@@ -54,3 +54,18 @@ h2 {
 ul {
   background-color: #BBA662;
 }
+
+* {
+  box-sizing: border-box;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.side {
+  flex: 30%;
+  background-color: #C5A742
+  padding: 20px;
+}
