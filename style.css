@@ -62,12 +62,12 @@ h2 {
 
 .side {
   flex: 30%;
-  background-color: ##C5A742
+  background-color: #A18422;
   padding: 20px;
 }
 
 .main {
   flex: 70%;
-  background-color: #E1BF4C
+  background-color: #E1BF4C;
   padding: 20px;
 }
