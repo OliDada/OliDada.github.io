@@ -65,3 +65,9 @@ h2 {
   background-color: #C5A742
   padding: 20px;
 }
+
+.main {
+  flex: 70%;
+  background-color: #E1BF4C
+  padding: 20px;
+}
