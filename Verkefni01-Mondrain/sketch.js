@@ -26,7 +26,3 @@ function draw() {
   rect(558, 440, 45, -108)
 
 }
-line(250, 0, 250, 700)
-strokeWeight(15)
-line(0, 325, 600, 325)
-fill('red')
