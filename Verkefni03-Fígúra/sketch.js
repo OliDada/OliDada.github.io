@@ -14,7 +14,7 @@ function setup() {
   rectMode(CENTER);
 }
 function draw() {
-  background(255,200,50);
+  background(255,200,0);
   // Teiknum búkinn
   colorMode(HSB)
   fill(litur,150,100);
@@ -44,12 +44,12 @@ function draw() {
 
 function mousePressed() {
 	bukur = random (50,150);
-    augu = random (10,35);
-    augubreidd = random (5,30);
-    hendur = random (-30,50);
-    munnur = random (-30,35);
-    fætur = random (30,60);
-    fæturhalli = (15,30);
-    litur = random (1,360);
-    andlitslitur = random (40,100);
+  augu = random (10,35);
+  augubreidd = random (5,30);
+  hendur = random (-30,50);
+  munnur = random (-30,35);
+  fætur = random (30,60);
+  fæturhalli = (15,30);
+  litur = random (1,360);
+  andlitslitur = random (40,100);
 }
