@@ -15,7 +15,7 @@ function setup() {
 }
 function draw() {
   colorMode(HSB)
-  background(200,200,0);
+  background(200,200,100);
   // Teiknum búkinn
   fill(litur,150,100);
   rect(mouseX,mouseY,50,bukur,10);
