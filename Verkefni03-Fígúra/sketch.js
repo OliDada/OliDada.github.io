@@ -14,9 +14,9 @@ function setup() {
   rectMode(CENTER);
 }
 function draw() {
-  background(200,100,0);
-  // Teiknum búkinn
   colorMode(HSB)
+  background(200,200,0);
+  // Teiknum búkinn
   fill(litur,150,100);
   rect(mouseX,mouseY,50,bukur,10);
   // Teiknum hendurnar
