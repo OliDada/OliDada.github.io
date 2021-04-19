@@ -15,7 +15,6 @@ function draw() {
   fill(236,36,94);
   if(mouseX < width/2 && mouseY < height / 2){
 		rect(0,0,width/2,height/2);
-    function draw() {
     background(255,200,0);
     ellipse(x, y, 30, 30);
     x = x + xSpeed;
@@ -31,7 +30,6 @@ function draw() {
       ySpeed = ySpeed * -0.9;
       y = height-15; //til að boltinn festist ekki
     }
-  }
 	}
 	if(mouseX > width/2 && mouseY < height / 2){
 		rect(width/2,0,width/2,height/2);
