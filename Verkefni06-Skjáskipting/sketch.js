@@ -23,7 +23,7 @@ function draw() {
     if ((x > width/2) || (x < 0)) {
       xSpeed = xSpeed * -1;
     }
-    if (y > (height-15)) {      //til að láta boltann skoppa þegar neðri rönd snertir
+    if (y > (height/2-15)) {      //til að láta boltann skoppa þegar neðri rönd snertir
       ySpeed = ySpeed * -0.9;   //skjáinn þarf að draga 15 frá height, því þvermál
                                 //boltans er 30.
 
