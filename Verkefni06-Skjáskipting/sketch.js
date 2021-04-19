@@ -27,7 +27,7 @@ function draw() {
       ySpeed = ySpeed * -0.9;   //skjáinn þarf að draga 15 frá height, því þvermál
                                 //boltans er 30.
 
-      y = height/2-15;            //til að boltinn festist ekki
+      y = height/2-15;          //til að boltinn festist ekki
     }
 	}
 
@@ -35,7 +35,6 @@ function draw() {
 		rect(width/2,0,width/2,height/2);
     function draw(){
     fill(100,100,100)
-    if(mouseX > width/2 && mouseY < height / 2){
     ellipse(mouseX, mouseY, 30, 30);
   }
 
