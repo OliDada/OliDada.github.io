@@ -23,14 +23,14 @@ function draw() {
     if ((x > width/2) || (x < 0)) {
       xSpeed = xSpeed * -1;
     }
-    //til að láta boltann skoppa þegar neðri rönd snertir
-    //skjáinn þarf að draga 15 frá height, því þvermál
-    //boltans er 30.
-    if (y > (height-15)) {
-      ySpeed = ySpeed * -0.9;
-      y = height-15; //til að boltinn festist ekki
+    if (y > (height-15)) {      //til að láta boltann skoppa þegar neðri rönd snertir
+      ySpeed = ySpeed * -0.9;   //skjáinn þarf að draga 15 frá height, því þvermál
+                                //boltans er 30.
+
+      y = height-15;            //til að boltinn festist ekki
     }
 	}
+
 	if(mouseX > width/2 && mouseY < height / 2){
 		rect(width/2,0,width/2,height/2);
 	}
