@@ -23,7 +23,7 @@ function draw() {
     if ((x > width/2-15) || (x < 0)) {
       xSpeed = xSpeed * -1;
     }
-    if (y > (height/2-15)) {      //til að láta boltann skoppa þegar neðri rönd snertir
+    if (y > (height/2-15)) {    //til að láta boltann skoppa þegar neðri rönd snertir
       ySpeed = ySpeed * -0.9;   //skjáinn þarf að draga 15 frá height, því þvermál
                                 //boltans er 30.
 
@@ -33,6 +33,10 @@ function draw() {
 
 	if(mouseX > width/2 && mouseY < height / 2){
 		rect(width/2,0,width/2,height/2);
+    function draw(){
+    ellipse(mouseX, mouseY, 30, 30);
+  }
+
 	}
 	if(mouseX < width/2 && mouseY > height / 2){
 		rect(0,height/2,width/2,height/2);
