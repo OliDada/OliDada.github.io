@@ -12,11 +12,11 @@ function setup() {
 
 function draw() {
   background(255, 200, 0);
-	if(mouseX < width/2 && mouseY < height / 2){
+  fill(236,36,94);
+  if(mouseX < width/2 && mouseY < height / 2){
 		rect(0,0,width/2,height/2);
     function draw() {
     background(255,200,0);
-    fill(236,36,94);
     ellipse(x, y, 30, 30);
     x = x + xSpeed;
     y = y +ySpeed;
