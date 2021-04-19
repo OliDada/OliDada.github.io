@@ -31,13 +31,14 @@ function draw() {
     }
 	}
 
-	if(mouseX > width/2 && mouseY < height/2){
-		rect(width/2,0,width/2,height/2);
-    fill(100,100,100)
-    if(mouseX > width/2 && mouseY < height/2)
-     ellipse(mouseX, mouseY, 30, 30);
+  function draw() {
+    if(mouseX > width/2 && mouseY < height/2){
+		  rect(width/2,0,width/2,height/2);
+      fill(100,100,100)
+      if(mouseX > width/2 && mouseY < height/2)
+        ellipse(mouseX, mouseY, 30, 30);
   }
-  
+
 	if(mouseX < width/2 && mouseY > height / 2){
 		rect(0,height/2,width/2,height/2);
 	}
