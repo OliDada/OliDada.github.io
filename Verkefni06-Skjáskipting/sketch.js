@@ -34,7 +34,7 @@ function draw() {
 	if(mouseX > width/2 && mouseY < height / 2){
 		rect(width/2,0,width/2,height/2);
     function draw(){
-    fill(100,100,100)
+    fill(random)
     ellipse(mouseX, mouseY, 30, 30);
   }
 
