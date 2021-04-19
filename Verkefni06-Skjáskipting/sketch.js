@@ -15,7 +15,6 @@ function draw() {
   fill(236,36,94);
   if(mouseX < width/2 && mouseY < height / 2){
 		rect(0,0,width/2,height/2);
-    background(100,200,0);
     ellipse(x, y, 30, 30);
     x = x + xSpeed;
     y = y +ySpeed;
