@@ -20,7 +20,7 @@ function draw() {
     x = x + xSpeed;
     y = y +ySpeed;
     ySpeed = ySpeed+gravity;
-    if ((x > width/2-15) || (x < 15)) {
+    if ((x > width/2-15) || (x < 0)) {
       xSpeed = xSpeed * -1;
     }
     if (y > (height/2-15)) {      //til að láta boltann skoppa þegar neðri rönd snertir
