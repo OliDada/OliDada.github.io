@@ -1,6 +1,5 @@
 // Hér kemur kóðinn þinn:
-
-
+	document.addEventListener('DOMContentLoaded', () => {
 
 	const cardArray = [
 		{
