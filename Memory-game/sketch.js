@@ -97,8 +97,8 @@
 
 	function checkForMatch() {
 		var cards = document.querySelectorAll('img')
-		const optionOneId = cardsChosenId(0)
-		const optionTwoId = cardsChosenId(1)
+		const optionOneId = cardsChosenId[0]
+		const optionTwoId = cardsChosenId[1]
 
 		if (optionOneId == optionTwoId) {
 			cards[optionOneId].setAttribute('src', 'imgages/blank.png')
@@ -132,7 +132,7 @@
 		cardsChosenId.push(cardId)
 		this.setAttribute('src', cardArray[cardId].img)
 		if (cardsChosen.length === 2) {
-			setTimeout(checkForMatch, 0.5)
+			setTimeout(checkForMatch, 500)
 		}
 	}
 
