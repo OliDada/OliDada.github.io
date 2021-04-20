@@ -67,7 +67,7 @@
 			img: 'images/demantur.png'
 		},
 		{
-			name: 'white'
+			name: 'white',
 			img: 'images/demantur.png'
 		},
 		{
