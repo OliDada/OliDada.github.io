@@ -6,6 +6,6 @@ Til þess að læra að gera eitthvað, prófaðu að leita á google af því s
 .grid {
   display: flex;
   flex-wrap: wrap;
-  height: 300px;
-  width: 400px;
+  height: 400px;
+  width: 300px;
 }
