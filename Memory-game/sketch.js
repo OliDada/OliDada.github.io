@@ -100,14 +100,22 @@ document.addEventListener('DOMContentLoaded', () => {
 		var cards = document.querySelectorAll('img')
 		const optionOneId = cardsChosenId(0)
 		const optionTwoId = cardsChosenId(1)
-		if (cardsChosen[0] === cardsChosen[1]) {
-			alert('Samstæða!')
-			cards[optionOneId].setAttribute('src', 'imgages/white.png')
-			cards[optionTwoId].setAttribute('src', 'imgages/white.png')
+
+		if (optionOneId == optionTwoId) {
+			cards[optionOneId].setAttribute('src', 'imgages/blank.png')
+			cards[optionTwoId].setAttribute('src', 'imgages/blank.png')
+			alert('Þú valdir sömu myndina')
+		}
+		else if (cardsChosen[0] === cardsChosen[1]) {
+			alert('Þú fannst samstæðu!')
+			cards[optionOneId].setAttribute('src', 'images/white.png')
+		  cards[optionTwoId].setAttribute('src', 'images/white.png')
+			cards[optionOneId].removeEventListener('click', flipCard)
+			cards[optionOneId].removeEventListener('click', flipCard)
 			cardsWon.push(cardsChosen)
-		} else  {
-			cards[optionOneId].setAttribute('src', 'images/blank.png')
-		  cards[optionTwoId].setAttribute('src', 'images/blank.png')
+		} else {
+			cards[optionOneId].setAttribute('src', 'imgages/blank.png')
+			cards[optionTwoId].setAttribute('src', 'imgages/blank.png')
 			alert('Reyndu aftur')
 		}
 		cardsChosen = []
@@ -116,17 +124,18 @@ document.addEventListener('DOMContentLoaded', () => {
 		if (cardsWon.length === cardArray.length/2) {
 			resultDisplay.textContent = 'Þú vannst!'
 	}
-
+}
 
 
 	function flipCard() {
-		var cardId = this.getAttribute('data-id')
+		let cardId = this.getAttribute('data-id')
 		cardsChosen.push(cardArray[cardId].name)
 		cardsChosenId.push(cardId)
 		this.setAttribute('src', cardArray[cardId].img)
 		if (cardsChosen.length === 2) {
 			setTimeout(checkForMatch, 500)
+		}
 	}
 
-
 	createBoard()
+})
