@@ -9,3 +9,10 @@ Til þess að læra að gera eitthvað, prófaðu að leita á google af því s
   height: 400px;
   width: 300px;
 }
+
+.images {
+  display: flex;
+  flex-wrap: wrap;
+  height: 100px;
+  width: 100px;
+}
