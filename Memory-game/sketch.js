@@ -106,7 +106,7 @@
 			alert('Þú valdir sömu myndina')
 		}
 		else if (cardsChosen[0] === cardsChosen[1]) {
-			alert('Þú fannst samstæðu!')
+			alert('Reyndu aftur')
 			cards[optionOneId].setAttribute('src', 'images/white.png')
 		  cards[optionTwoId].setAttribute('src', 'images/white.png')
 			cards[optionOneId].removeEventListener('click', flipCard)
@@ -115,7 +115,7 @@
 		} else {
 			cards[optionOneId].setAttribute('src', 'imgages/blank.png')
 			cards[optionTwoId].setAttribute('src', 'imgages/blank.png')
-			alert('Reyndu aftur')
+			alert('Þú fannst samstæðu!')
 		}
 		cardsChosen = []
 		cardsChosenId = []
