@@ -4,7 +4,7 @@
 	const cardArray = [
 		{
 			name: 'demantur'
-			img: 'images/demantur.png'
+			img: 'images/demantur.png';
 		},
 		{
 			name: 'demantur'
