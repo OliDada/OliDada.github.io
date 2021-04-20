@@ -3,75 +3,75 @@
 
 	const cardArray = [
 		{
-			name: 'demantur'
-			img: 'images/demantur.png';
-		},
-		{
-			name: 'demantur'
+			name: 'demantur',
 			img: 'images/demantur.png'
 		},
 		{
-			name: 'ferningur'
+			name: 'demantur',
 			img: 'images/demantur.png'
 		},
 		{
-			name: 'ferningur'
+			name: 'ferningur',
 			img: 'images/demantur.png'
 		},
 		{
-			name: 'hjarta'
+			name: 'ferningur',
 			img: 'images/demantur.png'
 		},
 		{
-			name: 'hjarta'
+			name: 'hjarta',
 			img: 'images/demantur.png'
 		},
 		{
-			name: 'hringur'
+			name: 'hjarta',
 			img: 'images/demantur.png'
 		},
 		{
-			name: 'hringur'
+			name: 'hringur',
 			img: 'images/demantur.png'
 		},
 		{
-			name: 'sexhyrningur'
+			name: 'hringur',
 			img: 'images/demantur.png'
 		},
 		{
-			name: 'sexhyrningur'
+			name: 'sexhyrningur',
 			img: 'images/demantur.png'
 		},
 		{
-			name: 'stjarna'
+			name: 'sexhyrningur',
 			img: 'images/demantur.png'
 		},
 		{
-			name: 'stjarna'
+			name: 'stjarna',
 			img: 'images/demantur.png'
 		},
 		{
-			name: 'þríhyrningur'
+			name: 'stjarna',
 			img: 'images/demantur.png'
 		},
 		{
-			name: 'þríhyrningur'
+			name: 'þríhyrningur',
 			img: 'images/demantur.png'
 		},
 		{
-			name: 'blank'
+			name: 'þríhyrningur',
 			img: 'images/demantur.png'
 		},
 		{
-			name: 'blank'
+			name: 'blank',
 			img: 'images/demantur.png'
 		},
 		{
-			name: 'white'
+			name: 'blank',
 			img: 'images/demantur.png'
 		},
 		{
 			name: 'white'
+			img: 'images/demantur.png'
+		},
+		{
+			name: 'white',
 			img: 'images/demantur.png'
 			}
 	]
