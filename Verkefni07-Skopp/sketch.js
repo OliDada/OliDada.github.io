@@ -38,7 +38,7 @@ function draw() {
     hradiY = hradiY * -1;
     stig = stig + 1
   }
-	for(var x = 25; x < width; kassiBreidd = x+45) {
+	for(var x = 25; x < width; x = x+45) {
 		for(var y = 25; y < width/3; y = y+45) {
 			fill(100,75,100)
 			rect(x,y)
