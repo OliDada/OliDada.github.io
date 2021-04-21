@@ -10,7 +10,7 @@ var spadiThykkt = 25;
 var spadiY;
 
 function setup() {
-	createCanvas(400,500);
+	createCanvas(600,700);
 	spadiY = height - 45;
 	rectMode(CENTER);
 	textFont("Courier New",16);
