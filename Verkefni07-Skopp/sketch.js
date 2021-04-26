@@ -8,6 +8,8 @@ var stig = 0;
 var spadiBreidd = 150;
 var spadiThykkt = 25;
 var spadiY;
+var brick;
+
 
 function setup() {
 	createCanvas(600,700);
@@ -19,7 +21,7 @@ function setup() {
 }
 
 function draw() {
-  background(255,200,0);
+  background(50,130,100);
 	// Reikna ný hnit út frá hraða boltans:
   boltiX = boltiX + hradiX;
   boltiY = boltiY + hradiY;
@@ -35,18 +37,20 @@ function draw() {
      (boltiY < spadiY + boltiStaerd/2)&&
      (boltiX + boltiStaerd/2 > mouseX - spadiBreidd/2)&&
      (boltiX - boltiStaerd/2 < mouseX + spadiBreidd/2)) {
-    hradiY = hradiY * -1;
-    stig = stig + 1
+    hradiY = hradiY * -1.05;
+    hradiX = hradiX * 1.05;
+    stig = stig + 1;
   }
-	for(var x = 25; x < width; x = x+45) {
-		for(var y = 25; y < width/3; y = y+45) {
+	//Teikna kassa
+  for(var x = 60; x < width; x = x+95) {
+		for(var y = 50; y < width/3; y = y+45) {
 			fill(100,75,100)
-			rect(x,y)
+			rect(x,y,90,40)
 	// Teikna boltann
   fill(10,100,94);
   rect(boltiX, boltiY, boltiStaerd, boltiStaerd);
 	// Teikna spaðann
-  fill(3,123,227);
+  fill(200,103,107);
   rect(mouseX,spadiY ,spadiBreidd,spadiThykkt);
   fill (0);
   ellipse(mouseX, spadiY, 10,10);
