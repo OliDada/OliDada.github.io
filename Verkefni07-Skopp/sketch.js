@@ -57,6 +57,8 @@ function draw() {
 	// Teikna stigin
   fill(0);
   text("Stig: " + stig,10,20);
+
+		
+	 }
   }
  }
-}
