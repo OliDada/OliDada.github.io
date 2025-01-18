@@ -1,6 +1,6 @@
 body {
   background-image: url(images/1.jpg);
-  background-color: #ffb936ef;
+  background-color: #ffffff;
   background-size: cover;
   background-position: center;
   width: 100%;
@@ -63,6 +63,7 @@ p {
 
 .navbar a.active {
   font-weight: bold;
+  font-size: 25px;
 }
 
 .navbar a.right {
@@ -111,6 +112,8 @@ h2 {
   flex-direction: column;
   height: 30vh;
   text-align: center;
+  margin-top: 100px;
+  margin-bottom: 50px;
 }
 
 button {
@@ -194,3 +197,27 @@ button:hover {
     opacity: 1;
   }
 }
+
+.canvas-container {
+  display: flex;
+  flex-direction: center;
+  align-items: center;
+  margin: 20px;
+}
+
+canvas {
+  border: 2px solid #3D320D;
+  background-color: #fff;
+  cursor: crosshair;
+  margin-top: 40px;
+}
+
+.canvas-tools {
+  margin-top: 10px;
+}
+
+input[type="color"],
+input[type="range"] {
+  margin-left: 10px;
+}
+
