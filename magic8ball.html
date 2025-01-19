@@ -15,7 +15,6 @@
       <img class="dolphin" src="images/dolphin2.png" alt="Dolphin2">
       <div class="text-container">
         <h1 class="title">Oli.is</h1>
-        <p class="sub_title">Hello :)</p>
       </div>
       <img class="dolphin" src="images/dolphin1.png" alt="Dolphin">
     </div>
@@ -31,9 +30,11 @@
             <h2>Magic 8-Ball</h2>
             <p>Ask a question and get your fortune!</p>
             <div class="text-container">
-                <input type="text" id="questionInput" placeholder="Type your question"/>
+                <input type="text" id="questionInput" placeholder="Type your question" />
                 <p id="response">Click the ball to see your answer!</p>
-                <button id="magicBall" class="magic-ball" onclick="getAnswer()">Shake the Magic 8-Ball</button>
+                <div>
+                  <img src="images/8ball.png" alt="Magic 8-Ball" class="magic-ball" onclick="getAnswer()" />
+                </div>   
             </div>
                 <script src="magic8ball.js"></script>
             </div>

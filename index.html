@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Oli.is</title>
     <script src="script.js" defer></script>
+    <script src="draw.js" defer></script>
     <link rel="icon" href="images/dolphin2.png" type="image/x-icon">
     <link href="style.css" rel="stylesheet" type="text/css" media="all">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
@@ -35,7 +36,7 @@
           <p>Please draw something cool</p>
 
         <div class="canvar-container">
-          <canvas id="drawingCanvas" width="600" height="300"></canvas>
+          <canvas id="drawingCanvas" width="600" height="350"></canvas>
           <div class="canvas-tools">
             <button onclick="clearCanvas()">Clear</button>
             <input type="color" id="colorPicker" value="#000000" onchange="changeColor(this.value)">
