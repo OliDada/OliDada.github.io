@@ -35,13 +35,17 @@ function applySavedBackground() {
 // Apply the saved background when the page loads
 applySavedBackground();
 
+
+// Global variables
+let painting = false; // Tracks if the mouse is pressed
+let lastX = 0; // Last x-coordinate
+let lastY = 0; // Last y-coordinate
+let brushColor = "#000000"; // Default brush color
+let brushSize = 5; // Default brush size
+
+// Get the canvas and context
 const canvas = document.getElementById("drawingCanvas");
 const ctx = canvas.getContext("2d");
-let painting = false;
-let brushColor = "#000000"; // Default brush color is black
-let brushSize = 5;
-let lastX = 0;
-let lastY = 0;
 
 // Event listeners for mouse events on the canvas
 canvas.addEventListener("mousedown", (e) => {
@@ -76,7 +80,7 @@ function draw(e) {
     const y = e.clientY - rect.top;
 
     // Set the stroke properties based on the selected color and size
-    ctx.fillStyle = brushColor;
+    ctx.strokeStyle = brushColor; // Use strokeStyle for drawing lines
     ctx.lineWidth = brushSize;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";

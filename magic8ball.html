@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Oli.is</title>
+    <title>Oli.is - Magic 8 Ball</title>
     <script src="script.js" defer></script>
     <link rel="icon" href="images/dolphin2.png" type="image/x-icon">
     <link href="style.css" rel="stylesheet" type="text/css" media="all">
@@ -20,30 +20,24 @@
       <img class="dolphin" src="images/dolphin1.png" alt="Dolphin">
     </div>
     <div class="navbar">
-      <a href="index.html" class="active cta-button">Home</a>
+      <a href="index.html" class="cta-button">Home</a>
       <a href="programs.html" class="cta-button">Programs</a>
       <a href="jokes.html" class="cta-button">Jokes</a>
       <a href="change_color.html" class="right cta-button">Change Background Color</a>
       <a href="snake.html" class="cta-button">Snake Game</a>
-      <a href="magic8ball.html" class="cta-button">Magic 8 Ball</a>
+      <a href="magic8ball.html" class="cta-button active">Magic 8 Ball</a>
     </div>
-    <div class="row">
-      <div class="main">
-        <section>
-          <h2>My website</h2>
-          <p>This is my website :)</p>
-          <p>Please draw something cool</p>
-
-        <div class="canvar-container">
-          <canvas id="drawingCanvas" width="600" height="300"></canvas>
-          <div class="canvas-tools">
-            <button onclick="clearCanvas()">Clear</button>
-            <input type="color" id="colorPicker" value="#000000" onchange="changeColor(this.value)">
-            <label for="brushSize">Brush Size</label>
-            <input type="range" id="brushSize" min="1" max="20" value="5" onchange="changeBrushSize(this.value)">
-          </div> 
+        <div class="section text-container">
+            <h2>Magic 8-Ball</h2>
+            <p>Ask a question and get your fortune!</p>
+            <div class="text-container">
+                <input type="text" id="questionInput" placeholder="Type your question"/>
+                <p id="response">Click the ball to see your answer!</p>
+                <button id="magicBall" class="magic-ball" onclick="getAnswer()">Shake the Magic 8-Ball</button>
+            </div>
+                <script src="magic8ball.js"></script>
+            </div>
         </div>
-        </section>
       </div>
     </div>
   </body>
