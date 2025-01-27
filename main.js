@@ -29,7 +29,7 @@ Example: "Yo what's up! What do you want?"
 
 `;
 
-const API_KEY = "AIzaSyBjncz5RCL13z2XPpHcMK4JOK2kaS40Oyg";
+const API_KEY = "";
 const genAI = new GoogleGenerativeAI(API_KEY);
 const model = genAI.getGenerativeModel({ 
     model: "gemini-1.5-pro",
