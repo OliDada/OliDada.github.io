@@ -63,15 +63,7 @@ async function sendMessage() {
         // Update last request time
         lastRequestTime = Date.now();
         
-        // Check if API key is available
-        if (!API_KEY || API_KEY.trim() === '') {
-            document.querySelector(".chat-window .chat").insertAdjacentHTML("beforeend",`
-                <div class="error">
-                    <p>⚠️ AI Chat is not available in local development. The chat will work when deployed to GitHub Pages.</p>
-                </div>
-            `);
-            return;
-        }
+        
 
         try {
             // Clear the input field
