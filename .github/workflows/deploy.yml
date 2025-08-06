@@ -33,14 +33,11 @@ jobs:
         };
         EOF
         echo "Config.js created successfully"
-        echo "Content preview (first 100 chars):"
-        head -c 100 config.js
-        echo "..."
-        if [ -z "${{ secrets.GEMINI_API_KEY }}" ]; then
-          echo "WARNING: GEMINI_API_KEY secret is not set!"
-        else
-          echo "API key is present in secrets"
-        fi
+        echo "Content check:"
+        cat config.js
+        echo "API key length: ${#GEMINI_API_KEY}"
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         
     - name: Setup Pages
       uses: actions/configure-pages@v4
