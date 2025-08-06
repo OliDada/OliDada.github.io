@@ -1,1 +1,0 @@
-// Hér kemur kóðinn þinn:
