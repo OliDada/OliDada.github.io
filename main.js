@@ -109,6 +109,26 @@ async function sendMessage() {
     }
 }
 
+function resetChat() {
+    // Clear the message history
+    messages.history = [];
+
+    // Remove chat history from localStorage
+    localStorage.removeItem('chatHistory');
+
+    // Clear the chat window
+    const chatWindow = document.querySelector(".chat-window .chat");
+    chatWindow.innerHTML = '';
+
+    // Optionally, add a message indicating the chat has been reset
+    chatWindow.insertAdjacentHTML("beforeend", `
+        <div class="info">
+            <p>Chat has been reset. Start fresh!</p>
+        </div>
+    `);
+}
+
+
 window.addEventListener('load', () => {
     // Check if there is a saved chat history in localStorage
     const savedMessages = localStorage.getItem('chatHistory');
@@ -148,6 +168,9 @@ window.addEventListener('load', () => {
 document.querySelector(".chat-window .input-area button")
 .addEventListener("click", ()=>sendMessage());
 
+document.querySelector(".reset-chat")
+.addEventListener("click", ()=>resetChat());
+
 document.querySelector(".chat-button")
 .addEventListener("click", ()=>{
     document.querySelector("body").classList.add("chat-open");
@@ -157,4 +180,8 @@ document.querySelector(".chat-window button.close")
 .addEventListener("click", ()=>{
     document.querySelector("body").classList.remove("chat-open");
 });
+
+
+
+
 

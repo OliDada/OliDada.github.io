@@ -8,6 +8,8 @@ function setup() {
   snake = new Snake();
   frameRate(10);
   pickLocation();
+  let canvas = createCanvas(600, 600);
+  canvas.parent('snake-canvas');
 
 }
 
