@@ -97,6 +97,7 @@ async function sendMessage() {
             localStorage.setItem('chatHistory', JSON.stringify(messages.history));
 
         } catch (error) {
+            console.error('Error:', error);
             document.querySelector(".chat-window .chat").insertAdjacentHTML("beforeend",`
                 <div class="error">
                     <p>The message could not be sent. Please try again.</p>
@@ -105,7 +106,8 @@ async function sendMessage() {
         }
 
         // Remove loader once the response is processed
-        document.querySelector(".chat-window .chat .loader").remove();
+        const loader = document.querySelector(".chat-window .chat .loader");
+        if (loader) loader.remove();
     }
 }
 
@@ -120,14 +122,13 @@ function resetChat() {
     const chatWindow = document.querySelector(".chat-window .chat");
     chatWindow.innerHTML = '';
 
-    // Optionally, add a message indicating the chat has been reset
+    // Add welcome message
     chatWindow.insertAdjacentHTML("beforeend", `
-        <div class="info">
-            <p>Chat has been reset. Start fresh!</p>
+        <div class="model">
+            <p>Hi, welcome to Oli.is. What's on your mind?</p>
         </div>
     `);
 }
-
 
 window.addEventListener('load', () => {
     // Check if there is a saved chat history in localStorage
@@ -161,27 +162,40 @@ window.addEventListener('load', () => {
 
     // Keep the chat window scrolled to the bottom
     const chatWindow = document.querySelector(".chat-window .chat");
-    chatWindow.scrollTop = chatWindow.scrollHeight;
+    if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
+    
+    // Add event listeners only if elements exist
+    const sendButton = document.querySelector(".chat-window .input-area button");
+    if (sendButton) {
+        sendButton.addEventListener("click", () => sendMessage());
+    }
+    
+    const resetButton = document.querySelector(".reset-chat");
+    if (resetButton) {
+        resetButton.addEventListener("click", () => resetChat());
+    }
+    
+    const inputField = document.querySelector(".chat-window input");
+    if (inputField) {
+        inputField.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") {
+                sendMessage();
+            }
+        });
+    }
+    
+    // These are for other pages, only add if they exist
+    const chatButton = document.querySelector(".chat-button");
+    if (chatButton) {
+        chatButton.addEventListener("click", () => {
+            document.querySelector("body").classList.add("chat-open");
+        });
+    }
+    
+    const closeButton = document.querySelector(".chat-window button.close");
+    if (closeButton) {
+        closeButton.addEventListener("click", () => {
+            document.querySelector("body").classList.remove("chat-open");
+        });
+    }
 });
-
-
-document.querySelector(".chat-window .input-area button")
-.addEventListener("click", ()=>sendMessage());
-
-document.querySelector(".reset-chat")
-.addEventListener("click", ()=>resetChat());
-
-document.querySelector(".chat-button")
-.addEventListener("click", ()=>{
-    document.querySelector("body").classList.add("chat-open");
-});
-
-document.querySelector(".chat-window button.close")
-.addEventListener("click", ()=>{
-    document.querySelector("body").classList.remove("chat-open");
-});
-
-
-
-
-

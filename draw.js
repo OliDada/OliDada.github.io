@@ -1,3 +1,5 @@
+// Check if canvas exists before initializing
+if (document.getElementById("drawingCanvas")) {
 // Global variables
 let painting = false; // Tracks if the mouse is pressed
 let lastX = 0; // Last x-coordinate
@@ -56,4 +58,5 @@ function draw(e) {
     // Update the last position for the next segment
     lastX = x;
     lastY = y;
+}
 }
