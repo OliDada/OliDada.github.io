@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oli.is - Physics Simulation</title>
+    <script src="script.js" defer></script>
+    <link href="style.css" rel="stylesheet" type="text/css" media="all">
+    <link rel="icon" href="images/dolphin2.png" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <script src="physics_simulation.js"></script>
+</head>
+<body>
+    <div class="header">
+      <img class="dolphin" src="images/dolphin2.png" alt="Dolphin2">
+      <div class="text-container">
+        <h1 class="title">Oli.is</h1>
+        <p class="sub_title">Look at all those physics!</p>
+      </div>
+      <img class="dolphin" src="images/dolphin1.png" alt="Dolphin">
+    </div>
+    <div class="navbar-grid">
+      <a href="index.html" class="nav-tile"><span>Home</span></a>
+      <a href="programs.html" class="nav-tile"><span>Programs</span></a>
+      <a href="jokes.html" class="nav-tile"><span>Jokes</span></a>
+      <a href="snake.html" class="nav-tile"><span>Snake Game</span></a>
+      <a href="magic8ball.html" class="nav-tile"><span>Magic 8 Ball</span></a>
+      <a href="aichat.html" class="nav-tile"><span>AI Chat</span></a>
+      <a href="game_of_life.html" class="nav-tile"><span>Game of Life</span></a>
+      <a href="physics_simulation.html" class="nav-tile active"><span>Physics Simulation</span></a>
+      <a href="gravity_dash.html" class="nav-tile"><span>Gravity Dash</span></a>
+      <a href="change_color.html" class="nav-tile"><span>Change Background Color</span></a>
+    </div>
+    <div class="main-content">
+      <h2>Physics Simulation!</h2>
+      <h3>Click or drag your mouse to interact with the simulation.</h3>
+      <h3>Press "F" to place fire. Press "W" to place water. Press "E" to erode terrain.</h3>
+      <button onclick="location.reload()" style="margin-bottom: 16px;">Refresh Simulation</button>
+      <div id="physics-canvas"></div>
+    </div>
+</body>
+</html>

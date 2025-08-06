@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Oli.is - Game of Life</title>
+  <link href="style.css" rel="stylesheet" type="text/css">
+  <link rel="icon" href="images/dolphin2.png" type="image/x-icon">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>  
+  <script src="Game of Life/game_of_life.js"></script>
+  <script src="script.js" defer></script>
+</head>
+<body>
+    <div class="header">
+        <img class="dolphin" src="images/dolphin2.png" alt="Dolphin2">
+        <div class="text-container">
+          <h1 class="title">Oli.is</h1>
+          <a class="sub_title">This game is alive!</a>
+        </div>
+        <img class="dolphin" src="images/dolphin1.png" alt="Dolphin1">
+      </div>
+      <div class="navbar-grid">
+        <a href="index.html" class="nav-tile"><span>Home</span></a>
+        <a href="programs.html" class="nav-tile"><span>Programs</span></a>
+        <a href="jokes.html" class="nav-tile"><span>Jokes</span></a>
+        <a href="snake.html" class="nav-tile"><span>Snake Game</span></a>
+        <a href="magic8ball.html" class="nav-tile"><span>Magic 8 Ball</span></a>
+        <a href="aichat.html" class="nav-tile"><span>AI Chat</span></a>
+        <a href="game_of_life.html" class="nav-tile active"><span>Game of Life</span></a>
+        <a href="physics_simulation.html" class="nav-tile"><span>Physics Simulation</span></a>
+        <a href="gravity_dash.html" class="nav-tile"><span>Gravity Dash</span></a>
+        <a href="change_color.html" class="nav-tile"><span>Change Background Color</span></a>
+      </div>
+    <div class="main">
+        <h1 class="game_of_life_title">Game of Life!</h1>
+        <p>Press space to restart the simulation.</p>
+        <p>Drag your mouse around to create life!</p>
+        <button onclick="fillBrowser()" style="margin-bottom:10px;">Fill Browser</button>
+        <div id="gameoflife-canvas"></div>
+        <div class="bottom-buttons">
+            <button onclick="clearGrid()" style="margin-bottom:10px;">Clear</button>
+            <button onclick="goBack()" id="back-btn" style="margin-bottom:10px; display:none;">Back</button>
+        </div>
+    </div>
+</body>
+</html>
