@@ -15,13 +15,22 @@ concurrency:
 
 jobs:
   deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+        
+    - name: Debug secrets
+      run: |
+        echo "Checking if GEMINI_API_KEY secret exists..."
+        if [ -z "${{ secrets.GEMINI_API_KEY }}" ]; then
+          echo "ERROR: GEMINI_API_KEY secret is not set!"
+          exit 1
+        else
+          echo "GEMINI_API_KEY secret is set (length: ${#GEMINI_API_KEY})"
+        fi
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         
     - name: Create config.js with API key
       run: |
@@ -35,7 +44,12 @@ jobs:
         echo "Config.js created successfully"
         echo "Content check:"
         cat config.js
-        echo "API key length: ${#GEMINI_API_KEY}"
+        echo "Verifying API key was injected..."
+        if grep -q "AIzaSy" config.js; then
+          echo "✅ API key successfully injected"
+        else
+          echo "❌ API key NOT injected - check secrets!"
+        fi
       env:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         
@@ -50,3 +64,5 @@ jobs:
     - name: Deploy to GitHub Pages
       id: deployment
       uses: actions/deploy-pages@v4
+      with:
+        deployment-name: github-pages
