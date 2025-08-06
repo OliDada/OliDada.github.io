@@ -1,15 +1,15 @@
 // Check if canvas exists before initializing
 if (document.getElementById("drawingCanvas")) {
-// Global variables
-let painting = false; // Tracks if the mouse is pressed
-let lastX = 0; // Last x-coordinate
-let lastY = 0; // Last y-coordinate
-let brushColor = "#000000"; // Default brush color
-let brushSize = 5; // Default brush size
+    // Global variables
+    let painting = false; // Tracks if the mouse is pressed
+    let lastX = 0; // Last x-coordinate
+    let lastY = 0; // Last y-coordinate
+    let brushColor = "#000000"; // Default brush color
+    let brushSize = 5; // Default brush size
 
-// Get the canvas and context
-const canvas = document.getElementById("drawingCanvas");
-const ctx = canvas.getContext("2d");
+    // Get the canvas and context
+    const canvas = document.getElementById("drawingCanvas");
+    const ctx = canvas.getContext("2d");
 
 // Event listeners for mouse events on the canvas
 canvas.addEventListener("mousedown", (e) => {
