@@ -40,10 +40,39 @@ let messages = {
     history: [],
 }
 
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL = 2000; // 2 seconds between requests
+
 async function sendMessage() {
     const userMessage = document.querySelector(".chat-window input").value;
     
+    // Rate limiting: prevent too frequent requests
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTime;
+    if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+        const waitTime = Math.ceil((MIN_REQUEST_INTERVAL - timeSinceLastRequest) / 1000);
+        document.querySelector(".chat-window .chat").insertAdjacentHTML("beforeend",`
+            <div class="error">
+                <p>Please wait ${waitTime} seconds before sending another message.</p>
+            </div>
+        `);
+        return;
+    }
+    
     if (userMessage.length) {
+        // Update last request time
+        lastRequestTime = Date.now();
+        
+        // Check if API key is available
+        if (!API_KEY || API_KEY.trim() === '') {
+            document.querySelector(".chat-window .chat").insertAdjacentHTML("beforeend",`
+                <div class="error">
+                    <p>⚠️ AI Chat is not available in local development. The chat will work when deployed to GitHub Pages.</p>
+                </div>
+            `);
+            return;
+        }
+
         try {
             // Clear the input field
             document.querySelector(".chat-window input").value = "";
@@ -98,9 +127,20 @@ async function sendMessage() {
 
         } catch (error) {
             console.error('Error:', error);
+            let errorMessage = "The message could not be sent. Please try again.";
+            
+            // Check for specific error types
+            if (error.message && error.message.includes("unregistered callers")) {
+                errorMessage = "⚠️ AI Chat requires a valid API key. This feature works when deployed to GitHub Pages.";
+            } else if (error.message && error.message.includes("429")) {
+                errorMessage = "⚠️ API quota exceeded. Please wait a few minutes before sending another message. The free tier has limited daily usage.";
+            } else if (error.message && error.message.includes("quota")) {
+                errorMessage = "⚠️ Daily API usage limit reached. Try again tomorrow or upgrade your Google AI API plan.";
+            }
+            
             document.querySelector(".chat-window .chat").insertAdjacentHTML("beforeend",`
                 <div class="error">
-                    <p>The message could not be sent. Please try again.</p>
+                    <p>${errorMessage}</p>
                 </div>
             `);
         }
