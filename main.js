@@ -63,6 +63,14 @@ async function sendMessage() {
         // Update last request time
         lastRequestTime = Date.now();
         
+        // Debug: Check what's actually in window.CONFIG
+        console.log('window.CONFIG:', window.CONFIG);
+        console.log('API Key available:', window.CONFIG?.GEMINI_API_KEY ? 'YES' : 'NO');
+        if (window.CONFIG?.GEMINI_API_KEY) {
+            console.log('API Key length:', window.CONFIG.GEMINI_API_KEY.length);
+            console.log('API Key starts with:', window.CONFIG.GEMINI_API_KEY.substring(0, 10));
+        }
+        
         // Get current API key (in case config loaded after page load)
         const currentApiKey = window.CONFIG?.GEMINI_API_KEY || "";
         
@@ -70,7 +78,7 @@ async function sendMessage() {
         if (!currentApiKey || currentApiKey.trim() === '') {
             document.querySelector(".chat-window .chat").insertAdjacentHTML("beforeend",`
                 <div class="error">
-                    <p>⚠️ AI Chat is not available. Please refresh the page and try again.</p>
+                    <p>⚠️ Debug: API key not found. Check console for details.</p>
                 </div>
             `);
             return;
@@ -181,6 +189,23 @@ function resetChat() {
 }
 
 window.addEventListener('load', () => {
+    // Add cache busting - check if config.js loaded properly
+    console.log('Page loaded. Checking config...');
+    console.log('window.CONFIG:', window.CONFIG);
+    
+    // Try to reload config.js if it's missing or empty
+    if (!window.CONFIG || !window.CONFIG.GEMINI_API_KEY || window.CONFIG.GEMINI_API_KEY.trim() === '') {
+        console.log('Config missing or empty, attempting to reload...');
+        
+        // Create a new script tag with cache busting
+        const script = document.createElement('script');
+        script.src = `config.js?v=${Date.now()}`;
+        script.onload = () => {
+            console.log('Config reloaded. New config:', window.CONFIG);
+        };
+        document.head.appendChild(script);
+    }
+    
     // Check if there is a saved chat history in localStorage
     const savedMessages = localStorage.getItem('chatHistory');
     
