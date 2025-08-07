@@ -63,22 +63,14 @@ async function sendMessage() {
         // Update last request time
         lastRequestTime = Date.now();
         
-        // Debug: Check what's actually in window.CONFIG
-        console.log('window.CONFIG:', window.CONFIG);
-        console.log('API Key available:', window.CONFIG?.GEMINI_API_KEY ? 'YES' : 'NO');
-        if (window.CONFIG?.GEMINI_API_KEY) {
-            console.log('API Key length:', window.CONFIG.GEMINI_API_KEY.length);
-            console.log('API Key starts with:', window.CONFIG.GEMINI_API_KEY.substring(0, 10));
-        }
-        
-        // Get current API key (in case config loaded after page load)
+        // Get current API key
         const currentApiKey = window.CONFIG?.GEMINI_API_KEY || "";
         
         // Check if API key is available
         if (!currentApiKey || currentApiKey.trim() === '') {
             document.querySelector(".chat-window .chat").insertAdjacentHTML("beforeend",`
                 <div class="error">
-                    <p>⚠️ Debug: API key not found. Check console for details.</p>
+                    <p>⚠️ AI Chat is temporarily unavailable. Please refresh and try again.</p>
                 </div>
             `);
             return;
@@ -212,13 +204,13 @@ window.addEventListener('load', () => {
     
     document.body.appendChild(versionInfo);
     
-    // Add config status to console
+    // Console status (keep this for debugging)
     console.log('🚀 Site loaded!');
     console.log('Deploy version:', window.CONFIG?.DEPLOY_VERSION || 'Unknown');
     console.log('Build ID:', window.CONFIG?.BUILD_ID || 'Unknown');
     console.log('API Key status:', window.CONFIG?.GEMINI_API_KEY ? '✅ Available' : '❌ Missing');
     
-    // Add cache busting - check if config.js loaded properly
+    // Add config status to console
     console.log('Page loaded. Checking config...');
     console.log('window.CONFIG:', window.CONFIG);
     
