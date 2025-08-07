@@ -189,6 +189,35 @@ function resetChat() {
 }
 
 window.addEventListener('load', () => {
+    // Add version info display
+    const versionInfo = document.createElement('div');
+    versionInfo.style.cssText = `
+        position: fixed;
+        bottom: 10px;
+        right: 10px;
+        font-size: 10px;
+        color: #666;
+        background: rgba(255,255,255,0.8);
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-family: monospace;
+        z-index: 1000;
+    `;
+    
+    if (window.CONFIG && window.CONFIG.DEPLOY_VERSION) {
+        versionInfo.textContent = `v${window.CONFIG.BUILD_ID} - ${window.CONFIG.DEPLOY_VERSION}`;
+    } else {
+        versionInfo.textContent = 'Version info loading...';
+    }
+    
+    document.body.appendChild(versionInfo);
+    
+    // Add config status to console
+    console.log('🚀 Site loaded!');
+    console.log('Deploy version:', window.CONFIG?.DEPLOY_VERSION || 'Unknown');
+    console.log('Build ID:', window.CONFIG?.BUILD_ID || 'Unknown');
+    console.log('API Key status:', window.CONFIG?.GEMINI_API_KEY ? '✅ Available' : '❌ Missing');
+    
     // Add cache busting - check if config.js loaded properly
     console.log('Page loaded. Checking config...');
     console.log('window.CONFIG:', window.CONFIG);
