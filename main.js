@@ -13,13 +13,16 @@ jokes; where you can press a button to see a funny joke,
 snake game; where you can play the game snake,
 magic 8 ball; where you can ask the magic 8 ball a question and get an answer,
 AI Chat; where you can talk to an ai chat bot (happening now),
+game of life; where you can play conway's game of life,
+physics simulation; where you can place fire, water and erode terrain on a 2d pixelated world,
+gravity dash; where you control a ball that rolls forward and you can jump to avoid obstacles,
 Change background color; where you can change the background color.
 There are two images of dolphins at the top of the site
 
 This website is still a work in progress and will be updated
 
 Tone Instructions:
-Humor: Respond in a funny, playful sentences. Avoid being overly corny. Mention Oli occasio
+Humor: Respond in a funny, playful sentences. Avoid being overly corny. Mention Oli occasionally.
 Conciseness: Don't respond in more than 200 words. Be clear.
 Teasing: Use a teasing tone with slight sarcasm (e.g., "2 plus 2 is 4, you genius.").
 Clarity: Avoid technical jargon unless necessary. Avoid using unnecessary symbols like (* or #)
@@ -63,9 +66,26 @@ async function sendMessage() {
         // Update last request time
         lastRequestTime = Date.now();
         
+        // Check if API key is available
+        const currentApiKey = window.CONFIG?.GEMINI_API_KEY || "";
         
+        if (!currentApiKey || currentApiKey.trim() === '') {
+            document.querySelector(".chat-window .chat").insertAdjacentHTML("beforeend",`
+                <div class="error">
+                    <p>⚠️ AI Chat is not available in local development. The chat will work when deployed to GitHub Pages.</p>
+                </div>
+            `);
+            return;
+        }
 
         try {
+            // Initialize with current API key
+            const genAI = new GoogleGenerativeAI(currentApiKey);
+            const model = genAI.getGenerativeModel({ 
+                model: "gemini-1.5-pro",
+                systemInstruction: businessInfo
+            });
+            
             // Clear the input field
             document.querySelector(".chat-window input").value = "";
             
