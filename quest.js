@@ -157,15 +157,25 @@ window.questSystem = {
 function monitorAIChat() {
     if (!window.location.pathname.includes('aichat')) return;
     
+    console.log('🕵️ Quest monitoring started on AI chat page');
+    
     const observer = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
             if (mutation.type === 'childList') {
                 const messages = document.querySelectorAll('.chat .user p');
                 const lastMessage = Array.from(messages).pop()?.textContent?.toLowerCase();
                 
-                if (lastMessage && questTriggers.chatTriggers.some(trigger => 
-                    lastMessage.includes(trigger))) {
+                console.log('🔍 Checking message:', lastMessage);
+                
+                if (lastMessage && questTriggers.chatTriggers.some(trigger => {
+                    const found = lastMessage.includes(trigger);
+                    if (found) console.log('✅ Found trigger:', trigger);
+                    return found;
+                })) {
+                    console.log('🚀 Quest triggered!');
                     window.questSystem.trigger();
+                } else if (lastMessage) {
+                    console.log('❌ No triggers found in:', lastMessage);
                 }
             }
         });
@@ -173,7 +183,12 @@ function monitorAIChat() {
     
     const chatWindow = document.querySelector('.chat');
     if (chatWindow) {
+        console.log('✅ Chat window found, monitoring...');
         observer.observe(chatWindow, { childList: true, subtree: true });
+    } else {
+        console.log('❌ Chat window not found');
+        // Try again in a moment
+        setTimeout(monitorAIChat, 1000);
     }
 }
 
