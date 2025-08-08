@@ -245,11 +245,15 @@ window.addEventListener('load', () => {
         const script = document.createElement('script');
         script.src = `config.js?v=${Date.now()}`;
         script.onload = () => {
+            console.log('Config script loaded. Checking contents...');
+            console.log('window.CONFIG:', window.CONFIG);
+            console.log('API Key value:', window.CONFIG?.GEMINI_API_KEY);
+            console.log('API Key length:', window.CONFIG?.GEMINI_API_KEY?.length);
             console.log('Config reloaded. API Key status:', window.CONFIG?.GEMINI_API_KEY ? '✅ Available' : '❌ Missing');
             updateVersionDisplay(); // Update display after reload
         };
         script.onerror = () => {
-            console.log('❌ Failed to load config.js');
+            console.log('❌ Failed to load config.js - file not found');
             versionInfo.textContent = 'Config load failed';
         };
         document.head.appendChild(script);
