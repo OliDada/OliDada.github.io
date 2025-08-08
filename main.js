@@ -196,33 +196,37 @@ window.addEventListener('load', () => {
         z-index: 1000;
     `;
     
-    if (window.CONFIG && window.CONFIG.DEPLOY_VERSION) {
-        versionInfo.textContent = `v${window.CONFIG.BUILD_ID} - ${window.CONFIG.DEPLOY_VERSION}`;
-    } else {
-        versionInfo.textContent = 'Version info loading...';
-    }
+    // Function to update version display
+    const updateVersionDisplay = () => {
+        if (window.CONFIG && window.CONFIG.DEPLOY_VERSION) {
+            versionInfo.textContent = `v${window.CONFIG.BUILD_ID} - ${window.CONFIG.DEPLOY_VERSION}`;
+        } else {
+            versionInfo.textContent = 'Loading...';
+        }
+    };
     
+    updateVersionDisplay();
     document.body.appendChild(versionInfo);
     
-    // Console status (keep this for debugging)
+    // Console status (secure - don't show API key)
     console.log('🚀 Site loaded!');
     console.log('Deploy version:', window.CONFIG?.DEPLOY_VERSION || 'Unknown');
     console.log('Build ID:', window.CONFIG?.BUILD_ID || 'Unknown');
     console.log('API Key status:', window.CONFIG?.GEMINI_API_KEY ? '✅ Available' : '❌ Missing');
     
-    // Add config status to console
-    console.log('Page loaded. Checking config...');
-    console.log('window.CONFIG:', window.CONFIG);
-    
-    // Try to reload config.js if it's missing or empty
+    // Improved cache busting - try multiple times if needed
     if (!window.CONFIG || !window.CONFIG.GEMINI_API_KEY || window.CONFIG.GEMINI_API_KEY.trim() === '') {
-        console.log('Config missing or empty, attempting to reload...');
+        console.log('Config missing, attempting to reload...');
         
-        // Create a new script tag with cache busting
         const script = document.createElement('script');
         script.src = `config.js?v=${Date.now()}`;
         script.onload = () => {
-            console.log('Config reloaded. New config:', window.CONFIG);
+            console.log('Config reloaded. API Key status:', window.CONFIG?.GEMINI_API_KEY ? '✅ Available' : '❌ Missing');
+            updateVersionDisplay(); // Update display after reload
+        };
+        script.onerror = () => {
+            console.log('❌ Failed to load config.js');
+            versionInfo.textContent = 'Config load failed';
         };
         document.head.appendChild(script);
     }
