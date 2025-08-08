@@ -16,9 +16,6 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -28,6 +25,7 @@ jobs:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       run: |
         echo "=== DEBUG INFO ==="
+        echo "GEMINI_API_KEY available: $([[ -n "$GEMINI_API_KEY" ]] && echo "YES" || echo "NO")"
         echo "GEMINI_API_KEY length: ${#GEMINI_API_KEY}"
         echo "First 10 chars: ${GEMINI_API_KEY:0:10}..."
         echo "==================="
@@ -47,7 +45,7 @@ window.CONFIG = {
 EOF
         
         echo "=== CONFIG.JS CONTENT ==="
-        cat config.js
+        cat config.js | head -10
         echo "=========================="
         
         # Verify the API key was inserted
@@ -55,8 +53,10 @@ EOF
           echo "✅ API key successfully inserted"
         else
           echo "❌ API key NOT found in config.js"
-          echo "Environment variables available:"
-          env | grep -E "(GITHUB_|GEMINI_)" || echo "No relevant environment variables found"
+          echo "Full config.js content:"
+          cat config.js
+          echo "Available environment variables:"
+          env | sort
           exit 1
         fi
         
@@ -71,3 +71,5 @@ EOF
     - name: Deploy to GitHub Pages
       id: deployment
       uses: actions/deploy-pages@v4
+      with:
+        token: ${{ github.token }}
