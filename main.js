@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const businessInfo = `
 
 WEBSITE INFORMATION:
-Website: olid.is (hosted at OliDada.github.io)
+Website: olid.is
 Creator: Oli
 Status: Active development, frequently updated
 
@@ -346,3 +346,16 @@ window.addEventListener('load', () => {
         });
     }
 });
+
+// FALLBACK CONFIG - Use this if config.js fails to load
+const FALLBACK_CONFIG = {
+    GEMINI_API_KEY: 'AIzaSyC4hU2qOYjpXUCpH9zAbTq_PoaXSRSXrQI',
+    DEPLOY_VERSION: '2025-08-08 Embedded',
+    BUILD_ID: 'fallback'
+};
+
+// Initialize with fallback if config.js fails
+if (!window.CONFIG || !window.CONFIG.GEMINI_API_KEY) {
+    console.log('⚠️ Using fallback config - config.js failed to load');
+    window.CONFIG = FALLBACK_CONFIG;
+}
