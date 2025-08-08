@@ -250,6 +250,25 @@ window.addEventListener('load', () => {
             console.log('API Key value:', window.CONFIG?.GEMINI_API_KEY);
             console.log('API Key length:', window.CONFIG?.GEMINI_API_KEY?.length);
             console.log('Config reloaded. API Key status:', window.CONFIG?.GEMINI_API_KEY ? '✅ Available' : '❌ Missing');
+            
+            // If still missing, try to fetch config.js directly to see what's wrong
+            if (!window.CONFIG?.GEMINI_API_KEY) {
+                console.log('Attempting to fetch config.js directly...');
+                fetch(`config.js?v=${Date.now()}`)
+                    .then(response => response.text())
+                    .then(text => {
+                        console.log('Raw config.js content:', text);
+                        if (text.trim() === '') {
+                            console.log('❌ Config.js is empty');
+                        } else if (text.includes('PLACEHOLDER')) {
+                            console.log('❌ Config.js contains unreplaced placeholders');
+                        } else {
+                            console.log('❌ Config.js exists but failed to execute properly');
+                        }
+                    })
+                    .catch(err => console.log('❌ Could not fetch config.js:', err));
+            }
+            
             updateVersionDisplay(); // Update display after reload
         };
         script.onerror = () => {
