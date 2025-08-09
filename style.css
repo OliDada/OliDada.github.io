@@ -269,10 +269,11 @@ h2 {
   max-width: 700px;
   margin: 0px auto 40px auto;
   border-radius: 18px;
-  padding: 32px 20px 40px 20px;
+  padding: 20px 20px 40px 20px; /* Reduced top padding from 32px to 20px */
   display: flex;
   flex-direction: column;
   align-items: center;
+  margin-top: -50px; /* Add negative margin to pull content up */
 }
 
 .main-content p {
@@ -281,7 +282,7 @@ h2 {
   align-items: center;
   justify-content: center;
   width: 100%;
-  margin:auto
+  margin: 2px auto; /* Reduced from 5px to 2px */
 }
 
 button {
@@ -575,8 +576,8 @@ html, body {
 
 #gameoflife-canvas {
     width: 100vw;
-    height: 100vh;
-    margin: 0;
+    height: 60vh; /* Reduced from 70vh to 60vh */
+    margin: 5px 0; /* Reduced from 10px to 5px */
     padding: 0;
     display: flex;
     justify-content: center;
@@ -596,13 +597,75 @@ html, body {
     display: flex;
     justify-content: center;
     gap: 16px;
-    margin-top: 32px;
+    margin-top: 10px; /* Reduced from 32px to 10px */
 }
 
 .game_of_life_title {
-  margin-top: 100px;
+  margin-top: 10px; /* Reduced from 20px */
+  margin-bottom: 10px; /* Add bottom margin */
 }
 
 .gravity_dash_title {
   margin-top: 100px;
+}
+
+.color-controls {
+    margin: 30px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    padding: 25px;
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
+}
+
+.color-controls label {
+    font-weight: 600;
+    font-size: 18px;
+    color: #3d320d;
+    margin-bottom: 5px;
+    font-family: 'Poppins', sans-serif;
+}
+
+#colorPicker {
+    width: 80px;
+    height: 80px;
+    border: 4px solid #3d320d;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 20px rgba(61, 50, 13, 0.3);
+    background: none;
+    padding: 0;
+    overflow: hidden;
+}
+
+#colorPicker:hover {
+    transform: scale(1.1);
+    box-shadow: 0 8px 30px rgba(61, 50, 13, 0.4);
+    border-color: #3d88f9;
+}
+
+#colorPicker:active {
+    transform: scale(0.95);
+}
+
+/* Style the color picker input specifically for webkit browsers */
+#colorPicker::-webkit-color-swatch-wrapper {
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+}
+
+#colorPicker::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.3);
+}
+
+/* Firefox specific styling */
+#colorPicker::-moz-color-swatch {
+    border: none;
+    border-radius: 50%;
 }

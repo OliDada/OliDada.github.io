@@ -204,6 +204,41 @@ function resetChat() {
     `);
 }
 
+// Dynamic personality based on quest state
+function getActivePersonality() {
+    if (window.QUEST_ACTIVE && window.QUEST_PERSONALITY) {
+        return window.QUEST_PERSONALITY;
+    }
+    return businessInfo; // Normal personality
+}
+
+// Update the AI initialization
+async function initializeAI() {
+    if (window.CONFIG?.GEMINI_API_KEY) {
+        try {
+            const genAI = new GoogleGenerativeAI(window.CONFIG.GEMINI_API_KEY);
+            
+            // Use dynamic personality
+            const activePersonality = getActivePersonality();
+            
+            window.model = genAI.getGenerativeModel({ 
+                model: "gemini-1.5-pro",
+                systemInstruction: activePersonality
+            });
+            
+            console.log(`🤖 AI initialized with ${window.QUEST_ACTIVE ? 'QUEST' : 'normal'} personality`);
+        } catch (error) {
+            console.error('Failed to initialize AI:', error);
+        }
+    }
+}
+
+// Re-initialize AI when quest activates
+window.addEventListener('questActivated', () => {
+    console.log('🔄 Reinitializing AI with quest personality...');
+    initializeAI();
+});
+
 window.addEventListener('load', () => {
     // Add version info display
     const versionInfo = document.createElement('div');

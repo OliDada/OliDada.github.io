@@ -4,7 +4,7 @@ function changeBackgroundColor() {
     const randomColor = "#" + Math.floor(Math.random() * 16777215).toString(16);
 
     // Set the random color as the background and remove the image
-    document.body.style.backgroundColor = randomColor;
+    setBackgroundColor(randomColor);
     document.body.style.backgroundImage = "none";
 
     // Save the new background settings to localStorage
@@ -30,6 +30,15 @@ function applySavedBackground() {
     // Apply the saved background, or default to the original
     document.body.style.backgroundColor = savedColor || "";
     document.body.style.backgroundImage = savedImage || `url('${originalBackground}')`;
+}
+
+function setBackgroundColor(color) {
+    document.body.style.backgroundColor = color;
+    document.body.style.backgroundImage = 'none';
+    
+    // Save the selected color to localStorage
+    localStorage.setItem("backgroundColor", color);
+    localStorage.setItem("backgroundImage", "none");
 }
 
 // Apply the saved background when the page loads
