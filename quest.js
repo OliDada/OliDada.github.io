@@ -363,7 +363,9 @@ window.questSystem = {
         }
     },
     
-    // ...existing methods...
+    // Make sure there's no duplicate originalBackground declaration in this file
+    // If there is one, remove it since it's already declared in script.js
+    
     saveProgress: function() {
         localStorage.setItem('saveAIQuestState', JSON.stringify(questState));
     }
