@@ -628,7 +628,11 @@ html, body {
     font-family: 'Poppins', sans-serif;
 }
 
+/* Color picker cross-browser reset */
 #colorPicker {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
     width: 80px;
     height: 80px;
     border: 4px solid #3d320d;
@@ -639,19 +643,9 @@ html, body {
     background: none;
     padding: 0;
     overflow: hidden;
+    outline: none;
 }
 
-#colorPicker:hover {
-    transform: scale(1.1);
-    box-shadow: 0 8px 30px rgba(61, 50, 13, 0.4);
-    border-color: #3d88f9;
-}
-
-#colorPicker:active {
-    transform: scale(0.95);
-}
-
-/* Style the color picker input specifically for webkit browsers */
 #colorPicker::-webkit-color-swatch-wrapper {
     padding: 0;
     border: none;
@@ -664,7 +658,6 @@ html, body {
     box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.3);
 }
 
-/* Firefox specific styling */
 #colorPicker::-moz-color-swatch {
     border: none;
     border-radius: 50%;

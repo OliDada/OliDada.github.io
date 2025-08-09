@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Oli.is - Change Color</title>
-  <script src="script.js" defer></script>
-  <script src="quest.js" defer></script>
-  <link rel="icon" href="images/dolphin2.png" type="image/x-icon">
-  <link href="style.css" rel="stylesheet" type="text/css" media="all">
+  <!-- Use relative paths for deployment -->
+  <script src="./script.js" defer></script>
+  <script src="./quest.js" defer></script>
+  <link rel="icon" href="./images/dolphin2.png" type="image/x-icon">
+  <link href="./style.css" rel="stylesheet" type="text/css" media="all">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
 
 </head>
@@ -42,7 +43,10 @@
         </div>
         <button onclick="changeBackgroundColor()">Random Background Color</button>
         <button onclick="revertToOriginalBackground()" class="revertButton">Revert to Original Background</button>
-        <script src="script.js"></script>                  
     </div>
+
+    <!-- Load scripts at the end of body for better compatibility -->
+    <script src="./script.js"></script>
+    <script src="./quest.js"></script>
 </body>
 </html>
