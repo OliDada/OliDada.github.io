@@ -1,3 +1,5 @@
+let flashTimer = 0;
+
 function Snake() {
   this.x = 0;
   this.y = 0;
@@ -28,6 +30,7 @@ function Snake() {
       if (d < 1) {
         this.total = 0;
         this.tail = [];
+        flashTimer = 5;
       }
     }
   }
