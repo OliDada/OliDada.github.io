@@ -1,0 +1,21 @@
+{
+  "name": "dungeon-crawler-game",
+  "version": "1.0.0",
+  "description": "A thrilling dungeon crawler game built with p5.js.",
+  "main": "src/sketch.js",
+  "scripts": {
+    "start": "live-server src",
+    "build": "echo 'Build step not defined yet.'"
+  },
+  "keywords": [
+    "dungeon",
+    "crawler",
+    "game",
+    "p5.js"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "p5": "^1.4.0"
+  }
+}
