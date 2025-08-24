@@ -95,7 +95,7 @@ class Item {
                 let drawWidth, drawHeight;
 
                 // Fit to a maximum size while maintaining aspect ratio
-                const maxSize = tileSize * 7; // Scale with tile size
+                const maxSize = tileSize * 10; // Scale with tile size
                 if (imageRatio > 1) {
                     // Image is wider than tall - fit to width
                     drawWidth = maxSize;
@@ -123,9 +123,9 @@ class Item {
         const itemPixelX = this.x * tileSize;
         const itemPixelY = this.y * tileSize;
         
-        // Calculate player center - player visual size scales with tile size
-        const playerCenterX = player.position.x + player.size;
-        const playerCenterY = player.position.y + player.size;
+        // Calculate player center - player visual size is now size * 3
+        const playerCenterX = player.position.x + (player.size * 3) / 2;
+        const playerCenterY = player.position.y + (player.size * 3) / 2;
 
         if (this.type === 'key' || this.type === 'halfKey') {
             // Use rectangular hitbox for keys - scale with tile size
@@ -186,18 +186,37 @@ class Item {
         strokeWeight(2);
         
         if (this.type === 'key' || this.type === 'halfKey') {
-            // Draw rectangular hitbox for keys
-            const keyLeft = itemPixelX - 20;
-            const keyRight = itemPixelX + 55;
-            const keyTop = itemPixelY;
-            const keyBottom = itemPixelY + 30;
+            // Use the same center and size as in render()
+            const centerX = this.x * tileSize + tileSize/2;
+            const centerY = this.y * tileSize + tileSize/2;
+            let imageRatio, drawWidth, drawHeight, maxSize;
+            if (this.type === 'key') {
+                imageRatio = Item.keyImage.width / Item.keyImage.height;
+                maxSize = tileSize * (tileSize === 16 ? 3.5 : 1.8);
+            } else {
+                imageRatio = Item.halfKeyImage.width / Item.halfKeyImage.height;
+                maxSize = tileSize * (tileSize === 16 ? 3.5 : 1.8);
+            }
+            if (imageRatio > 1) {
+                drawWidth = maxSize;
+                drawHeight = maxSize / imageRatio;
+            } else {
+                drawHeight = maxSize;
+                drawWidth = maxSize * imageRatio;
+            }
+            rect(centerX - drawWidth/2, centerY - drawHeight/2, drawWidth, drawHeight);
+        } else if (this.type === 'gun') {
+            // Draw circular hitbox for guns
+            const itemCenterX = itemPixelX + tileSize/2;
+            const itemCenterY = itemPixelY + tileSize/2;
+            const collectionRadius = 50 * (tileSize / 32);
             
-            rect(keyLeft, keyTop, keyRight - keyLeft, keyBottom - keyTop);
+            ellipse(itemCenterX, itemCenterY, collectionRadius * 2, collectionRadius * 2);
         } else {
             // Draw circular hitbox for other items (gold)
-            const itemCenterX = itemPixelX + 16;
-            const itemCenterY = itemPixelY + 16;
-            const collectionRadius = 28;
+            const itemCenterX = itemPixelX + tileSize/2;
+            const itemCenterY = itemPixelY + tileSize/2;
+            const collectionRadius = 28 * (tileSize / 32);
             
             ellipse(itemCenterX, itemCenterY, collectionRadius * 2, collectionRadius * 2);
         }
@@ -252,7 +271,6 @@ class Inventory {
     }
 
     render(currentLevel) {
-        console.log("Inventory render called, gold:", this.gold); // Debug log
         
         // Make text more visible with background
         push();

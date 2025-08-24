@@ -4,7 +4,7 @@ class Player {
         this.health = health;
         this.position = position; // { x: number, y: number }
         this.inventory = [];
-        this.speed = 5; // Lower speed for smoother movement
+        this.speed = 6; // Lower speed for smoother movement
         this.size = this.calculatePlayerSize(); // Calculate size based on current level
         
         // Collision box adjustments to better match visual character
@@ -113,8 +113,8 @@ class Player {
             if (img && img.width > 0) {
                 // Force all images to display at exactly the same size
                 // This ensures consistent appearance regardless of original dimensions
-                const displayWidth = this.size * 2;   // 62 pixels
-                const displayHeight = this.size * 2;  // 62 pixels
+                const displayWidth = this.size * 3;   // 1.5x bigger (93 pixels)
+                const displayHeight = this.size * 3;  // 1.5x bigger (93 pixels)
                 
                 // Handle directional facing
                 push(); // Save state again for transformations
@@ -168,9 +168,9 @@ class Player {
         stroke(0, 255, 0); // Green color for player hitbox
         strokeWeight(2);
         
-        // Draw the collision detection box
-        const collisionSize = 50;
-        const collisionOffset = (this.size * 2 - collisionSize) / 2;
+    // Draw the collision detection box
+    const collisionSize = 55;
+    const collisionOffset = (this.size * 3 - collisionSize) / 2;
         
         const collisionLeft = this.position.x + collisionOffset;
         const collisionTop = this.position.y + collisionOffset;
@@ -180,8 +180,8 @@ class Player {
         // Draw center point
         fill(0, 255, 0);
         noStroke();
-        const centerX = this.position.x + 31;
-        const centerY = this.position.y + 31;
+        const centerX = this.position.x + (this.size * 3) / 2;
+        const centerY = this.position.y + (this.size * 3) / 2;
         ellipse(centerX - 2, centerY - 2, 4, 4);
         
         pop();
@@ -203,48 +203,84 @@ class Player {
         let newX = this.position.x + dx;
         let newY = this.position.y + dy;
 
-            // Use collision detection that matches the visual character size
-            // Visual character is 62x62, so use a collision box that's closer to that
-            const collisionSize = 50; // Slightly smaller than visual size for better feel
-            const collisionOffset = (this.size * 2 - collisionSize) / 2; // Center the collision box
+    // Use collision detection that matches the visual character size
+    // Visual character is now 93x93 (this.size * 3), so use a collision box that's closer to that
+    const collisionSize = 55; // Smaller than visual size so player can fit through 1-tile gaps
+    const collisionOffset = (this.size * 3 - collisionSize) / 2; // Center the collision box
+        
+        // Check X movement separately from Y movement to prevent corner clipping
+        let canMoveX = true;
+        let canMoveY = true;
+        
+        // Check horizontal movement
+        if (dx !== 0) {
+            const testX = this.position.x + dx;
+            const testY = this.position.y;
             
-            const collisionLeft = newX + collisionOffset;                  
-            const collisionRight = newX + collisionOffset + collisionSize - 1;
-            const collisionTop = newY + collisionOffset;
-            const collisionBottom = newY + collisionOffset + collisionSize - 1;
-
-            // Check more points for better collision detection at wall ends
+            const collisionLeft = testX + collisionOffset;                  
+            const collisionRight = testX + collisionOffset + collisionSize - 1;
+            const collisionTop = testY + collisionOffset;
+            const collisionBottom = testY + collisionOffset + collisionSize - 1;
+            
             const midX = collisionLeft + (collisionSize / 2);
             const midY = collisionTop + (collisionSize / 2);
+            const quarterSize = collisionSize / 4;
             
-            const collisionPoints = [
-                // Four corners
-                {x: collisionLeft, y: collisionTop},
-                {x: collisionRight, y: collisionTop},
-                {x: collisionLeft, y: collisionBottom},
-                {x: collisionRight, y: collisionBottom},
-                // Midpoints of edges
-                {x: midX, y: collisionTop},        // Top middle
-                {x: midX, y: collisionBottom},     // Bottom middle
-                {x: collisionLeft, y: midY},       // Left middle
-                {x: collisionRight, y: midY},      // Right middle
-                // Center point
-                {x: midX, y: midY}                 // Center
+            const xCollisionPoints = [
+                // Focus on the leading edge for X movement - use fewer points to be less strict
+                {x: dx > 0 ? collisionRight : collisionLeft, y: collisionTop + quarterSize},
+                {x: dx > 0 ? collisionRight : collisionLeft, y: midY},
+                {x: dx > 0 ? collisionRight : collisionLeft, y: collisionBottom - quarterSize},
             ];
-
-        let canMove = true;
-        for (const point of collisionPoints) {
-            const tileX = Math.floor(point.x / tileSize);
-            const tileY = Math.floor(point.y / tileSize);
-
-            if (map.isBlocked(tileX, tileY, inventory)) {
-                canMove = false;
-                break;
+            
+            for (const point of xCollisionPoints) {
+                const tileX = Math.floor(point.x / tileSize);
+                const tileY = Math.floor(point.y / tileSize);
+                
+                if (map.isBlocked(tileX, tileY, inventory)) {
+                    canMoveX = false;
+                    break;
+                }
             }
         }
-
-        if (canMove) {
+        
+        // Check vertical movement
+        if (dy !== 0) {
+            const testX = this.position.x;
+            const testY = this.position.y + dy;
+            
+            const collisionLeft = testX + collisionOffset;                  
+            const collisionRight = testX + collisionOffset + collisionSize - 1;
+            const collisionTop = testY + collisionOffset;
+            const collisionBottom = testY + collisionOffset + collisionSize - 1;
+            
+            const midX = collisionLeft + (collisionSize / 2);
+            const midY = collisionTop + (collisionSize / 2);
+            const quarterSize = collisionSize / 4;
+            
+            const yCollisionPoints = [
+                // Focus on the leading edge for Y movement - use fewer points to be less strict
+                {x: collisionLeft + quarterSize, y: dy > 0 ? collisionBottom : collisionTop},
+                {x: midX, y: dy > 0 ? collisionBottom : collisionTop},
+                {x: collisionRight - quarterSize, y: dy > 0 ? collisionBottom : collisionTop},
+            ];
+            
+            for (const point of yCollisionPoints) {
+                const tileX = Math.floor(point.x / tileSize);
+                const tileY = Math.floor(point.y / tileSize);
+                
+                if (map.isBlocked(tileX, tileY, inventory)) {
+                    canMoveY = false;
+                    break;
+                }
+            }
+        }
+        
+        // Apply movement
+        if (canMoveX) {
             this.position.x = newX;
+        }
+        if (canMoveY) {
             this.position.y = newY;
         }
         

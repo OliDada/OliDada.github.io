@@ -28,7 +28,7 @@ class Bullet {
         this.angle = Math.atan2(dy, dx);
         
         // Normalize direction and set speed
-        this.speed = 8;
+        this.speed = 16;
         this.velX = (dx / distance) * this.speed;
         this.velY = (dy / distance) * this.speed;
         
@@ -53,20 +53,38 @@ class Bullet {
         
         // Check for enemy collision
         if (gameMap && gameMap.enemies) {
-            gameMap.enemies.forEach(enemy => {
+            for (let i = gameMap.enemies.length - 1; i >= 0; i--) {
+                const enemy = gameMap.enemies[i];
                 if (enemy.isAlive()) {
-                    const enemyX = enemy.position.x * tileSize + tileSize / 2;
-                    const enemyY = enemy.position.y * tileSize + tileSize / 2;
-                    const distance = Math.sqrt((this.x - enemyX) ** 2 + (this.y - enemyY) ** 2);
-                    
-                    if (distance < tileSize / 2) {
-                        // Hit enemy
-                        enemy.health -= 10; // Damage to enemy
+                    let hit = false;
+                    if (enemy.name === 'Zombie') {
+                        // Use zombie's actual sprite rectangle (56x56 at x*32, y*32)
+                        const zx = enemy.position.x * 32;
+                        const zy = enemy.position.y * 32;
+                        const zw = 56;
+                        const zh = 56;
+                        if (
+                            this.x >= zx && this.x <= zx + zw &&
+                            this.y >= zy && this.y <= zy + zh
+                        ) hit = true;
+                    } else {
+                        const enemyX = enemy.position.x * tileSize + tileSize / 2;
+                        const enemyY = enemy.position.y * tileSize + tileSize / 2;
+                        const distance = Math.sqrt((this.x - enemyX) ** 2 + (this.y - enemyY) ** 2);
+                        if (distance < tileSize / 2) hit = true;
+                    }
+                    if (hit) {
+                        if (enemy.name === 'Zombie') {
+                            enemy.health = 0;
+                            gameMap.enemies.splice(i, 1);
+                            console.log('Zombie killed instantly!');
+                        } else {
+                            enemy.health -= 10; // Damage to other enemies
+                        }
                         this.active = false; // Bullet disappears
-                        console.log(`Bullet hit ${enemy.name}! Health: ${enemy.health}`);
                     }
                 }
-            });
+            }
         }
         
         // Remove bullet if it goes off screen
@@ -168,12 +186,25 @@ function draw() {
         return;
     }
 
+    // Update spikeball orbits before rendering
+    if (gameMap.enemies) {
+        gameMap.enemies.forEach(enemy => {
+            if (enemy instanceof SpikeBall) {
+                enemy.updateSpikeBall();
+            }
+        });
+    }
+
     gameMap.render(); // Draw the map first
+    // Draw enemies
     if (gameMap.enemies) {
         gameMap.enemies.forEach(enemy => {
             if (enemy instanceof Snake) {
                 enemy.drawSnake();
                 enemy.snakeMovement();
+            } else if (enemy instanceof Zombie) {
+                enemy.drawZombie();
+                enemy.zombieMovement(); // Ensure zombieMovement is called
             } else if (enemy instanceof Ghost) {
                 enemy.drawGhost();
                 enemy.ghostMovement();
@@ -494,25 +525,39 @@ function keyPressed() {
 }
 
 function playerOnExitTile(player, map) {
-    // Check the tile the player is standing on - use center of player
-    // Player visual size is 62x62, so center is at +31
-    const tileX = Math.floor((player.position.x + 31) / tileSize);
-    const tileY = Math.floor((player.position.y + 31) / tileSize);
-    
-    // Make sure coordinates are within map bounds
-    if (tileX >= 0 && tileX < map.width && tileY >= 0 && tileY < map.height) {
-        // Access the 2D array correctly
-        const currentTile = map.tiles[tileY][tileX];
-        return currentTile === '<'; // Exit tile
+    // Check all tiles overlapped by the player's collision box (not just center)
+    // Use the same collision box as in player.move()
+    const displaySize = player.size * 3;
+    const collisionSize = 55;
+    const collisionOffset = (displaySize - collisionSize) / 2;
+    const left = player.position.x + collisionOffset;
+    const top = player.position.y + collisionOffset;
+    const right = left + collisionSize;
+    const bottom = top + collisionSize;
+
+    // Check all tiles overlapped by the collision box
+    const minTileX = Math.floor(left / tileSize);
+    const maxTileX = Math.floor((right - 1) / tileSize);
+    const minTileY = Math.floor(top / tileSize);
+    const maxTileY = Math.floor((bottom - 1) / tileSize);
+
+    for (let tx = minTileX; tx <= maxTileX; tx++) {
+        for (let ty = minTileY; ty <= maxTileY; ty++) {
+            if (tx >= 0 && tx < map.width && ty >= 0 && ty < map.height) {
+                const currentTile = map.tiles[ty][tx];
+                if (typeof currentTile === 'string' && currentTile.includes('<')) {
+                    return true;
+                }
+            }
+        }
     }
-    
     return false;
 }
 
 function checkEnemyCollision(player, enemy) {
-    // Calculate player center
-    const playerCenterX = player.position.x + 16;
-    const playerCenterY = player.position.y + 16;
+    // Calculate player center - player visual size is now size * 3
+    const playerCenterX = player.position.x + (player.size * 3) / 2;
+    const playerCenterY = player.position.y + (player.size * 3) / 2;
     
     // Check if enemy has rectangular hitbox (like Snake)
     if (enemy.getHitboxBounds) {

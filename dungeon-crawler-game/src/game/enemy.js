@@ -22,6 +22,11 @@ class Enemy {
     isAlive() {
         return this.health > 0;
     }
+
+    // Default drawHitbox method (does nothing, can be overridden)
+    drawHitbox() {
+        // Optionally, draw a simple rectangle or nothing
+    }
 }
 
 
@@ -39,7 +44,7 @@ class Snake extends Enemy {
             // Level 2: Original movement range
             this.minX = 8;
             this.maxX = 16;
-            this.moveSpeed = 0.08; // How fast the snake moves (tiles per frame)
+            this.moveSpeed = 0.10; // How fast the snake moves (tiles per frame)
         } else {
             // Default range for other levels
             this.minX = 8;
@@ -177,8 +182,8 @@ class Ghost extends Enemy {
         this.endPosition = endPosition;
         this.moveSpeed1 = 0.08; // Slow speed
         this.moveSpeed2 = 0.10; // Medium speed
-        this.moveSpeed3 = 0.2 // Fast speed
-        this.moveSpeed4 = 0.4 // Very fast speed
+        this.moveSpeed3 = 0.22; // Fast speed
+        this.moveSpeed4 = 0.32; // Very fast speed
         this.hasDisappeared = false;
         
         // Movement state tracking - start with idle
@@ -414,6 +419,150 @@ class Ghost extends Enemy {
         ellipse(this.position.x * 32 + 16, this.position.y * 32 + 16, this.hitboxRadius * 2, this.hitboxRadius * 2);
         
         pop();
+    }
+}
+
+class Zombie extends Enemy {
+    constructor(position) {
+        super("Zombie", 40, 6, position);
+        this.moveSpeed = 0.04; // Fractional tiles per frame, like snake
+        this.collisionSize = 32;
+        this.displaySize = 93;
+        this.collisionOffset = (this.displaySize - this.collisionSize) / 2;
+        this.direction = { x: 0, y: 0 };
+        this.lastDirection = Math.random() * Math.PI * 2; // Random starting direction in radians
+        if (!Zombie.zombieImage) {
+            Zombie.zombieImage = loadImage('images/zombie.svg');
+        }
+    }
+
+    // Example method to draw the zombie (placeholder)
+    drawZombie() {
+        if (Zombie.zombieImage && Zombie.zombieImage.width > 0) {
+            const x = this.position.x * 32;
+            const y = this.position.y * 32;
+            push();
+            translate(x + 28, y + 28); // Center the zombie
+            rotate(this.lastDirection); // Rotate to face the direction of movement
+            imageMode(CENTER);
+            image(Zombie.zombieImage, 0, 0, 56, 56);
+            pop();
+        }
+    }
+
+    zombieMovement() {
+        // Only move in level 4 if player's y (in tiles) is greater than 12
+        if (
+            typeof level !== 'undefined' && level === 4 &&
+            player && (player.position.y / (window.tileSize || 32)) <= 12
+        ) {
+            return;
+        }
+
+        if (player && typeof gameMap !== 'undefined' && gameMap.isBlocked) {
+            const tileSize = window.tileSize || 32;
+
+            const zombieCenterX = this.position.x * tileSize + tileSize / 2;
+            const zombieCenterY = this.position.y * tileSize + tileSize / 2;
+            const playerCenterX = player.position.x + player.size / 2;
+            const playerCenterY = player.position.y + player.size / 2 - 5; // Adjusted to better align with player sprite
+
+            const dx = playerCenterX - zombieCenterX;
+            const dy = playerCenterY - zombieCenterY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance === 0) return;
+
+            const dirX = dx / distance;
+            const dirY = dy / distance;
+
+            const intendedX = this.position.x + dirX * this.moveSpeed;
+            const intendedY = this.position.y + dirY * this.moveSpeed;
+
+            const collisionPadding = 0; // Removed padding to allow closer movement to walls
+            if (!gameMap.isBlocked(Math.floor(intendedX), Math.floor(this.position.y))) {
+                this.position.x = intendedX;
+            }
+            if (!gameMap.isBlocked(Math.floor(this.position.x), Math.floor(intendedY))) {
+                this.position.y = intendedY;
+            }
+
+            const angle = Math.atan2(dirY, dirX);
+            this.lastDirection = angle; // Store the angle for drawing
+        }
+    }
+}
+
+class SpikeBall extends Enemy {
+    constructor(position) {
+        super("SpikeBall", 9999, 10, position); // Very high health to be indestructible
+        // Orbit animation properties
+        this.angle = 0; // Current angle in radians
+        this.orbitSpeed = 0.06; // Radians per frame (faster)
+        this.orbitRadius = (window.tileSize || 32) * 6; // Orbit radius in pixels (further from base)
+        // Load spike ball image if not already loaded
+        if (!SpikeBall.spikeBallImage) {
+            SpikeBall.spikeBallImage = loadImage('images/spikeBall.png');
+        }
+        // Load base image if not already loaded
+        if (!SpikeBall.baseImage) {
+            SpikeBall.baseImage = loadImage('images/spikeBallBase.svg');
+        }
+        // Cache aspect ratio for performance
+        this._spikeBallAspect = null;
+    }
+
+    updateSpikeBall() {
+        this.angle += this.orbitSpeed;
+        if (this.angle > Math.PI * 2) {
+            this.angle -= Math.PI * 2;
+        }
+    }
+
+    // Example method to draw the spike ball (placeholder)
+    drawSpikeBall() {
+        const tileSize = window.tileSize || 32;
+        const centerX = Math.round(this.position.x * tileSize + tileSize / 2);
+        const centerY = Math.round(this.position.y * tileSize + tileSize / 2);
+
+        // Draw the base (stationary)
+        let baseSize = tileSize * 1.3;
+        if (SpikeBall.baseImage && SpikeBall.baseImage.width > 0 && SpikeBall.baseImage.height > 0) {
+            image(SpikeBall.baseImage, Math.round(centerX - baseSize/2), Math.round(centerY - baseSize/2), Math.round(baseSize), Math.round(baseSize));
+        }
+
+        // Calculate orbit position for the ball
+        const orbitRadius = this.orbitRadius;
+        const ballX = Math.round(centerX + Math.cos(this.angle) * orbitRadius);
+        const ballY = Math.round(centerY + Math.sin(this.angle) * orbitRadius);
+
+        // Only draw the line if both images are loaded
+        if (SpikeBall.baseImage && SpikeBall.baseImage.width > 0 && SpikeBall.spikeBallImage && SpikeBall.spikeBallImage.width > 0) {
+            push();
+            stroke(80);
+            strokeWeight(tileSize * 0.12);
+            line(centerX, centerY - 8, ballX, ballY);
+            pop();
+        }
+
+        // Draw the spike ball (orbiting)
+        const targetHeight = tileSize * 3;
+        let targetWidth = targetHeight;
+        if (SpikeBall.spikeBallImage && SpikeBall.spikeBallImage.width > 0 && SpikeBall.spikeBallImage.height > 0) {
+            // Cache aspect ratio for performance
+            if (!this._spikeBallAspect) {
+                this._spikeBallAspect = SpikeBall.spikeBallImage.width / SpikeBall.spikeBallImage.height;
+            }
+            targetWidth = targetHeight * this._spikeBallAspect;
+            image(SpikeBall.spikeBallImage, Math.round(ballX - targetWidth/2), Math.round(ballY - targetHeight/2), Math.round(targetWidth), Math.round(targetHeight));
+        } else {
+            // Fallback: draw a red ellipse with the same proportions
+            push();
+            fill(200, 0, 0);
+            noStroke();
+            ellipse(ballX, ballY, targetWidth, targetHeight);
+            pop();
+        }
     }
 }
 

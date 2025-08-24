@@ -2,7 +2,7 @@
     "name": "Level 4",
     "width": 52,
     "height": 40,
-    "playerStart": {"x": 0, "y": 5},
+    "playerStart": {"x": 0, "y": 4},
     "items": [
         {"type": "gun", "x": 25, "y": 6},
         {"type": "key", "x": 4, "y": 12},
@@ -10,7 +10,13 @@
         {"type": "halfKey", "x": 4.5, "y": 35}
     ],
     "enemies": [  
-        {"type": "snake", "x": 0, "y": 7.5}      
+        {"type": "spikeBall", "x": 26, "y": 17},
+        {"type": "snake", "x": 0, "y": 7.5},
+        {"type": "zombie", "x": 15, "y": 15},
+        {"type": "zombie", "x": 9, "y": 10.5},
+        {"type": "zombie", "x": 9.3, "y": 13.5},
+        {"type": "zombie", "x": 13, "y": 16},
+        {"type": "zombie", "x": 18, "y": 10}
     ],
     "tiles": [
         "####################################################",

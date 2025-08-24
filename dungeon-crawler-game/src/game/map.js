@@ -21,8 +21,13 @@ class Map {
             this.tiles = this.createMap();
         } catch (error) {
             console.error('Failed to load map:', error);
-            // Fallback to default map
-            this.createDefaultMap();
+            // Fallback: create a minimal empty map
+            this.width = 10;
+            this.height = 10;
+            this.playerStart = { x: 1, y: 1 };
+            this.items = [];
+            this.enemies = [];
+            this.tiles = Array.from({ length: 10 }, () => Array(10).fill('.'));
         }
     }
 
@@ -44,6 +49,10 @@ class Map {
                     const startPos = { x: enemyData.x, y: enemyData.y };
                     const endPos = { x: this.width - 1, y: enemyData.y };
                     return new Ghost(startPos, endPos);
+                } else if (enemyData.type === 'zombie') {
+                    return new Zombie({ x: enemyData.x, y: enemyData.y });
+                } else if (enemyData.type === 'spikeBall') {
+                    return new SpikeBall({ x: enemyData.x, y: enemyData.y });
                 }
                 // Add other enemy types here as needed
                 return null;
@@ -80,6 +89,10 @@ class Map {
                         enemy.drawSnake();
                     } else if (enemy instanceof Ghost) {
                         enemy.drawGhost();
+                    } else if (enemy instanceof Zombie) {
+                        enemy.drawZombie();
+                    } else if (enemy instanceof SpikeBall) {
+                        enemy.drawSpikeBall();
                     }
                 }
             });
@@ -88,26 +101,24 @@ class Map {
 
     // Check if a tile blocks movement
     isBlocked(x, y, inventory) {
-        if (y < 0 || y >= this.height || x < 0 || x >= this.width) {
+        // Always use integer indices for tile access
+        const ix = Math.floor(x);
+        const iy = Math.floor(y);
+        if (iy < 0 || iy >= this.height || ix < 0 || ix >= this.width) {
             return true; // Out of bounds
         }
-        
-        const tile = this.tiles[y][x];
-        
-        if (tile === '#') {
-            return true; // Wall always blocks
+        const tile = this.tiles[iy][ix];
+        if (tile === '#' || tile === 'o') {
+            return true; // Wall or invisible wall always blocks
         }
-        
         if (tile === '<') {
             // Door blocks only if player has no keys
             return !inventory || inventory.keys === 0;
         }
-
         if (tile === '=') {
-            // Door blocks only if player has no keys
+            // Door blocks only if player has no halfKeys
             return !inventory || inventory.halfKeys === 0;
         }
-        
         return false; // Floor and other tiles don't block
     }
 
@@ -130,7 +141,7 @@ class Map {
             if (this.levelNumber === 1) {
                 fill(80, 149, 237, 150); // Darker blue
             } else if (this.levelNumber === 2) {
-                fill(200, 255, 200, 150); // Darker floor color for level 2
+                fill(150, 255, 200, 150); // Darker green floor color for level 2
             } else if (this.levelNumber === 3) {
                 fill(150, 50, 150, 150); // Darker purple for level 3
             } else if (this.levelNumber === 4) {
@@ -141,7 +152,7 @@ class Map {
             if (this.levelNumber === 1) {
                 fill(80, 149, 237, 150); // Invisible wall (Floor color)
             } else if (this.levelNumber === 2) {
-                fill(200, 255, 200, 150); // Invisible wall (Light green)
+                fill(150, 255, 200, 150); // Invisible wall (Light green)
             } else if (this.levelNumber === 3) {
                 fill(150, 50, 150, 150); // Invisible wall (Purple)
             } else if (this.levelNumber === 4) {
@@ -153,7 +164,7 @@ class Map {
                 if (this.levelNumber === 1) {
                     fill(80, 149, 237, 150); // Open door (Floor color)
                 } else if (this.levelNumber === 2) {
-                    fill(200, 255, 200, 150); // Open door (Light green)
+                    fill(150, 255, 200, 150); // Open door (Light green)
                 } else if (this.levelNumber === 3) {
                     fill(150, 50, 150, 150); // Open door (Purple)
                 }
@@ -166,7 +177,7 @@ class Map {
                 if (this.levelNumber === 1) {
                     fill(80, 149, 237, 150); // Open half door (Floor color)
                 } else if (this.levelNumber === 2) {
-                    fill(200, 255, 200, 150); // Open half door (Light green)
+                    fill(150, 255, 200, 150); // Open half door (Light green)
                 } else if (this.levelNumber === 3) {
                     fill(150, 50, 150, 150); // Open half door (Purple)
                 }
