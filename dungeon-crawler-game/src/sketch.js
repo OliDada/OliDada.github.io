@@ -4,6 +4,7 @@ let inventory;
 let mapLoaded = false;
 let level = 1;
 let levelCompleted = false;
+let resetting = false;
 let tileSize = 32;
 let debugMode = false; // Toggle with 'D' key to show hitboxes
 
@@ -58,11 +59,13 @@ class Bullet {
                 if (enemy.isAlive()) {
                     let hit = false;
                     if (enemy.name === 'Zombie') {
-                        // Use zombie's actual sprite rectangle (56x56 at x*32, y*32)
-                        const zx = enemy.position.x * 32;
-                        const zy = enemy.position.y * 32;
-                        const zw = 56;
-                        const zh = 56;
+                        // Use zombie's actual scaled sprite rectangle for hitbox
+                        const tileSize = window.tileSize || 32;
+                        const enemyScale = (typeof getEnemyScale === 'function' ? getEnemyScale() : 1) * 2; // double size
+                        const zw = tileSize * 1.75 * enemyScale;
+                        const zh = tileSize * 1.75 * enemyScale;
+                        const zx = enemy.position.x * tileSize + tileSize * 0.875 * enemyScale - zw / 2;
+                        const zy = enemy.position.y * tileSize + tileSize * 0.875 * enemyScale - zh / 2;
                         if (
                             this.x >= zx && this.x <= zx + zw &&
                             this.y >= zy && this.y <= zy + zh
@@ -77,7 +80,23 @@ class Bullet {
                         if (enemy.name === 'Zombie') {
                             enemy.health = 0;
                             gameMap.enemies.splice(i, 1);
-                            console.log('Zombie killed instantly!');
+                            console.log('Zombie killed!');
+                            // If this was the last zombie, spawn halfKey in center of level 4
+                            if (level === 4 && !gameMap.enemies.some(e => e.name === 'Zombie')) {
+                                // Center of level 4 (use map width/height)
+                                const centerX = Math.floor(gameMap.width / 2);
+                                const centerY = Math.floor(gameMap.height / 2);
+                                if (!gameMap.items) gameMap.items = [];
+                                // Use the Item class for halfKey so it works with inventory and doors
+                                if (typeof Item !== 'undefined') {
+                                    const specialKey = new Item('specialHalfKey', centerX, centerY);
+                                    gameMap.items.push(specialKey);
+                                    if (gameMap.mapData && Array.isArray(gameMap.mapData.items)) {
+                                        gameMap.mapData.items.push({ type: 'specialHalfKey', x: centerX, y: centerY });
+                                    }
+                                }
+                                console.log('HalfKey spawned in center of level 4!');
+                            }
                         } else {
                             enemy.health -= 10; // Damage to other enemies
                         }
@@ -92,7 +111,7 @@ class Bullet {
             this.active = false;
         }
     }
-    
+    4
     render() {
         if (!this.active) return;
         
@@ -128,19 +147,22 @@ function updateTileSize() {
 
 async function setup() {
     updateTileSize(); // Set initial tile size
-    
+
+    // Clear any persistent messages (like 'CLICK TO SHOOT') on level load
+    showMessage("");
+
     // Create canvas and attach it to the game-container
     let canvas = createCanvas(800, 600);
     canvas.parent('game-container');
-    
+
     gameMap = new Map(1); // Load level 1
-    
+
     // Wait for map to load properly
     await waitForMapLoad();
-    
+
     // Set canvas to consistent size (based on level 1 dimensions with 32px tiles)
     resizeCanvas(832, 640); // 26 * 32 = 832, 20 * 32 = 640
-    
+
     // Create player at the spawn position
     if (gameMap.playerStart) {
         player = new Player("Hero", 100, { 
@@ -150,17 +172,17 @@ async function setup() {
     } else {
         player = new Player("Hero", 100, { x: 5 * tileSize, y: 5 * tileSize });
     }
-    
+
     // Update player size to match tile size
     player.updateSize();
-    
+
     // Set initial facing direction based on level
     if (level === 1) {
         player.lastDirection = 'right';
     } else if (level === 2 || level === 3) {
         player.lastDirection = 'down';
     }
-    
+
     inventory = new Inventory();
     mapLoaded = true;
 }
@@ -230,13 +252,12 @@ function draw() {
     if (gameMap.items) {
         gameMap.items.forEach(item => {
             if (item.checkCollision(player) && !item.collected) {
-                inventory.addItem(item.type);
+                // Use the collect() method to ensure all logic is triggered
                 item.collect();
-                
+                inventory.addItem(item.type);
                 // Show message for specific items
                 if (item.type === 'gun') {
                     showMessage("CLICK TO SHOOT");
-                    // Use browser's built-in crosshair cursor (much smaller)
                     document.body.style.cursor = 'crosshair';
                 }
             }
@@ -247,18 +268,28 @@ function draw() {
     if (gameMap.enemies) {
         gameMap.enemies.forEach(enemy => {
             if (enemy.isAlive() && checkEnemyCollision(player, enemy)) {
-                // Reset to level 1 and lose all gold when hit by snake
-                resetToLevel1WithGoldLoss();
-                enemy.attack(player);
-                console.log(`Player health: ${player.health}`);
-                
-                // Simple knockback - move player away from enemy
-                const dx = player.position.x - enemy.position.x * 32;
-                const dy = player.position.y - enemy.position.y * 32;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                if (distance > 0) {
-                    player.position.x += (dx / distance) * 20;
-                    player.position.y += (dy / distance) * 20;
+                if (enemy.name === 'Zombie') {
+                    // Zombies send the player to level 1 on contact
+                    if (!resetting) {
+                        resetting = true;
+                        resetToLevel1WithGoldLoss().then(() => { resetting = false; });
+                        return;
+                    }
+                } else if (enemy.name === 'Snake') {
+                    // Reset to level 1 and lose all gold when hit by snake
+                    resetToLevel1WithGoldLoss();
+                    enemy.attack(player);
+                    console.log(`Player health: ${player.health}`);
+                    // Simple knockback - move player away from enemy
+                    const dx = player.position.x - enemy.position.x * 32;
+                    const dy = player.position.y - enemy.position.y * 32;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance > 0) {
+                        player.position.x += (dx / distance) * 20;
+                        player.position.y += (dy / distance) * 20;
+                    }
+                } else {
+                    // Other enemies: can add logic here if needed
                 }
             }
         });
@@ -447,14 +478,18 @@ async function loadSpecificLevel(targetLevel) {
 }
 
 async function resetToLevel1WithGoldLoss() {
+    // Clear any persistent messages (like 'CLICK TO SHOOT') on reset
+    showMessage("");
     level = 1;
     mapLoaded = false;
-    
+    updateTileSize();
+    resizeCanvas(832, 640); // 26 * 32 = 832, 20 * 32 = 640 for level 1
+
     // Don't preserve gold when hit by snake - reset to 0
-    
+
     gameMap = new Map(level);
     await waitForMapLoad();
-    
+
     // Create player at the spawn position for level 1
     if (gameMap.playerStart) {
         player = new Player("Hero", 100, { 
@@ -464,18 +499,21 @@ async function resetToLevel1WithGoldLoss() {
     } else {
         player = new Player("Hero", 100, { x: 5 * tileSize, y: 5 * tileSize });
     }
-    
+
+    // Update player size to match tile size
+    player.updateSize();
+
     // Set initial facing direction for level 1
     player.lastDirection = 'right';
-    
+
     // Create new inventory with 0 gold (don't preserve)
     inventory = new Inventory();
     levelCompleted = false;
     mapLoaded = true;
-    
+
     // Reset cursor since gun is lost when hit by snake
     document.body.style.cursor = 'default';
-    
+
     console.log("Player hit by snake! Reset to level 1 with gold loss.");
 }
 
@@ -558,12 +596,17 @@ function checkEnemyCollision(player, enemy) {
     // Calculate player center - player visual size is now size * 3
     const playerCenterX = player.position.x + (player.size * 3) / 2;
     const playerCenterY = player.position.y + (player.size * 3) / 2;
-    
-    // Check if enemy has rectangular hitbox (like Snake)
-    if (enemy.getHitboxBounds) {
-        // Rectangular collision detection
+
+    // Use custom hitbox for zombies and snakes
+    if (enemy.name === 'Zombie' && typeof enemy.getHitboxBounds === 'function') {
         const bounds = enemy.getHitboxBounds();
-        
+        return playerCenterX >= bounds.left && 
+               playerCenterX <= bounds.right && 
+               playerCenterY >= bounds.top && 
+               playerCenterY <= bounds.bottom;
+    } else if (enemy.getHitboxBounds) {
+        // Rectangular collision detection (e.g. Snake)
+        const bounds = enemy.getHitboxBounds();
         return playerCenterX >= bounds.left && 
                playerCenterX <= bounds.right && 
                playerCenterY >= bounds.top && 
@@ -572,12 +615,10 @@ function checkEnemyCollision(player, enemy) {
         // Fallback to circular collision for other enemies
         const enemyCenterX = enemy.position.x * 32 + 16;
         const enemyCenterY = enemy.position.y * 32 + 16;
-        
         const distance = Math.sqrt(
             Math.pow(playerCenterX - enemyCenterX, 2) + 
             Math.pow(playerCenterY - enemyCenterY, 2)
         );
-        
         const hitboxRadius = enemy.getHitboxRadius ? enemy.getHitboxRadius() : 25;
         return distance < hitboxRadius;
     }

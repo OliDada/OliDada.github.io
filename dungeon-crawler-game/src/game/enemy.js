@@ -29,6 +29,11 @@ class Enemy {
     }
 }
 
+// Helper for scaling so enemies always appear the same pixel size regardless of tile size
+function getEnemyScale() {
+    const tileSize = window.tileSize || 32;
+    return 32 / tileSize;
+}
 
 class Snake extends Enemy {
     constructor(position, level = 1) {
@@ -71,33 +76,31 @@ class Snake extends Enemy {
     }
 
     getHitboxBounds() {
-        const centerX = this.position.x * 32 + 16;
-        const centerY = this.position.y * 32 + 16;
-        
-        // Adjust hitbox offset based on direction (snake head position)
-        let directionOffsetX = this.hitboxOffsetX;
-        
+        const tileSize = window.tileSize || 32;
+        const enemyScale = getEnemyScale();
+        const centerX = this.position.x * tileSize + tileSize / 2;
+        const centerY = this.position.y * tileSize + tileSize / 2;
+        let directionOffsetX = this.hitboxOffsetX * (tileSize / 32) * enemyScale;
         if (this.direction === 1) {
-            // Moving right - hitbox towards the right (head position)
-            directionOffsetX -= 15;
+            directionOffsetX -= tileSize * 15 / 32 * enemyScale;
         } else {
-            // Moving left - hitbox towards the left (head position) 
-            directionOffsetX += 15;
+            directionOffsetX += tileSize * 15 / 32 * enemyScale;
         }
-        
         return {
-            left: centerX - this.hitboxWidth/2 + directionOffsetX,
-            right: centerX + this.hitboxWidth/2 + directionOffsetX,
-            top: centerY - this.hitboxHeight/2 + this.hitboxOffsetY,
-            bottom: centerY + this.hitboxHeight/2 + this.hitboxOffsetY
+            left: centerX - (this.hitboxWidth/2) * (tileSize/32) * enemyScale + directionOffsetX,
+            right: centerX + (this.hitboxWidth/2) * (tileSize/32) * enemyScale + directionOffsetX,
+            top: centerY - (this.hitboxHeight/2) * (tileSize/32) * enemyScale + this.hitboxOffsetY * (tileSize/32) * enemyScale,
+            bottom: centerY + (this.hitboxHeight/2) * (tileSize/32) * enemyScale + this.hitboxOffsetY * (tileSize/32) * enemyScale
         };
     }
 
     drawSnake() {
+        const tileSize = window.tileSize || 32;
+        const enemyScale = getEnemyScale();
         // Draw the snake PNG image
         if (Snake.snakeImage && Snake.snakeImage.width > 0) {
-            const x = this.position.x * 32;
-            const y = this.position.y * 32;
+            const x = this.position.x * tileSize;
+            const y = this.position.y * tileSize;
             
             // Calculate aspect ratio and fit within tile while maintaining proportions
             const imageRatio = Snake.snakeImage.width / Snake.snakeImage.height;
@@ -105,17 +108,17 @@ class Snake extends Enemy {
             
             if (imageRatio > 1) {
                 // Image is wider than tall - fit to width
-                drawWidth = 32;
-                drawHeight = 32 / imageRatio;
+                drawWidth = tileSize * enemyScale;
+                drawHeight = (tileSize / imageRatio) * enemyScale;
             } else {
                 // Image is taller than wide - fit to height
-                drawHeight = 32;
-                drawWidth = 32 * imageRatio;
+                drawHeight = tileSize * enemyScale;
+                drawWidth = (tileSize * imageRatio) * enemyScale;
             }
             
             // Center the image within the tile
-            const offsetX = (32 - drawWidth) / 2;
-            const offsetY = (32 - drawHeight) / 2;
+            const offsetX = (tileSize * enemyScale - drawWidth) / 2;
+            const offsetY = (tileSize * enemyScale - drawHeight) / 2;
             
             // Save the current transformation matrix
             push();
@@ -139,7 +142,7 @@ class Snake extends Enemy {
             // Fallback: simple green circle if image fails to load
             fill(0, 200, 0);
             noStroke();
-            ellipse(this.position.x * 32 + 16, this.position.y * 32 + 16, 32, 32);
+            ellipse(this.position.x * tileSize + tileSize / 2, this.position.y * tileSize + tileSize / 2, tileSize * enemyScale, tileSize * enemyScale);
         }
     }
 
@@ -159,6 +162,8 @@ class Snake extends Enemy {
 
     drawHitbox() {
         if (debugMode) {
+            const tileSize = window.tileSize || 32;
+            const enemyScale = getEnemyScale();
             push();
             stroke(255, 0, 0);
             strokeWeight(2);
@@ -166,7 +171,7 @@ class Snake extends Enemy {
             
             // Draw rectangular hitbox that matches the actual collision detection
             const bounds = this.getHitboxBounds();
-            rect(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
+            rect(bounds.left, bounds.top, (bounds.right - bounds.left), (bounds.bottom - bounds.top));
             
             pop();
         }
@@ -311,6 +316,7 @@ class Ghost extends Enemy {
     }
 
     drawGhost() {
+        const tileSize = window.tileSize || 32;
         if (this.hasDisappeared) return;
         
         // Load ghost up images if not already loaded
@@ -381,9 +387,9 @@ class Ghost extends Enemy {
             
             // Make up/down sprites larger since they appear smaller
             if (this.movementState.includes('Up') || this.movementState.includes('Down')) {
-                targetWidth = 74; // Larger for up/down movement
+                targetWidth = tileSize * 2.3;
             } else {
-                targetWidth = 48; // Normal size for left/right/idle
+                targetWidth = tileSize * 1.5;
             }
             
             const aspectRatio = currentSprite.height / currentSprite.width;
@@ -391,33 +397,30 @@ class Ghost extends Enemy {
             const drawHeight = targetWidth * aspectRatio;
             
             // Center the ghost on the tile
-            const offsetX = (32 - drawWidth) / 2;
-            const offsetY = (32 - drawHeight) / 2;
+            const offsetX = (tileSize - drawWidth) / 2;
+            const offsetY = (tileSize - drawHeight) / 2;
             
             image(currentSprite, 
-                  this.position.x * 32 + offsetX, 
-                  this.position.y * 32 + offsetY - 8, // Slight upward offset
+                  this.position.x * tileSize + offsetX, 
+                  this.position.y * tileSize + offsetY - tileSize * 0.25, 
                   drawWidth, 
                   drawHeight);
         } else {
             // Fallback: simple white circle if image fails to load (also 2x bigger)
             fill(255, 255, 255, 200);
             noStroke();
-            ellipse(this.position.x * 32 + 16, this.position.y * 32 + 16, 56, 56);
+            ellipse(this.position.x * tileSize + tileSize / 2, this.position.y * tileSize + tileSize / 2, tileSize * 1.75, tileSize * 1.75);
         }
     }
 
     drawHitbox() {
         if (this.hasDisappeared || !debugMode) return;
-        
+        const tileSize = window.tileSize || 32;
         push();
         stroke(255, 255, 0);
         strokeWeight(2);
         noFill();
-        
-        // Draw circular hitbox
-        ellipse(this.position.x * 32 + 16, this.position.y * 32 + 16, this.hitboxRadius * 2, this.hitboxRadius * 2);
-        
+        ellipse(this.position.x * tileSize + tileSize / 2, this.position.y * tileSize + tileSize / 2, this.hitboxRadius * 2 * (tileSize / 32), this.hitboxRadius * 2 * (tileSize / 32));
         pop();
     }
 }
@@ -425,70 +428,129 @@ class Ghost extends Enemy {
 class Zombie extends Enemy {
     constructor(position) {
         super("Zombie", 40, 6, position);
-        this.moveSpeed = 0.04; // Fractional tiles per frame, like snake
-        this.collisionSize = 32;
-        this.displaySize = 93;
+        const tileSize = window.tileSize || 32;
+        this.moveSpeed = 0.04;
+        this.collisionSize = tileSize;
+        this.displaySize = tileSize * 1.75 * 2; // matches drawZombie
         this.collisionOffset = (this.displaySize - this.collisionSize) / 2;
         this.direction = { x: 0, y: 0 };
-        this.lastDirection = Math.random() * Math.PI * 2; // Random starting direction in radians
+        this.lastDirection = Math.random() * Math.PI * 2;
+        // Wandering state
+        this.wanderTimer = 0;
+        this.wanderDuration = 0;
+        this.wanderAngle = 0;
+        this.nextWanderDelay = Math.floor(Math.random() * 120) + 60; // 1-3 seconds
         if (!Zombie.zombieImage) {
             Zombie.zombieImage = loadImage('images/zombie.svg');
         }
     }
 
-    // Example method to draw the zombie (placeholder)
+    getHitboxBounds() {
+        // Center hitbox at the same point as drawZombie's translate
+        const tileSize = window.tileSize || 32;
+        const enemyScale = getEnemyScale() * 2;
+        const hitboxScale = 1.3;
+        const size = tileSize * hitboxScale * enemyScale;
+        // drawZombie uses: x + tileSize * 0.875 * 2
+        const x = this.position.x * tileSize;
+        const y = this.position.y * tileSize;
+        const centerX = x + tileSize * 0.875 * 2;
+        const centerY = y + tileSize * 0.875 * 2;
+        return {
+            left: centerX - size / 2,
+            right: centerX + size / 2,
+            top: centerY - size / 2,
+            bottom: centerY + size / 2
+        };
+    }
     drawZombie() {
+        const tileSize = window.tileSize || 32;
+        const enemyScale = getEnemyScale() * 2; // Double the zombie size
         if (Zombie.zombieImage && Zombie.zombieImage.width > 0) {
-            const x = this.position.x * 32;
-            const y = this.position.y * 32;
+            const x = this.position.x * tileSize;
+            const y = this.position.y * tileSize;
+            // Wiggle effect: small oscillation based on frameCount and position
+            const wiggle = Math.sin((frameCount + this.position.x * 5 + this.position.y * 5) * 0.05) * 0.05;
             push();
-            translate(x + 28, y + 28); // Center the zombie
-            rotate(this.lastDirection); // Rotate to face the direction of movement
+            translate(x + tileSize * 0.875 * 2, y + tileSize * 0.875 * 2);
+            rotate(this.lastDirection + wiggle);
             imageMode(CENTER);
-            image(Zombie.zombieImage, 0, 0, 56, 56);
+            image(Zombie.zombieImage, 0, 0, tileSize * 1.75 * 2, tileSize * 1.75 * 2);
             pop();
         }
     }
-
     zombieMovement() {
-        // Only move in level 4 if player's y (in tiles) is greater than 12
-        if (
-            typeof level !== 'undefined' && level === 4 &&
-            player && (player.position.y / (window.tileSize || 32)) <= 12
-        ) {
+        if (!player || !gameMap || !gameMap.isBlocked) return;
+        const tileSize = window.tileSize || 32;
+        const playerTileX = player.position.x / tileSize;
+        const playerTileY = player.position.y / tileSize;
+        // --- Only chase if player is below y=12 in level 4 ---
+        const isLevel4 = (typeof level !== 'undefined' && level === 4);
+        const canChase = !isLevel4 || playerTileY > 12;
+        // Wandering logic
+        if (!canChase || this.wanderTimer > 0) {
+            // Move in random direction
+            if (this.wanderTimer > 0) {
+                const dirX = Math.cos(this.wanderAngle);
+                const dirY = Math.sin(this.wanderAngle);
+                const intendedX = this.position.x + dirX * this.moveSpeed;
+                const intendedY = this.position.y + dirY * this.moveSpeed;
+                this.lastDirection = this.wanderAngle;
+                if (!gameMap.isBlocked(Math.floor(intendedX), Math.floor(intendedY))) {
+                    this.position.x = intendedX;
+                    this.position.y = intendedY;
+                }
+                this.wanderTimer--;
+                return;
+            } else if (this.nextWanderDelay > 0) {
+                this.nextWanderDelay--;
+                return;
+            } else {
+                // Start wandering for a random duration in a random direction
+                this.wanderTimer = Math.floor(Math.random() * 30) + 15; // 0.25-0.75s
+                this.wanderAngle = Math.random() * Math.PI * 2;
+                this.nextWanderDelay = Math.floor(Math.random() * 120) + 60; // 1-3s until next wander
+                return;
+            }
+        }
+        // Normal chase logic
+        let dx = playerTileX - this.position.x;
+        let dy = playerTileY - this.position.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance === 0) return;
+        const dirX = dx / distance;
+        const dirY = dy / distance;
+        const intendedX = this.position.x + dirX * this.moveSpeed;
+        const intendedY = this.position.y + dirY * this.moveSpeed;
+        this.lastDirection = Math.atan2(dirY, dirX);
+        if (!gameMap.isBlocked(Math.floor(intendedX), Math.floor(intendedY))) {
+            this.position.x = intendedX;
+            this.position.y = intendedY;
             return;
         }
-
-        if (player && typeof gameMap !== 'undefined' && gameMap.isBlocked) {
-            const tileSize = window.tileSize || 32;
-
-            const zombieCenterX = this.position.x * tileSize + tileSize / 2;
-            const zombieCenterY = this.position.y * tileSize + tileSize / 2;
-            const playerCenterX = player.position.x + player.size / 2;
-            const playerCenterY = player.position.y + player.size / 2 - 5; // Adjusted to better align with player sprite
-
-            const dx = playerCenterX - zombieCenterX;
-            const dy = playerCenterY - zombieCenterY;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-
-            if (distance === 0) return;
-
-            const dirX = dx / distance;
-            const dirY = dy / distance;
-
-            const intendedX = this.position.x + dirX * this.moveSpeed;
-            const intendedY = this.position.y + dirY * this.moveSpeed;
-
-            const collisionPadding = 0; // Removed padding to allow closer movement to walls
-            if (!gameMap.isBlocked(Math.floor(intendedX), Math.floor(this.position.y))) {
-                this.position.x = intendedX;
+        let moved = false;
+        if (!gameMap.isBlocked(Math.floor(intendedX), Math.floor(this.position.y))) {
+            this.position.x += dirX * this.moveSpeed;
+            moved = true;
+        }
+        if (!moved && !gameMap.isBlocked(Math.floor(this.position.x), Math.floor(intendedY))) {
+            this.position.y += dirY * this.moveSpeed;
+            moved = true;
+        }
+        if (!moved) {
+            const randomAngle = Math.random() * 2 * Math.PI;
+            const randomX = Math.cos(randomAngle) * this.moveSpeed;
+            const randomY = Math.sin(randomAngle) * this.moveSpeed;
+            const fallbackX = this.position.x + randomX;
+            const fallbackY = this.position.y + randomY;
+            if (!gameMap.isBlocked(Math.floor(fallbackX), Math.floor(fallbackY))) {
+                this.position.x = fallbackX;
+                this.position.y = fallbackY;
+            } else if (!gameMap.isBlocked(Math.floor(fallbackX), Math.floor(this.position.y))) {
+                this.position.x += randomX;
+            } else if (!gameMap.isBlocked(Math.floor(this.position.x), Math.floor(fallbackY))) {
+                this.position.y += randomY;
             }
-            if (!gameMap.isBlocked(Math.floor(this.position.x), Math.floor(intendedY))) {
-                this.position.y = intendedY;
-            }
-
-            const angle = Math.atan2(dirY, dirX);
-            this.lastDirection = angle; // Store the angle for drawing
         }
     }
 }

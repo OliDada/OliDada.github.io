@@ -1,4 +1,3 @@
-
 class Map {
     constructor(levelNumber = 1) {
         this.levelNumber = levelNumber;
@@ -11,6 +10,7 @@ class Map {
 
     async loadMap() {
         try {
+            console.log(`Loading map for level ${this.levelNumber}`);
             const response = await fetch(`maps/level${this.levelNumber}.json`);
             this.mapData = await response.json();
             this.width = this.mapData.width;
@@ -42,7 +42,9 @@ class Map {
 
     loadEnemies() {
         if (this.mapData && this.mapData.enemies) {
+            console.log(`Loading enemies for level ${this.levelNumber}`);
             return this.mapData.enemies.map(enemyData => {
+                console.log(`Initializing enemy:`, enemyData);
                 if (enemyData.type === 'snake') {
                     return new Snake({ x: enemyData.x, y: enemyData.y }, this.levelNumber);
                 } else if (enemyData.type === 'ghost') {
@@ -104,20 +106,29 @@ class Map {
         // Always use integer indices for tile access
         const ix = Math.floor(x);
         const iy = Math.floor(y);
+
         if (iy < 0 || iy >= this.height || ix < 0 || ix >= this.width) {
             return true; // Out of bounds
         }
         const tile = this.tiles[iy][ix];
+
         if (tile === '#' || tile === 'o') {
             return true; // Wall or invisible wall always blocks
         }
         if (tile === '<') {
             // Door blocks only if player has no keys
-            return !inventory || inventory.keys === 0;
+            const blocked = !inventory || inventory.keys === 0;
+            return blocked;
         }
         if (tile === '=') {
             // Door blocks only if player has no halfKeys
-            return !inventory || inventory.halfKeys === 0;
+            const blocked = !inventory || inventory.halfKeys === 0;
+            return blocked;
+        }
+        if (tile === '-') {
+            // Special door blocks only if player has no specialHalfKeys
+            const blocked = !inventory || inventory.specialHalfKeys === 0;
+            return blocked;
         }
         return false; // Floor and other tiles don't block
     }
@@ -180,6 +191,21 @@ class Map {
                     fill(150, 255, 200, 150); // Open half door (Light green)
                 } else if (this.levelNumber === 3) {
                     fill(150, 50, 150, 150); // Open half door (Purple)
+                }
+            } else {
+                fill(139, 69, 19); // Door color (brown)
+            }
+        } else if (tile === '-') {
+            // Special door
+            if (this.items.some(item => item.type === 'specialHalfKey' && item.collected)) {
+                if (this.levelNumber === 1) {
+                    fill(80, 149, 237, 150); // Open special door (Floor color)
+                } else if (this.levelNumber === 2) {
+                    fill(150, 255, 200, 150); // Open special door (Light green)
+                } else if (this.levelNumber === 3) {
+                    fill(150, 50, 150, 150); // Open special door (Purple)
+                } else if (this.levelNumber === 4) {
+                    fill(181, 146, 63); // Open special door (Yellow)
                 }
             } else {
                 fill(139, 69, 19); // Door color (brown)

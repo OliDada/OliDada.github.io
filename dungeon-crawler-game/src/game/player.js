@@ -298,6 +298,15 @@ class Player {
     }
 
     die() {
+        if (window.gameOver) return;
+        window.gameOver = true;
+        if (typeof showMessage === 'function') {
+            showMessage('You were eaten by a zombie! Game Over.');
+        }
+        // Optionally, fade out or freeze the game, then reload after a delay
+        setTimeout(() => {
+            location.reload();
+        }, 2000);
         console.log(`${this.name} has died.`);
     }
 

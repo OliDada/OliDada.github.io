@@ -1,6 +1,6 @@
 class Item {
     constructor(type, x, y) {
-        this.type = type; // 'gold', 'key', 'halfKey or gun'
+    this.type = type; // 'gold', 'key', 'halfKey', 'specialHalfKey', or 'gun'
         this.x = x;
         this.y = y;
         this.collected = false;
@@ -14,6 +14,9 @@ class Item {
         }
         if (!Item.halfKeyImage) {
             Item.halfKeyImage = loadImage('images/halfKey.svg');
+        }
+        if (!Item.specialHalfKeyImage) {
+            Item.specialHalfKeyImage = Item.halfKeyImage; // Use same image for now
         }
         if (!Item.gunImage) {
             Item.gunImage = loadImage('images/gun.svg');
@@ -64,13 +67,13 @@ class Item {
                 image(Item.keyImage, centerX - drawWidth/2, centerY - drawHeight/2, drawWidth, drawHeight);
             }
 
-        } else if (this.type === 'halfKey') {
-            // Render half key image
-            if (Item.halfKeyImage && Item.halfKeyImage.width > 0) {
+        } else if (this.type === 'halfKey' || this.type === 'specialHalfKey') {
+            // Render half key or special half key image
+            let img = this.type === 'specialHalfKey' ? Item.specialHalfKeyImage : Item.halfKeyImage;
+            if (img && img.width > 0) {
                 // Calculate aspect ratio and fit within tile while maintaining proportions
-                const imageRatio = Item.halfKeyImage.width / Item.halfKeyImage.height;
+                const imageRatio = img.width / img.height;
                 let drawWidth, drawHeight;
-                
                 // Fit to a maximum size while maintaining aspect ratio
                 // Make half keys bigger in level 4 to compensate for smaller tiles
                 const halfKeyScale = tileSize === 16 ? 3.5 : 1.8; // 3.5x for level 4, 1.8x for other levels
@@ -84,8 +87,7 @@ class Item {
                     drawHeight = maxSize;
                     drawWidth = maxSize * imageRatio;
                 }
-                
-                image(Item.halfKeyImage, centerX - drawWidth/2, centerY - drawHeight/2, drawWidth, drawHeight);
+                image(img, centerX - drawWidth/2, centerY - drawHeight/2, drawWidth, drawHeight);
             }
         } else if (this.type === 'gun') {
             // Render gun image
@@ -127,7 +129,7 @@ class Item {
         const playerCenterX = player.position.x + (player.size * 3) / 2;
         const playerCenterY = player.position.y + (player.size * 3) / 2;
 
-        if (this.type === 'key' || this.type === 'halfKey') {
+    if (this.type === 'key' || this.type === 'halfKey' || this.type === 'specialHalfKey') {
             // Use rectangular hitbox for keys - scale with tile size
             const keyLeft = itemPixelX - (15 * tileSize / 32);
             const keyRight = itemPixelX + (75 * tileSize / 32); // Key extends far to the right
@@ -231,10 +233,11 @@ class Item {
 
 class Inventory {
     constructor() {
-        this.gold = 0;
-        this.keys = 0;
-        this.halfKeys = 0;
-        this.hasGun = false;
+    this.gold = 0;
+    this.keys = 0;
+    this.halfKeys = 0;
+    this.specialHalfKeys = 0;
+    this.hasGun = false;
     }
 
     addItem(type) {
@@ -244,9 +247,19 @@ class Inventory {
             this.keys++;
         } else if (type === 'halfKey') {
             this.halfKeys++;
+        } else if (type === 'specialHalfKey') {
+            this.specialHalfKeys++;
         } else if (type === 'gun') {
             this.hasGun = true;
         }
+    }
+
+    useSpecialHalfKey() {
+        if (this.specialHalfKeys > 0) {
+            this.specialHalfKeys--;
+            return true;
+        }
+        return false;
     }
 
     useKey() {
