@@ -1,0 +1,23 @@
+import globalStateManager from "./globalState.js";
+import oldmanGlobalStateManager from "./oldmanGlobalState.js";
+import lumberjackGlobalStateManager from "./lumberjackGlobalState.js";
+import playerGlobalStateManager from "./playerGlobalState.js";
+import shopkeeperGlobalStateManager from "./shopkeeperGlobalState.js";
+import prisonerGlobalStateManager from "./prisonerGlobalState.js";
+import wizardGlobalStateManager from "./wizardGlobalState.js";
+import guardGlobalStateManager from "./guardGlobalState.js";
+import farmerGlobalStateManager from "./farmerGlobalState.js";
+import chickenGlobalStateManager from "./chickenGlobalState.js";
+import bartenderGlobalStateManager from "./bartenderGlobalState.js";
+
+export const gameState = globalStateManager().getInstance();
+export const oldmanState = oldmanGlobalStateManager().getInstance();
+export const lumberjackState = lumberjackGlobalStateManager().getInstance();
+export const playerState = playerGlobalStateManager().getInstance();
+export const shopkeeperState = shopkeeperGlobalStateManager().getInstance();
+export const prisonerState = prisonerGlobalStateManager().getInstance();
+export const wizardState = wizardGlobalStateManager().getInstance();
+export const guardState = guardGlobalStateManager().getInstance();
+export const farmerState = farmerGlobalStateManager().getInstance();
+export const chickenState = chickenGlobalStateManager().getInstance();
+export const bartenderState = bartenderGlobalStateManager().getInstance();
