@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Oli.is - Change Color</title>
+  <!-- Use relative paths for deployment -->
+  <script src="./script.js" defer></script>
+  <script src="./quest.js" defer></script>
+  <link rel="icon" href="./images/dolphin2.png" type="image/x-icon">
+  <link href="./style.css" rel="stylesheet" type="text/css" media="all">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+
+</head>
+<body>
+    <div class="header">
+        <img class="dolphin" src="images/dolphin2.png" alt="Dolphin2">
+        <div class="text-container">
+          <h1 class="title">Oli.is</h1>
+          <a class="sub_title">What's your favorite color?</a>
+        </div>
+        <img class="dolphin" src="images/dolphin1.png" alt="Dolphin1">
+      </div>
+      <div class="navbar-grid">
+        <a href="index.html" class="nav-tile"><span>Home</span></a>
+        <a href="programs.html" class="nav-tile"><span>Programs</span></a>
+        <a href="jokes.html" class="nav-tile"><span>Jokes</span></a>
+        <a href="snake.html" class="nav-tile"><span>Snake Game</span></a>
+        <a href="magic8ball.html" class="nav-tile"><span>Magic 8 Ball</span></a>
+        <a href="aichat.html" class="nav-tile"><span>AI Chat</span></a>
+        <a href="game_of_life.html" class="nav-tile"><span>Game of Life</span></a>
+        <a href="physics_simulation.html" class="nav-tile"><span>Physics Simulation</span></a>
+        <a href="gravity_dash.html" class="nav-tile"><span>Gravity Dash</span></a>
+        <a href="dungeon-crawler-game/src/index.html" class="nav-tile"><span>Dungeon Crawler</span></a>
+        <a href="zelda-game/index.html" class="nav-tile"><span>RPG Game</span></a>
+        <a href="change_color.html" class="nav-tile active"><span>Change Background Color</span></a>
+
+
+      </div>
+    <div class="main">
+        <h1>Click to Change Color!</h1>
+        <div class="color-controls">
+            <label for="colorPicker">Choose a color:</label>
+            <input type="color" id="colorPicker" onchange="setBackgroundColor(this.value)">
+        </div>
+        <button onclick="changeBackgroundColor()">Random Background Color</button>
+        <button onclick="revertToOriginalBackground()" class="revertButton">Revert to Original Background</button>
+    </div>
+
+    <!-- Load scripts at the end of body for better compatibility -->
+    <script src="./script.js"></script>
+    <script src="./quest.js"></script>
+</body>
+</html>
