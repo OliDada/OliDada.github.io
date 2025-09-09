@@ -18,18 +18,22 @@ export function generateFarmerComponents(k, pos, tag = "farmer") {
 
 export async function startInteraction(k, farmer, player, farmerIndex = 0) {
     // If player entered from barn-side and any chicken is hurt or dead
+    
     if (
         gameState.getPreviousScene() === "barn-side" &&
-        (chickenState.isAnyChickenHurt())
+        (chickenState.isAnyChickenHurt() || chickenState.isAnyChickenDead())
     ) {
         farmer.flipX = true;
         playAnimIfNotPlaying(farmer, "farmer-idle-side");
         let lines;
-        if (chickenState.isAnyChickenDead() && !chickenState.isAnyChickenAlive()) {
+        if (!chickenState.isAnyChickenAlive()) {
+            // All chickens dead
             lines = [["No! My chickens! What have you done? T-they're all dead!"], ["Just leave! You monster!"]];
         } else if (chickenState.isSomeButNotAllDead && typeof chickenState.isSomeButNotAllDead === "function" && chickenState.isSomeButNotAllDead()) {
+            // Some but not all dead
             lines = [["You killed Beatrice! That was my favorite chicken!"], ["I can't believe you would do this!"]];
         } else {
+            // Hurt but none dead
             lines = [["Hey! What's your problem? Leave my chickens alone!"], ["You think you can just waltz in here and mess with my chickens?"], ["Get lost!"]];
         }
 

@@ -1,4 +1,4 @@
-import { playerState } from "./state/stateManagers.js";
+import { playerState, cowState } from "./state/stateManagers.js";
 import { healthBar } from "./uiComponents/healthbar.js";
 import { useHealthPotion } from "./items/healthPotion.js";
 
@@ -47,10 +47,8 @@ export function drawTiles(k, map, layer, tileheight, tilewidth, tilesets) {
         }
 
         nbOfDrawnTiles++;
-        if (tile === 0) continue;
-
-        // Skip obviously invalid or corrupted tile IDs
-        if (tile < 0 || tile > 10000) continue;
+        // Only draw tiles with indices between 0 and 20000
+        if (tile === 0 || tile < 0 || tile > 20000) continue;
 
         const ts = getTilesetForTile(tile);
         if (!ts) continue;
@@ -139,13 +137,7 @@ export async function deathAnimation(k, entity, times = 3, interval = 0.12) {
 
 export async function onAttacked(k, entity, getPlayer) {
     entity.onCollide("swordHitBox", async () => {
-        if (entity.isAttacking) return;
-
-        if (entity.hp() <= 0) {
-            await deathAnimation(k, entity);
-            k.destroy(entity);
-            return;
-        }
+        if (entity.isAttacking || entity.isDead) return;
 
         // Get player direction
         const player = getPlayer();
@@ -168,12 +160,49 @@ export async function onAttacked(k, entity, getPlayer) {
         // Run blink and knockback in parallel
         blinkEffect(k, entity);
         knockback(k, entity, dir, 200);
+
+        // Hurt the entity and check health immediately after
         entity.hurt(getPlayer.attackPower);
+        const hp = entity.hp && entity.hp();
+
+        // If health is now 0 or less, trigger death animation and destroy
+        if (hp <= 0) {
+            // Persist dead state for slimes
+            if (entity.hasTag && entity.hasTag("slime")) {
+                const pos = entity.pos;
+                const key = `${Math.round(pos.x)},${Math.round(pos.y)}`;
+                if (gameState && gameState.addDeadSlime) {
+                    gameState.addDeadSlime(key);
+                }
+            }
+            entity.isDead = true;
+            // Stop movement if dead
+            if (entity.stop) entity.stop();
+            // Play squish sound if available
+            if (k.play) k.play("player-hurt", { volume: 0.7 });
+            // Color flash (red)
+            if (entity.color) {
+                entity.color = k.rgb(255, 0, 80);
+                await new Promise((resolve) => setTimeout(resolve, 80));
+            }
+            // Shrink and fade out simultaneously
+            if (entity.scale && entity.opacity) {
+                k.tween(entity.scale, 0.2, 0.3, (v) => { entity.scale = v; });
+                k.tween(entity.opacity, 0, 0.3, (v) => { entity.opacity = v; });
+                await new Promise((resolve) => setTimeout(resolve, 300));
+            } else if (entity.opacity) {
+                k.tween(entity.opacity, 0, 0.3, (v) => { entity.opacity = v; });
+                await new Promise((resolve) => setTimeout(resolve, 300));
+            }
+            k.destroy(entity);
+            return;
+        }
     });
 }
 
 export function onCollideWithPlayer(k, entity) {
     entity.onCollide("player", async (player) => {
+        if (entity.isDead) return;
         if (player.isAttacking) return;
 
         playerState.setHealth(playerState.getHealth() - entity.attackPower);
@@ -255,6 +284,26 @@ export function giveItem(k, player, item) {
 }
 
 export function followPlayer(k, player, entity, distance = 16) {
+    let animMap = null;
+    if (entity.name === "prisoner") {
+        animMap = {
+            "player-idle-down": "prisoner-idle-down",
+            "player-down": "prisoner-down",
+            "player-idle-side": "prisoner-idle-side",
+            "player-side": "prisoner-side",
+            "player-idle-up": "prisoner-idle-up",
+            "player-up": "prisoner-up",
+        };
+    } else if (entity.name === "cow") {
+        animMap = {
+            "player-idle-down": "cow-idle-down",
+            "player-down": "cow-down",
+            "player-idle-side": "cow-idle-side",
+            "player-side": "cow-side",
+            "player-idle-up": "cow-idle-up",
+            "player-up": "cow-up",
+        };
+    }
     if (entity.isFollowing) return; // Prevent multiple handlers
     entity.isFollowing = true;
     entity.startFollowing = false;
@@ -265,9 +314,21 @@ export function followPlayer(k, player, entity, distance = 16) {
     movementHandler = k.onKeyPress(movementKeys, () => {
         entity.startFollowing = true;
     });
-    k.onUpdate(() => {
+    let updateRef = k.onUpdate(() => {
         if (!entity.exists() || !player.exists()) return;
         if (!entity.startFollowing) return; // Don't follow until player moves
+
+        // For cow, stop following if quest is complete or isFollowingPlayer is false
+        if (entity.name === "cow") {
+            if (cowState.getCowQuestComplete() || !cowState.getIsFollowingPlayer()) {
+                entity.isFollowing = false;
+                entity.startFollowing = false;
+                entity.use(k.body({ isStatic: true }));
+                playAnimIfNotPlaying(entity, "cow-idle-down");
+                if (updateRef && updateRef.cancel) updateRef.cancel();
+                return;
+            }
+        }
 
         // Correct offset: always behind the player
         let offset = k.vec2(0, 0);
@@ -289,27 +350,24 @@ export function followPlayer(k, player, entity, distance = 16) {
         }
         entity.pos = entity.pos.lerp(player.pos.add(offset), 0.1);
 
-        // Handle flipX for prisoner sprite
-        entity.flipX = player.direction === "left";
+        // Handle flipX for cow and prisoner sprite
+        if (entity.name === "cow" || entity.name === "prisoner") {
+            entity.flipX = player.direction === "right";
+        } else {
+            entity.flipX = player.direction === "left";
+        }
 
         // Mirror animation
-        if (player.curAnim && entity.curAnim && player.curAnim()) {
-            const mappedAnim = prisonerAnimMap[player.curAnim()];
-            if (entity.curAnim() !== mappedAnim) {
+        if (player.curAnim && entity.curAnim && player.curAnim() && animMap) {
+            const mappedAnim = animMap[player.curAnim()];
+            if (mappedAnim && entity.curAnim() !== mappedAnim) {
                 entity.play(mappedAnim);
             }
         }
     });
 }
 
-const prisonerAnimMap = {
-    "player-idle-down": "prisoner-idle-down",
-    "player-down": "prisoner-down",
-    "player-idle-side": "prisoner-idle-side",
-    "player-side": "prisoner-side",
-    "player-idle-up": "prisoner-idle-up",
-    "player-up": "prisoner-up",
-};
+
 
 export async function slideCamY(k, range, duration) {
     const currentCamPos = k.camPos();
@@ -319,5 +377,37 @@ export async function slideCamY(k, range, duration) {
         duration, 
         (newPosY) => k.camPos(currentCamPos.x, newPosY),
         k.easings.linear,
+    );
+}
+
+export function isPartiallyOnScreen(k, obj) {
+    // Get camera info
+    const cam = k.getCamPos();
+    const scale = 4; // hardcoded from world.js
+    const screenW = 1280;
+    const screenH = 720;
+    // Camera shows a region centered at cam, scaled
+    const viewW = screenW / scale;
+    const viewH = screenH / scale;
+    const left = cam.x - viewW / 2;
+    const right = cam.x + viewW / 2;
+    const top = cam.y - viewH / 2;
+    const bottom = cam.y + viewH / 2;
+    // Get object's bounding box (assume area shape is Rect)
+    const pos = obj.worldPos ? obj.worldPos() : obj.pos;
+    const area = obj.area ? obj.area : null;
+    let objLeft = pos.x, objRight = pos.x, objTop = pos.y, objBottom = pos.y;
+    if (area && area.shape && area.shape.w && area.shape.h) {
+        objLeft = pos.x;
+        objRight = pos.x + area.shape.w;
+        objTop = pos.y;
+        objBottom = pos.y + area.shape.h;
+    }
+    // Check for any overlap
+    return (
+        objLeft < right &&
+        objRight > left &&
+        objTop < bottom &&
+        objBottom > top
     );
 }

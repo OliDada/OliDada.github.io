@@ -10,7 +10,7 @@ export function generateGuardComponents(k, pos, anim, tag = "guard-1") {
         k.body({ isStatic: true }),
         k.health(3),
         k.offscreen(),
-        tag, // <-- Add this line
+        tag,
     ];
 }
 

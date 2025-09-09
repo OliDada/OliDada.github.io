@@ -10,6 +10,8 @@ export default function playerGlobalStateManager() {
         let keys = [];
         let hasHadPotion = false;
         let hasPrisonKey = false;
+        let hasCarrot = false;
+        let hasMagicalBeans = true;
 
         return {
             setIsSwordEquipped(value) {
@@ -82,6 +84,18 @@ export default function playerGlobalStateManager() {
             },
             getHasPrisonKey() {
                 return hasPrisonKey;
+            },
+            setHasCarrot(value) {
+                hasCarrot = value;
+            },
+            getHasCarrot() {
+                return hasCarrot;
+            },
+            setHasMagicalBeans(value) {
+                hasMagicalBeans = value;
+            },
+            getHasMagicalBeans() {
+                return hasMagicalBeans;
             },
 
         };

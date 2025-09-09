@@ -44,10 +44,6 @@ export async function startInteraction(k, wizard, player, options = {}) {
         }
     }
 
-    playerState.setIsSwordEquipped(true);
-
-
-
     const responses = wizardLines[gameState.getLanguage()];
 
     // Get the number of times the player has talked to the old man

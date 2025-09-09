@@ -1,38 +1,7 @@
-import { playAnimIfNotPlaying } from "../utils";
-import { onAttacked } from "../utils";
+import { playAnimIfNotPlaying, isPartiallyOnScreen } from "../utils.js";
+import { onAttacked } from "../utils.js";
+import { slimeState } from "../state/stateManagers.js";
 
-// Helper: check if a game object is partially visible on screen
-function isPartiallyOnScreen(k, obj) {
-    // Get camera info
-    const cam = k.getCamPos();
-    const scale = 4; // hardcoded from world.js
-    const screenW = 1280;
-    const screenH = 720;
-    // Camera shows a region centered at cam, scaled
-    const viewW = screenW / scale;
-    const viewH = screenH / scale;
-    const left = cam.x - viewW / 2;
-    const right = cam.x + viewW / 2;
-    const top = cam.y - viewH / 2;
-    const bottom = cam.y + viewH / 2;
-    // Get object's bounding box (assume area shape is Rect)
-    const pos = obj.worldPos ? obj.worldPos() : obj.pos;
-    const area = obj.area ? obj.area : null;
-    let objLeft = pos.x, objRight = pos.x, objTop = pos.y, objBottom = pos.y;
-    if (area && area.shape && area.shape.w && area.shape.h) {
-        objLeft = pos.x;
-        objRight = pos.x + area.shape.w;
-        objTop = pos.y;
-        objBottom = pos.y + area.shape.h;
-    }
-    // Check for any overlap
-    return (
-        objLeft < right &&
-        objRight > left &&
-        objTop < bottom &&
-        objBottom > top
-    );
-}
 
 const directionalStates = ["left", "right", "up", "down"];
 
@@ -60,6 +29,22 @@ export function generateSlimeComponents(k, pos) {
 }
 
 export function setSlimeAI(k, slime) {
+    // Sync health with slimeState for tracked slimes
+    slime.on("hurt", () => {
+        if (typeof slime._slimeIndex === "number" && typeof slimeState !== "undefined") {
+            slimeState.setSlimeHealth(slime._slimeIndex, slime.health);
+        }
+    });
+
+    slime.on("death", () => {
+        if (typeof slime._slimeIndex === "number" && typeof slimeState !== "undefined") {
+            slimeState.setSlimeHealth(slime._slimeIndex, 0);
+                if (window && window.console) {
+                    console.log('SlimeState health after death:', slimeState.getSlimeHealth());
+                }
+        }
+    });
+
     k.onUpdate(() => {
         // Skip AI updates if the slime is dead or offscreen
         if (slime.health <= 0) return;
@@ -80,6 +65,19 @@ export function setSlimeAI(k, slime) {
             case "down":
                 slime.move(0, slime.speed);
                 break;
+        }
+    });
+
+    // Listen for slime death and persist dead state
+    slime.on("death", () => {
+        // Debug: print both spawn key and current position
+        const spawnKey = slime._spawnKey;
+        const deathKey = `${Math.floor(slime.pos.x)},${Math.floor(slime.pos.y)}`;
+        if (window && window.console) {
+            console.log('Slime died at spawnKey:', spawnKey, 'deathKey:', deathKey);
+        }
+        if (window.gameState && window.gameState.addDeadSlime && spawnKey) {
+            window.gameState.addDeadSlime(spawnKey);
         }
     });
 

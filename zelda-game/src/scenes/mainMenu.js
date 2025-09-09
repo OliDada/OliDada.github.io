@@ -1,6 +1,8 @@
+
 import menuText from "../content/menuText.js";
 import globalStateManager from "../state/globalState.js";
 import { colorizeBackground } from "../utils";
+import { chickenState } from "../state/stateManagers.js";
 
 const gameState = globalStateManager().getInstance();
 
@@ -43,9 +45,10 @@ export default function mainMenu(k) {
     });
 
     k.onKeyPress("enter", () => {
+        chickenState.initIfNeeded(3);
         gameState.pauseCurrentSong();
         const newSong = k.play("soundtrack", { loop: true });
         gameState.setCurrentSong(newSong);
-        k.go("world");
+        k.go("basement");
     });
 }

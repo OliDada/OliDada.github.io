@@ -40,27 +40,34 @@ export async function dialog(k, pos, content, dialogOptions = {}) {
 
     await displayLine(k, textContainer, content[index], speed);
     let lineFinishDisplayed = true;
-    const dialogKey = k.onKeyPress(["space", "enter"], async () => { 
-        if (!lineFinishDisplayed) {
-            return;
-        }
-        index++;
-        if (!content[index]) {
-            k.destroy(dialogBox);
-            dialogKey.cancel();
-            gameState.setFreezePlayer(false);
-            return;
-        }
 
-        textContainer.text = '';
-        lineFinishDisplayed = false;
+    // Return a promise that resolves when dialog is finished
+    return new Promise((resolve) => {
+        const dialogKey = k.onKeyPress(["space", "enter"], async () => { 
+            if (!lineFinishDisplayed) {
+                return;
+            }
+            index++;
+            if (!content[index]) {
+                k.destroy(dialogBox);
+                dialogKey.cancel();
+                if (!dialogOptions.keepFrozen) {
+                    gameState.setFreezePlayer(false);
+                }
+                resolve();
+                return;
+            }
 
-        // Call onLine callback for each new line
-        if (dialogOptions.onLine) {
-            dialogOptions.onLine(index);
-        }
+            textContainer.text = '';
+            lineFinishDisplayed = false;
 
-        await displayLine(k, textContainer, content[index], speed);
-        lineFinishDisplayed = true;
+            // Call onLine callback for each new line
+            if (dialogOptions.onLine) {
+                dialogOptions.onLine(index);
+            }
+
+            await displayLine(k, textContainer, content[index], speed);
+            lineFinishDisplayed = true;
+        });
     });
 }

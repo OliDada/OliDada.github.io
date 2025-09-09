@@ -1,7 +1,7 @@
 import { playAnimIfNotPlaying } from "../utils.js";
 import { dialog } from "../uiComponents/dialog.js";
 import lumberjackLines from "../content/lumberjackDialogue.js";
-import { gameState, lumberjackState, playerState } from "../state/stateManagers.js";
+import { gameState, lumberjackState, playerState, slimeState } from "../state/stateManagers.js";
 
 export function generateLumberjackComponents(k, pos) {
     return [
@@ -37,10 +37,19 @@ export async function startInteraction(k, lumberjack, player) {
     }
 
     const responses = lumberjackLines[gameState.getLanguage()];
+    let hasMentionedSlimesDefeated = lumberjackState.getHasMentionedSlimesDefeated();
     let nbTimesTalkedLumberjack = lumberjackState.getNbTimesTalkedLumberjack();
 
+    // Show first regular line
+    let showSpecialAfter = false;
+    if (typeof slimeState !== "undefined" && slimeState.areBothSlimesDead && slimeState.areBothSlimesDead() === true && !hasMentionedSlimesDefeated) {
+        showSpecialAfter = true;
+        hasMentionedSlimesDefeated = true;
+        lumberjackState.setHasMentionedSlimesDefeated(true);
+    }
+
     // If player has had potion and hasn't heard the gift line yet
-    if (playerState.getHasHadPotion() && !lumberjackState.getHasMentionedGift() && playerState.getPotions() > 0) {
+    if (playerState.getHasHadPotion() && !lumberjackState.getHasMentionedGift()) {
         await dialog(k, k.vec2(250, 500), responses[5], { speed: 10 });
         lumberjackState.setHasMentionedGift(true);
         return;
@@ -60,10 +69,18 @@ export async function startInteraction(k, lumberjack, player) {
     }
 
     if (responses[lineToSay]) {
+        let lines = responses[lineToSay];
+        if (showSpecialAfter) {
+            lines = [
+                ...lines,
+                "Oh and by the way... You really cleaned up those slimes! You're a real natural.",
+                "Let me teach you a trick. You can perform a charge attack by pressing 'shift'."
+            ];
+        }
         await dialog(
             k,
             k.vec2(250, 500),
-            responses[lineToSay],
+            lines,
             { speed: 10 }
         );
         lumberjackState.setNbTimesTalkedLumberjack(nbTimesTalkedLumberjack + 1);

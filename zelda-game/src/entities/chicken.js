@@ -1,45 +1,13 @@
-import { playAnimIfNotPlaying } from "../utils";
+import { playAnimIfNotPlaying, isPartiallyOnScreen } from "../utils";
 import { onAttacked } from "../utils";
 import { chickenState } from "../state/stateManagers.js";
 import globalStateManager from "../state/globalState.js";
 
-// Helper: check if a game object is partially visible on screen
-function isPartiallyOnScreen(k, obj) {
-    // Get camera info
-    const cam = k.getCamPos();
-    const scale = 4; // hardcoded from world.js
-    const screenW = 1280;
-    const screenH = 720;
-    // Camera shows a region centered at cam, scaled
-    const viewW = screenW / scale;
-    const viewH = screenH / scale;
-    const left = cam.x - viewW / 2;
-    const right = cam.x + viewW / 2;
-    const top = cam.y - viewH / 2;
-    const bottom = cam.y + viewH / 2;
-    // Get object's bounding box (assume area shape is Rect)
-    const pos = obj.worldPos ? obj.worldPos() : obj.pos;
-    const area = obj.area ? obj.area : null;
-    let objLeft = pos.x, objRight = pos.x, objTop = pos.y, objBottom = pos.y;
-    if (area && area.shape && area.shape.w && area.shape.h) {
-        objLeft = pos.x;
-        objRight = pos.x + area.shape.w;
-        objTop = pos.y;
-        objBottom = pos.y + area.shape.h;
-    }
-    // Check for any overlap
-    return (
-        objLeft < right &&
-        objRight > left &&
-        objTop < bottom &&
-        objBottom > top
-    );
-}
 
 const directionalStates = ["left", "right"];
 const gameState = globalStateManager().getInstance();
 
-export function generateChickenComponents(k, pos) {
+export function generateChickenComponents(k, pos, health = 2) {
     return [
         k.sprite('Everything', {
             anim: 'chicken-idle-side',
@@ -53,7 +21,7 @@ export function generateChickenComponents(k, pos) {
             "idle",
             ["idle", ...directionalStates]
         ),
-        k.health(2),
+        k.health(health),
         {
             speed: 30,
             attackPower: 0.5,
@@ -63,10 +31,24 @@ export function generateChickenComponents(k, pos) {
 }
 
 export function setChickenAI(k, chicken, chickenIndex) {
+    chicken.on("hurt", () => {
+        console.log(`[ChickenAI] Chicken ${chickenIndex} hurt event: hp=${chicken.hp && chicken.hp()}`);
+    });
+    chicken.on("death", () => {
+        console.log(`[ChickenAI] Chicken ${chickenIndex} death event: hp=${chicken.hp && chicken.hp()}`);
+    });
     k.onUpdate(() => {
-        // Skip AI updates if the chicken is dead or offscreen
-        if (chicken.health <= 0) return;
-        if (!isPartiallyOnScreen(k, chicken)) return;
+        // Emit death event if chicken health reaches 0 and hasn't already
+        if (chicken.health <= 0) {
+            if (!chicken._deathEmitted) {
+                chicken._deathEmitted = true;
+                chicken.trigger("death");
+            }
+            return;
+        }
+        if (!isPartiallyOnScreen(k, chicken)) {
+            return;
+        }
         switch (chicken.state) {
             case "idle":
                 chicken.move(0);
@@ -95,10 +77,9 @@ export function setChickenAI(k, chicken, chickenIndex) {
     const right = chicken.onStateEnter("right", async () => {
         chicken.flipX = true;
         playAnimIfNotPlaying(chicken, "chicken-side");
-        const waitTime = k.rand(1, 5);
         let elapsed = 0;
         let collided = false;
-        while (elapsed < waitTime) {
+        while (elapsed < 2) {
             await k.wait(0.1);
             elapsed += 0.1;
             if (chicken.getCollisions().length > 0) {
@@ -115,10 +96,9 @@ export function setChickenAI(k, chicken, chickenIndex) {
     const left = chicken.onStateEnter("left", async () => {
         chicken.flipX = false;
         playAnimIfNotPlaying(chicken, "chicken-side");
-        const waitTime = k.rand(1, 5);
         let elapsed = 0;
         let collided = false;
-        while (elapsed < waitTime) {
+        while (elapsed < 3) {
             await k.wait(0.1);
             elapsed += 0.1;
             if (chicken.getCollisions().length > 0) {
@@ -133,8 +113,18 @@ export function setChickenAI(k, chicken, chickenIndex) {
         chicken.enterState("idle");
     });
 
+
+
     chicken.on("hurt", () => {
-        chickenState.setChickenHealth(chickenIndex, chicken.health);
+        const hp = chicken.hp && chicken.hp();
+        if (typeof hp === 'number' && !isNaN(hp)) {
+            console.log(`[ChickenAI] setChickenHealth called for index=${chickenIndex}, hp=${hp}`);
+            chickenState.setChickenHealth(chickenIndex, hp);
+        }
+    });
+
+    chicken.on("death", () => {
+        chickenState.setChickenHealth(chickenIndex, 0);
     });
 
     k.onSceneLeave(() => {

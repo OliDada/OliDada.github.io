@@ -8,18 +8,39 @@ export default function chickenGlobalStateManager() {
     function createInstance() {
         let chickenHealth = [];
         return {
-            setChickenHealth(index, health) { chickenHealth[index] = health; },
-            getChickenHealth() { return chickenHealth; },
+            setChickenHealth(index, health) {
+                if (typeof health !== 'number' || isNaN(health)) {
+                    return;
+                }
+                chickenHealth[index] = health;
+            },
+            getChickenHealth() {
+                return chickenHealth;
+            },
             isAnyChickenHurt() {
-                return this.getChickenHealth().reduce((sum, h) => sum + (h || 0), 0) < 6;
-            }, // assuming max health is 2
-            isAnyChickenDead() { return chickenHealth.some(h => h <= 0); },
-            isAnyChickenAlive() { return chickenHealth.some(h => h > 0); },
+                const healthArr = this.getChickenHealth();
+                const result = healthArr.some(h => h > 0 && h < 2);
+                return result;
+            },
+            isAnyChickenDead() {
+                const result = chickenHealth.some(h => h <= 0);
+                return result;
+            },
+            isAnyChickenAlive() {
+                const result = chickenHealth.some(h => h > 0);
+                return result;
+            },
             isInitialized() { return initialized; },
             setInitialized(val) { initialized = val; },
             resetChickenHealth(numChickens) {
                 chickenHealth = Array(numChickens).fill(2); // or whatever your max health is
                 initialized = true;
+            },
+            // Only initialize chicken health if not already initialized or array is empty
+            initIfNeeded(numChickens) {
+                if (!initialized || chickenHealth.length === 0) {
+                    this.resetChickenHealth(numChickens);
+                }
             },
             hasTriggeredHurtInteraction() { return chickenHurtInteractionTriggered; },
             setTriggeredHurtInteraction(val) { chickenHurtInteractionTriggered = val; },

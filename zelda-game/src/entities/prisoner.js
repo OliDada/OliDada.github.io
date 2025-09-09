@@ -13,16 +13,21 @@ export function generatePrisonerComponents(k, pos) {
         k.pos(pos),
         k.offscreen(),
         'prisoner',
+        {   
+            name: 'prisoner',
+            hp() { return 1; },
+            hurt() {},
+        },
     ];
 }
 
 export async function startInteraction(k, prisoner, player) {
     if (player.direction === "left") {
-        prisoner.flipX = false;
+        prisoner.flipX = true;
         playAnimIfNotPlaying(prisoner, "prisoner-idle-side");
     }
     if (player.direction === "right") {
-        prisoner.flipX = true;
+        prisoner.flipX = false;
         playAnimIfNotPlaying(prisoner, "prisoner-idle-side");
     }
     if (player.direction === "up") {

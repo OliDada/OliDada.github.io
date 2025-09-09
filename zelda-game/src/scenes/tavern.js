@@ -4,7 +4,7 @@ import { colorizeBackground, registerHealthPotionHandler, registerMuteHandler, f
 import { healthBar } from "../uiComponents/healthbar.js";
 import { gameState, chickenState } from "../state/stateManagers.js";
 import { startInteraction } from "../entities/bartender.js";
-import { dialog } from "../uiComponents/dialog.js";
+
 
 export default async function tavern(k) {
     registerHealthPotionHandler(k);
@@ -66,6 +66,7 @@ export default async function tavern(k) {
     });
     entities.player.onCollide("tavern-exit", () => {
         gameState.setPreviousScene("tavern");
+        k.play("door-open");
         k.go("castle");
     });
 

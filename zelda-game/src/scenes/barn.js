@@ -74,11 +74,13 @@ export default async function barn(k) {
 
     entities.player.onCollide("barn-exit", () => {
         gameState.setPreviousScene("barn");
+        k.play("door-open");
         k.go("castle");
     });
 
     entities.player.onCollide("barn-side-exit", () => {
         gameState.setPreviousScene("barn-side");
+        k.play("door-open");
         k.go("castle");
     });
 

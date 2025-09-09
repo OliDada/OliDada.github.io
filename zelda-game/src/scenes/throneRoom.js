@@ -149,7 +149,7 @@ export default async function castle(k) {
 
     entities.player.onCollide("throne-room-exit", () => {
         gameState.setPreviousScene("throne-room");
-        k.go("castle");
+        k.go("castle-main");
     });
 
     // Set camera to follow player

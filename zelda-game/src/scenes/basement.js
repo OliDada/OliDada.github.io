@@ -5,7 +5,9 @@ import {
     fetchMapData,
     registerMuteHandler,
     registerHealthPotionHandler,
-    slideCamY
+    slideCamY,
+    onAttacked,
+    onCollideWithPlayer
 } from '../utils.js';
 import {
     generatePlayerComponents,
@@ -20,12 +22,14 @@ import {
 import { startInteraction } from '../entities/prisoner.js';
 import { generateChestComponents, startChestInteraction } from '../entities/chest.js';
 import { generatePrisonDoorComponents, openPrisonDoor } from '../entities/prisonDoor.js';
+import { generateShiftingWallComponents } from '../entities/shiftingWalls.js';
 import { generateSecretPassageComponents } from "../entities/secretPassage.js";
 import { generateTransitionComponents } from "../entities/transition.js";
 import { generatePressurePlateComponents } from '../entities/pressurePlate.js';
 import { dialog } from '../uiComponents/dialog.js';
 import { generateDungeonDoorComponents } from "../entities/dungeonDoor.js";
 import globalStateManager from "../state/globalState.js";
+import { generateGhostComponents, onGhostDestroyed, setGhostAI } from '../entities/ghost.js';
 
 const gameState = globalStateManager().getInstance();
 
@@ -52,6 +56,8 @@ export default async function basement(k) {
         pressurePlates: [],
         prisoner: null,
         dungeonDoor: null,
+        shiftingWalls: null,
+        ghost: null,
     };
 
     // Spawn entities from Tiled layers
@@ -126,6 +132,25 @@ export default async function basement(k) {
                     );
                     continue;
                 }
+                if (object.name === "shifting-walls") {
+                    entities.shiftingWalls = map.add(
+                        generateShiftingWallComponents(k, k.vec2(object.x, object.y))
+                    );
+                    continue;
+                }
+                if (object.name === "ghost") {
+                    entities.ghost = map.add(
+                        generateGhostComponents(k, k.vec2(object.x, object.y))
+                    );
+                    continue;
+                }
+                if (object.name === "player-dungeon") {
+                    entities.player.onCollide("dungeon", () => {
+                        entities.player.pos.x = object.x;
+                        entities.player.pos.y = object.y;
+                    });
+                }
+
             }
         }
 
@@ -158,6 +183,8 @@ export default async function basement(k) {
             }
         }
     });
+
+    
 
     if (entities.secretPassage) {
         entities.secretPassage.onCollide("pressure-plate", (plate) => {
@@ -265,9 +292,23 @@ export default async function basement(k) {
     });
 
     entities.player.onCollide('castle', () => {
+        gameState.setPreviousScene('basement');
         k.go('castle');
     })
 
+    if (entities.ghost) {
+        setGhostAI(k, entities.ghost, entities.player);
+        onAttacked(k, entities.ghost, () => entities.player);
+        onCollideWithPlayer(k, entities.ghost, entities.player);
+        // Listen for ghost death and trigger wall shift
+        entities.ghost.onDestroy(() => {
+            onGhostDestroyed(k);
+            if (gameState.getHasDefeatedGhost() === true && entities.shiftingWalls) {
+                shiftWalls();
+            }
+        });
+    }
+ 
     k.setCamScale(4);
 
     // Camera follow after transition
@@ -313,7 +354,25 @@ export default async function basement(k) {
         await entities.dungeonDoor.play("dungeon-door-3");
         await k.wait(0.5);
         await entities.dungeonDoor.play("dungeon-door-4");
-        // Optionally: remove collider so player can walk through
+        // Remove collider so player can walk through
         entities.dungeonDoor.unuse("body");
+    }
+
+    async function shiftWalls() {
+        if (!entities.shiftingWalls) return;
+        await entities.shiftingWalls.play("wall-2");
+        await k.wait(0.5);
+        await entities.shiftingWalls.play("wall-3");
+        await k.wait(0.5);
+        await entities.shiftingWalls.play("wall-4");
+        await k.wait(0.5);
+        await entities.shiftingWalls.play("wall-5");
+        await k.wait(0.5);
+        await entities.shiftingWalls.play("wall-6");
+        await k.wait(0.5);
+        await entities.shiftingWalls.play("wall-7");
+        await k.wait(0.5);
+        // Remove collider so player can walk through
+        entities.shiftingWalls.unuse("body");
     }
 }

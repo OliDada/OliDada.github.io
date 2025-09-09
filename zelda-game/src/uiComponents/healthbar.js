@@ -8,6 +8,8 @@ export function healthBar(k) {
     let hasSword = playerState.getIsSwordEquipped();
     let hasHadPotion = playerState.getHasHadPotion();
     let hasHadKey = playerState.getHasBasementKey();
+    let hasCarrot = playerState.getHasCarrot();
+    let hasMagicalBeans = playerState.getHasMagicalBeans();
 
     let previousX = 0;
 
@@ -65,7 +67,21 @@ export function healthBar(k) {
             k.text(`x${nbOfKeys}`, { font: "gameboy", size: 24 }),
             k.pos(previousX + 76, 16)
         ]);
-        // previousX += 98; // Uncomment if you want to add more icons after keys
+        previousX += 98; // Uncomment if you want to add more icons after keys
+    }
+
+    if (hasCarrot === true) {
+        heartsContainer.add([
+            k.sprite("carrot"),
+            k.pos(previousX + 24, 0)
+        ]);
+    }
+
+    if (hasMagicalBeans === true) {
+        heartsContainer.add([
+            k.sprite("magical-beans"),
+            k.pos(previousX + 24, 0)
+        ]);
     }
 
     return heartsContainer;

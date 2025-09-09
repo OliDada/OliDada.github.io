@@ -21,15 +21,17 @@ import {
 } from '../entities/chest.js';
 import { startInteraction } from '../entities/lumberjack.js';
 import { healthBar } from '../uiComponents/healthbar.js';
-import { gameState } from '../state/stateManagers.js';
+import { gameState, slimeState } from '../state/stateManagers.js';
 
 
 
 export default async function world(k) {
 
+    
     registerMuteHandler(k);
     registerHealthPotionHandler(k);
     const previousScene = gameState.getPreviousScene();
+    console.log(previousScene);
 
     colorizeBackground(k, 8, 148, 236);
 
@@ -42,6 +44,19 @@ export default async function world(k) {
         slimes: [],
         chests: [],
     };
+    // Track dead slimes by position (rounded for consistency)
+    const deadSlimes = gameState.getDeadSlimes ? gameState.getDeadSlimes() : [];
+
+    // --- Slime tracking for lumberjack interaction ---
+    // Only track the first two slimes at the start of the world
+    let startingSlimeCount = 0;
+    const startingSlimeIndices = [];
+
+    // Only reset slime health if not initialized (once per scene load)
+        // Only reset slime health if not initialized and health array is empty
+        if (!slimeState.isInitialized() && (!slimeState.getSlimeHealth() || slimeState.getSlimeHealth().length === 0)) {
+            slimeState.resetSlimeHealth(2); // 2 starting slimes
+        }
 
     const layers = mapData.layers;
 
@@ -125,23 +140,42 @@ export default async function world(k) {
 
         if (layer.name === 'SpawnPoints') {
             for (const object of layer.objects) {
-                if (object.name === 'player' && !entities.player) {
+                if (object.name === 'player' && !entities.player && previousScene !== 'town') {
+                    entities.player = map.add(
+                        generatePlayerComponents(k, k.vec2(object.x, object.y))
+                    );
+                    continue;
+                }
+
+                if (object.name === 'player-town' && !entities.player && previousScene === 'town') {
                     entities.player = map.add(
                         generatePlayerComponents(k, k.vec2(object.x, object.y))
                     );
                     continue;
                 }
                 if (object.name === 'slime') {
-                    entities.slimes.push(
-                        map.add(
+                    // Use Math.floor for both spawn and death
+                    const slimeKey = `${Math.floor(object.x)},${Math.floor(object.y)}`;
+                
+                    if (!deadSlimes.includes(slimeKey)) {
+                        const slime = map.add(
                             generateSlimeComponents(
                                 k,
                                 k.vec2(object.x, object.y)
                             )
-                        )
-                    );
+                        );
+                        slime._spawnKey = slimeKey;
+                        // Assign index to first two slimes for tracking
+                        if (startingSlimeCount < 2) {
+                            slime._slimeIndex = startingSlimeCount;
+                            startingSlimeIndices.push(startingSlimeCount);
+                            startingSlimeCount++;
+                        }
+                        entities.slimes.push(slime);
+                    }
                     continue;
                 }
+    // (Removed duplicate health reset from inside the spawn loop)
                 if (object.name === 'lumberjack') {
                     entities.lumberjack = map.add(
                         generateLumberjackComponents(
@@ -187,6 +221,10 @@ export default async function world(k) {
         k.play('door-open');
         k.go('tower');
     });
+    entities.player.onCollide('town-entrance', () => {
+        gameState.setPreviousScene('world');
+        k.go('town');
+    });
     entities.player.onCollide('chest', (chest) => {
         startChestInteraction(k, chest, entities.player);
     });
@@ -203,6 +241,16 @@ export default async function world(k) {
         setSlimeAI(k, slime);
         onAttacked(k, slime, () => entities.player);
         onCollideWithPlayer(k, slime, entities.player);
+        // Listen for slime death and persist dead state
+        if (slime.onDeath) {
+            slime.onDeath(() => {
+                const pos = slime.pos;
+                const key = `${Math.floor(pos.x)},${Math.floor(pos.y)}`;
+                if (gameState.addDeadSlime) {
+                    gameState.addDeadSlime(key);
+                }
+            });
+        }
     }
     k.setCamScale(4);
     k.setCamPos(entities.player.worldPos());

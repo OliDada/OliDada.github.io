@@ -47,7 +47,6 @@ export async function startInteraction(k, shopkeeper, player, options = {}) {
 
     const responses = shopkeeperLines[gameState.getLanguage()];
 
-    // FIX: Move this line up before using nbOfTimesTalkedShopkeeper
     let nbOfTimesTalkedShopkeeper = shopkeeperState.getNbOfTimesTalkedShopkeeper();
 
     // Only for the first interaction, play sound and show potion after potion line

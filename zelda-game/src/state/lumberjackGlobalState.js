@@ -4,6 +4,7 @@ export default function lumberjackGlobalStateManager() {
     function createInstance() {
         let nbTimesTalkedLumberjack = 0;
         let hasMentionedGift = false;
+        let hasMentionedSlimesDefeated = false;
 
         return {
             setNbTimesTalkedLumberjack(value) {
@@ -17,6 +18,12 @@ export default function lumberjackGlobalStateManager() {
             },
             setHasMentionedGift(val) {
                 hasMentionedGift = val;
+            },
+            getHasMentionedSlimesDefeated() {
+                return hasMentionedSlimesDefeated;
+            },
+            setHasMentionedSlimesDefeated(val) {
+                hasMentionedSlimesDefeated = val;
             }
         };
     }

@@ -139,6 +139,7 @@ export default async function shop(k) {
 
     entities.player.onCollide("shop-exit", () => {
         gameState.setPreviousScene("shop");
+        k.play("door-open");
         k.go("world");
     });
 
