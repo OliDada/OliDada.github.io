@@ -1,0 +1,14 @@
+{ "columns":10,
+ "image":"Maple Tree.png",
+ "imageheight":48,
+ "imagewidth":160,
+ "margin":0,
+ "name":"Maple Tree",
+ "spacing":0,
+ "tilecount":30,
+ "tiledversion":"1.11.2",
+ "tileheight":16,
+ "tilewidth":16,
+ "type":"tileset",
+ "version":"1.10"
+}
