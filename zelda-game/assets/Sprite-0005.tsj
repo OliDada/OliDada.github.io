@@ -1,0 +1,14 @@
+{ "columns":33,
+ "image":"Sprite-0005.png",
+ "imageheight":384,
+ "imagewidth":528,
+ "margin":0,
+ "name":"Sprite-0005",
+ "spacing":0,
+ "tilecount":792,
+ "tiledversion":"1.11.2",
+ "tileheight":16,
+ "tilewidth":16,
+ "type":"tileset",
+ "version":"1.10"
+}
