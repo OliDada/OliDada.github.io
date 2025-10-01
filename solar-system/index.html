@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Solar System</title>
+    <link rel="icon" href="../../images/dolphin2.png" type="image/x-icon">
+    <style>
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+      }
+      
+      /* Instructions overlay */
+      #instructions {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        max-width: 400px;
+        font-size: 14px;
+        line-height: 1.4;
+        z-index: 1000;
+        transition: opacity 0.3s ease;
+      }
+      
+      #instructions.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      
+      #instructions h3 {
+        margin: 0 0 15px 0;
+        color: #4CAF50;
+        font-size: 18px;
+      }
+      
+      #instructions .section {
+        margin-bottom: 15px;
+      }
+      
+      #instructions .section h4 {
+        margin: 0 0 8px 0;
+        color: #FFD700;
+        font-size: 14px;
+      }
+      
+      #instructions .controls {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 5px 15px;
+        font-family: monospace;
+      }
+      
+      #instructions .key {
+        color: #00BFFF;
+        font-weight: bold;
+      }
+      
+      #instructions .toggle-hint {
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid #444;
+        text-align: center;
+        color: #888;
+        font-style: italic;
+      }
+    </style>
+    <script type="importmap">
+			{
+				"imports": {
+					"three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+          "jsm/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+        }
+			}
+		</script>
+  </head>
+  <body>
+    <!-- Instructions Overlay -->
+    <div id="instructions">
+      <h3>Solar System Controls</h3>
+      
+      <div class="section">
+        <h4>Planet Selection</h4>
+        <div class="controls">
+          <span class="key">1</span><span>Mercury</span>
+          <span class="key">2</span><span>Venus</span>
+          <span class="key">3</span><span>Earth</span>
+          <span class="key">4</span><span>Mars</span>
+          <span class="key">5</span><span>Jupiter</span>
+          <span class="key">6</span><span>Saturn</span>
+          <span class="key">7</span><span>Uranus</span>
+          <span class="key">8</span><span>Neptune</span>
+          <span class="key">9</span><span>Pluto</span>
+          <span class="key">0</span><span>Solar System Overview</span>
+        </div>
+      </div>
+      
+      <div class="section">
+        <h4>Basic Movement</h4>
+        <div class="controls">
+          <span class="key">WASD</span><span>Move around</span>
+          <span class="key">↑↓←→</span><span>Look around</span>
+          <span class="key">Q/E</span><span>Up/Down</span>
+          <span class="key">Space</span><span>Boost Speed (hold)</span>
+        </div>
+      </div>
+      
+      <div class="section">
+        <h4>Camera Control</h4>
+        <div class="controls">
+          <span class="key">Mouse Drag</span><span>Look around </span>
+          <span class="key">Mouse Wheel</span><span>Zoom (when locked-on)</span>
+        </div>
+      </div>
+      
+      <div class="section">
+        <h4>Lock-On System</h4>
+        <div class="controls">
+          <span class="key">1-9</span><span>Go to planet & follow it</span>
+          <span class="key">Shift+1-9</span><span>Look at a planet (from current spot)</span>
+          <span class="key">0</span><span>Solar system overview</span>
+          <span class="key">Shift+0</span><span>Lock to Sun</span>
+        </div>
+      </div>
+      
+      <div class="section">
+        <h4>When Locked On</h4>
+        <div class="controls">
+          <span class="key">↑↓←→</span><span>Orbit around planet</span>
+          <span class="key">Mouse Wheel</span><span>Zoom in/out</span>
+          <span class="key">W/A/S/D/Q/E</span><span>Unlock & move freely</span>
+        </div>
+      </div>
+      
+      <div class="section">
+          
+        <strong style="color: #FFD700;">Lock vs Go:</strong> Number keys move you to planets. Shift+Number locks on to the planet from your current position.
+
+      </div>
+      
+      <div class="toggle-hint">
+        Press <span class="key">H</span> to toggle these instructions
+      </div>
+    </div>
+    
+    <script type="module" src="index.js"></script>
+  </body>
+</html>
