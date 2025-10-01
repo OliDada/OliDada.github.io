@@ -585,13 +585,19 @@ export function createCameraControls(camera, renderer, celestialBodies = {}) {
     }
     
     // A/D movement (strafe left/right) and Q/E movement (up/down)
-    // Check if camera is upside down to correct left/right movement direction
-    const cameraUp = new THREE.Vector3(0, 1, 0);
-    cameraUp.applyQuaternion(camera.quaternion);
-    const isUpsideDown = cameraUp.y < 0;
-    
-    if (keys.a) camera.position.addScaledVector(right, isUpsideDown ? -currentSpeed : currentSpeed);
-    if (keys.d) camera.position.addScaledVector(right, isUpsideDown ? currentSpeed : -currentSpeed);
+    if (lockedObject) {
+      // When locked, maintain consistent left/right movement regardless of camera orientation
+      if (keys.a) camera.position.addScaledVector(right, currentSpeed);
+      if (keys.d) camera.position.addScaledVector(right, -currentSpeed);
+    } else {
+      // When not locked, check if camera is upside down to correct left/right movement direction
+      const cameraUp = new THREE.Vector3(0, 1, 0);
+      cameraUp.applyQuaternion(camera.quaternion);
+      const isUpsideDown = cameraUp.y < 0;
+      
+      if (keys.a) camera.position.addScaledVector(right, isUpsideDown ? -currentSpeed : currentSpeed);
+      if (keys.d) camera.position.addScaledVector(right, isUpsideDown ? currentSpeed : -currentSpeed);
+    }
     if (keys.q) camera.position.y += currentSpeed; // Move up in world space
     if (keys.e) camera.position.y -= currentSpeed; // Move down in world space
     
