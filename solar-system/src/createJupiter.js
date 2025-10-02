@@ -5,13 +5,13 @@ export function createJupiter(sunGroup = null) {
 
   // Jupiter properties (realistic relative to Earth)
   const radius = 10.95; // Jupiter radius relative to Earth (100% of Earth's radius)
-  const orbitRadius = 778; // Jupiter orbital distance from Sun (7.78 AU in your scale)
+  const orbitRadius = 1456; // Jupiter: 5.2 AU (proportionally correct)
   const orbitalInclination = 1.3 * (Math.PI / 180); // Jupiter orbital inclination: 1.3 degrees
 
   // Create Jupiter mesh (not in a group for orbital rotation)
-  const geometry = new THREE.IcosahedronGeometry(radius, 16);
+  const geometry = new THREE.SphereGeometry(radius, 64, 32);
   const material = new THREE.MeshStandardMaterial({
-    map: loader.load('./textures/jupitermap.jpg'),
+    map: loader.load('./textures/8k_jupiter.jpg'),
   });
   const jupiterMesh = new THREE.Mesh(geometry, material);
   

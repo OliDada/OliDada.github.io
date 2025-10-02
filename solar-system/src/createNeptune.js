@@ -5,15 +5,18 @@ export function createNeptune(sunGroup = null) {
 
   // Neptune properties (realistic relative to Earth)
   const radius = 3.86; // Neptune radius relative to Earth (49.2% of Earth's radius)
-  const orbitRadius = 4500; // Neptune orbital distance from Sun (30.07 AU in your scale)
+  const orbitRadius = 8420; // Neptune: 30.07 AU (proportionally correct)
   const orbitalInclination = 1.85 * (Math.PI / 180); // Neptune orbital inclination: 1.85 degrees
 
   // Create Neptune mesh (not in a group for orbital rotation)
-  const geometry = new THREE.IcosahedronGeometry(radius, 16);
+  const geometry = new THREE.SphereGeometry(radius, 64, 32); // Use SphereGeometry for better rendering
   const material = new THREE.MeshStandardMaterial({
-    map: loader.load('./textures/neptunemap.jpg'),
+    map: loader.load('./textures/2k_neptune.jpg'),
   });
   const neptuneMesh = new THREE.Mesh(geometry, material);
+
+  // Set initial position explicitly for testing
+  neptuneMesh.position.set(orbitRadius, 0, 0); // Should be clearly visible far from Sun
 
   // Neptune orbital angle (start at different position than Earth)
   let neptuneOrbitalAngle = Math.PI; // Start opposite side from Earth

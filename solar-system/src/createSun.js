@@ -8,7 +8,6 @@ export function createSun() {
 
   // Sun properties
   const sunRadius = 109.3; // relative to earth radius of 1
-  const sunDistance = 700; // relative to earth radius of 1
 
   const detail = 24;
 
@@ -20,7 +19,7 @@ export function createSun() {
 
   // Create sun mesh
   const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
-  sunMesh.position.set(sunDistance, 0, 0);
+  sunMesh.position.set(0, 0, 0); // Sun at the center of the solar system
   sunGroup.add(sunMesh);
 
   // Create multiple glow layers for realistic effect
@@ -33,7 +32,7 @@ export function createSun() {
     side: THREE.BackSide, // Render from inside
   });
   const innerGlow = new THREE.Mesh(innerGlowGeometry, innerGlowMaterial);
-  innerGlow.position.copy(sunMesh.position);
+  innerGlow.position.set(0, 0, 0); // Centered with the Sun
   sunGroup.add(innerGlow);
 
   // Outer glow - larger and more diffuse
@@ -45,7 +44,7 @@ export function createSun() {
     side: THREE.BackSide,
   });
   const outerGlow = new THREE.Mesh(outerGlowGeometry, outerGlowMaterial);
-  outerGlow.position.copy(sunMesh.position);
+  outerGlow.position.set(0, 0, 0); // Centered with the Sun
   sunGroup.add(outerGlow);
 
   // Corona effect - very large and subtle

@@ -5,11 +5,11 @@ export function createPluto(sunGroup = null) {
 
   // Pluto properties (realistic relative to Earth)
   const radius = 0.186; // Pluto radius relative to Earth (18.6% of Earth's radius)
-  const orbitRadius = 5925; // Pluto orbital distance from Sun (39.5 AU in your scale)
+  const orbitRadius = 11067; // Pluto: 39.5 AU (proportionally correct)
   const orbitalInclination = 17.16 * (Math.PI / 180); // Pluto orbital inclination: 17.16 degrees
 
   // Create Pluto mesh (not in a group for orbital rotation)
-  const geometry = new THREE.IcosahedronGeometry(radius, 5);
+  const geometry = new THREE.SphereGeometry(radius, 64, 32);
   const material = new THREE.MeshStandardMaterial({
     map: loader.load('./textures/plutomap2k.jpg'),
   });

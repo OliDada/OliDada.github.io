@@ -5,19 +5,19 @@ export function createSaturn(sunGroup = null) {
 
   // Saturn properties (realistic relative to Earth)
   const radius = 9.14; // Saturn radius relative to Earth (914% of Earth's radius)
-  const orbitRadius = 952; // Saturn orbital distance: 9.52 AU scaled down
+  const orbitRadius = 2666; // Saturn: 9.52 AU (proportionally correct)
   const orbitalInclination = 2.49 * (Math.PI / 180); // Saturn orbital inclination: 2.49 degrees
 
   // Create Saturn mesh
-  const geometry = new THREE.IcosahedronGeometry(radius, 16);
+  const geometry = new THREE.SphereGeometry(radius, 128, 64);
   const material = new THREE.MeshStandardMaterial({
-    map: loader.load('./textures/saturnmap.jpg'), // Saturn's surface color map
+    map: loader.load('./textures/8k_saturn.jpg'), // Saturn's surface color map
   });
   const saturnMesh = new THREE.Mesh(geometry, material);
 
   // Create Saturn's rings with custom geometry for proper texture mapping
   const ringInnerRadius = radius * 1.2; // Hole slightly larger than Saturn
-  const ringOuterRadius = radius * 3.0; // Ring system extends much further out
+  const ringOuterRadius = radius * 5.2; // Ring system extends much further out
   
   // Custom ring geometry function with proper UV mapping for textures
   function createRingGeometry(innerRadius, outerRadius, segments) {
@@ -26,7 +26,7 @@ export function createSaturn(sunGroup = null) {
     const uvs = [];
     const indices = [];
 
-    // Create vertices and UVs - this maps the texture radially from inner to outer edge
+    // Create vertices and UVs - this maps the texture radially from inner to outer edge (inverted)
     for (let i = 0; i <= segments; i++) {
       const angle = (i / segments) * Math.PI * 2;
       const cos = Math.cos(angle);
@@ -34,11 +34,11 @@ export function createSaturn(sunGroup = null) {
 
       // Inner vertex
       vertices.push(innerRadius * cos, innerRadius * sin, 0);
-      uvs.push(0, i / segments); // U=0 for inner edge, V wraps around
+      uvs.push(1, i / segments); // U=1 for inner edge (inverted), V wraps around
 
       // Outer vertex  
       vertices.push(outerRadius * cos, outerRadius * sin, 0);
-      uvs.push(1, i / segments); // U=1 for outer edge, V wraps around
+      uvs.push(0, i / segments); // U=0 for outer edge (inverted), V wraps around
     }
 
     // Create indices for triangles
@@ -64,8 +64,8 @@ export function createSaturn(sunGroup = null) {
   const ringGeometry = createRingGeometry(ringInnerRadius, ringOuterRadius, 128);
   
   // Load both ring textures
-  const ringColorMap = loader.load('./textures/saturnringcolor.jpg');
-  const ringPatternMap = loader.load('./textures/saturnringpattern.gif');
+  const ringColorMap = loader.load('./textures/8k_saturn_ring_alpha.png');
+  const ringPatternMap = loader.load('./textures/8k_saturn_ring_alpha.png');
 
   // Material with both color and transparency
   const ringMaterial = new THREE.MeshBasicMaterial({
@@ -73,7 +73,7 @@ export function createSaturn(sunGroup = null) {
     alphaMap: ringPatternMap,  // This would control transparency
     side: THREE.DoubleSide,
     transparent: true,
-    alphaTest: 0.12,
+    alphaTest: 0.1,
     depthWrite: false
   });
   
@@ -98,7 +98,9 @@ export function createSaturn(sunGroup = null) {
   saturnGroup.add(ringMesh3);
   
   // Apply Saturn's axial tilt (26.7 degrees - affects both planet and rings)
-  saturnGroup.rotation.z = 26.7 * (Math.PI / 180);
+  // Apply tilt to the entire group for proper coordinate system alignment
+  const saturnTilt = 26.7 * (Math.PI / 180);
+  saturnGroup.rotation.z = saturnTilt;
 
   // Saturn orbital angle and speed
   let saturnOrbitalAngle = Math.PI / 3; // Start at 60 degrees

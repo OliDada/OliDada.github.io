@@ -5,19 +5,21 @@ export function createUranus(sunGroup = null) {
 
   // Uranus properties (realistic relative to Earth)
   const radius = 3.98; // Uranus radius relative to Earth (398% of Earth's radius)
-  const orbitRadius = 2880; // Uranus orbital distance: 19.8 AU scaled down
+  const orbitRadius = 5544; // Uranus: 19.8 AU (proportionally correct)
   const orbitalInclination = 0.8 * (Math.PI / 180); // Uranus orbital inclination: 0.8 degrees
 
   // Create Uranus mesh
-  const geometry = new THREE.IcosahedronGeometry(radius, 16);
+  const geometry = new THREE.SphereGeometry(radius, 64, 32);
   const material = new THREE.MeshStandardMaterial({
-    map: loader.load('./textures/uranusmap.jpg'), // Uranus's surface color map
+    map: loader.load('./textures/2k_uranus.jpg'), // Uranus's surface color map
+    metalness: 0.0, // Ensure proper lighting response
+    roughness: 1.0, // Make surface more responsive to directional light
   });
   const uranusMesh = new THREE.Mesh(geometry, material);
 
   // Create Uranus's rings with custom geometry for proper texture mapping
-  const ringInnerRadius = radius * 1.2; // Hole slightly larger than Uranus
-  const ringOuterRadius = radius * 3.0; // Ring system extends much further out
+  const ringInnerRadius = radius * 2; // Hole slightly larger than Uranus
+  const ringOuterRadius = radius * 2.3; // Much narrower ring system (Uranus has thin, narrow rings)
   
   // Custom ring geometry function with proper UV mapping for textures
   function createRingGeometry(innerRadius, outerRadius, segments) {
@@ -26,7 +28,7 @@ export function createUranus(sunGroup = null) {
     const uvs = [];
     const indices = [];
 
-    // Create vertices and UVs - this maps the texture radially from inner to outer edge
+    // Create vertices and UVs - this maps the texture radially from inner to outer edge (inverted)
     for (let i = 0; i <= segments; i++) {
       const angle = (i / segments) * Math.PI * 2;
       const cos = Math.cos(angle);
@@ -34,11 +36,11 @@ export function createUranus(sunGroup = null) {
 
       // Inner vertex
       vertices.push(innerRadius * cos, innerRadius * sin, 0);
-      uvs.push(0, i / segments); // U=0 for inner edge, V wraps around
+      uvs.push(1, i / segments); // U=1 for inner edge (inverted), V wraps around
 
       // Outer vertex  
       vertices.push(outerRadius * cos, outerRadius * sin, 0);
-      uvs.push(1, i / segments); // U=1 for outer edge, V wraps around
+      uvs.push(0, i / segments); // U=0 for outer edge (inverted), V wraps around
     }
 
     // Create indices for triangles
@@ -61,7 +63,7 @@ export function createUranus(sunGroup = null) {
     return geometry;
   }
 
-  const ringGeometry = createRingGeometry(ringInnerRadius, ringOuterRadius, 128);
+  const ringGeometry = createRingGeometry(ringInnerRadius, ringOuterRadius, 256);
   
   // Load both ring textures
   const ringColorMap = loader.load('./textures/uranusringcolour.jpg');
@@ -73,7 +75,7 @@ export function createUranus(sunGroup = null) {
     alphaMap: ringPatternMap,  // This would control transparency
     side: THREE.DoubleSide,
     transparent: true,
-    alphaTest: 0.09,
+    alphaTest: 0.1,
     depthWrite: false
   });
   
@@ -81,25 +83,25 @@ export function createUranus(sunGroup = null) {
   const ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
   ringMesh.rotation.x = Math.PI / 2; // 90 degrees
   
-  // Create additional ring layers for thickness
+  // Create one additional ring layer for very subtle thickness
   const ringMesh2 = new THREE.Mesh(ringGeometry, ringMaterial);
   ringMesh2.rotation.x = Math.PI / 2;
-  ringMesh2.position.y = 0.02; // Slightly offset
-  
-  const ringMesh3 = new THREE.Mesh(ringGeometry, ringMaterial);
-  ringMesh3.rotation.x = Math.PI / 2;
-  ringMesh3.position.y = -0.02; // Slightly offset in opposite direction
+  ringMesh2.position.y = 0.001; // Extremely thin offset
 
   // Create Uranus group to hold both planet and rings
   const uranusGroup = new THREE.Group();
   uranusGroup.add(uranusMesh);
   uranusGroup.add(ringMesh);
   uranusGroup.add(ringMesh2);
-  uranusGroup.add(ringMesh3);
+
+  // Apply Uranus's extreme axial tilt (97.77 degrees - nearly on its side!)
+  // Apply tilt to the entire group for proper coordinate system alignment
+  const axialTilt = 97.77 * (Math.PI / 180);
+  uranusGroup.rotation.z = axialTilt;
 
   // Uranus orbital angle and speed
   let uranusOrbitalAngle = Math.PI / 3; // Start at 60 degrees
-  const uranusOrbitalSpeed = 0.000034; // Uranus: 29.5 years orbital period
+  const uranusOrbitalSpeed = 0.0000238; 
 
   // Animation function for Uranus orbit around Sun
   const animateUranus = () => {
@@ -114,10 +116,9 @@ export function createUranus(sunGroup = null) {
     // Uranus self-rotation (10.7 hours - quite fast for its size)
     uranusMesh.rotation.y += -0.00279; // Faster than Earth
 
-    // Rings rotate with the planet (all layers)
+    // Rings rotate with the planet (both layers)
     ringMesh.rotation.z += -0.00279;
     ringMesh2.rotation.z += 0.00279;
-    ringMesh3.rotation.z += -0.00279;
   };
 
   return {

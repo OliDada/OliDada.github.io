@@ -5,16 +5,30 @@ export function createVenus(sunGroup = null) {
 
   // Venus properties (realistic relative to Earth)
   const radius = 0.949; // Venus radius relative to Earth (94.9% of Earth's radius)
-  const orbitRadius = 108; // Venus orbital distance from Sun (0.72 AU in your scale)
+  const orbitRadius = 200; // Venus: 0.72 AU (proportionally correct)
   const orbitalInclination = 3.39 * (Math.PI / 180); // Venus orbital inclination: 3.39 degrees
-
+  
   // Create Venus mesh (not in a group for orbital rotation)
-  const geometry = new THREE.IcosahedronGeometry(radius, 5);
+  const geometry = new THREE.SphereGeometry(radius, 64, 32);
   const material = new THREE.MeshStandardMaterial({
-    map: loader.load('./textures/venusmap.jpg'),
+    map: loader.load('./textures/8k_venus_surface.jpg'),
   });
   const venusMesh = new THREE.Mesh(geometry, material);
-  
+
+  // Venus atmosphere (very thick and dense)
+  const cloudsMat = new THREE.MeshStandardMaterial({
+    map: loader.load('./textures/4k_venus_atmosphere.jpg'),
+    transparent: true,
+    opacity: 0.4,
+    blending: THREE.NormalBlending,
+    side: THREE.DoubleSide,
+  });
+  const cloudsMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(radius + 0.01, 64, 32), // Thicker atmosphere
+    cloudsMat
+  );
+  venusMesh.add(cloudsMesh);
+
   // Apply Venus's axial tilt (177.4 degrees - retrograde rotation, nearly upside down!)
   venusMesh.rotation.z = 177.4 * (Math.PI / 180);
 
@@ -34,6 +48,7 @@ export function createVenus(sunGroup = null) {
 
     // Venus self-rotation (very slow and retrograde - 243 Earth days)
     venusMesh.rotation.y -= 0.0000082; // Negative for retrograde rotation
+    cloudsMesh.rotation.y -= 0.0001; // Clouds rotate slightly faster
   };
 
   return {

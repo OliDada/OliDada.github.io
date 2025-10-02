@@ -6,7 +6,7 @@ export function createEarth() {
   const detail = 12;
   
   // Earth orbital properties
-  const orbitRadius = 200; // Earth's distance from Sun (moved outside Sun's radius)
+  const orbitRadius = 280; // Earth: 1.0 AU (proportionally correct)
   let earthOrbitalAngle = 0; // Start at 0 degrees
   const earthOrbitalSpeed = 0.0001; // Earth's orbital speed (365.25 days baseline)
   const orbitalInclination = 0; // Earth orbital inclination: 0 degrees (reference plane)

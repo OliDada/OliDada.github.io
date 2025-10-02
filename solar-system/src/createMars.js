@@ -5,13 +5,13 @@ export function createMars(sunGroup = null) {
 
   // Mars properties (realistic relative to Earth)
   const radius = 0.532; // Mars radius relative to Earth (53.2% of Earth's radius)
-  const orbitRadius = 152; // Mars orbital distance from Sun (1.52 AU in your scale)
+  const orbitRadius = 425; // Mars: 1.52 AU (proportionally correct)
   const orbitalInclination = 1.85 * (Math.PI / 180); // Mars orbital inclination: 1.85 degrees
-  
+
   // Create Mars mesh (not in a group for orbital rotation)
-  const geometry = new THREE.IcosahedronGeometry(radius, 5);
+  const geometry = new THREE.SphereGeometry(radius, 64, 32);
   const material = new THREE.MeshStandardMaterial({
-    map: loader.load('./textures/marsmap1k.jpg'),
+    map: loader.load('./textures/8k_mars.jpg'),
   });
   const marsMesh = new THREE.Mesh(geometry, material);
   

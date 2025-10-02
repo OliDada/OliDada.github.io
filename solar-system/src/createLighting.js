@@ -3,50 +3,41 @@ import * as THREE from "three";
 export function createLighting(sunObject = null) {
   const lights = [];
   
-  // Ambient light (makes unlit areas clearly visible)
-  const ambientLight = new THREE.AmbientLight(0x404040, 0.3); // General ambient light
-  lights.push(ambientLight);
   
   // Hemisphere light (additional ambient lighting)
-  const hemiLight = new THREE.HemisphereLight(0x404040, 0x202020, 0.2);
+  const hemiLight = new THREE.HemisphereLight(0x404040, 0x202020, 2); // Higher hemisphere light
   lights.push(hemiLight);
-  
-  // Main sun light (directional light simulating the sun)
-  const sunLight = new THREE.DirectionalLight(0xffffff,3);
+
+  // Main sun light (point light with no distance falloff for outer planets)
+  const sunLight = new THREE.PointLight(0xffffff, 4, 0, 0); // No distance limit (0 = infinite range)
   
   if (sunObject && sunObject.mesh) {
     // Position the light at the sun's location
     const sunPosition = new THREE.Vector3();
     sunObject.mesh.getWorldPosition(sunPosition);
     sunLight.position.copy(sunPosition);
-    
-    // Make the light look toward the center (Earth)
-    sunLight.target.position.set(0, 0, 0);
   } else {
     // Fallback position if no sun object provided
     sunLight.position.set(0, 0, 0);
   }
   
-  // Add shadow properties for more realism
-  sunLight.castShadow = true;
+  // Disable shadows for performance with infinite range
+  sunLight.castShadow = false;
   sunLight.shadow.mapSize.width = 2048;
   sunLight.shadow.mapSize.height = 2048;
-  sunLight.shadow.camera.near = 500;
-  sunLight.shadow.camera.far = 1500;
-  sunLight.shadow.camera.left = -1000;
-  sunLight.shadow.camera.right = 1000;
-  sunLight.shadow.camera.top = 1000;
-  sunLight.shadow.camera.bottom = -1000;
+  sunLight.shadow.camera.near = 1;
+  sunLight.shadow.camera.far = 15000; // Match the light range
   
   lights.push(sunLight);
-  
-  // Optional: Add a point light at sun position for close-up illumination
+
+  // Additional point light from sun for close-range illumination
+  const sunPointLight = new THREE.PointLight(0xffaa44, 50, 10000); // Higher intensity
   if (sunObject && sunObject.mesh) {
-    const sunPointLight = new THREE.PointLight(0xffaa44, 1, 2000);
     const sunPosition = new THREE.Vector3();
     sunObject.mesh.getWorldPosition(sunPosition);
     sunPointLight.position.copy(sunPosition);
-    lights.push(sunPointLight);
+  } else {
+    sunPointLight.position.set(0, 0, 0);
   }
   
   // Return lights and update function
@@ -55,13 +46,11 @@ export function createLighting(sunObject = null) {
       const sunPosition = new THREE.Vector3();
       sunObject.mesh.getWorldPosition(sunPosition);
       
-      // Update directional light position
+      // Update main sun light position (PointLight)
       sunLight.position.copy(sunPosition);
       
-      // Update point light position if it exists
-      if (lights.length > 2) {
-        lights[2].position.copy(sunPosition);
-      }
+      // Update additional point light position
+      sunPointLight.position.copy(sunPosition);
     }
   };
   

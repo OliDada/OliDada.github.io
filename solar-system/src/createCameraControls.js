@@ -181,7 +181,7 @@ export function createCameraControls(camera, renderer, celestialBodies = {}) {
     if (event.shiftKey) {
       lockOnToObject(celestialBodies[planetName], distance); // Shift: Just lock on planet
     } else {
-      // Special focus - position camera higher to show rings better
+      // Special focus - position camera at 45-degree angle to view rings better
       const position = new THREE.Vector3();
       if (celestialBodies[planetName].mesh) {
         celestialBodies[planetName].mesh.getWorldPosition(position);
@@ -191,16 +191,24 @@ export function createCameraControls(camera, renderer, celestialBodies = {}) {
         celestialBodies[planetName].getWorldPosition(position);
       }
       
-      // Position camera with higher Y offset to view rings from above
+      // Position camera at 45-degree angle (both X and Y offset for diagonal view)
+      const angle45 = Math.PI / 4; // 45 degrees in radians
+      const cosAngle = Math.cos(angle45);
+      const sinAngle = Math.sin(angle45);
+      
       camera.position.copy(position);
-      camera.position.z += distance; // Distance
-      camera.position.y += 5; // Higher Y position to see rings better
+      camera.position.x += distance * cosAngle; // X offset for 45-degree angle
+      camera.position.y += distance * sinAngle; // Y offset for 45-degree angle
+      camera.position.z += distance * 0.5; // Slight Z offset for better view
       
       // Reset rotation tracking
       cameraRotationX = 0;
       cameraRotationY = 0;
       rotationTrackingSync = true;
       camera.rotation.set(0, 0, 0);
+      
+      // Make camera look at the planet
+      camera.lookAt(position);
       
       // Update OrbitControls target
       controls.target.copy(position);
@@ -366,10 +374,10 @@ export function createCameraControls(camera, renderer, celestialBodies = {}) {
         break;
       case 'Digit9':
         if (event.shiftKey) {
-          lockOnToObject(celestialBodies.pluto, 2); // Shift+9: Just lock on Pluto
+          lockOnToObject(celestialBodies.pluto, 5); // Shift+9: Just lock on Pluto with better distance
         } else {
-          focusOnObject(celestialBodies.pluto, 2); // Position camera on Pluto
-          lockOnToObject(celestialBodies.pluto, 2); // Then lock to follow Pluto
+          focusOnObject(celestialBodies.pluto, 5); // Position camera on Pluto with better distance
+          lockOnToObject(celestialBodies.pluto, 5); // Then lock to follow Pluto
         }
         break;
       case 'Digit0':

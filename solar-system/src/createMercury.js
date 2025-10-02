@@ -5,13 +5,13 @@ export function createMercury(sunGroup = null) {
 
   // Mercury properties (realistic relative to Earth)
   const radius = 0.383; // Mercury radius relative to Earth (38.3% of Earth's radius)
-  const orbitRadius = 57.91; // Mercury orbital distance from Sun (0.39 AU in your scale)
+  const orbitRadius = 150; // Mercury: 0.39 AU (proportionally correct)
   const orbitalInclination = 3.39 * (Math.PI / 180); // Mercury orbital inclination: 3.39 degrees
-
+  
   // Create Mercury mesh (not in a group for orbital rotation)
-  const geometry = new THREE.IcosahedronGeometry(radius, 5);
+  const geometry = new THREE.SphereGeometry(radius, 64, 32);
   const material = new THREE.MeshStandardMaterial({
-    map: loader.load('./textures/mercurymap.jpg'),
+    map: loader.load('./textures/8k_mercury.jpg'),
   });
   const mercuryMesh = new THREE.Mesh(geometry, material);
 
