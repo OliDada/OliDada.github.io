@@ -4,8 +4,9 @@ export function createJupiter(sunGroup = null) {
   const loader = new THREE.TextureLoader();
 
   // Jupiter properties (realistic relative to Earth)
-  const radius = 10.95; // Jupiter radius relative to Earth (100% of Earth's radius)
-  const orbitRadius = 1456; // Jupiter: 5.2 AU (proportionally correct)
+  const SPEED_FACTOR = 0.5;
+  const radius = 109.5; // Jupiter radius relative to Earth
+  const orbitRadius = 122585; // Jupiter: 5.2 AU
   const orbitalInclination = 1.3 * (Math.PI / 180); // Jupiter orbital inclination: 1.3 degrees
 
   // Create Jupiter mesh (not in a group for orbital rotation)
@@ -19,8 +20,8 @@ export function createJupiter(sunGroup = null) {
   jupiterMesh.rotation.z = 3.1 * (Math.PI / 180);
 
   // Jupiter orbital angle (start at different position than Earth)
-  let jupiterOrbitalAngle = Math.PI; // Start opposite side from Earth
-  const jupiterOrbitalSpeed = 0.0005; // Slower than Earth (Jupiter takes ~4333 Earth days)
+  let jupiterOrbitalAngle = 1.0 * Math.PI; // Unique starting angle
+  const jupiterOrbitalSpeed = 0.0005 * SPEED_FACTOR; // Slower than Earth (Jupiter takes ~4333 Earth days)
 
   // Animation function for jupiter orbit around Sun
   const animateJupiter = () => {
@@ -33,7 +34,7 @@ export function createJupiter(sunGroup = null) {
     jupiterMesh.position.y = Math.sin(jupiterOrbitalAngle) * orbitRadius * Math.sin(orbitalInclination);
 
     // Jupiter self-rotation
-    jupiterMesh.rotation.y += 0.00485;
+  jupiterMesh.rotation.y += 0.00485 * SPEED_FACTOR;
   };
 
   return {

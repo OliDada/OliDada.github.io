@@ -6,15 +6,15 @@ export function createSun() {
   // Sun group for orbital rotation
   const sunGroup = new THREE.Group();
 
-  // Sun properties
-  const sunRadius = 109.3; // relative to earth radius of 1
+  // Sun properties (scaled up)
+  const sunRadius = 1093; // relative to earth radius of 10
 
   const detail = 24;
 
   // Sun geometry and material - Make it emissive (self-illuminating)
-  const sunGeometry = new THREE.IcosahedronGeometry(sunRadius, detail);
+  const sunGeometry = new THREE.SphereGeometry(sunRadius, 64, 32);
   const sunMaterial = new THREE.MeshBasicMaterial({
-    map: loader.load('./textures/sunmap.jpg'),
+    map: loader.load('./textures/8k_sun.jpg'),
   });
 
   // Create sun mesh
@@ -24,7 +24,7 @@ export function createSun() {
 
   // Create multiple glow layers for realistic effect
   // Inner glow - bright and warm
-  const innerGlowGeometry = new THREE.IcosahedronGeometry(sunRadius * 1.02, detail);
+  const innerGlowGeometry = new THREE.SphereGeometry(sunRadius * 1.02, 64, 32);
   const innerGlowMaterial = new THREE.MeshBasicMaterial({
     color: 0xffcc66,
     transparent: true,
@@ -36,7 +36,7 @@ export function createSun() {
   sunGroup.add(innerGlow);
 
   // Outer glow - larger and more diffuse
-  const outerGlowGeometry = new THREE.IcosahedronGeometry(sunRadius * 1.08, detail);
+  const outerGlowGeometry = new THREE.SphereGeometry(sunRadius * 1.08, 64, 32);
   const outerGlowMaterial = new THREE.MeshBasicMaterial({
     color: 0xff8844,
     transparent: true,
@@ -48,7 +48,7 @@ export function createSun() {
   sunGroup.add(outerGlow);
 
   // Corona effect - very large and subtle
-  const coronaGeometry = new THREE.IcosahedronGeometry(sunRadius * 1.2, detail);
+  const coronaGeometry = new THREE.SphereGeometry(sunRadius * 1.2, 64, 32);
   const coronaMaterial = new THREE.MeshBasicMaterial({
     color: 0xffffaa,
     transparent: true,

@@ -1,26 +1,25 @@
 import * as THREE from "three";
-
-export default function getStarfield({ numStars = 500, layers = 1 } = {}) {
+export default function getStarfield({ numStars = 500, layers = 1, maxRadius = 110000000 } = {}) {
+  const effectiveMaxRadius = maxRadius;
   function randomSpherePoint(layer = 0) {
-    // Create different distance ranges for different layers
+    // Create different distance ranges for different layers, but clamp to maxRadius
     let radius;
     let starSize;
-    
+  let layerMax = effectiveMaxRadius;
     if (layer === 0) {
-      // Close stars (further from Earth but still closer than background)
-      radius = Math.random() * 2800 + 2800; // 2800-5600 units from center
-      starSize = 0.1 + Math.random() * 0.2; // Smaller, closer stars
+      radius = Math.random() * Math.min(500000, layerMax - 1000000) + 1000000;
+      starSize = 0.1 + Math.random() * 0.2;
     } else if (layer === 1) {
-      // Medium distance stars
-      radius = Math.random() * 3000 + 3000; // 3000-6000 units from center
+      radius = Math.random() * Math.min(1000000, layerMax - 1500000) + 1500000;
       starSize = 0.15 + Math.random() * 0.25;
     } else if (layer === 2) {
-      // Medium distance stars
-      radius = Math.random() * 6000 + 6100; // 6100-12100 units
+      radius = Math.random() * Math.min(2000000, layerMax - 2500000) + 2500000;
       starSize = 0.15 + Math.random() * 0.25;
     } else {
-      // Far stars (original distance)
-      radius = Math.random() * 6000 + 12200; // 12200-18200 units
+      // Far stars - deep space background
+      radius = Math.random() * Math.min(5000000, layerMax - 5000000) + 5000000;
+      // Clamp to maxRadius
+      if (radius > layerMax) radius = layerMax;
       starSize = 0.2 + Math.random() * 0.3;
     }
     

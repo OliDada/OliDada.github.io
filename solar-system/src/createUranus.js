@@ -4,8 +4,9 @@ export function createUranus(sunGroup = null) {
   const loader = new THREE.TextureLoader();
 
   // Uranus properties (realistic relative to Earth)
-  const radius = 3.98; // Uranus radius relative to Earth (398% of Earth's radius)
-  const orbitRadius = 5544; // Uranus: 19.8 AU (proportionally correct)
+    const SPEED_FACTOR = 0.5;
+    const radius = 39.8; // Uranus radius relative to Earth
+    const orbitRadius = 466765; // Uranus: 19.8 AU
   const orbitalInclination = 0.8 * (Math.PI / 180); // Uranus orbital inclination: 0.8 degrees
 
   // Create Uranus mesh
@@ -100,8 +101,8 @@ export function createUranus(sunGroup = null) {
   uranusGroup.rotation.z = axialTilt;
 
   // Uranus orbital angle and speed
-  let uranusOrbitalAngle = Math.PI / 3; // Start at 60 degrees
-  const uranusOrbitalSpeed = 0.0000238; 
+  let uranusOrbitalAngle = 1.4 * Math.PI; // Unique starting angle
+    const uranusOrbitalSpeed = 0.0000238 * SPEED_FACTOR; 
 
   // Animation function for Uranus orbit around Sun
   const animateUranus = () => {
@@ -114,11 +115,11 @@ export function createUranus(sunGroup = null) {
     uranusGroup.position.y = Math.sin(uranusOrbitalAngle) * orbitRadius * Math.sin(orbitalInclination);
 
     // Uranus self-rotation (10.7 hours - quite fast for its size)
-    uranusMesh.rotation.y += -0.00279; // Faster than Earth
+    uranusMesh.rotation.y += -0.00279 * SPEED_FACTOR; // Faster than Earth
 
     // Rings rotate with the planet (both layers)
-    ringMesh.rotation.z += -0.00279;
-    ringMesh2.rotation.z += 0.00279;
+      ringMesh.rotation.z += -0.00279 * SPEED_FACTOR;
+      ringMesh2.rotation.z += 0.00279 * SPEED_FACTOR;
   };
 
   return {

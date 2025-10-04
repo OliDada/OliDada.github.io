@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from 'jsm/controls/OrbitControls.js';
 
-export function createCameraControls(camera, renderer, celestialBodies = {}) {
+export function createCameraControls(camera, renderer, celestialBodies = {}, scene = null) {
   // Initialize OrbitControls
   const controls = new OrbitControls(camera, renderer.domElement);
   
@@ -13,7 +13,7 @@ export function createCameraControls(camera, renderer, celestialBodies = {}) {
   };
   let baseSpeed = 0.1; // Base movement speed
   let currentSpeed = 0.1; // Current effective speed
-  let maxSpeedMultiplier = 40; // Maximum speed boost (20x base speed)
+  let maxSpeedMultiplier = 200; // Maximum speed boost (20x base speed)
   let accelerationTime = 0; // Time spent accelerating (for spaceship-like curve)
   let decelerationTime = 0; // Time spent decelerating
   const maxAccelTime = 3.0; // Seconds to reach max speed
@@ -30,7 +30,7 @@ export function createCameraControls(camera, renderer, celestialBodies = {}) {
   
   // Instructions toggle
   const instructionsElement = document.getElementById('instructions');
-  let instructionsVisible = true;
+  let instructionsVisible = false;
   
   const toggleInstructions = () => {
     instructionsVisible = !instructionsVisible;
@@ -48,6 +48,11 @@ export function createCameraControls(camera, renderer, celestialBodies = {}) {
   let orbitTheta = 0; // Horizontal angle (azimuth)
   let orbitPhi = Math.PI / 2; // Vertical angle (polar), start at equator
   let orbitRadius = 5; // Distance from object
+  let orbitSpeed = 0.01; // Default orbit speed
+  
+  // Planet highlighting system
+  let planetHighlights = [];
+  let highlightsVisible = false;
   
   // Zoom functionality when locked on
   const handleWheel = (event) => {
@@ -94,6 +99,171 @@ export function createCameraControls(camera, renderer, celestialBodies = {}) {
     }
   };
   
+  // Planet highlighting system
+  const createPlanetHighlights = () => {
+    // Clear existing highlights
+    planetHighlights.forEach(highlight => {
+      if (highlight.parent) highlight.parent.remove(highlight);
+    });
+    planetHighlights = [];
+    
+    // Create highlights for each planet
+    const planets = [
+      { name: 'Mercury', obj: celestialBodies.mercury, color: 0xff6b35 },
+      { name: 'Venus', obj: celestialBodies.venus, color: 0xffa500 },
+      { name: 'Earth', obj: celestialBodies.earth, color: 0x00ff00 },
+      { name: 'Mars', obj: celestialBodies.mars, color: 0xff0000 },
+      { name: 'Jupiter', obj: celestialBodies.jupiter, color: 0xffaa00 },
+      { name: 'Saturn', obj: celestialBodies.saturn, color: 0xffff00 },
+      { name: 'Uranus', obj: celestialBodies.uranus, color: 0x00ffff },
+      { name: 'Neptune', obj: celestialBodies.neptune, color: 0x0000ff },
+      { name: 'Pluto', obj: celestialBodies.pluto, color: 0x800080 }
+    ];
+    
+    planets.forEach(planet => {
+      if (!planet.obj) return;
+      
+      // Create a group to hold all highlight elements
+      const highlightGroup = new THREE.Group();
+      
+      // Create a bright glowing sphere as highlight
+      const highlightGeometry = new THREE.SphereGeometry(50, 16, 16); // Large visible marker
+      const highlightMaterial = new THREE.MeshBasicMaterial({
+        color: planet.color,
+        transparent: true,
+        opacity: 0.7,
+        wireframe: true
+      });
+      
+      const highlight = new THREE.Mesh(highlightGeometry, highlightMaterial);
+      highlightGroup.add(highlight);
+      
+      // Add glow effect
+      const glowGeometry = new THREE.SphereGeometry(80, 16, 16);
+      const glowMaterial = new THREE.MeshBasicMaterial({
+        color: planet.color,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.BackSide
+      });
+      const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+      highlightGroup.add(glow);
+      
+      // Create text label using CSS3DRenderer approach with canvas texture
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.width = 512;
+      canvas.height = 128;
+      
+      // Set up text styling
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = '#000000';
+      context.font = 'bold 48px Arial';
+      context.textAlign = 'center';
+      context.fillText(planet.name, canvas.width / 2, canvas.height / 2 + 16);
+      
+      // Create texture from canvas
+      const texture = new THREE.CanvasTexture(canvas);
+      const labelMaterial = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        side: THREE.DoubleSide
+      });
+      
+      const labelGeometry = new THREE.PlaneGeometry(200, 50);
+      const label = new THREE.Mesh(labelGeometry, labelMaterial);
+      label.position.set(0, 120, 0); // Position above the highlight
+      highlightGroup.add(label);
+      
+      // Create arrow pointing to planet
+      const arrowGeometry = new THREE.ConeGeometry(20, 60, 8);
+      const arrowMaterial = new THREE.MeshBasicMaterial({
+        color: planet.color,
+        transparent: true,
+        opacity: 0.8
+      });
+      const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
+      arrow.position.set(0, 80, 0); // Position between label and planet
+      arrow.rotation.x = Math.PI; // Point downward
+      highlightGroup.add(arrow);
+      
+      // Store reference
+      planetHighlights.push(highlightGroup);
+    });
+  };
+  
+  const togglePlanetHighlights = () => {
+    highlightsVisible = !highlightsVisible;
+    
+    if (highlightsVisible) {
+      createPlanetHighlights();
+      // Add highlights to scene
+      if (scene) {
+        planetHighlights.forEach(highlight => scene.add(highlight));
+      }
+      console.log('Planet highlights: ON');
+    } else {
+      // Remove highlights from scene
+      if (scene) {
+        planetHighlights.forEach(highlight => scene.remove(highlight));
+      }
+      planetHighlights = [];
+      console.log('Planet highlights: OFF');
+    }
+  };
+  
+  const updatePlanetHighlights = () => {
+    if (!highlightsVisible) return;
+    
+    const planets = [
+      celestialBodies.mercury,
+      celestialBodies.venus,
+      celestialBodies.earth,
+      celestialBodies.mars,
+      celestialBodies.jupiter,
+      celestialBodies.saturn,
+      celestialBodies.uranus,
+      celestialBodies.neptune,
+      celestialBodies.pluto
+    ];
+    
+    planets.forEach((planet, index) => {
+      if (!planet || !planetHighlights[index]) return;
+      
+      const planetPosition = new THREE.Vector3();
+      if (planet.mesh) {
+        planet.mesh.getWorldPosition(planetPosition);
+      } else if (planet.group) {
+        planet.group.getWorldPosition(planetPosition);
+      }
+      
+      const highlightGroup = planetHighlights[index];
+      highlightGroup.position.copy(planetPosition);
+      
+      // Calculate distance from camera to planet
+      const distanceToCamera = camera.position.distanceTo(planetPosition);
+      
+      // Much more aggressive scaling for massive solar system distances
+      // Use square root scaling for very large distances
+      const minReadableDistance = 500; // Base distance for normal text size
+      const scaleFactor = Math.max(1.0, Math.sqrt(distanceToCamera / minReadableDistance));
+      
+      // Additional boost for extreme distances (outer planets)
+      const extremeDistanceBoost = distanceToCamera > 100000 ? (distanceToCamera / 100000) : 1.0;
+      const finalTextScale = scaleFactor * extremeDistanceBoost;
+      
+      // Apply the much larger scaling
+      highlightGroup.scale.setScalar(finalTextScale);
+      
+      // Make label always face the camera
+      const label = highlightGroup.children[2]; // Third child is the label
+      if (label) {
+        label.lookAt(camera.position);
+      }
+    });
+  };
+  
   // Camera focus function
   const focusOnObject = (object, distance = 5) => {
     if (!object) {
@@ -116,27 +286,32 @@ export function createCameraControls(camera, renderer, celestialBodies = {}) {
     }
     
     // Set camera position at a good viewing distance
-    // Calculate a proper offset direction (towards camera from object)
-    const cameraDirection = new THREE.Vector3(0, 0, 1); // Default camera direction
+    // For Earth, use the opposite direction
+    let cameraDirection;
+    if (object === celestialBodies.earth) {
+      cameraDirection = new THREE.Vector3(0, 0, 1); // Opposite side for Earth
+      // Set orbit speed to Earth's orbital speed (approx 0.017 radians/frame for 60fps)
+      orbitSpeed = 0.017;
+    } else {
+      cameraDirection = new THREE.Vector3(0, 0, 1); // Default direction
+    }
     const offset = cameraDirection.clone().multiplyScalar(distance);
-    
-    // Position camera at object location plus offset
     camera.position.copy(position).add(offset);
-    
+
     // Update OrbitControls target FIRST
     controls.target.copy(position);
-    
+
     // Temporarily disable controls to prevent interference
     controls.enabled = false;
-    
+
     // Make camera look directly at the object
     camera.lookAt(position);
-    
+
     // Reset rotation tracking
     cameraRotationX = 0;
     cameraRotationY = 0;
     rotationTrackingSync = true; // Need to sync on next arrow key use
-    
+
     // Re-enable controls and update
     controls.enabled = true;
     controls.update();
@@ -319,57 +494,71 @@ export function createCameraControls(camera, renderer, celestialBodies = {}) {
       // Camera focus and lock shortcuts
       case 'Digit1':
         if (event.shiftKey) {
-          lockOnToObject(celestialBodies.mercury, 3); // Shift+1: Just lock on Mercury
+          lockOnToObject(celestialBodies.mercury, 12); // Shift+1: Just lock on Mercury
         } else {
-          focusOnObject(celestialBodies.mercury, 3); // Position camera on Mercury
-          lockOnToObject(celestialBodies.mercury, 3); // Then lock to follow Mercury
+          focusOnObject(celestialBodies.mercury, 12); // Position camera on Mercury
+          lockOnToObject(celestialBodies.mercury, 12); // Then lock to follow Mercury
         } 
         break;
       case 'Digit2': 
         if (event.shiftKey) {
-          lockOnToObject(celestialBodies.venus, 5); // Shift+2: Just lock on Venus
+          lockOnToObject(celestialBodies.venus, 55); // Shift+2: Just lock on Venus
         } else {
-          focusOnObject(celestialBodies.venus, 5); // Position camera on Venus
-          lockOnToObject(celestialBodies.venus, 5); // Then lock to follow Venus
+          focusOnObject(celestialBodies.venus, 55); // Position camera on Venus
+          lockOnToObject(celestialBodies.venus, 55); // Then lock to follow Venus
         }
         break;
       case 'Digit3': 
-        if (event.shiftKey) {
-          lockOnToObject(celestialBodies.earth, 6); // Shift+3: Just lock on Earth
+        if (event.ctrlKey || event.metaKey) {
+          // Ctrl+3 (or Cmd+3 on Mac): Focus on Moon
+          console.log('Attempting to focus on Moon:', celestialBodies.moon);
+          if (celestialBodies.moon) {
+            console.log('Moon object found, focusing...');
+            if (event.shiftKey) {
+              lockOnToObject(celestialBodies.moon, 15); // Shift+Ctrl+3: Just lock on Moon
+            } else {
+              focusOnObject(celestialBodies.moon, 15); // Position camera on Moon
+              lockOnToObject(celestialBodies.moon, 15); // Then lock to follow Moon
+            }
+          } else {
+            console.log('Moon object not found in celestialBodies');
+          }
+        } else if (event.shiftKey) {
+          lockOnToObject(celestialBodies.earth, 60); // Shift+3: Just lock on Earth
         } else {
-          focusOnObject(celestialBodies.earth, 6); // Position camera on Earth
-          lockOnToObject(celestialBodies.earth, 6); // Then lock to follow Earth
+          focusOnObject(celestialBodies.earth, 60); // Position camera on Earth
+          lockOnToObject(celestialBodies.earth, 60); // Then lock to follow Earth
         }
         break;
       case 'Digit4': 
         if (event.shiftKey) {
-          lockOnToObject(celestialBodies.mars, 3); // Shift+4: Just lock on Mars
+          lockOnToObject(celestialBodies.mars, 25); // Shift+4: Just lock on Mars
         } else {
-          focusOnObject(celestialBodies.mars, 3); // Position camera on Mars
-          lockOnToObject(celestialBodies.mars, 3); // Then lock to follow Mars
+          focusOnObject(celestialBodies.mars, 25); // Position camera on Mars
+          lockOnToObject(celestialBodies.mars, 25); // Then lock to follow Mars
         }
         break;
       case 'Digit5': 
         if (event.shiftKey) {
-          lockOnToObject(celestialBodies.jupiter, 30); // Shift+5: Just lock on Jupiter
+          lockOnToObject(celestialBodies.jupiter, 500); // Shift+5: Just lock on Jupiter
         } else {
-          focusOnObject(celestialBodies.jupiter, 30); // Position camera on Jupiter
-          lockOnToObject(celestialBodies.jupiter, 30); // Then lock to follow Jupiter
+          focusOnObject(celestialBodies.jupiter, 500); // Position camera on Jupiter
+          lockOnToObject(celestialBodies.jupiter, 500); // Then lock to follow Jupiter
         }
         break;
       case 'Digit6': 
-        ringPlanetView('saturn', 40);
+        ringPlanetView('saturn', 400);
         break;
         
       case 'Digit7':
-        ringPlanetView('uranus', 20);
+        ringPlanetView('uranus', 200);
         break;
       case 'Digit8':
         if (event.shiftKey) {
-          lockOnToObject(celestialBodies.neptune, 20); // Shift+8: Just lock on Neptune
+          lockOnToObject(celestialBodies.neptune, 200); // Shift+8: Just lock on Neptune
         } else {
-          focusOnObject(celestialBodies.neptune, 20); // Position camera on Neptune
-          lockOnToObject(celestialBodies.neptune, 20); // Then lock to follow Neptune
+          focusOnObject(celestialBodies.neptune, 200); // Position camera on Neptune
+          lockOnToObject(celestialBodies.neptune, 200); // Then lock to follow Neptune
         }
         break;
       case 'Digit9':
@@ -382,15 +571,13 @@ export function createCameraControls(camera, renderer, celestialBodies = {}) {
         break;
       case 'Digit0':
         if (event.shiftKey) {
-          lockOnToObject(celestialBodies.sun, 200); // Shift+0: Just lock on Sun
-        } else {
-          // Overview - show whole system
+          // Shift+0: Overview - show whole system
           unlock(); // Unlock first
-          camera.position.set(0, 0, 2000); // Position camera
+          camera.position.set(0, 0, 50000); // Position camera far back
           
           // Set rotation tracking first, then apply to camera
           cameraRotationX = 0;
-          cameraRotationY = Math.PI / 4; // 90 degrees to the right
+          cameraRotationY = Math.PI / 4; // 45 degrees to the right
           rotationTrackingSync = true; // Need to sync on next arrow key use
           
           // Apply rotation using the same method as arrow keys
@@ -400,9 +587,17 @@ export function createCameraControls(camera, renderer, celestialBodies = {}) {
           camera.rotation.z = 0;
           
           // Set target and update controls
-          controls.target.set(100, 0, 0);
+          controls.target.set(0, 0, 0);
           controls.update();
+        } else {
+          // Focus on Sun
+          focusOnObject(celestialBodies.sun, 3000); // Position camera on Sun
+          lockOnToObject(celestialBodies.sun, 3000); // Then lock to follow Sun
         }
+        break;
+
+      case 'KeyP': // Toggle planet highlights
+        togglePlanetHighlights();
         break;
 
       case 'KeyH': // Toggle instructions
@@ -464,8 +659,8 @@ export function createCameraControls(camera, renderer, celestialBodies = {}) {
       currentSpeed = Math.max(baseSpeed * targetMultiplier, baseSpeed);
     }
     
-    const direction = new THREE.Vector3();
-    const right = new THREE.Vector3();
+  const direction = new THREE.Vector3();
+  const right = new THREE.Vector3();
     
     // Handle arrow key rotation/orbiting first
     if (keys.arrowRight || keys.arrowLeft || keys.arrowUp || keys.arrowDown) {
@@ -486,7 +681,7 @@ export function createCameraControls(camera, renderer, celestialBodies = {}) {
         // Update spherical coordinates based on arrow keys
         if (keys.arrowRight || keys.arrowLeft) {
           // Horizontal orbit (change azimuth angle)
-          const deltaTheta = keys.arrowRight ? -rotateSpeed : rotateSpeed;
+          const deltaTheta = keys.arrowRight ? rotateSpeed : -rotateSpeed; // Fixed: right = positive, left = negative
           orbitTheta += deltaTheta;
         }
         
@@ -572,8 +767,9 @@ export function createCameraControls(camera, renderer, celestialBodies = {}) {
     // Don't automatically re-enable OrbitControls - only when user uses mouse
     
     // Get camera's forward and right vectors (after rotation is applied)
-    camera.getWorldDirection(direction);
-    right.crossVectors(camera.up, direction).normalize();
+  camera.getWorldDirection(direction);
+  // Compute right vector as (direction cross up) so it points to the camera's local right
+  right.crossVectors(direction, camera.up).normalize();
     
     // Apply movement based on pressed keys
     if (lockedObject) {
@@ -594,17 +790,13 @@ export function createCameraControls(camera, renderer, celestialBodies = {}) {
     
     // A/D movement (strafe left/right) and Q/E movement (up/down)
     if (lockedObject) {
-      // When locked, maintain consistent left/right movement regardless of camera orientation
-      if (keys.a) camera.position.addScaledVector(right, currentSpeed);
-      if (keys.d) camera.position.addScaledVector(right, -currentSpeed);
+      // When locked, A should strafe left, D should strafe right (relative to camera)
+      if (keys.a) camera.position.addScaledVector(right, -currentSpeed);
+      if (keys.d) camera.position.addScaledVector(right, currentSpeed);
     } else {
-      // When not locked, check if camera is upside down to correct left/right movement direction
-      const cameraUp = new THREE.Vector3(0, 1, 0);
-      cameraUp.applyQuaternion(camera.quaternion);
-      const isUpsideDown = cameraUp.y < 0;
-      
-      if (keys.a) camera.position.addScaledVector(right, isUpsideDown ? -currentSpeed : currentSpeed);
-      if (keys.d) camera.position.addScaledVector(right, isUpsideDown ? currentSpeed : -currentSpeed);
+      // When not locked, use the same consistent mapping: A = left, D = right
+      if (keys.a) camera.position.addScaledVector(right, -currentSpeed);
+      if (keys.d) camera.position.addScaledVector(right, currentSpeed);
     }
     if (keys.q) camera.position.y += currentSpeed; // Move up in world space
     if (keys.e) camera.position.y -= currentSpeed; // Move down in world space
@@ -614,6 +806,9 @@ export function createCameraControls(camera, renderer, celestialBodies = {}) {
       controls.target.copy(camera.position).add(direction.multiplyScalar(5));
       controls.update();
     }
+    
+    // Update planet highlights
+    updatePlanetHighlights();
   };
   
   // Cleanup function to remove event listeners
@@ -639,11 +834,17 @@ export function createCameraControls(camera, renderer, celestialBodies = {}) {
     unlock, // Expose unlock function
     isLocked: () => lockedObject !== null, // Check if camera is locked
     getLockedObject: () => lockedObject, // Get currently locked object
+    // Planet highlighting
+    togglePlanetHighlights,
+    getPlanetHighlights: () => planetHighlights,
+    areHighlightsVisible: () => highlightsVisible,
     // Expose settings for customization
     setMoveSpeed: (speed) => { baseSpeed = speed; currentSpeed = speed; },
     setRotateSpeed: (speed) => { rotateSpeed = speed; },
     getMoveSpeed: () => baseSpeed,
     getCurrentSpeed: () => currentSpeed,
-    getRotateSpeed: () => rotateSpeed
+    getRotateSpeed: () => rotateSpeed,
+    setOrbitSpeed: (speed) => { orbitSpeed = speed; },
+    getOrbitSpeed: () => orbitSpeed
   };
 }

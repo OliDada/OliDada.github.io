@@ -5,7 +5,7 @@ export function createLighting(sunObject = null) {
   
   
   // Hemisphere light (additional ambient lighting)
-  const hemiLight = new THREE.HemisphereLight(0x404040, 0x202020, 2); // Higher hemisphere light
+  const hemiLight = new THREE.HemisphereLight(0x404040, 0x202020, 3); // Higher hemisphere light
   lights.push(hemiLight);
 
   // Main sun light (point light with no distance falloff for outer planets)

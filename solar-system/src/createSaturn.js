@@ -4,8 +4,9 @@ export function createSaturn(sunGroup = null) {
   const loader = new THREE.TextureLoader();
 
   // Saturn properties (realistic relative to Earth)
-  const radius = 9.14; // Saturn radius relative to Earth (914% of Earth's radius)
-  const orbitRadius = 2666; // Saturn: 9.52 AU (proportionally correct)
+  const SPEED_FACTOR = 0.5;
+  const radius = 91.4; // Saturn radius relative to Earth
+  const orbitRadius = 224425; // Saturn: 9.52 AU
   const orbitalInclination = 2.49 * (Math.PI / 180); // Saturn orbital inclination: 2.49 degrees
 
   // Create Saturn mesh
@@ -16,8 +17,8 @@ export function createSaturn(sunGroup = null) {
   const saturnMesh = new THREE.Mesh(geometry, material);
 
   // Create Saturn's rings with custom geometry for proper texture mapping
-  const ringInnerRadius = radius * 1.2; // Hole slightly larger than Saturn
-  const ringOuterRadius = radius * 5.2; // Ring system extends much further out
+  const ringInnerRadius = radius * 1.2; // Hole slightly larger than Saturn (already scaled)
+  const ringOuterRadius = radius * 5.2; // Ring system extends much further out (already scaled)
   
   // Custom ring geometry function with proper UV mapping for textures
   function createRingGeometry(innerRadius, outerRadius, segments) {
@@ -103,8 +104,8 @@ export function createSaturn(sunGroup = null) {
   saturnGroup.rotation.z = saturnTilt;
 
   // Saturn orbital angle and speed
-  let saturnOrbitalAngle = Math.PI / 3; // Start at 60 degrees
-  const saturnOrbitalSpeed = 0.000034; // Saturn: 29.5 years orbital period
+  let saturnOrbitalAngle = 1.2 * Math.PI; // Unique starting angle
+  const saturnOrbitalSpeed = 0.000034 * SPEED_FACTOR; // Saturn: 29.5 years orbital period
 
   // Animation function for Saturn orbit around Sun
   const animateSaturn = () => {
@@ -117,12 +118,11 @@ export function createSaturn(sunGroup = null) {
     saturnGroup.position.y = Math.sin(saturnOrbitalAngle) * orbitRadius * Math.sin(orbitalInclination);
     
     // Saturn self-rotation (10.7 hours - quite fast for its size)
-    saturnMesh.rotation.y += 0.0056; // Faster than Earth
-    
-    // Rings rotate with the planet (all layers)
-    ringMesh.rotation.z += 0.0056;
-    ringMesh2.rotation.z += 0.0056;
-    ringMesh3.rotation.z += 0.0056;
+  saturnMesh.rotation.y += 0.0056 * SPEED_FACTOR; // Faster than Earth
+  // Rings rotate with the planet (all layers)
+  ringMesh.rotation.z += 0.0056 * SPEED_FACTOR;
+  ringMesh2.rotation.z += 0.0056 * SPEED_FACTOR;
+  ringMesh3.rotation.z += 0.0056 * SPEED_FACTOR;
   };
 
   return {

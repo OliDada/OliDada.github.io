@@ -4,8 +4,9 @@ export function createMercury(sunGroup = null) {
   const loader = new THREE.TextureLoader();
 
   // Mercury properties (realistic relative to Earth)
-  const radius = 0.383; // Mercury radius relative to Earth (38.3% of Earth's radius)
-  const orbitRadius = 150; // Mercury: 0.39 AU (proportionally correct)
+  const SPEED_FACTOR = 0.5;
+  const radius = 3.83; // Mercury radius relative to Earth
+  const orbitRadius = 9194; // Mercury: 0.39 AU
   const orbitalInclination = 3.39 * (Math.PI / 180); // Mercury orbital inclination: 3.39 degrees
   
   // Create Mercury mesh (not in a group for orbital rotation)
@@ -16,8 +17,8 @@ export function createMercury(sunGroup = null) {
   const mercuryMesh = new THREE.Mesh(geometry, material);
 
   // Mercury orbital angle (start at different position than Earth)
-  let mercuryOrbitalAngle = Math.PI; // Start opposite side from Earth
-  const mercuryOrbitalSpeed = 0.0005; // Slower than Earth (Mercury takes ~88 Earth days)
+  let mercuryOrbitalAngle = 0.2 * Math.PI; // Unique starting angle
+  const mercuryOrbitalSpeed = 0.0005 * SPEED_FACTOR; // Slower than Earth (Mercury takes ~88 Earth days)
 
   // Animation function for mercury orbit around Sun
   const animateMercury = () => {
@@ -30,7 +31,7 @@ export function createMercury(sunGroup = null) {
     mercuryMesh.position.y = Math.sin(mercuryOrbitalAngle) * orbitRadius * Math.sin(orbitalInclination);
 
     // Mercury self-rotation (very slow and retrograde - 243 Earth days)
-    mercuryMesh.rotation.y -= 0.000034; // Negative for retrograde rotation
+  mercuryMesh.rotation.y -= 0.000034 * SPEED_FACTOR; // Negative for retrograde rotation, scaled
   };
 
   return {

@@ -4,8 +4,9 @@ export function createVenus(sunGroup = null) {
   const loader = new THREE.TextureLoader();
 
   // Venus properties (realistic relative to Earth)
-  const radius = 0.949; // Venus radius relative to Earth (94.9% of Earth's radius)
-  const orbitRadius = 200; // Venus: 0.72 AU (proportionally correct)
+  const SPEED_FACTOR = 0.5;
+  const radius = 9.49; // Venus radius relative to Earth
+  const orbitRadius = 16973; // Venus: 0.72 AU
   const orbitalInclination = 3.39 * (Math.PI / 180); // Venus orbital inclination: 3.39 degrees
   
   // Create Venus mesh (not in a group for orbital rotation)
@@ -19,12 +20,12 @@ export function createVenus(sunGroup = null) {
   const cloudsMat = new THREE.MeshStandardMaterial({
     map: loader.load('./textures/4k_venus_atmosphere.jpg'),
     transparent: true,
-    opacity: 0.4,
+    opacity: 0.7,
     blending: THREE.NormalBlending,
     side: THREE.DoubleSide,
   });
   const cloudsMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(radius + 0.01, 64, 32), // Thicker atmosphere
+    new THREE.SphereGeometry(radius + 0.05, 64, 32), // Thicker atmosphere
     cloudsMat
   );
   venusMesh.add(cloudsMesh);
@@ -33,8 +34,8 @@ export function createVenus(sunGroup = null) {
   venusMesh.rotation.z = 177.4 * (Math.PI / 180);
 
   // Venus orbital angle (start at different position than Earth)
-  let venusOrbitalAngle = Math.PI; // Start opposite side from Earth
-  const venusOrbitalSpeed = 0.0005; // Slower than Earth (Venus takes ~225 Earth days)
+  let venusOrbitalAngle = 0.4 * Math.PI; // Unique starting angle
+  const venusOrbitalSpeed = 0.0005 * SPEED_FACTOR; // Slower than Earth (Venus takes ~225 Earth days)
 
   // Animation function for venus orbit around Sun
   const animateVenus = () => {
@@ -47,8 +48,8 @@ export function createVenus(sunGroup = null) {
     venusMesh.position.y = Math.sin(venusOrbitalAngle) * orbitRadius * Math.sin(orbitalInclination);
 
     // Venus self-rotation (very slow and retrograde - 243 Earth days)
-    venusMesh.rotation.y -= 0.0000082; // Negative for retrograde rotation
-    cloudsMesh.rotation.y -= 0.0001; // Clouds rotate slightly faster
+  venusMesh.rotation.y -= 0.0000082 * SPEED_FACTOR; // Negative for retrograde rotation, scaled
+  cloudsMesh.rotation.y -= 0.001 * SPEED_FACTOR; // Clouds rotate slightly faster, scaled
   };
 
   return {

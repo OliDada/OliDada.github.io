@@ -6,14 +6,15 @@ export function createMoon(earthObject = null) {
   // Moon group for orbital rotation
   const moonGroup = new THREE.Group();
   
-  // Moon properties
-  const moonRadius = 0.27; // relative to earth radius of 1
-  const moonDistance = 10; // realistic average distance from Earth in your scale
+  // Moon properties (scaled up)
+  const SPEED_FACTOR = 0.5;
+  const moonRadius = 2.73; // Moon radius: 27.3% of Earth's radius
+  const moonDistance = 603; // Realistic average distance from Earth: ~60.3 Earth radii
   
   // Moon geometry and material
-  const moonGeometry = new THREE.IcosahedronGeometry(moonRadius, 5);
+  const moonGeometry = new THREE.IcosahedronGeometry(moonRadius, 32);
   const moonMaterial = new THREE.MeshStandardMaterial({
-    map: loader.load('./textures/moonmap4k.jpg'),
+    map: loader.load('./textures/8k_moon.jpg'),
   });
   
   // Create moon mesh
@@ -24,7 +25,7 @@ export function createMoon(earthObject = null) {
   // Animation function for moon orbit
   const animateMoon = () => {
     // Moon orbits around Earth
-    moonGroup.rotation.y += 0.005; // Orbital rotation around Earth
+  moonGroup.rotation.y += 0.005 * SPEED_FACTOR; // Orbital rotation around Earth
     
     // Update moon group position to follow Earth (handle both old .group and new .mesh structure)
     if (earthObject && (earthObject.group || earthObject.mesh)) {
@@ -37,6 +38,7 @@ export function createMoon(earthObject = null) {
   
   return {
     group: moonGroup,
+    mesh: moonMesh, // Return the actual moon mesh for camera focusing
     animate: animateMoon
   };
 }
