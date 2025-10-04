@@ -1,40 +1,32 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Oli.is - Dungeon Crawler</title>
-    <script src="game/player.js" defer></script>
-    <script src="game/items.js" defer></script>
-    <script src="game/enemy.js" defer></script>
-    <script src="game/map.js" defer></script>
-    <script src="sketch.js" defer></script>
-    <script src="/script.js" defer></script>
-    <link rel="icon" href="/images/dolphin2.png" type="image/x-icon">
-    <link href="/style.css" rel="stylesheet" type="text/css" media="all">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@400;700&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
-        <style>
-            /* Ensure background matches the rest of the site even when opened locally or from the site root */
-            body {
-                background-image: url('/images/1.jpg'), url('../../images/1.jpg');
-                background-repeat: no-repeat;
-                background-size: cover;
-                background-position: center top;
-                background-attachment: fixed;
-                background-color: #ffffff;
-            }
-        </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Oli.is - Dungeon Crawler</title>
+  <link rel="icon" href="/images/dolphin2.png" type="image/x-icon">
+  <link href="/style.css" rel="stylesheet" type="text/css" media="all">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@400;700&display=swap" rel="stylesheet">
+  <!-- p5 must load before any sketch code that uses it -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <!-- Site-level script that sets up background handling -->
+  <script src="/script.js" defer></script>
+  <!-- Game scripts (deferred so they run after parsing and after p5 is available) -->
+  <script src="game/player.js" defer></script>
+  <script src="game/items.js" defer></script>
+  <script src="game/enemy.js" defer></script>
+  <script src="game/map.js" defer></script>
+  <script src="sketch.js" defer></script>
 </head>
 <body>
     <div class="header">
-    <img class="dolphin" src="/images/dolphin2.png" alt="Dolphin2">
+    <img class="dolphin" src="../../images/dolphin2.png" alt="Dolphin2">
         <div class="text-container">
             <h1 class="title">Oli.is</h1>
             <p class="sub_title">Can you survive the dungeon?</p>
         </div>
-    <img class="dolphin" src="/images/dolphin1.png" alt="Dolphin1">
+    <img class="dolphin" src="../../images/dolphin1.png" alt="Dolphin1">
     </div>
     <div class="navbar-grid">
         <a href="/index.html" class="nav-tile"><span>Home</span></a>

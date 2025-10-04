@@ -1,4 +1,5 @@
-const originalBackground = "images/1.jpg";
+// Use root-relative path so pages in subfolders load the same background image
+const originalBackground = "/images/1.jpg";
 
 function changeBackgroundColor() {
     const randomColor = "#" + Math.floor(Math.random() * 16777215).toString(16);
@@ -29,7 +30,12 @@ function applySavedBackground() {
 
     // Apply the saved background, or default to the original
     document.body.style.backgroundColor = savedColor || "";
-    document.body.style.backgroundImage = savedImage || `url('${originalBackground}')`;
+    // Normalize savedImage so it uses the root-relative path if it references the site image
+    if (savedImage && savedImage.includes("images/1.jpg")) {
+        document.body.style.backgroundImage = `url('${originalBackground}')`;
+    } else {
+        document.body.style.backgroundImage = savedImage || `url('${originalBackground}')`;
+    }
 }
 
 function setBackgroundColor(color) {
