@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<title>Flappy Bird — embed</title>
+	<style>html,body{height:100%;margin:0;background:#000}#flappy-root{position:fixed;inset:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center}</style>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+	<script>
+		// After the p5 canvas is created, scale it to fit the iframe visually and post visible size to parent
+		function postCanvasSize() {
+			try {
+				const c = document.querySelector('canvas');
+				if (!c) return;
+				// Use clientWidth/clientHeight so we report the visible (CSS-scaled) size
+				const w = c.clientWidth || c.offsetWidth || c.width;
+				const h = c.clientHeight || c.offsetHeight || c.height;
+				window.parent.postMessage({ type: 'game-aspect', width: Math.round(w), height: Math.round(h), subtitle: document.title || 'Flappy Bird' }, '*');
+			} catch (e) {}
+		}
+		const sendAfter = () => { postCanvasSize(); setTimeout(postCanvasSize, 500); };
+		window.addEventListener('load', sendAfter);
+		window.addEventListener('resize', postCanvasSize);
+		let _cnt = 0; const _int = setInterval(() => { postCanvasSize(); if (++_cnt > 8) clearInterval(_int); }, 300);
+	</script>
+</head>
+<body>
+	<div id="flappy-root"></div>
+	<!-- load game scripts; the sketch will create a canvas which we then scale -->
+	<script src="/flappybird/bird.js"></script>
+	<script src="/flappybird/pipe.js"></script>
+	<script src="/flappybird/sketch.js"></script>
+	<script>
+		// After p5 creates the canvas, make it responsive to the iframe (scale to fit)
+		function makeResponsive() {
+			try {
+				const c = document.querySelector('canvas');
+				if (!c) return;
+				// Ensure the canvas is visually scaled to the iframe width while preserving aspect
+				c.style.width = '100%';
+				c.style.height = 'auto';
+				c.style.display = 'block';
+				c.style.margin = '0 auto';
+				postCanvasSize();
+			} catch (e) {}
+		}
+		// run periodically to catch p5 timing
+		let tries = 0; const t = setInterval(() => { makeResponsive(); if (++tries > 12) clearInterval(t); }, 200);
+		window.addEventListener('resize', makeResponsive);
+	</script>
+</body>
+</html>
+

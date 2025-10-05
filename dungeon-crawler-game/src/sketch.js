@@ -153,7 +153,8 @@ async function setup() {
 
     // Create canvas and attach it to the game-container
     let canvas = createCanvas(800, 600);
-    canvas.parent('game-container');
+    const _gameParent = document.getElementById('game-container');
+    if (_gameParent) canvas.parent(_gameParent); else canvas.parent(document.body);
 
     gameMap = new Map(1); // Load level 1
 

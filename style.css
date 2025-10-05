@@ -3,7 +3,8 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  background: linear-gradient(135deg, #e0f7fa 0%, #fffde4 100%);
+  /* background intentionally managed by the backing layer (body::before)
+     so JavaScript can switch between the image and a color reliably. */
 }
 
 .header {
@@ -40,7 +41,7 @@ body {
 .sub_title {
   font-size: 1.2rem;
   color: #1a1a1a;
-  margin: 0;
+  margin: 32px;
   opacity: 0.8;
 }
 
@@ -126,19 +127,59 @@ body {
   cursor: pointer;
 }
 
+/* ensure the root and body can grow with page content; avoid forcing a fixed 100% height */
+html, body {
+  min-height: 100vh;
+}
+
+/* Default background sits on the root element so it always covers the viewport.
+   JS will apply inline styles to html/documentElement when switching backgrounds. */
+html { background: none; }
+
 body {
-  background-image: url(images/1.jpg);
-  background-repeat: no-repeat;
-  background-size: cover;
-  background-color: #ffffff;
-  background-position: center top;
-  background-attachment: fixed;
+  /* The visual page background is rendered by the ::before pseudo-element which uses
+     the --page-bg custom property. This gives a reliable full-viewport background that
+     doesn't depend on element height. JS updates --page-bg when the user picks a color
+     or reverts to the image. */
+  position: relative;
   width: 100%;
-  height: 100vh;
+  min-height: 100vh; /* let body grow beyond viewport */
   font-family: 'Roboto', sans-serif;
   color: #3D320D;
-  transition: background-color 0.5s ease, background-image 0.5s ease;
+  transition: color 0.2s ease;
 }
+
+/* Full-viewport backing layer for the page background */
+/* Backing layer: use fixed positioning so it robustly covers the viewport and stays behind content.
+   Using fixed ensures the visual background always fills the visible area and appears continuous
+   even when page content grows or when some pages set unusual heights on html/body. The JS
+   still updates --page-bg to switch between color and image. */
+html::before {
+  /* viewport-level fallback: always visible and covers the viewport even if body is small */
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -10000;
+  pointer-events: none;
+  background: var(--page-bg, url('/images/1.jpg') center center / cover no-repeat);
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center center;
+}
+body::before {
+  content: "";
+  position: absolute; /* span the full body/document height so long pages show full image */
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: -999;
+  pointer-events: none;
+  background: var(--page-bg, url('/images/1.jpg') center center / cover no-repeat);
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center center;
+  transition: background 0.45s ease, background-color 0.45s ease, opacity 0.3s ease;
+}
+
+/* Removed parallax fixed background to allow the image to scale with the page height and reach the bottom */
 
 .header {
   display: flex;
@@ -207,6 +248,33 @@ p {
 .navbar a:hover {
   background-color: #ddd;
   color: #3D320D;
+}
+
+/* Header top-nav and inline color picker */
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+}
+
+.top-nav {
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+/* (fallbacks and responsive attachment handled above; removed duplicate rules) */
+
+.top-nav input[type="color"] {
+  width: 40px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid rgba(0,0,0,0.12);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
 }
 
 .row {
@@ -372,7 +440,8 @@ button:hover {
   margin: 0 auto;
 }
 canvas {
-  background-color: #fff;
+  background-color: var(--surface-bg);
+  color: var(--surface-foreground);
   border: 2px solid #3D320D;
   border-radius: 10px;
   margin: 20px;
@@ -388,6 +457,25 @@ canvas {
   border: 2px solid #3D320D;
   background-color: #ffffff;
   cursor: pointer;
+}
+
+/* Floating right panel (controls) */
+
+/* inline header controls (color + buttons) will use .top-nav styles */
+.top-nav .btn.small { margin-left: 8px; }
+
+.panel-inner .btn {
+  background-color: #2f2a22;
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  text-align: center;
+  display: inline-block;
+  width: 100%;
+}
+
+.panel-inner .btn:hover {
+  background-color: #4b443a;
 }
 
 
@@ -449,6 +537,10 @@ input[type="range"] {
   --grey: #f5f5f5;
   --blue: #3d88f9;
   --black: #1a1a1a;
+  /* UI surface variables (updated at runtime by script.js) */
+  --surface-bg: #ffffff; /* solid surface color for cards/panels */
+  --surface-bg-trans: rgba(255,255,255,0.92); /* translucent surface used for overlays */
+  --surface-foreground: #000000; /* text color to use on top of surface */
 }
 
 body.chat-open {
@@ -490,10 +582,11 @@ body.chat-open {
     font-family: "Raleway", sans-serif;
   }
 
-    display: flex; /* Always display the chat window */
-    box-shadow: rgba(0, 0, 0, 0.24) 0px 3px 8px;
-    background-color: white;
-    border-radius: 20px;
+  display: flex; /* Always display the chat window */
+  box-shadow: rgba(0, 0, 0, 0.24) 0px 3px 8px;
+  background-color: var(--surface-bg);
+  color: var(--surface-foreground);
+  border-radius: 20px;
     position: relative; /* Fix position to viewport */
     margin-top: 350px;
     left: 50%; /* Center horizontally */
@@ -563,9 +656,9 @@ body.chat-open {
 @keyframes l1 {to{clip-path: inset(0 -34% 0 0)}}
 
 html, body {
-    margin: 0;
-    padding: 0;
-    height: 100%;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh; /* allow body to grow with content; avoid fixed heights */
 }
 
 #gameoflife-canvas {
@@ -579,13 +672,13 @@ html, body {
 }
 
 #gameoflife-controls {
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    background-color: rgba(255, 255, 255, 0.8);
-    padding: 10px;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  background-color: var(--surface-bg-trans);
+  padding: 10px;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 .bottom-buttons {
     display: flex;
@@ -656,3 +749,319 @@ html, body {
     border: none;
     border-radius: 50%;
 }
+
+/* ---------------- Retro Arcade Hub styles (appended) ---------------- */
+
+/* three.js decorative canvas sitting behind content */
+.three-canvas {
+  position: fixed;
+  inset: 0; /* top:0; right:0; bottom:0; left:0; */
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  /* sit above backing-layer pseudo-elements (which use large negative z) but behind page UI */
+  z-index: -500;
+  pointer-events: none; /* decorative only */
+  opacity: 0.9;
+  transition: opacity 220ms ease-in-out, visibility 180ms ease-in-out;
+}
+
+/* Ensure the decorative canvas itself is transparent; the WebGL renderer manages its clear color. */
+.three-canvas { background: transparent !important; }
+/* Remove any generic canvas styling (border/shadow) for the decorative full-viewport canvas */
+.three-canvas {
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Arcade homepage background when body has .arcade */
+body.arcade {
+  background: radial-gradient(ellipse at center, #0b1020 0%, #05060a 40%, #000 100%);
+  color: #fff;
+}
+
+/* when the canvas should be visible by default, show it (script controls further) */
+#three-canvas { display: block }
+
+.site-header {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 28px;
+  backdrop-filter: blur(8px);
+  border-bottom: 3px solid rgba(255,255,255,0.06);
+}
+
+/* Centered control area for the Programs button */
+.center-controls { position: absolute; left: 50%; transform: translateX(-50%); z-index: 11 }
+.center-controls .btn { display: inline-block }
+
+/* Right-side nav tweaks: keep a horizontal layout and small gaps */
+.top-nav { display:flex; gap:8px; align-items:center }
+.top-nav .home-btn { margin-right: 6px }
+
+.brand { display:flex; gap:14px; align-items:center }
+.logo { width:56px; height:auto }
+.site-title { margin:0; font-size:1.6rem; color:var(--black) }
+.site-tag { margin:0; font-size:0.9rem; color:rgba(0,0,0,0.6) }
+
+/* Remove underline/line styling under the brand title */
+.brand-link, .brand-link:visited, .brand-link:active {
+  text-decoration: none;
+  border-bottom: none !important;
+}
+.brand-link .site-title {
+  text-decoration: none;
+  border-bottom: none !important;
+}
+
+.top-nav { display:flex; gap:8px; align-items:center }
+.btn {
+  background: linear-gradient(180deg,#ffb347,#ff7f50);
+  color: white;
+  padding: 10px 16px; /* slightly larger touch target */
+  border-radius: 10px;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease, background 0.12s ease;
+}
+
+/* Background controls label and layout in the header */
+.bg-controls { display:flex; flex-direction:row; align-items:center; gap:8px; min-width:160px; }
+.bg-label {
+  font-size:0.75rem;
+  color: #ffffff;
+  font-weight:700;
+  text-transform:uppercase;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:4px 8px;
+  margin:0; /* keep it tight with buttons */
+}
+.bg-buttons { display:flex; gap:8px; align-items:center; }
+.bg-controls .color-picker-wrap { display:flex; align-items:center; }
+.btn.small { padding: 8px 12px; font-size: 0.95rem }
+
+/* Hover and focus states for buttons */
+.btn:hover,
+.btn:focus {
+  /* remove vertical lift; highlight instead */
+  transform: scale(1.01);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.18), 0 0 18px rgba(255,127,80,0.06);
+  filter: brightness(1.06);
+  outline: none;
+}
+.btn:active {
+  transform: scale(0.995);
+}
+
+.arcade-main { position:relative; z-index:10; padding:28px; min-height:calc(100vh - 140px) }
+.hero { text-align:center; margin-bottom:18px }
+.hero h2 { font-size:2rem; margin:6px 0 }
+
+.cabinet-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:18px; max-width:1200px; margin:0 auto }
+
+/* Player area styles */
+.player-area { max-width:1200px; margin: 10px auto 24px auto; background: linear-gradient(180deg,#0b1220,#071021); border-radius:10px; padding:8px; box-shadow: 0 8px 30px rgba(0,0,0,0.6); }
+.player-header { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:6px 8px; }
+.player-title { color:#ffd166; font-weight:700 }
+.player-subtitle { color:rgba(255,255,255,0.8); font-weight:500; font-size:0.95rem; margin-top:4px }
+.player-area iframe#playerFrameMain { width:100%; height:60vh; border-radius:8px; border:2px solid rgba(255,255,255,0.04); background:#000 }
+.player-aspect-box {
+  position: relative;
+  width: 100%;
+  max-width: 1100px;
+  margin: 10px auto 0 auto;
+  /* default aspect 16:9 -> padding-top = 9 / 16 * 100% = 56.25% */
+  padding-top: 56.25%;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.player-aspect-box iframe {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  width: 100%; height: 100%;
+  border: 0;
+}
+.player-actions .btn { margin-left:8px }
+
+/* fullscreen styles for player area */
+.player-area.fullscreen { position:fixed; inset:0; width:100%; height:100%; z-index:9999; margin:0; border-radius:0; display:flex; flex-direction:column; }
+.player-area.fullscreen iframe#playerFrameMain { height:100%; border-radius:0; }
+
+/* Right-side controls panel (floating top-right) */
+.arcade-layout { display:grid; grid-template-columns: 1fr; gap:18px; align-items:start }
+.right-panel { position:fixed; top:18px; right:18px; z-index:9999; margin:0 }
+.panel-inner { background: rgba(6,8,12,0.78); padding:14px; border-radius:14px; box-shadow: 0 12px 40px rgba(0,0,0,0.6); color: #fff; min-width:220px; display:flex; flex-direction:column; align-items:stretch }
+.panel-inner h3 { margin:0 0 8px 0; color:#fff }
+.panel-inner p { color: rgba(255,255,255,0.8); margin-bottom:12px }
+.panel-inner label { display:block; margin-bottom:8px; color:rgba(255,255,255,0.9); font-weight:600; text-align:left }
+.panel-inner input[type="color"], #pageColorPicker { -webkit-appearance: none; -moz-appearance: none; appearance: none; width:84px; height:84px; border-radius:50%; border:3px solid rgba(255,255,255,0.06); cursor:pointer; box-shadow: 0 8px 28px rgba(0,0,0,0.6); display:block; margin:0 auto 10px auto }
+
+/* Inline header/color display wrapper: keep native input accessible but show a full-circle display over it */
+.color-picker-wrap { position: relative; width: 48px; height: 48px; display:inline-block; margin-right:8px }
+.color-picker-wrap #pageColorPicker { width:48px; height:48px; border-radius:50%; padding:0; margin:0; border:none; position:relative; z-index:1; opacity:0; }
+.color-display { position: absolute; top: 0; left: 0; width: 48px; height: 48px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.08); box-shadow: 0 6px 18px rgba(0,0,0,0.35); display: block; pointer-events: none; z-index:2; background: var(--surface-bg); }
+
+/* simple tooltip using data-tooltip attribute */
+[data-tooltip] { position: relative; }
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  /* always appear below the element */
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.85);
+  color: #fff;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  z-index: 99999;
+}
+[data-tooltip]:hover::after,
+[data-tooltip]:focus::after {
+  opacity: 1;
+}
+
+/* If the tooltip would overflow the top of the viewport, flip it below the element.
+   The JS will set data-tooltip-pos="bottom" on the element when needed. */
+
+
+/* Fix the internal swatch so the color fills the circular picker */
+.panel-inner input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+  border-radius: 50%;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+.panel-inner input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  box-sizing: border-box;
+  display: block;
+}
+.panel-inner input[type="color"]::-moz-color-swatch {
+  border: none;
+  border-radius: 50%;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  box-sizing: border-box;
+  display: block;
+}
+
+/* Ensure no extra inner padding on Safari and clip any overflow so the swatch fills the circle */
+.panel-inner input[type="color"] { padding: 0; overflow: hidden; }
+
+/* Extra Chrome-specific fixes: remove any inner baseline or font rendering and ensure transparency */
+.panel-inner input[type="color"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  line-height: 0;
+  font-size: 0;
+}
+.panel-inner input[type="color"]::-webkit-color-swatch-wrapper {
+  display: block; /* ensure wrapper participates in layout */
+}
+.panel-inner input[type="color"]::-webkit-color-swatch {
+  display: block;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.panel-actions { display:flex; gap:8px; justify-content:center; align-items:center }
+.panel-inner .btn { background:linear-gradient(180deg,#3d320d,#2b2b2b); color:white; padding:8px 10px; border-radius:8px; border:none }
+
+@media (max-width:980px) {
+  .arcade-layout { grid-template-columns: 1fr; }
+  .right-panel { order: 2 }
+  .arcade-main { order: 1 }
+  .center-controls { position: static; transform: none; text-align: center; margin: 8px 0 }
+}
+
+.cabinet {
+  position:relative;
+  background: linear-gradient(180deg,#111 0%, #2b2b2b 100%);
+  color: #fff;
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.45);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:10px;
+  min-height:260px;
+}
+
+.cabinet.featured {
+  grid-column: span 2;
+  background: linear-gradient(180deg,#2a2a2a 0%, #111 100%);
+  transform: translateY(-6px);
+  box-shadow: 0 14px 40px rgba(0,0,0,0.6);
+}
+
+.cabinet.featured .screen { height: 200px }
+
+.cabinet .screen {
+  width:100%;
+  height:140px;
+  background:#000;
+  border-radius:8px;
+  overflow:hidden;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.cabinet img.thumb {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;    /* fill the container and crop if needed */
+  object-position: center;
+}
+.cabinet .label { font-weight:700; color:#ffd166 }
+.cabinet .sub { font-size:0.85rem; color:#b8c1c9 }
+
+.cabinet .controls { display:flex; gap:8px }
+.cabinet .play { background:#00d1ff; color:#001; padding:8px 12px; border-radius:8px; text-decoration:none }
+
+
+
+.modal { position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:50; background:rgba(0,0,0,0.6) }
+.modal[aria-hidden="false"] { display:flex }
+.modal-inner { width:90%; max-width:1000px; height:80vh; background:#111; border-radius:12px; padding:8px; display:flex; flex-direction:column }
+.modal-close { align-self:flex-end; background:transparent; border:none; color:#fff; font-size:1.2rem; cursor:pointer }
+.modal iframe { flex:1; border-radius:8px; border:0 }
+
+@media (max-width:720px) {
+  .cabinet { min-height:220px }
+  .site-header { padding:12px }
+  .hero h2 { font-size:1.3rem }
+}
+
+/* small accessibility focus states */
+.cabinet:focus-within { outline:4px solid rgba(255, 127, 80, 0.25) }
+
+/* ensure the rest of the site sits above the decorative canvas */
+body > * { position:relative; }

@@ -11,20 +11,26 @@
         font-family: Arial, sans-serif;
       }
       
-      /* Instructions overlay */
+      /* Instructions overlay - responsive so it scales with canvas/iframe size */
       #instructions {
         position: fixed;
         top: 20px;
         left: 20px;
         background: rgba(0, 0, 0, 0.8);
         color: white;
-        padding: 20px;
+        /* responsive padding and width: scale with viewport/canvas size */
+        padding: clamp(10px, 1.2vw, 20px);
         border-radius: 10px;
-        max-width: 400px;
-        font-size: 14px;
-        line-height: 1.4;
+        width: clamp(180px, 28vw, 420px);
+        max-width: 90%;
+        /* ensure overlay never grows taller than the canvas / viewport */
+        max-height: calc(100vh - 40px);
+        overflow: auto;
+        font-size: clamp(12px, 1.2vw, 15px);
+        line-height: 1.35;
         z-index: 1000;
-        transition: opacity 0.3s ease;
+        transition: opacity 0.3s ease, transform 0.18s ease;
+        box-sizing: border-box;
       }
       
       #instructions.hidden {
@@ -33,40 +39,55 @@
       }
       
       #instructions h3 {
-        margin: 0 0 15px 0;
+        margin: 0 0 12px 0;
         color: #4CAF50;
-        font-size: 18px;
+        font-size: clamp(16px, 1.8vw, 20px);
       }
       
       #instructions .section {
-        margin-bottom: 15px;
+        margin-bottom: 12px;
       }
       
       #instructions .section h4 {
         margin: 0 0 8px 0;
         color: #FFD700;
-        font-size: 14px;
+        font-size: clamp(13px, 1.1vw, 15px);
       }
       
       #instructions .controls {
         display: grid;
         grid-template-columns: auto 1fr;
-        gap: 5px 15px;
+        gap: 6px 12px;
         font-family: monospace;
       }
       
       #instructions .key {
         color: #00BFFF;
         font-weight: bold;
+        font-size: 0.95em;
       }
       
       #instructions .toggle-hint {
-        margin-top: 15px;
-        padding-top: 15px;
+        margin-top: 12px;
+        padding-top: 12px;
         border-top: 1px solid #444;
         text-align: center;
         color: #888;
         font-style: italic;
+        font-size: 0.95em;
+      }
+
+      /* When the embed or canvas is small, move the instructions into a compact mode */
+      @media (max-width: 520px) {
+        #instructions {
+          top: 12px;
+          left: 12px;
+          width: calc(100% - 24px);
+          padding: 10px;
+          font-size: 12px;
+          max-height: calc(100vh - 24px);
+        }
+        #instructions .controls { gap: 6px 10px; }
       }
     </style>
     <script type="importmap">

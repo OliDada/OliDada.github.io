@@ -1,0 +1,78 @@
+[
+  {
+    "title": "RPG Game",
+    "path": "/zelda-game/index.html",
+    "source": "/zelda-game/",
+    "thumbnail": "/data/thumbnails/rpg-thumbnail.png",
+    "tags": ["game", "rpg"],
+    "featured": true
+  },
+  {
+    "title": "Solar System",
+    "path": "/solar-system/index.html",
+    "source": "/solar-system/index.js",
+    "thumbnail": "data/thumbnails/solar-system-thumbnail.png",
+    "tags": ["3d", "threejs"],
+    "featured": true
+  },
+  {
+    "title": "Neon Rush",
+    "path": "/worm-hole/index.html",
+    "source": "/worm-hole/index.js",
+    "thumbnail": "/data/thumbnails/neon-rush-thumbnail.png",
+    "tags": ["game", "neon"],
+    "featured": true
+  },
+  {
+    "title": "Gravity Dash",
+    "path": "/gravity_dash.html",
+    "embed": "/embeds/gravity_dash.html",
+    "source": "/gravity_dash.js",
+    "aspect": "4:3",
+    "subtitle": "That ball is dashing!",
+    "thumbnail": "data/thumbnails/gravity-dash-thumbnail.png",
+    "tags": ["game", "physics"],
+    "featured": true
+  },
+  {
+    "title": "Flappy Bird",
+    "path": "/flappybird/index.html",
+    "source": "/flappybird/sketch.js",
+    "thumbnail": "/flappybird/bird.png",
+    "tags": ["game", "canvas"],
+    "featured": false
+  },
+  {
+    "title": "Snake",
+    "path": "/Snake/index.html",
+    "source": "/Snake/snake.js",
+    "thumbnail": "/data/thumbnails/snake-thumbnail.png",
+    "tags": ["game", "p5"],
+    "featured": false
+  },
+  {
+    "title": "Game of Life",
+    "path": "/game_of_life.html",
+    "source": "/Game of Life/game_of_life.js",
+    "thumbnail": "/data/thumbnails/game-of-life-thumbnail.png",
+    "tags": ["simulation"],
+    "featured": false
+  },
+  {
+    "title": "Physics Simulation",
+    "path": "/physics_simulation.html",
+    "source": "/physics_simulation.js",
+    "embed": "/embeds/physics_simulation.html",
+    "thumbnail": "/data/thumbnails/physics-simulation-thumbnail.png",
+    "tags": ["simulation", "physics"],
+    "featured": true
+  },
+  {
+    "title": "Dungeon Crawler",
+    "path": "/dungeon-crawler-game/src/index.html",
+    "source": "/dungeon-crawler-game/src/index.html",
+    "thumbnail": "/dungeon-crawler-game/images/dungeon-thumb.png",
+    "tags": ["game", "dungeon", "adventure"],
+    "featured": false
+  }
+]

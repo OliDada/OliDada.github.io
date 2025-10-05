@@ -11,6 +11,45 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
     <script src="gravity_dash.js"></script>
 
+    <script>
+      // If this page is loaded with ?embed=1, hide site chrome so only the game appears in an iframe/player.
+      // Run the logic after DOMContentLoaded so elements in the body can be found and modified.
+      (function(){
+        function handleEmbed() {
+          try {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('embed') === '1') {
+              document.documentElement.classList.add('embedded');
+              // hide header, navbar, and other chrome
+              const hide = ['.header', '.navbar-grid', '.main-content', 'footer'];
+              hide.forEach(sel => {
+                const el = document.querySelector(sel);
+                if (el) el.style.display = 'none';
+              });
+              // make game container fill the body
+              const container = document.getElementById('gravity-dash-canvas');
+              if (container) {
+                container.style.position = 'fixed';
+                container.style.inset = '0';
+                container.style.width = '100%';
+                container.style.height = '100%';
+              }
+              document.body.style.margin = '0';
+              document.body.style.background = '#000';
+            }
+          } catch (e) {
+            console.warn('embed param handling failed', e);
+          }
+        }
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', handleEmbed);
+        } else {
+          handleEmbed();
+        }
+      })();
+    </script>
+
 </head>
 <body>
     <div class="header">

@@ -4,52 +4,54 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Oli.is - Magic 8 Ball</title>
+    <script src="draw.js" defer></script>
     <script src="script.js" defer></script>
     <link rel="icon" href="images/dolphin2.png" type="image/x-icon">
     <link href="style.css" rel="stylesheet" type="text/css" media="all">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
 
   </head>
-  <body>
-    <div class="header">
-      <img class="dolphin" src="images/dolphin2.png" alt="Dolphin2">
-      <div class="text-container">
-        <h1 class="title">Oli.is</h1>
-        <a class="sub_title">Have a question? Ask the Magic 8-Ball!</a>
-      </div>
-      <img class="dolphin" src="images/dolphin1.png" alt="Dolphin">
-    </div>
-    <div class="navbar-grid">
-      <a href="index.html" class="nav-tile"><span>Home</span></a>
-      <a href="programs.html" class="nav-tile"><span>Programs</span></a>
-      <a href="jokes.html" class="nav-tile"><span>Jokes</span></a>
-      <a href="snake.html" class="nav-tile"><span>Snake Game</span></a>
-      <a href="magic8ball.html" class="nav-tile active"><span>Magic 8 Ball</span></a>
-      <a href="aichat.html" class="nav-tile"><span>AI Chat</span></a>
-      <a href="game_of_life.html" class="nav-tile"><span>Game of Life</span></a>
-      <a href="physics_simulation.html" class="nav-tile"><span>Physics Simulation</span></a>
-      <a href="gravity_dash.html" class="nav-tile"><span>Gravity Dash</span></a>
-      <a href="dungeon-crawler-game/src/index.html" class="nav-tile"><span>Dungeon Crawler</span></a>
-      <a href="/zelda-game/" class="nav-tile" target="_blank"><span>RPG Game</span></a>
-      <a href="/solar-system/" class="nav-tile" target="_blank"><span>Solar System</span></a>
-      <a href="/worm-hole/" class="nav-tile" target="_blank"><span>Neon Rush</span></a>
-      <a href="change_color.html" class="nav-tile"><span>Change Background Color</span></a>
+  <body class="arcade">
+    <canvas id="three-canvas" class="three-canvas" aria-hidden="true"></canvas>
 
-    </div>
-        <div class="section text-container">
-            <h2>Magic 8-Ball</h2>
-            <p>Ask a question and get your fortune!</p>
-            <div class="text-container">
-                <input type="text" id="questionInput" placeholder="Type your question" />
-                <p id="response">Click the ball to see your answer!</p>
-                <div>
-                  <img src="images/8ball.png" alt="Magic 8-Ball" class="magic-ball" onclick="getAnswer()" />
-                </div>   
-            </div>
-                <script src="magic8ball.js"></script>
-            </div>
+    <header class="site-header">
+      <div class="brand">
+        <a href="/" class="brand-link" aria-label="Home">
+          <img src="images/dolphin1.png" alt="logo" class="logo">
+        </a>
+        <div>
+          <a href="/" class="brand-link"><h1 class="site-title">Oli.is</h1></a>
+          <p class="site-tag">Have a question? Ask the Magic 8-Ball!</p>
         </div>
       </div>
-    </div>
+      <div class="center-controls">
+        <a id="programsBtn" class="btn" href="programs.html">Programs</a>
+      </div>
+      <nav class="top-nav">
+        <a class="btn small home-btn" href="/">Home</a>
+        <div class="color-picker-wrap" data-tooltip="Pick a background color">
+          <input type="color" id="pageColorPicker" value="#000000" aria-label="Page color picker" title="Pick background color">
+          <span id="pageColorDisplay" class="color-display" aria-hidden="true"></span>
+        </div>
+        <button id="randomBgBtn" class="btn small" data-tooltip="Set a random background color">Random</button>
+        <button id="revertBgBtn" class="btn small" data-tooltip="Revert to the default background image">Revert</button>
+        <button id="toggle-3d" class="btn small">3D</button>
+      </nav>
+    </header>
+
+    <main class="main-content">
+      <section class="section text-container">
+        <h2>Magic 8-Ball</h2>
+        <p>Ask a question and get your fortune!</p>
+        <div class="text-container">
+          <input type="text" id="questionInput" placeholder="Type your question" />
+          <p id="response">Click the ball to see your answer!</p>
+          <div>
+            <img src="images/8ball.png" alt="Magic 8-Ball" class="magic-ball" onclick="getAnswer()" />
+          </div>
+        </div>
+      </section>
+      <script src="magic8ball.js"></script>
+    </main>
   </body>
 </html>

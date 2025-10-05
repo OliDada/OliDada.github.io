@@ -1,68 +1,95 @@
 <!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Oli.is - Jokes</title>
-  <script src="script.js" defer></script>
-  <link rel="icon" href="images/dolphin2.png" type="image/x-icon">
-  <link href="style.css" rel="stylesheet" type="text/css" media="all">
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Oli.is - Jokes</title>
+    <link rel="icon" href="images/dolphin2.png" type="image/x-icon">
+    <link href="style.css" rel="stylesheet" type="text/css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+    <script src="draw.js" defer></script>
+    <script src="script.js" defer></script>
+  </head>
+  <body class="arcade">
+    <canvas id="three-canvas" class="three-canvas" aria-hidden="true"></canvas>
+
+    <header class="site-header">
+      <div class="brand">
+        <a href="/" class="brand-link" aria-label="Home">
+          <img src="images/dolphin1.png" alt="logo" class="logo">
+        </a>
+        <div>
+          <a href="/" class="brand-link"><h1 class="site-title">Oli.is</h1></a>
+          <p class="site-tag">Games and stuff</p>
+        </div>
+      </div>
+      <div class="center-controls">
+        <a class="btn home-btn" href="/">Home</a>
+        <a id="programsBtn" class="btn" href="programs.html">Programs</a>
+        <a id="jokesBtn" class="btn" href="jokes.html">Jokes</a>
+      </div>
+      <nav class="top-nav">
+        <div class="bg-controls">
+            <div class="bg-label"><p>Change background color</p></div>
+            <div class="bg-buttons">
+              <div class="color-picker-wrap" data-tooltip="Pick a background color">
+                <input type="color" id="pageColorPicker" value="#ffa500" aria-label="Page color picker" title="Pick background color">
+                <span id="pageColorDisplay" class="color-display" aria-hidden="true"></span>
+              </div>
+              <button id="randomBgBtn" class="btn small" data-tooltip="Set a random background color">Random</button>
+              <button id="revertBgBtn" class="btn small" data-tooltip="Revert to the default background image">Revert</button>
+              <button id="toggle-3d" class="btn small">3D</button>
+            </div>
+          </div>
+      </nav>
+    </header>
+
+    <div class="arcade-layout">
+      <main class="arcade-main">
+        <section id="hero" class="hero">
+          <h2 class="hero-title">Jokes</h2>
+          <p class="sub_title">Click the button to see a joke!</p>
+        </section>
+
+        <section class="section text-container">
+          <div>
+            <button id="showJokeBtn" class="btn">Show me a joke</button>
+            <p id="jokeDisplay" class="joke-display" aria-live="polite" style="margin-top:20px; font-size:18px; color:var(--surface-foreground)"></p>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="site-footer"><p></p></footer>
 
     <script>
+      // lightweight jokes list and wiring (kept inline for a small page)
+      (function(){
         const jokes = [
-            "Why don't programmers like nature? It has too many bugs.",
-            "Why do programmers prefer dark mode? Because light attracts bugs.",
-            "What is a programmer's favorite hangout place? The Foo Bar.",
-            "Why do Java developers wear glasses? Because they don't C#.",
-            "How do you comfort a JavaScript bug? You console it.",
-            "Why do Python developers prefer snakes? Because they don't have to deal with Java!",
-            "What did the HTML tag say to the CSS file? 'You style me so well!'",
-            "Why was the JavaScript developer sad? Because he didn't know how to 'null' his feelings.",
-            "Why don't programmers need to eat? They just feed on loops.",
-            "What do you call 8 hobbits? A hobbyte.",
-            "Why did the developer go broke? Because he used up all his cache.",
-            "What’s a programmer’s favorite type of coffee? Java.",
-            "Why was the computer cold? It left its Windows open.",
-            "How do programmers cheer up? They just have a byte of chocolate!"
+          "There are 10 types of people in the world: those who understand binary and those who don’t.",
+          "A SQL query walks into a bar, walks up to two tables and asks, 'Can I join you?'.",
+          "I told my computer I needed a break. It said: 'Error 404: Coffee not found.'",
+          "Why did the programmer quit his job? Because he didn’t get arrays.",
+          "How many programmers does it take to change a light bulb? None — that’s a hardware problem.",
+          "I’d tell you a UDP joke, but you might not get it.",
+          "Real programmers count from 0. Everyone else counts from 1.",
+          "I changed my password to 'incorrect' — so whenever I forget it, the computer says, 'Your password is incorrect.'",
+          "Why do dragons sleep during the day? So they can fight knights.",
+          "Parallel lines have so much in common. It’s a shame they’ll never meet.",
+          "What do you call a belt made of watches? A waist of time.",
+          "Why was the JavaScript developer sad? Because he didn’t Node how to Express himself.",
+          "I told my phone a joke about Bluetooth. It paired right away.",
+          "Why did the scarecrow win an award? He was outstanding in his field.",
+          "Coffee: because adulting is hard and debugging is harder."
         ];
 
         function showJoke() {
-            const randomIndex = Math.floor(Math.random() * jokes.length);
-            document.getElementById("jokeDisplay").innerText = jokes[randomIndex];
+          const randomIndex = Math.floor(Math.random() * jokes.length);
+          document.getElementById('jokeDisplay').innerText = jokes[randomIndex];
         }
+
+        document.getElementById('showJokeBtn').addEventListener('click', showJoke);
+      })();
     </script>
-</head>
-<body>
-  <div class="header">
-    <img class="dolphin" src="images/dolphin2.png" alt="Dolphin2">
-    <div class="text-container">
-      <h1 class="title">Oli.is</h1>
-      <a class="sub_title">Hahaha funny!</a>
-    </div>
-    <img class="dolphin" src="images/dolphin1.png" alt="Dolphin1">
-  </div>
-  <div class="navbar-grid">
-    <a href="index.html" class="nav-tile"><span>Home</span></a>
-    <a href="programs.html" class="nav-tile"><span>Programs</span></a>
-    <a href="jokes.html" class="nav-tile active"><span>Jokes</span></a>
-    <a href="snake.html" class="nav-tile"><span>Snake Game</span></a>
-    <a href="magic8ball.html" class="nav-tile"><span>Magic 8 Ball</span></a>
-    <a href="aichat.html" class="nav-tile"><span>AI Chat</span></a>
-    <a href="game_of_life.html" class="nav-tile"><span>Game of Life</span></a>
-    <a href="physics_simulation.html" class="nav-tile"><span>Physics Simulation</span></a>
-    <a href="gravity_dash.html" class="nav-tile"><span>Gravity Dash</span></a>
-    <a href="dungeon-crawler-game/src/index.html" class="nav-tile"><span>Dungeon Crawler</span></a>
-    <a href="/zelda-game/" class="nav-tile" target="_blank"><span>RPG Game</span></a>
-    <a href="/solar-system/" class="nav-tile" target="_blank"><span>Solar System</span></a>
-    <a href="/worm-hole/" class="nav-tile" target="_blank"><span>Neon Rush</span></a>
-    <a href="change_color.html" class="nav-tile"><span>Change Background Color</span></a>
-  </div>
-    <div class="main-content">
-        <h2>Jokes</h2>
-        <h3>Click the button to see a joke!</h3>
-        <button onclick="showJoke()" style="padding: 10px 20px; font-size: 16px;">Show Me a Joke</button>
-        <p id="jokeDisplay" style="margin-top: 20px; font-size: 18px; color: #3d320d"></p>
-    </div>
-</body>
+  </body>
 </html>

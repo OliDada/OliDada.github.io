@@ -6,8 +6,19 @@ let hiscore = 0;
 
 
 function setup() {
-  let canvas = createCanvas(600, 600);
-  canvas.parent('snake-canvas');
+  // Use a fixed native game size so the Snake game always runs at 600x600
+  const nativeSize = 600;
+  let canvas = createCanvas(nativeSize, nativeSize);
+  // Safely parent the canvas: if the host page provides a container with id
+  // 'snake-canvas' use it, otherwise fall back to attaching the canvas to
+  // document.body. This avoids p5 trying to append to a null element which
+  // throws `appendChild` errors when embedded in other pages.
+  const parentEl = document.getElementById('snake-canvas');
+  if (parentEl) {
+    canvas.parent(parentEl);
+  } else {
+    canvas.parent(document.body);
+  }
   snake = new Snake();
   frameRate(10);
   pickLocation();
@@ -17,6 +28,8 @@ function setup() {
     hiscore = parseInt(localStorage.getItem('snakeHiscore'));
   }
 }
+
+// Keep the canvas at fixed native size; do not resize on window changes.
 
 function pickLocation() {
   var cols = floor(width/scl);

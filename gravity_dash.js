@@ -5,9 +5,15 @@ let h = 3000;  // Increased height for more depth
 
 let flying = 0; // Controls the speed of terrain and obstacles
 let speedFactor = 0.05; // Unified speed factor for terrain
-let obstacleSpeedFactor = 0.15; // Increased speed factor for obstacles
 let terrain = [];
 let obstacles = [];
+
+// Speed ramping: start slower and increase over time
+let baseObstacleSpeed = 15; // base obstacle forward movement per frame
+let speedMultiplier = 0.5; // starts at 20% speed
+let maxSpeedMultiplier = 1.0; // cap at full speed
+let speedRampRate = 0.00003; // increase per millisecond (~0.00003 * 1000 = 0.03 per second)
+let lastMillis = 0;
 let gameOver = false;
 let particles = [];
 let gameOverTimer = 0;
@@ -25,15 +31,33 @@ let ball = {
 	z: 2200,
 	radius: 20,
 	velocity: 0,
-	gravity: 0.9,
+	gravity: 0.5,
 	bounce: -0.5,
 	jumping: false,
-	jumpStrength: -15
+	jumpStrength: -12
 };
 
 function setup() {
-    let canvas = createCanvas(800, 600, WEBGL);
-    canvas.parent('gravity-dash-canvas');
+    // Determine canvas size: when embedded (in an iframe) size to the parent container
+    let canvasWidth = 800;
+    let canvasHeight = 600;
+    try {
+        const inIframe = window.self !== window.top;
+        if (inIframe) {
+            const container = document.getElementById('gravity-dash-canvas') || document.body;
+            canvasWidth = Math.max(300, container.clientWidth || window.innerWidth);
+            canvasHeight = Math.max(200, container.clientHeight || window.innerHeight);
+        }
+    } catch (e) {
+        // fallback to defaults
+    }
+
+    let canvas = createCanvas(canvasWidth, canvasHeight, WEBGL);
+    const _gdParent = document.getElementById('gravity-dash-canvas');
+    if (_gdParent) canvas.parent(_gdParent); else canvas.parent(document.body);
+    // Ensure the canvas scales to fill the container visually
+    canvas.style('width', '100%');
+    canvas.style('height', '100%');
     frameRate(60); // Set to 60 FPS for smooth gameplay
 
     cols = floor(w / scale);
@@ -48,6 +72,27 @@ function setup() {
     // Initial obstacles
     for (let i = 0; i < 50; i++) {
         addObstacle();
+    }
+}
+
+function windowResized() {
+    // Resize the canvas to match container when embedded, otherwise keep default
+    try {
+        const inIframe = window.self !== window.top;
+        if (inIframe) {
+            const container = document.getElementById('gravity-dash-canvas') || document.body;
+            const newW = Math.max(300, container.clientWidth || window.innerWidth);
+            const newH = Math.max(200, container.clientHeight || window.innerHeight);
+            resizeCanvas(newW, newH);
+            // keep canvas CSS filling container
+            const canv = document.querySelector('#gravity-dash-canvas canvas');
+            if (canv) {
+                canv.style.width = '100%';
+                canv.style.height = '100%';
+            }
+        }
+    } catch (e) {
+        // ignore
     }
 }
 
@@ -129,7 +174,8 @@ function drawObstacles() {
     for (let i = obstacles.length - 1; i >= 0; i--) {
         let obs = obstacles[i];
         if (!gameOver) {
-            obs.z += 15;  // Increased movement speed
+            // obstacle forward movement scales with speedMultiplier
+            obs.z += baseObstacleSpeed * speedMultiplier;
         }
 
         // Get terrain height at current position
@@ -182,7 +228,16 @@ function draw() {
     handleControls();
     
     if (!gameOver) {
-        flying -= speedFactor;  
+        // update speed multiplier based on elapsed time
+        let now = millis();
+        if (!lastMillis) lastMillis = now;
+        let dt = now - lastMillis; // milliseconds
+        lastMillis = now;
+        // ramp the multiplier up to the max over time
+        speedMultiplier = Math.min(maxSpeedMultiplier, speedMultiplier + speedRampRate * dt);
+
+        // flying is affected by base speedFactor and the multiplier
+        flying -= speedFactor * speedMultiplier;
     }
 
     let yoff = flying;

@@ -48,8 +48,16 @@ function Snake() {
     this.x = this.x + this.xspeed*scl;
     this.y = this.y + this.yspeed*scl;
 
-    this.x = constrain(this.x, 0, width-scl);
-    this.y = constrain(this.y, 0, height-scl);
+    // If the snake hits the canvas edge, treat it as a death (reset)
+    if (this.x < 0 || this.x > width - scl || this.y < 0 || this.y > height - scl) {
+      // reset like death
+      this.total = 0;
+      this.tail = [];
+      flashTimer = 5;
+      // keep snake inside bounds visually
+      this.x = constrain(this.x, 0, width - scl);
+      this.y = constrain(this.y, 0, height - scl);
+    }
 
   }
 

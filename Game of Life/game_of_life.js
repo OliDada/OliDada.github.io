@@ -16,7 +16,8 @@ let originalHeight = 400;
 
 function setup() {
     let canvas = createCanvas(originalWidth, originalHeight);
-    canvas.parent('gameoflife-canvas');
+        const _gofParent = document.getElementById('gameoflife-canvas');
+        if (_gofParent) canvas.parent(_gofParent); else canvas.parent(document.body);
     frameRate(20);
     cols = Math.floor(width / resolution);
     rows = Math.floor(height / resolution);

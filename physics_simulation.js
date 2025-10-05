@@ -34,7 +34,8 @@ function make2Darray(cols, rows) {
 
 function setup() {
     let canvas = createCanvas(1200, 800);
-    canvas.parent('physics-canvas');
+    const _psParent = document.getElementById('physics-canvas');
+    if (_psParent) canvas.parent(_psParent); else canvas.parent(document.body);
     frameRate(60);
 
     cols = floor(width / resolution);

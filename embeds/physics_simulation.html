@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Physics Simulation — embed</title>
+  <style>html,body{height:100%;margin:0;background:#000}#physics-canvas{position:fixed;inset:0;width:100%;height:100%}</style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
+  <!-- load only the simulation script so the iframe contains just the game canvas -->
+  <script src="/physics_simulation.js"></script>
+  <script>
+    // Attempt to notify the parent window of the game's canvas size once created.
+    function postCanvasSize() {
+      try {
+        // find the first canvas on the page
+        const c = document.querySelector('canvas');
+        if (!c) return;
+        const w = c.width || c.clientWidth || c.offsetWidth;
+        const h = c.height || c.clientHeight || c.offsetHeight;
+        window.parent.postMessage({ type: 'game-aspect', width: w, height: h }, '*');
+      } catch (e) { /* ignore */ }
+    }
+    // p5 typically creates the canvas after loading; poll briefly then send size and on resize
+    const sendAfter = () => { postCanvasSize(); setTimeout(postCanvasSize, 500); };
+    window.addEventListener('load', sendAfter);
+    window.addEventListener('resize', postCanvasSize);
+    // also try regular polling for the first few seconds in case p5 delays canvas creation
+    let _cnt = 0; const _int = setInterval(() => { postCanvasSize(); if (++_cnt > 8) clearInterval(_int); }, 300);
+  </script>
+</head>
+<body>
+  <div id="physics-canvas"></div>
+</body>
+</html>

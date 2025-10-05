@@ -1,54 +1,94 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
   <head>
-    <meta charset="UTF-8">
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Oli.is</title>
-    <script src="script.js" defer></script>
-    <script src="draw.js" defer></script>
     <link rel="icon" href="images/dolphin2.png" type="image/x-icon">
-    <link href="style.css" rel="stylesheet" type="text/css" media="all">
+    <link href="style.css" rel="stylesheet" type="text/css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
-    
+    <script src="draw.js" defer></script>
+    <script src="script.js" defer></script>
   </head>
-  <body>
-    <div class="header">
-      <img class="dolphin" src="images/dolphin2.png" alt="Dolphin2">
-      <div class="text-container">
-        <h1 class="title">Oli.is</h1>
-        <p class="sub_title">Hello :)</p>
+  <body class="arcade">
+    <!-- Decorative 3D canvas sits behind the UI and is lazy-loaded when WebGL is available -->
+    <canvas id="three-canvas" class="three-canvas" aria-hidden="true"></canvas>
+
+    <header class="site-header">
+      <div class="brand">
+        <a href="/" class="brand-link" aria-label="Home">
+          <img src="images/dolphin1.png" alt="logo" class="logo">
+        </a>
+        <div>
+          <a href="/" class="brand-link"><h1 class="site-title">Oli.is</h1></a>
+          <a href="/" class="brand-link"><p class="site-tag">Games and stuff</p></a>
+        </div>
       </div>
-      <img class="dolphin" src="images/dolphin1.png" alt="Dolphin">
+      <div class="center-controls">
+        <a class="btn home-btn" href="/">Home</a>
+        <a id="programsBtn" class="btn" href="programs.html">Programs</a>
+        <a id="jokesBtn" class="btn" href="jokes.html">Jokes</a>
+      </div>
+      <nav class="top-nav">
+          <div class="bg-controls">
+            <div class="bg-label"><p>Change background color</p></div>
+            <div class="bg-buttons">
+              <div class="color-picker-wrap" data-tooltip="Pick a background color">
+                <input type="color" id="pageColorPicker" value="#ffa500" aria-label="Page color picker" title="Pick background color">
+                <span id="pageColorDisplay" class="color-display" aria-hidden="true"></span>
+              </div>
+              <button id="randomBgBtn" class="btn small" data-tooltip="Set a random background color">Random</button>
+              <button id="revertBgBtn" class="btn small" data-tooltip="Revert to the default background image">Revert</button>
+              <button id="toggle-3d" class="btn small">3D</button>
+            </div>
+          </div>
+      </nav>
+    </header>
+
+    <div class="arcade-layout">
+      <main class="arcade-main">
+      <!-- Hero removed to declutter the top of the arcade -->
+      <section id="hero" class="hero">
+        <h2 class="hero-title">Games</h2>
+        <p class="sub_title">Welcome :)</p>
+      </section>
+      <!-- Player area: when a game is played it loads here and cabinets remain below -->
+      <section id="playerArea" class="player-area" aria-hidden="true" style="display:none;">
+        <div class="player-header">
+          <div id="playerSubtitle" class="player-subtitle"></div>
+          <div class="player-actions">
+            <a id="openNewTab" class="btn small" href="#" target="_blank" rel="noopener">Open in new tab</a>
+            <button id="toggleFullscreen" class="btn small">Fullscreen</button>
+            <button id="closePlayer" class="btn small">Close</button>
+          </div>
+        </div>
+  <div id="playerAspectBox" class="player-aspect-box" data-aspect="16:9">
+    <iframe id="playerFrameMain" src="about:blank" frameborder="0" title="Game player" allowfullscreen allow="fullscreen"></iframe>
+  </div>
+      </section>
+
+      <section class="cabinet-section">
+        <div id="cabinetGrid" class="cabinet-grid" aria-live="polite">
+          <!-- Cabinets are rendered here by script.js using data/projects.json -->
+        </div>
+      </section>
+    </main>
+
+      
     </div>
-    <div class="navbar-grid">
-      <a href="index.html" class="nav-tile active"><span>Home</span></a>
-      <a href="programs.html" class="nav-tile"><span>Programs</span></a>
-      <a href="jokes.html" class="nav-tile"><span>Jokes</span></a>
-      <a href="snake.html" class="nav-tile"><span>Snake Game</span></a>
-      <a href="magic8ball.html" class="nav-tile"><span>Magic 8 Ball</span></a>
-      <a href="aichat.html" class="nav-tile"><span>AI Chat</span></a>
-      <a href="game_of_life.html" class="nav-tile"><span>Game of Life</span></a>
-      <a href="physics_simulation.html" class="nav-tile"><span>Physics Simulation</span></a>
-      <a href="gravity_dash.html" class="nav-tile"><span>Gravity Dash</span></a>
-      <a href="dungeon-crawler-game/src/index.html" class="nav-tile"><span>Dungeon Crawler</span></a>
-      <a href="/zelda-game/" class="nav-tile" target="_blank"><span>RPG Game</span></a>
-      <a href="/solar-system/" class="nav-tile" target="_blank"><span>Solar System</span></a>
-      <a href="/worm-hole/" class="nav-tile" target="_blank"><span>Neon Rush</span></a>
-      <a href="change_color.html" class="nav-tile"><span>Change Background Color</span></a>
-    </div>
-    <div class="main-content">
-      <h2>My website</h2>
-      <p>This is my website :)</p>
-      <p>Please draw something cool</p>
-      <div class="canvas-area">
-        <canvas id="drawingCanvas" width="600" height="350"></canvas>
-        <div class="canvas-tools">
-          <button alt="clear-button" onclick="clearCanvas()">Clear</button>
-          <input class="color-picker" type="color" id="colorPicker" value="#000000" onchange="changeColor(this.value)">
-          <label for="brushSize">Brush Size</label>
-          <input type="range" id="brushSize" min="1" max="20" value="5" onchange="changeBrushSize(this.value)">
-        </div> 
+
+    <!-- Project modal / overlay -->
+    <div id="projectModal" class="modal" aria-hidden="true">
+      <div class="modal-inner">
+        <button id="modalClose" class="modal-close" aria-label="Close">✕</button>
+        <iframe id="projectFrame" src="about:blank" frameborder="0" title="Project preview"></iframe>
       </div>
     </div>
+
+    <footer class="site-footer">
+      <p></p>
+    </footer>
+
+    <!-- color wiring handled by existing script.js and simple controls above -->
   </body>
 </html>
