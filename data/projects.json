@@ -71,8 +71,18 @@
     "source": "/minesweeper/minesweeper.js",
     "aspect": "1:1",
     "playSize": { "width": 400, "height": 400 },
-    "thumbnail": "/minesweeper/images/minesweeper-thumb.png",
+    "thumbnail": "/data/thumbnails/minesweeper-thumbnail.png",
     "tags": ["game", "puzzle"],
+    "featured": false
+  },
+  {
+    "title": "Balance Ball",
+    "path": "/balance-game/index.html",
+    "source": "/balance-game/main.js",
+    "aspect": "1:1",
+    "playSize": { "width": 400, "height": 400 },
+    "thumbnail": "/data/thumbnails/balance-ball-thumbnail.png",
+    "tags": ["game", "physics"],
     "featured": false
   }
 ]

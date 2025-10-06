@@ -294,6 +294,21 @@ async function renderCabinets() {
                 } catch (e) {
                     frame.src = addEmbedParam(path);
                 }
+
+                // focus iframe so keyboard works immediately (added)
+                try {
+                    frame.tabIndex = -1;
+                    frame.style.outline = 'none';
+                    // focus as soon as it loads
+                    const __focusOnLoad = () => {
+                        requestAnimationFrame(() => focusIframeAndCanvas(frame));
+                        frame.removeEventListener('load', __focusOnLoad);
+                    };
+                    frame.addEventListener('load', __focusOnLoad);
+                    // also try immediately (user gesture)
+                    requestAnimationFrame(() => focusIframeAndCanvas(frame));
+                } catch (err) { /* best-effort, ignore */ }
+
                 // Keep the player title static as 'Now playing' (do not append the game name)
                 if (title) title.textContent = 'Now playing';
                 if (openNewTab) openNewTab.href = path;
@@ -861,5 +876,31 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// helper: focus an iframe and its inner canvas (best-effort)
+function focusIframeAndCanvas(frame) {
+  try {
+    frame.tabIndex = -1;
+    frame.style.outline = 'none';
+
+    if (frame.contentWindow && typeof frame.contentWindow.focus === 'function') {
+      frame.contentWindow.focus();
+    }
+
+    const doc = frame.contentDocument;
+    if (doc) {
+      const innerCanvas = doc.querySelector('canvas');
+      if (innerCanvas) {
+        innerCanvas.tabIndex = -1;
+        innerCanvas.style.outline = 'none';
+        try { innerCanvas.focus(); } catch (_) {}
+      }
+    }
+
+    try { frame.contentWindow.postMessage({ type: 'focus' }, '*'); } catch (_) {}
+  } catch (err) {
+    console.debug('focusIframeAndCanvas failed', err);
+  }
+}
 
 
