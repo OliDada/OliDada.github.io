@@ -1,4 +1,5 @@
 let grid;
+let canvas;
 let rows = 10;
 let cols = 10;
 let w = 40;
@@ -128,16 +129,26 @@ function resetGame() {
 }
 
 function setup() {
-    createCanvas(cols * w, rows * w);    if (gameWon) {
-        fill(0, 200, 0, 200);
-        rect(0, height / 2 - 40, width, 80);
-        fill(255);
-        textAlign(CENTER, CENTER);
-        textSize(40);
-        text("You Win!", width / 2, height / 2);
-    }
-    canvas = document.querySelector('canvas');
-    canvas.addEventListener('contextmenu', e => e.preventDefault());
+    // create the p5 canvas and attach it into the #game container when embedded
+    const p5canvas = createCanvas(cols * w, rows * w);
+
+    // If opened as an embed (parent adds ?embed=1), remove surrounding chrome and attach canvas
+    try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('embed') === '1') {
+            // attach p5 element into the #game div so it's at the top of the iframe
+            try { p5canvas.parent('game'); } catch (e) {}
+            // remove default document margins and hide header content so the canvas is visible immediately
+            try { document.body.style.margin = '0'; } catch (e) {}
+            try { const h = document.querySelector('h1'); if (h) h.style.display = 'none'; } catch (e) {}
+            try { const s = document.querySelector('h3'); if (s) s.style.display = 'none'; } catch (e) {}
+            try { const b = document.querySelector('button'); if (b) b.style.display = 'none'; } catch (e) {}
+        }
+    } catch (e) {}
+
+    // grab underlying DOM element for direct event wiring
+    try { canvas = p5canvas.elt; } catch (e) { canvas = document.querySelector('canvas'); }
+    try { canvas.addEventListener('contextmenu', e => e.preventDefault()); } catch (e) {}
     resetGame();
 }
 

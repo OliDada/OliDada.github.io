@@ -248,11 +248,20 @@ async function renderCabinets() {
                     frame.style.height = '';
                     frame.style.maxWidth = '';
                     frame.style.maxHeight = '';
+                    // clear any positioning overrides applied when a previous game used playSize
+                    frame.style.position = '';
+                    frame.style.top = '';
+                    frame.style.left = '';
+                    frame.style.right = '';
+                    frame.style.bottom = '';
                     if (aspectBox) {
                         aspectBox.style.height = '';
                         aspectBox.style.display = '';
                         aspectBox.style.justifyContent = '';
                         aspectBox.style.alignItems = '';
+                        // clear any explicit width set for previous playSize
+                        aspectBox.style.width = '';
+                        aspectBox.style.maxWidth = '';
                     }
                 } catch (e) {}
 
@@ -291,34 +300,70 @@ async function renderCabinets() {
 
                 // Per-game sizing overrides for embeds that don't report sizing
                 try {
-                    const lookup = (match && (match.path || match.source || match.title)) || path || '';
-                    const key = String(lookup).toLowerCase();
-                    // Flappy Bird: portrait, keep reasonably small
-                    if (key.includes('flappybird') || key.includes('flappy')) {
-                        frame.style.width = '384px';
-                        frame.style.height = '512px';
+                    // If the project explicitly provides a playSize, use it first (pixel-perfect)
+                    if (match && match.playSize && (match.playSize.width || match.playSize.height)) {
+                        const w = Number(match.playSize.width) || '';
+                        const h = Number(match.playSize.height) || '';
+                        // ensure the iframe uses its inline width/height instead of being stretched by absolute positioning
+                        frame.style.position = 'relative';
+                        // clear any inset offsets that CSS may have applied for absolute positioning
+                        frame.style.top = '';
+                        frame.style.left = '';
+                        frame.style.right = '';
+                        frame.style.bottom = '';
+                        if (w) frame.style.width = w + 'px';
+                        if (h) frame.style.height = h + 'px';
                         frame.style.maxWidth = '100%';
                         frame.style.maxHeight = '80vh';
                         if (aspectBox) {
-                            aspectBox.style.paddingTop = '';
-                            aspectBox.style.height = 'auto';
+                            aspectBox.style.paddingTop = '0';
+                            // set explicit pixel height so the surrounding player-area background shrinks to fit
+                            if (h) {
+                                aspectBox.style.height = h + 'px';
+                            } else {
+                                aspectBox.style.height = 'auto';
+                            }
                             aspectBox.style.display = 'flex';
                             aspectBox.style.justifyContent = 'center';
                             aspectBox.style.alignItems = 'center';
+                            // constrain the aspect box to the explicit width so it doesn't expand to the default max-width
+                            if (w) {
+                                aspectBox.style.width = w + 'px';
+                                aspectBox.style.maxWidth = '100%';
+                            }
                         }
-                    }
-                    // Snake: square canvas
-                    else if (key.includes('/snake') || key.includes('snake')) {
-                        frame.style.width = '600px';
-                        frame.style.height = '600px';
-                        frame.style.maxWidth = '100%';
-                        frame.style.maxHeight = '80vh';
-                        if (aspectBox) {
-                            aspectBox.style.paddingTop = '';
-                            aspectBox.style.height = 'auto';
-                            aspectBox.style.display = 'flex';
-                            aspectBox.style.justifyContent = 'center';
-                            aspectBox.style.alignItems = 'center';
+                    } else {
+                        // ensure default absolute positioning is used for aspect-box based sizing
+                        frame.style.position = '';
+                        const lookup = (match && (match.path || match.source || match.title)) || path || '';
+                        const key = String(lookup).toLowerCase();
+                        // Flappy Bird: portrait, keep reasonably small
+                        if (key.includes('flappybird') || key.includes('flappy')) {
+                            frame.style.width = '384px';
+                            frame.style.height = '512px';
+                            frame.style.maxWidth = '100%';
+                            frame.style.maxHeight = '80vh';
+                            if (aspectBox) {
+                                aspectBox.style.paddingTop = '';
+                                aspectBox.style.height = 'auto';
+                                aspectBox.style.display = 'flex';
+                                aspectBox.style.justifyContent = 'center';
+                                aspectBox.style.alignItems = 'center';
+                            }
+                        }
+                        // Snake: square canvas
+                        else if (key.includes('/snake') || key.includes('snake')) {
+                            frame.style.width = '600px';
+                            frame.style.height = '600px';
+                            frame.style.maxWidth = '100%';
+                            frame.style.maxHeight = '80vh';
+                            if (aspectBox) {
+                                aspectBox.style.paddingTop = '';
+                                aspectBox.style.height = 'auto';
+                                aspectBox.style.display = 'flex';
+                                aspectBox.style.justifyContent = 'center';
+                                aspectBox.style.alignItems = 'center';
+                            }
                         }
                     }
                 } catch (e) {}
@@ -343,6 +388,12 @@ async function renderCabinets() {
                 // Try to adjust aspect by probing the embedded page's canvas once it loads
                 frame.addEventListener('load', function adjustAspect() {
                     try {
+                        // If the parent provided an explicit playSize, skip probing the iframe content
+                        // — the playSize should be authoritative and probing can resize the aspect box unexpectedly.
+                        if (match && match.playSize) {
+                            frame.removeEventListener('load', adjustAspect);
+                            return;
+                        }
                         const iframeDoc = frame.contentDocument || frame.contentWindow.document;
                         // probe for subtitle-like elements inside the embedded page if we don't have metadata
                         try {
