@@ -84,5 +84,15 @@
     "thumbnail": "/data/thumbnails/balance-ball-thumbnail.png",
     "tags": ["game", "physics"],
     "featured": false
+  },
+  {
+    "title": "Farm Frenzy",
+    "path": "/farm-frenzy/index.html",
+    "source": "/farm-frenzy/main.js",
+    "aspect": "9:6",
+    "playSize": { "width": 1920, "height": 720 },
+    "thumbnail": "/data/thumbnails/farm-frenzy-thumbnail.png",
+    "tags": ["game", "arcade"],
+    "featured": true
   }
 ]
