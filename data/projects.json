@@ -32,7 +32,6 @@
     "embed": "/embeds/gravity_dash.html",
     "source": "/gravity_dash.js",
     "aspect": "4:3",
-    "subtitle": "That ball is dashing!",
     "thumbnail": "data/thumbnails/gravity-dash-thumbnail.png",
     "tags": ["game", "physics"],
     "featured": true
@@ -53,6 +52,7 @@
     "source": "/Game of Life/game_of_life.js",
     "aspect": "8:4",
     "playSize": { "width": 800, "height": 400 },
+    "description": "Use the mouse to create new cells. Press space to reset.",
     "thumbnail": "data/thumbnails/game-of-life-thumbnail.png",
     "tags": ["simulation"],
     "featured": false
@@ -115,6 +115,18 @@
     "description": "Click the screen to change the character",
     "thumbnail": "data/thumbnails/figura-thumbnail.png",
     "tags": ["art", "p5"],
+    "featured": false
+  },
+  {
+    "title": "Brian's Brain",
+    "path": "/simulations/Brians_Brain/brians_brain.html",
+    "source": "/simulations/Brians_Brain/brians_brain.js",
+    "embed": "/embeds/brians_brain.html",
+    "aspect": "1:1",
+    "playSize": { "width": 800, "height": 400 },
+    "thumbnail": "data/thumbnails/brians-brain-thumbnail.png",
+    "description": "Press space to reset the simulation.",
+    "tags": ["simulation", "cellular automata", "p5"],
     "featured": false
   }
 ]
