@@ -871,15 +871,19 @@ body.arcade {
 
 /* Player area styles */
 .player-area { max-width:1200px; margin: 10px auto 24px auto; background: linear-gradient(180deg,#0b1220,#071021); border-radius:10px; padding:8px; box-shadow: 0 8px 30px rgba(0,0,0,0.6); }
-.player-header { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:6px 8px; }
-.player-title { color:#ffd166; font-weight:700 }
-.player-subtitle { color:rgba(255,255,255,0.8); font-weight:500; font-size:0.95rem; margin-top:4px }
+.player-header { position:relative; display:flex; align-items:flex-start; gap:12px; padding:10px 8px; z-index: 6; }
+.player-info { width:100%; max-width:1100px; margin:0 auto; text-align:left; padding-right:260px; }
+.player-title { color:#ffd166; font-weight:700; margin:0 0 4px 0 }
+.player-subtitle { color:rgba(255,255,255,0.9); font-weight:500; font-size:0.95rem; margin-top:0 }
+.player-desc { color: rgba(255,255,255,0.85); margin-top:6px; max-width:100%; font-size:0.95rem; line-height:1.3 }
+.player-actions { position:absolute; right:12px; top:12px; display:flex; gap:8px; z-index: 8 }
 .player-area iframe#playerFrameMain { width:100%; height:60vh; border-radius:8px; border:2px solid rgba(255,255,255,0.04); background:#000 }
 .player-aspect-box {
   position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 1100px;
-  margin: 10px auto 0 auto;
+  margin: 24px auto 0 auto;
   /* default aspect 16:9 -> padding-top = 9 / 16 * 100% = 56.25% */
   padding-top: 56.25%;
   background: #000;

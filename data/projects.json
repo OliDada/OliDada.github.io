@@ -6,6 +6,7 @@
     "aspect": "9:6",
     "playSize": { "width": 1028, "height": 720 },
     "thumbnail": "data/thumbnails/rpg-thumbnail.png",
+    "description": "Start by going in the house and talking to the old man.",
     "tags": ["game", "rpg"],
     "featured": true
   },
@@ -94,8 +95,7 @@
     "thumbnail": "data/thumbnails/farm-frenzy-thumbnail.png",
     "tags": ["game", "arcade"],
     "featured": true
-  }
-  ,
+  },
   {
     "title": "Tic Tac Toe",
     "path": "tic-tac-toe-minimax/index.html",
@@ -104,6 +104,17 @@
     "playSize": { "width": 400, "height": 400 },
     "thumbnail": "data/thumbnails/tic-tac-toe-thumbnail.png",
     "tags": ["game", "puzzle", "minimax", "p5"],
+    "featured": false
+  },
+  {
+    "title": "Fígúra",
+    "path": "Verkefni03-Fígúra 2/index.html",
+    "source": "Verkefni03-Fígúra 2/sketch.js",
+    "aspect": "1:1",
+    "playSize": { "width": 350, "height": 350 },
+    "description": "Click the screen to change the character",
+    "thumbnail": "data/thumbnails/figura-thumbnail.png",
+    "tags": ["art", "p5"],
     "featured": false
   }
 ]

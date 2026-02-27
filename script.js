@@ -402,6 +402,16 @@ async function renderCabinets() {
                     }
                 }
 
+                // set player description from metadata if available
+                const descEl = document.getElementById('playerDescription');
+                if (descEl) {
+                    if (match && (match.description || match.longDescription)) {
+                        descEl.textContent = match.description || match.longDescription;
+                    } else {
+                        descEl.textContent = '';
+                    }
+                }
+
                 // Try to adjust aspect by probing the embedded page's canvas once it loads
                 frame.addEventListener('load', function adjustAspect() {
                     try {
@@ -418,6 +428,12 @@ async function renderCabinets() {
                             if (subtitleEl && (!match || !match.subtitle)) {
                                 const found = iframeDoc.querySelector('.sub_title, .player-subtitle, .sub, #subtitle');
                                 if (found && found.textContent) subtitleEl.textContent = found.textContent.trim();
+                            }
+                            // try to probe for a description inside the iframe if we don't have one in metadata
+                            const descEl = document.getElementById('playerDescription');
+                            if (descEl && (!match || !(match.description || match.longDescription))) {
+                                const foundDesc = iframeDoc.querySelector('.description, .desc, .player-description, #description');
+                                if (foundDesc && foundDesc.textContent) descEl.textContent = foundDesc.textContent.trim();
                             }
                         } catch (e) {
                             // ignore subtitle probing errors
@@ -453,6 +469,8 @@ async function renderCabinets() {
                     if (data && data.type === 'game-aspect') {
                         const subtitleEl = document.getElementById('playerSubtitle');
                         if (subtitleEl && data.subtitle) subtitleEl.textContent = data.subtitle;
+                        const descEl = document.getElementById('playerDescription');
+                        if (descEl && data.description) descEl.textContent = data.description;
 
                         // If the embedded frame reports exact pixel width/height, size the iframe to those dimensions
                         if (data.width && data.height) {
