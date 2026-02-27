@@ -5,7 +5,7 @@
     "source": "/zelda-game/",
     "aspect": "9:6",
     "playSize": { "width": 1028, "height": 720 },
-    "thumbnail": "/data/thumbnails/rpg-thumbnail.png",
+    "thumbnail": "data/thumbnails/rpg-thumbnail.png",
     "tags": ["game", "rpg"],
     "featured": true
   },
@@ -21,7 +21,7 @@
     "title": "Neon Rush",
     "path": "/worm-hole/index.html",
     "source": "/worm-hole/index.js",
-    "thumbnail": "/data/thumbnails/neon-rush-thumbnail.png",
+    "thumbnail": "data/thumbnails/neon-rush-thumbnail.png",
     "tags": ["game", "neon"],
     "featured": true
   },
@@ -42,7 +42,7 @@
     "source": "/Snake/snake.js",
     "aspect": "1:1",
     "playSize": { "width": 600, "height": 600 },
-    "thumbnail": "/data/thumbnails/snake-thumbnail.png",
+    "thumbnail": "data/thumbnails/snake-thumbnail.png",
     "tags": ["game", "p5"],
     "featured": false
   },
@@ -52,7 +52,7 @@
     "source": "/Game of Life/game_of_life.js",
     "aspect": "8:4",
     "playSize": { "width": 800, "height": 400 },
-    "thumbnail": "/data/thumbnails/game-of-life-thumbnail.png",
+    "thumbnail": "data/thumbnails/game-of-life-thumbnail.png",
     "tags": ["simulation"],
     "featured": false
   },
@@ -61,7 +61,7 @@
     "path": "/physics_simulation.html",
     "source": "/physics_simulation.js",
     "embed": "/embeds/physics_simulation.html",
-    "thumbnail": "/data/thumbnails/physics-simulation-thumbnail.png",
+    "thumbnail": "data/thumbnails/physics-simulation-thumbnail.png",
     "tags": ["simulation", "physics"],
     "featured": true
   },
@@ -71,7 +71,7 @@
     "source": "/minesweeper/minesweeper.js",
     "aspect": "1:1",
     "playSize": { "width": 400, "height": 400 },
-    "thumbnail": "/data/thumbnails/minesweeper-thumbnail.png",
+    "thumbnail": "data/thumbnails/minesweeper-thumbnail.png",
     "tags": ["game", "puzzle"],
     "featured": false
   },
@@ -81,7 +81,7 @@
     "source": "/balance-game/main.js",
     "aspect": "1:1",
     "playSize": { "width": 400, "height": 400 },
-    "thumbnail": "/data/thumbnails/balance-ball-thumbnail.png",
+    "thumbnail": "data/thumbnails/balance-ball-thumbnail.png",
     "tags": ["game", "physics"],
     "featured": false
   },
@@ -91,8 +91,19 @@
     "source": "/farm-frenzy/main.js",
     "aspect": "9:6",
     "playSize": { "width": 1920, "height": 720 },
-    "thumbnail": "/data/thumbnails/farm-frenzy-thumbnail.png",
+    "thumbnail": "data/thumbnails/farm-frenzy-thumbnail.png",
     "tags": ["game", "arcade"],
     "featured": true
+  }
+  ,
+  {
+    "title": "Tic Tac Toe",
+    "path": "tic-tac-toe-minimax/index.html",
+    "source": "tic-tac-toe-minimax/sketch.js",
+    "aspect": "1:1",
+    "playSize": { "width": 400, "height": 400 },
+    "thumbnail": "data/thumbnails/tic-tac-toe-thumbnail.png",
+    "tags": ["game", "puzzle", "minimax", "p5"],
+    "featured": false
   }
 ]

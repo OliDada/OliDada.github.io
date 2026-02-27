@@ -1,5 +1,5 @@
-// Use root-relative path so pages in subfolders load the same background image
-const originalBackground = "/images/1.jpg";
+// Use relative path so pages in subfolders can resolve the background image
+const originalBackground = "images/1.jpg";
 
 // Helper: set UI surface CSS variables based on the active background value.
 function updateUISurfaceForBackground(bgValue) {
@@ -147,7 +147,9 @@ applySavedBackground();
 // Utility to fetch local JSON with project metadata
 async function loadProjects() {
     try {
-        const res = await fetch('/data/projects.json');
+        // fetch relative to the current page so the JSON loads correctly
+        // whether the page is at the site root or in a subfolder
+        const res = await fetch('data/projects.json');
         if (!res.ok) throw new Error('Failed to load projects');
         return await res.json();
     } catch (err) {

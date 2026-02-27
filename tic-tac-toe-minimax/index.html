@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+  <style>
+    body, html { height:100%; margin:0; }
+    #gameContainer {
+      min-height:100vh;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      align-items:center;
+      gap:12px;
+    }
+    #controls { display:flex; gap:10px; align-items:center; }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <div id="canvasHolder"></div>
+    <div id="controls">
+      <button id="pvp">PVP</button>
+      <button id="pvc">PVC</button>
+      <select id="xOrO"><option>X</option><option>O</option></select>
+      <button id="reset">Reset</button>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+  <script src="sketch.js"></script>
+</body>
+</html>
+

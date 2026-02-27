@@ -1,3 +1,4 @@
+
 let terrainGrid;
 let waterGrid;    // stores water depth (>0 means water present)
 let properties; // grid to store cell properties
@@ -264,6 +265,9 @@ function draw() {
 
     waterPhysics();
     terrainGrid = nextGrid;
+
+    // Draw on-canvas player instructions / HUD
+    drawInstructions();
 }
 
 
@@ -641,6 +645,62 @@ function updateTerrainType(i, j) {
     else if (n < 0.65) terrainGrid[i][j] = TREE;
     else if (n < 0.75) terrainGrid[i][j] = ROCK;
     else terrainGrid[i][j] = SNOW;
+}
+
+
+// Draw a small HUD with player instructions on the canvas
+function drawInstructions() {
+    push();
+    textAlign(LEFT, TOP);
+    textSize(12);
+    const lines = [];
+    const mode = isFireMode ? 'Fire' : isWaterMode ? 'Water' : isErosionMode ? 'Erosion' : 'None';
+    lines.push('Mode: ' + mode);
+    lines.push('Keys: F = Fire  W = Water  E = Erosion');
+
+    // Compute background box size
+    let padding = 8;
+    let lineHeight = 16;
+    let maxW = 0;
+    for (let i = 0; i < lines.length; i++) {
+        maxW = max(maxW, textWidth(lines[i]));
+    }
+
+    // Reserve space for a small colored square next to the mode label
+    let iconSize = 12;
+    let iconGap = 6;
+    let extraWidth = iconSize + iconGap; // extra space on the left for the icon
+
+    let boxX = 10;
+    let boxY = 10;
+    let boxW = maxW + padding * 2 + extraWidth;
+    let boxH = lines.length * lineHeight + padding * 2;
+
+    noStroke();
+    fill(0, 160);
+    rect(boxX, boxY, boxW, boxH, 6);
+
+    // Determine mode color
+    let modeCol;
+    if (isFireMode) modeCol = color(255, 120, 0);
+    else if (isWaterMode) modeCol = color(0, 140, 255);
+    else if (isErosionMode) modeCol = color(160, 110, 60);
+    else modeCol = color(200);
+
+    // Draw the colored square next to the first line (Mode)
+    let iconX = boxX + padding;
+    let iconY = boxY + padding + (lineHeight - iconSize) / 2;
+    fill(modeCol);
+    rect(iconX, iconY, iconSize, iconSize, 3);
+
+    // Draw text, shifted right to leave room for the icon
+    fill(255);
+    for (let i = 0; i < lines.length; i++) {
+        let textX = boxX + padding + (i === 0 ? extraWidth : 0);
+        text(lines[i], textX, boxY + padding + i * lineHeight);
+    }
+
+    pop();
 }
 
 
