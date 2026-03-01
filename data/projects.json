@@ -15,6 +15,7 @@
     "path": "/solar-system/index.html",
     "source": "/solar-system/index.js",
     "thumbnail": "data/thumbnails/solar-system-thumbnail.png",
+    "subtitle": "Press 'H' to toggle instructions.",
     "tags": ["3d", "threejs"],
     "featured": true
   },
@@ -48,8 +49,9 @@
   },
   {
     "title": "Game of Life",
-    "path": "/game_of_life.html",
-    "source": "/Game of Life/game_of_life.js",
+    "path": "/simulations/Game of Life/gol.html",
+    "source": "/simulations/Game_of_Life/game_of_life.js",
+    "embed": "/embeds/gol.html",
     "aspect": "8:4",
     "playSize": { "width": 800, "height": 400 },
     "description": "Use the mouse to create new cells. Press space to reset.",
@@ -127,6 +129,17 @@
     "thumbnail": "data/thumbnails/brians-brain-thumbnail.png",
     "description": "Press space to reset the simulation.",
     "tags": ["simulation", "cellular automata", "p5"],
+    "featured": false
+  },
+  {
+    "title": "Falling Sand Simulation",
+    "path": "/simulations/Falling_Sand/falling_sand.html",
+    "source": "/simulations/Falling_Sand/falling_sand.js",
+    "embed": "/embeds/falling_sand.html",
+    "aspect": "1:1",
+    "playSize": { "width": 800, "height": 800 },
+    "thumbnail": "data/thumbnails/falling-sand-thumbnail.png",
+    "tags": ["simulation", "physics", "p5"],
     "featured": false
   }
 ]
