@@ -146,7 +146,8 @@ function draw() {
 
     // layout positions (responsive)
     const titleY = height * 0.14;
-    const previewY = height * 0.26;
+    // place the preview (bar + ball) slightly higher in the menu
+    const previewY = height * 0.32;
     const controlsY = height * 0.46; // move controls up a bit
     const captionY = controlsY + 56; // give caption more space below
     const playY = height * 0.82; // push Play a bit lower
@@ -255,11 +256,7 @@ function draw() {
       mx < kx4 + kw / 2 &&
       my > ky - kh / 2 &&
       my < ky + kh / 2;
-    // visual fill when hovered or pressed
-    rect(kx1, ky, kw, kh, 8);
-    rect(kx2, ky, kw, kh, 8);
-    rect(kx3, ky, kw, kh, 8);
-    rect(kx4, ky, kw, kh, 8);
+    // visual key labels (keycap shapes removed to simplify menu)
     // labels
     fill(255);
     textSize(16);
@@ -270,19 +267,15 @@ function draw() {
     scale(sA);
     text("A", 0, 0);
     pop();
-    // left arrow glyph in keycap 2 (use text glyph for consistent centering)
     push();
     fill(255);
     noStroke();
     translate(kx2, ky);
     const sL = 1 - 0.06 * constrain(keyPressTimers.LEFT / keyPressDuration, 0, 1);
     push();
-    scale(sL);
     textSize(20);
-    text('←', 0, 0);
     pop();
     pop();
-    // right arrow glyph in keycap 3 (use text glyph for consistent centering)
     push();
     fill(255);
     noStroke();
@@ -291,7 +284,6 @@ function draw() {
     push();
     scale(sR);
     textSize(20);
-    text('→', 0, 0);
     pop();
     pop();
     const sD = 1 - 0.06 * constrain(keyPressTimers.D / keyPressDuration, 0, 1);
@@ -300,14 +292,6 @@ function draw() {
     scale(sD);
     text("D", 0, 0);
     pop();
-
-    // mini bar between the inner keys (centered at innerCenter)
-    noStroke();
-    fill(240);
-    rect(innerCenter, ctrlY, miniBarW, 14, 10);
-    // 2x scoring band (center)
-    fill(255, 180, 60);
-    rect(innerCenter, ctrlY, 52, 12, 8);
 
     // store layout for input handlers
     menuLayout = {
@@ -330,7 +314,105 @@ function draw() {
     // caption under controls (centered with mini-bar)
     fill(200);
     textSize(12);
-    text("A  /  ←   (bar)   →  /  D", innerCenter, captionY);
+      // nicer instructions panel with subtle key visuals
+      push();
+      rectMode(CENTER);
+      // Panel settings
+      const instrSize = 13;
+      textSize(instrSize);
+      const pad = 12;
+      // text parts
+      const t1 = "Move the bar with";
+      const t2 = "Tilt the bar with";
+      const t3 = "Collect power-ups and avoid obstacles!";
+      const kA = "A";
+      const kD = "D";
+      const kL = "←";
+      const kR = "→";
+      // key visual sizes
+      const keyW = 28;
+      const keyH = 20;
+      const gap = 8;
+      // measure widths (include t3 so panel fits)
+      textAlign(LEFT, CENTER);
+      const t1w = textWidth(t1);
+      const t2w = textWidth(t2);
+      const t3w = textWidth(t3);
+      const keys1w = keyW * 2 + gap;
+      const keys2w = keyW * 2 + gap;
+      const line1W = t1w + gap + keys1w;
+      const line2W = t2w + gap + keys2w;
+      const panelW = Math.max(line1W, line2W, t3w) + pad * 2;
+      // compute panel height to fit key visuals + three instruction lines with padding
+      const lineSpacing = instrSize + 8;
+      const contentHeight = Math.max(keyH, instrSize) + lineSpacing * 2; // first line (keys) + 2 more lines
+      const panelH = Math.ceil(pad * 2 + contentHeight + 6);
+      const panelX = innerCenter;
+      const panelY = captionY + 6;
+
+      // panel background
+      fill(8, 12, 18, 180);
+      noStroke();
+      rect(panelX, panelY, panelW, panelH, 10);
+
+      // draw first line and keys (left aligned inside panel)
+      const line1X = panelX - panelW / 2 + pad;
+      const line1Y = panelY - 20;
+      fill(230);
+      textSize(instrSize);
+      text(t1, line1X, line1Y);
+      // key A
+      const k1x = line1X + t1w + gap + keyW / 2;
+      fill(250);
+      stroke(200);
+      strokeWeight(1);
+      rect(k1x, line1Y, keyW, keyH, 6);
+      noStroke();
+      fill(20);
+      textAlign(CENTER, CENTER);
+      text(kA, k1x, line1Y);
+      // key D
+      const k2x = k1x + keyW + gap;
+      fill(250);
+      stroke(200);
+      rect(k2x, line1Y, keyW, keyH, 6);
+      noStroke();
+      fill(20);
+      text(kD, k2x, line1Y);
+
+      // draw second line and arrow keys
+      const line2X = panelX - panelW / 2 + pad;
+      const line2Y = panelY + 6;
+      fill(230);
+      textAlign(LEFT, CENTER);
+      text(t2, line2X, line2Y);
+      // left arrow key
+      const ka1x = line2X + t2w + gap + keyW / 2;
+      fill(250);
+      stroke(200);
+      rect(ka1x, line2Y, keyW, keyH, 6);
+      noStroke();
+      fill(20);
+      textAlign(CENTER, CENTER);
+      text(kL, ka1x, line2Y);
+      // right arrow key
+      const ka2x = ka1x + keyW + gap;
+      fill(250);
+      stroke(200);
+      rect(ka2x, line2Y, keyW, keyH, 6);
+      noStroke();
+      fill(20);
+      text(kR, ka2x, line2Y);
+
+      // third instruction line (use t3, left-aligned to match others)
+      textAlign(LEFT, CENTER);
+      const t3X = panelX - panelW / 2 + pad;
+      const t3Y = line2Y + lineSpacing;
+      fill(220);
+      text(t3, t3X, t3Y);
+      // restore alignment and end panel group
+      textAlign(CENTER, CENTER);
+      pop();
 
     // decrement key press timers
     for (let k of Object.keys(keyPressTimers)) {
