@@ -259,6 +259,19 @@ p {
   padding: 12px 20px;
 }
 
+/* Hide the Programs link in the center controls (site-wide) */
+#programsBtn {
+  display: none !important;
+}
+
+/* Larger, more tappable center/header buttons */
+.center-controls .btn,
+.top-nav .btn {
+  padding: 12px 22px;
+  font-size: clamp(16px, 2.2vw, 20px);
+  border-radius: 8px;
+}
+
 .top-nav {
   display:flex;
   align-items:center;
@@ -366,10 +379,12 @@ button:hover {
   margin-top: 20px;
 }
 
-#jokeDisplay {
+#joke-display, .joke-display, #jokeDisplay {
   margin-top: 20px;
-  font-size: 18px;
-  color: #3d320d;
+  /* larger, responsive font for jokes */
+  font-size: clamp(20px, 2.8vw, 28px);
+  color: var(--surface-foreground, #3d320d);
+  line-height: 1.4;
 }
 
 .img1, .img2 {
@@ -397,6 +412,62 @@ button:hover {
   height: auto;
   transition: transform 0.3s ease, filter 0.3 ease;
 }
+
+/* All-jokes list styling */
+.all-jokes {
+  margin: 0;
+  /* reduce visual footprint */
+  padding: 8px;
+  overflow: auto;
+  border-radius: 8px 8px 6px 6px;
+  /* lighter translucent background so it doesn't dominate the page */
+  background: rgba(255,255,255,0.55);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+  text-align: left;
+}
+.all-jokes .joke-item {
+  margin-bottom: 10px;
+  /* restore comfortable reading size */
+  font-size: clamp(16px, 2.2vw, 20px);
+  line-height: 1.35;
+}
+
+.joke-controls { display:flex; gap:10px; justify-content:center; align-items:center; margin-bottom:8px }
+
+/* Wrapper that reserves vertical space so the Show All button doesn't move */
+/* Wrapper that reserves vertical space and centers the jokes box */
+.all-jokes-wrapper {
+  position: relative;
+  width: clamp(320px, 72%, 1000px);
+  margin: 8px auto 0 auto;
+  padding: 0 12px;
+}
+
+/* place the list inside the wrapper; allow it to size naturally so the button below moves with it */
+.all-jokes {
+  position: relative;
+  width: 100%;
+  max-height: 40vh;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+/* when collapsed, hide the list so the following button moves up */
+.all-jokes.collapsed {
+  display: none;
+}
+
+/* bottom/inline actions placed after the wrapper (static in flow) */
+.bottom-actions { display:flex; justify-content:center; margin-top:12px }
+.bottom-actions .btn { padding: 12px 22px; font-size: 18px }
+
+/* bottom actions area (button placed further down the page) */
+.bottom-actions {
+  display: flex;
+  justify-content: center;
+  padding: 12px 16px 36px 16px; /* reduced spacing so button sits below jokes area but not too far */
+}
+.bottom-actions .btn { padding: 12px 22px; font-size: 18px }
 
 .dolphin:hover {
   transform: scale(1.2);

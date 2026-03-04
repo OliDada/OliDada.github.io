@@ -53,8 +53,14 @@
 
         <section class="section text-container">
           <div>
-            <button id="showJokeBtn" class="btn">Show me a joke</button>
-            <p id="jokeDisplay" class="joke-display" aria-live="polite" style="margin-top:20px; font-size:18px; color:var(--surface-foreground)"></p>
+            <div class="joke-controls">
+              <button id="showJokeBtn" class="btn">Show me a joke</button>
+            </div>
+            <p id="jokeDisplay" class="joke-display" aria-live="polite"></p>
+            <div id="allJokesContainer" class="all-jokes" hidden aria-live="polite"></div>
+            <div class="bottom-actions" style="margin-top:18px;">
+              <button id="showAllJokesBtn" class="btn">Show all jokes</button>
+            </div>
           </div>
         </section>
       </main>
@@ -95,7 +101,6 @@
           "Hvers vegna var Stebbi svona góður læknir?\n - Hann var með puttana á púlsinum",
           "Afhverju eru kafarar svona klárir?\n - Þeir eru alltaf að leggja höfuðið í bleyti",
           "Afhverju er garðurinn hans Shrek alltaf svona fínn?\n - Hann er með græna fingur",""
-
         ];
 
         function showJoke() {
@@ -104,6 +109,30 @@
         }
 
         document.getElementById('showJokeBtn').addEventListener('click', showJoke);
+
+        // show all jokes toggle
+        function toggleAllJokes() {
+          const container = document.getElementById('allJokesContainer');
+          const btn = document.getElementById('showAllJokesBtn');
+          if (!container) return;
+          if (container.hasAttribute('hidden')) {
+            // populate
+            container.innerHTML = jokes.map((j, i) =>
+              `<div class="joke-item"><strong>${i+1}.</strong> <span>${j.replace(/\n/g, '<br>')}</span></div>`
+            ).join('');
+            container.removeAttribute('hidden');
+            btn.textContent = 'Hide all jokes';
+          } else {
+            container.setAttribute('hidden', '');
+            btn.textContent = 'Show all jokes';
+          }
+        }
+
+        const allBtn = document.getElementById('showAllJokesBtn');
+        if (allBtn) allBtn.addEventListener('click', toggleAllJokes);
+
+        // show a random joke immediately when the page loads
+        try { showJoke(); } catch (e) { /* ignore if DOM not ready */ }
       })();
     </script>
   </body>
