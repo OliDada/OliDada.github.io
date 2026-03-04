@@ -1,4 +1,3 @@
-// Falling sand simulation — refactored with ParticleSim class
 
 function make2DArray(cols, rows) {
     let arr = new Array(cols);
@@ -8,6 +7,9 @@ function make2DArray(cols, rows) {
     }
     return arr;
 }
+
+// Particle type constants
+const TYPE = { EMPTY: 0, SAND: 1, WATER: 2, FIRE: 3 };
 
 let w = 3;
 let sandA, sandB, colorCycle;
@@ -50,11 +52,11 @@ class ParticleSim {
                     
                     // ADD NEW PARTICLES HERE
                     if(type === 'sand'){
-                        this.type[nx][ny] = 1;
+                        this.type[nx][ny] = TYPE.SAND;
                         this.seed[nx][ny] = ((frameCount + random()*5) % colorCycle) / colorCycle;
                         this.varGrid[nx][ny] = (random()-0.5)*0.32;
                     } else if(type === 'water'){
-                        this.type[nx][ny] = 2;
+                        this.type[nx][ny] = TYPE.WATER;
                         const baseHue = (window._waterHueBase != null) ? window._waterHueBase : 200;
                         const hueRange = (window._waterHueRange != null) ? window._waterHueRange : 6;
                         const satBase = (window._waterSat != null) ? window._waterSat : 80;
@@ -68,7 +70,7 @@ class ParticleSim {
                         this.varGrid[nx][ny] = 0;
                     } else if(type === 'fire'){
                         // Example for fire particle (not implemented in step logic)
-                        this.type[nx][ny] = 3; // let's say 3 represents fire
+                        this.type[nx][ny] = TYPE.FIRE; // fire
                         this.seed[nx][ny] = random(); // could be used for animation phase
                         this.varGrid[nx][ny] = random(); // could be used for size or brightness variation  
                     }
@@ -95,34 +97,47 @@ class ParticleSim {
                 const t = this.type[i][j];
 
                 // ADD PARTICLE UPDATE LOGIC HERE
-                if(t===0) continue;
+                if(t===TYPE.EMPTY) continue;
 
-                if(t===1){ // sand
+                if(t===TYPE.SAND){ // sand
                     if(j < this.rows-1){
-                        if(this.type[i][j+1]===0 && nextType[i][j+1]===0){
-                            nextType[i][j+1]=1; nextSeed[i][j+1]=this.seed[i][j]; nextVar[i][j+1]=this.varGrid[i][j];
+                        if(this.type[i][j+1]===TYPE.EMPTY && nextType[i][j+1]===TYPE.EMPTY){
+                            nextType[i][j+1]=TYPE.SAND; nextSeed[i][j+1]=this.seed[i][j]; nextVar[i][j+1]=this.varGrid[i][j];
                         } else {
-                            const leftEmpty = (i>0 && this.type[i-1][j+1]===0 && nextType[i-1][j+1]===0);
-                            const rightEmpty= (i<this.cols-1 && this.type[i+1][j+1]===0 && nextType[i+1][j+1]===0);
-                            if(leftEmpty && rightEmpty){ if(random()<0.5){ nextType[i-1][j+1]=1; nextSeed[i-1][j+1]=this.seed[i][j]; nextVar[i-1][j+1]=this.varGrid[i][j]; } else { nextType[i+1][j+1]=1; nextSeed[i+1][j+1]=this.seed[i][j]; nextVar[i+1][j+1]=this.varGrid[i][j]; } }
-                            else if(leftEmpty){ nextType[i-1][j+1]=1; nextSeed[i-1][j+1]=this.seed[i][j]; nextVar[i-1][j+1]=this.varGrid[i][j]; }
-                            else if(rightEmpty){ nextType[i+1][j+1]=1; nextSeed[i+1][j+1]=this.seed[i][j]; nextVar[i+1][j+1]=this.varGrid[i][j]; }
-                            else { if(nextType[i][j]===0){ nextType[i][j]=1; nextSeed[i][j]=this.seed[i][j]; nextVar[i][j]=this.varGrid[i][j]; } }
+                            const leftEmpty = (i>0 && this.type[i-1][j+1]===TYPE.EMPTY && nextType[i-1][j+1]===TYPE.EMPTY);
+                            const rightEmpty= (i<this.cols-1 && this.type[i+1][j+1]===TYPE.EMPTY && nextType[i+1][j+1]===TYPE.EMPTY);
+                            if(leftEmpty && rightEmpty){
+                                if(random()<0.5){
+                                    nextType[i-1][j+1]=TYPE.SAND; nextSeed[i-1][j+1]=this.seed[i][j]; nextVar[i-1][j+1]=this.varGrid[i][j];
+                                } else {
+                                    nextType[i+1][j+1]=TYPE.SAND; nextSeed[i+1][j+1]=this.seed[i][j]; nextVar[i+1][j+1]=this.varGrid[i][j];
+                                }
+                            } else if(leftEmpty){
+                                nextType[i-1][j+1]=TYPE.SAND; nextSeed[i-1][j+1]=this.seed[i][j]; nextVar[i-1][j+1]=this.varGrid[i][j];
+                            } else if(rightEmpty){
+                                nextType[i+1][j+1]=TYPE.SAND; nextSeed[i+1][j+1]=this.seed[i][j]; nextVar[i+1][j+1]=this.varGrid[i][j];
+                            } else {
+                                if(nextType[i][j]===TYPE.EMPTY){
+                                    nextType[i][j]=TYPE.SAND; nextSeed[i][j]=this.seed[i][j]; nextVar[i][j]=this.varGrid[i][j];
+                                }
+                            }
                         }
-                    } else { if(nextType[i][j]===0){ nextType[i][j]=1; nextSeed[i][j]=this.seed[i][j]; nextVar[i][j]=this.varGrid[i][j]; } }
-                } else if(t===2){ // water
+                    } else {
+                        if(nextType[i][j]===TYPE.EMPTY){ nextType[i][j]=TYPE.SAND; nextSeed[i][j]=this.seed[i][j]; nextVar[i][j]=this.varGrid[i][j]; }
+                    }
+                } else if(t===TYPE.WATER){ // water
                     let moved = false;
                     const copy = (sx,sy,tx,ty)=>{ nextHue[tx][ty]=this.hue[sx][sy]; nextSat[tx][ty]=this.sat[sx][sy]; nextBri[tx][ty]=this.bri[sx][sy]; nextPhase[tx][ty]=this.phase[sx][sy]; };
-                    if(j < this.rows-1 && this.type[i][j+1]===0 && nextType[i][j+1]===0){ nextType[i][j+1]=2; copy(i,j,i,j+1); moved=true; }
+                    if(j < this.rows-1 && this.type[i][j+1]===TYPE.EMPTY && nextType[i][j+1]===TYPE.EMPTY){ nextType[i][j+1]=TYPE.WATER; copy(i,j,i,j+1); moved=true; }
                     else {
                         let dirs = (random()<0.5)?[-1,1]:[1,-1];
-                        for(let d of dirs){ let ni=i+d; if(ni<0||ni>=this.cols) continue; if(j < this.rows-1 && this.type[ni][j+1]===0 && nextType[ni][j+1]===0){ nextType[ni][j+1]=2; copy(i,j,ni,j+1); moved=true; break;} if(this.type[ni][j]===0 && nextType[ni][j]===0){ nextType[ni][j]=2; copy(i,j,ni,j); moved=true; break;} }
+                        for(let d of dirs){ let ni=i+d; if(ni<0||ni>=this.cols) continue; if(j < this.rows-1 && this.type[ni][j+1]===TYPE.EMPTY && nextType[ni][j+1]===TYPE.EMPTY){ nextType[ni][j+1]=TYPE.WATER; copy(i,j,ni,j+1); moved=true; break;} if(this.type[ni][j]===TYPE.EMPTY && nextType[ni][j]===TYPE.EMPTY){ nextType[ni][j]=TYPE.WATER; copy(i,j,ni,j); moved=true; break;} }
                     }
-                    if(!moved && nextType[i][j]===0){ nextType[i][j]=2; nextHue[i][j]=this.hue[i][j]; nextSat[i][j]=this.sat[i][j]; nextBri[i][j]=this.bri[i][j]; nextPhase[i][j]=this.phase[i][j]; }
-                } else if(t===3){ // fire (not implemented in rendering or spawning logic yet)
+                    if(!moved && nextType[i][j]===TYPE.EMPTY){ nextType[i][j]=TYPE.WATER; nextHue[i][j]=this.hue[i][j]; nextSat[i][j]=this.sat[i][j]; nextBri[i][j]=this.bri[i][j]; nextPhase[i][j]=this.phase[i][j]; }
+                } else if(t===TYPE.FIRE){ // fire (not implemented in rendering or spawning logic yet)
                     // Example logic for fire particle (could rise up and then disappear)
-                    if(j > 0 && this.type[i][j-1]===0 && nextType[i][j-1]===0){ nextType[i][j-1]=3; nextSeed[i][j-1]=this.seed[i][j]; nextVar[i][j-1]=this.varGrid[i][j]; }
-                    else if(nextType[i][j]===0){ nextType[i][j]=3; nextSeed[i][j]=this.seed[i][j]; nextVar[i][j]=this.varGrid[i][j]; }
+                    if(j > 0 && this.type[i][j-1]===TYPE.EMPTY && nextType[i][j-1]===TYPE.EMPTY){ nextType[i][j-1]=TYPE.FIRE; nextSeed[i][j-1]=this.seed[i][j]; nextVar[i][j-1]=this.varGrid[i][j]; }
+                    else if(nextType[i][j]===TYPE.EMPTY){ nextType[i][j]=TYPE.FIRE; nextSeed[i][j]=this.seed[i][j]; nextVar[i][j]=this.varGrid[i][j]; }
                 }
             }
         }
@@ -140,7 +155,7 @@ class ParticleSim {
                 const p = this.type[i][j];
 
                 // ADD RENDERING LOGIC HERE
-                if(p===1){
+                if(p===TYPE.SAND){
                     // smooth time-based cycle between sandA and sandB with per-particle phase offset
                     const globalT = (frameCount % colorCycle) / colorCycle;
                     const seed = (this.seed[i][j] != null) ? this.seed[i][j] : 0.5;
@@ -151,7 +166,7 @@ class ParticleSim {
                     const mix = constrain(triangle * 0.9 + seed * 0.1 + jitter, 0, 1);
                     const c = lerpColor(sandA, sandB, mix);
                     fill(c); rect(i * this.w, j * this.w, this.w, this.w);
-                } else if(p===2){
+                } else if(p===TYPE.WATER){
                     const baseHue = (this.hue[i][j] != null) ? this.hue[i][j] : (window._waterHueBase || 200);
                     const baseSat = (this.sat[i][j] != null) ? this.sat[i][j] : (window._waterSat || 80);
                     const baseBri = (this.bri[i][j] != null) ? this.bri[i][j] : (window._waterBri || 90);
@@ -163,7 +178,7 @@ class ParticleSim {
                     const sat = constrain(baseSat + shimmer*2, 0, 100);
                     const bri = constrain(baseBri + shimmer*briAmp, 0, 100);
                     fill(color(hue, sat, bri)); rect(i*this.w, j*this.w, this.w, this.w);
-                } else if(p===3){
+                } else if(p===TYPE.FIRE){
                     // Example rendering for fire particle (not implemented in logic yet)
                     const baseHue = 30; // orange
                     const baseSat = 100;
@@ -204,7 +219,7 @@ function createBrushButtons(){
     sandBtn.style('background-color','#ddd');
 }
 
-function mouseDragged(){ if(mouseButton === LEFT) sim.setCircleAt(mouseX, mouseY, 3, 0.6, currentBrush === 'water', currentBrush === 'fire' ? 'fire' : 'sand'); }
-function mousePressed(){ if(mouseButton === LEFT) sim.setCircleAt(mouseX, mouseY, 3, 0.6, currentBrush === 'water', currentBrush === 'fire' ? 'fire' : 'sand'); }
+function mouseDragged(){ if(mouseButton === LEFT) sim.setCircleAt(mouseX, mouseY, 3, 0.6, currentBrush); }
+function mousePressed(){ if(mouseButton === LEFT) sim.setCircleAt(mouseX, mouseY, 3, 0.6, currentBrush); }
 
-function draw(){ background(0); sim.step(); if(mouseIsPressed && mouseButton===LEFT) sim.setCircleAt(mouseX, mouseY, 3, 0.6, currentBrush === 'water' ? 'water' : 'sand'); sim.render(); }
+function draw(){ background(0); sim.step(); if(mouseIsPressed && mouseButton===LEFT) sim.setCircleAt(mouseX, mouseY, 3, 0.6, currentBrush); sim.render(); }
