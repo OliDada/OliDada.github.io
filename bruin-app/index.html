@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="is">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Brúin</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="stage" aria-label="Brúin app">
+      <section class="app-phone">
+        <header class="brand-header">
+          <h1>Brúin</h1>
+        </header>
+
+        <section class="view active" id="discover" aria-labelledby="discover-title">
+          <div class="page-title">
+            <div>
+              <h2 id="discover-title">Fólk í nágrenninu 👋</h2>
+              <p>Tengdu núna!</p>
+            </div>
+          </div>
+
+          <label class="search">
+            <span>Leita</span>
+            <input id="searchInput" type="search" placeholder="Leita eftir áhugamáli eða nafni">
+          </label>
+
+          <div class="chips" id="discoverChips" aria-label="Áhugamál"></div>
+
+          <div class="people-list" id="peopleList"></div>
+        </section>
+
+        <section class="view" id="events" aria-labelledby="events-title">
+          <div class="page-title row">
+            <div>
+              <h2 id="events-title">Viðburðir 🎉</h2>
+              <p>Komdu með!</p>
+            </div>
+            <button class="create-button" type="button" id="createEvent">+ Búa til</button>
+          </div>
+
+          <div class="filters" aria-label="Síur">
+            <label>
+              Aldur
+              <select id="ageFilter">
+                <option>Allir</option>
+                <option>18-25</option>
+                <option>26-45</option>
+                <option>46+</option>
+              </select>
+            </label>
+            <label>
+              Tegund
+              <select id="typeFilter">
+                <option>Allt</option>
+                <option>Úti</option>
+                <option>Inni</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="event-switch" aria-label="Viðburðayfirlit">
+            <button class="event-mode active" type="button" data-event-mode="all">Allir viðburðir</button>
+            <button class="event-mode" type="button" data-event-mode="mine">Mínir viðburðir</button>
+          </div>
+
+          <div class="event-list" id="eventList"></div>
+        </section>
+
+        <section class="view" id="profile" aria-labelledby="profile-title">
+          <section class="profile-card">
+            <div class="profile-top">
+              <div class="profile-photo">ÓD</div>
+              <div>
+                <h2 id="profile-title">Ólafur Daðason</h2>
+                <p>Reykjavík 📍</p>
+                <small>Meðlimur síðan jan. 2026</small>
+              </div>
+            </div>
+            <div class="profile-stats">
+              <article><strong>12</strong><span>Vinir</span></article>
+              <article><strong>5</strong><span>Sótt</span></article>
+              <article><strong id="joinedCount">0</strong><span>Skráð</span></article>
+            </div>
+          </section>
+
+          <section class="panel">
+            <h2>Áhugamál þín ⭐</h2>
+            <p class="panel-copy">Smelltu á áhugamál til að fjarlægja það.</p>
+            <div class="interest-pills" id="myInterests"></div>
+          </section>
+
+          <section class="panel">
+            <h2>Bæta við fleiri</h2>
+            <div class="add-pills" id="availableInterests"></div>
+            <form class="custom-interest" id="interestForm">
+              <input name="interest" maxlength="24" placeholder="Skrifa eigið áhugamál">
+              <button type="submit">Bæta við</button>
+            </form>
+          </section>
+
+          <section class="panel trust-panel">
+            <h2>Öryggi</h2>
+            <label><span>Staðfestir notendur</span><input type="checkbox" checked></label>
+            <label><span>Má mæta með vini</span><input type="checkbox" checked></label>
+          </section>
+        </section>
+
+        <nav class="bottom-nav" aria-label="Aðalvalmynd">
+          <button class="nav-item active" type="button" data-view="discover"><span>♙</span>Uppgötva</button>
+          <button class="nav-item" type="button" data-view="events"><span>▣</span>Viðburðir</button>
+          <button class="nav-item" type="button" data-view="profile"><span>♙</span>Prófíll</button>
+        </nav>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <section class="modal" id="eventModal" aria-hidden="true">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-head">
+          <div>
+            <h2 id="modalTitle">Búa til viðburð</h2>
+            <p>Hann birtist strax undir mínum viðburðum.</p>
+          </div>
+          <button class="close-button" type="button" id="closeModal" aria-label="Loka">×</button>
+        </div>
+
+        <form id="eventForm" class="event-form">
+          <label>
+            Nafn viðburðar
+            <input name="title" required placeholder="t.d. Gönguferð við Tjörnina">
+          </label>
+          <label>
+            Staður
+            <input name="place" required placeholder="t.d. Hljómskálagarður">
+          </label>
+          <div class="form-grid">
+            <label>
+              Tími
+              <input name="time" required placeholder="Föstudagur · 17:00">
+            </label>
+            <label>
+              Tegund
+              <select name="type">
+                <option>Úti</option>
+                <option>Inni</option>
+              </select>
+            </label>
+          </div>
+          <div class="form-grid">
+            <label>
+              Áhugamál
+              <select name="interest" id="eventInterestSelect"></select>
+            </label>
+          </div>
+          <div class="form-grid">
+            <label>
+              Aldur
+              <select name="age">
+                <option>Allir</option>
+                <option>18-25</option>
+                <option>26-45</option>
+                <option>46+</option>
+              </select>
+            </label>
+            <label>
+              Mynd
+              <select name="image">
+                <option value="walk">Göngur</option>
+                <option value="coffee">Kaffi</option>
+                <option value="games">Spil</option>
+                <option value="golf">Golf</option>
+                <option value="food">Matur</option>
+                <option value="music">Tónlist</option>
+                <option value="photo">Ljósmyndun</option>
+                <option value="yoga">Jóga</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            Lýsing
+            <textarea name="description" rows="3" required placeholder="Stutt lýsing sem lækkar þröskuldinn fyrir nýja þátttakendur."></textarea>
+          </label>
+          <button class="primary submit-button" type="submit">Búa til og skrá mig</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="modal" id="detailModal" aria-hidden="true">
+      <div class="modal-card detail-card" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+        <button class="close-button detail-close" type="button" id="closeDetailModal" aria-label="Loka">×</button>
+        <div id="eventDetail"></div>
+      </div>
+    </section>
+    <script src="app.js"></script>
+  </body>
+</html>
