@@ -93,6 +93,8 @@ let events = [
     image: "coffee",
     interests: ["Ljósmyndun", "Kaffi"],
     description: "Stuttur og afslappaður hittingur fyrir fólk sem vill taka fyrsta skrefið."
+   ,
+    attendeesList: ["Sigríður Árnadóttir","Jón Þórsson","Emma Jónsdóttir","Kristján Helgason","Diljá Rún","Margrét Líf"]
   },
   {
     id: "ellidaardalur-walk",
@@ -106,6 +108,8 @@ let events = [
     image: "walk",
     interests: ["Göngur", "Útivist"],
     description: "Létt ganga, hópstjóri á staðnum og allir kynna sig í byrjun."
+   ,
+    attendeesList: ["Emma Jónsdóttir","Sigríður Árnadóttir","Kristján Helgason","Margrét Líf","Jón Þórsson","Diljá Rún","Unknown Person","Another Person","Someone Else"]
   },
   {
     id: "hr-games",
@@ -119,6 +123,8 @@ let events = [
     image: "games",
     interests: ["Spil", "Kaffi"],
     description: "Borðspil, teymi og engin krafa um að þekkja neinn fyrirfram."
+   ,
+    attendeesList: ["Jón Þórsson","Emma Jónsdóttir","Sigríður Árnadóttir","Someone Else"]
   },
   {
     id: "golf-coffee",
@@ -132,6 +138,8 @@ let events = [
     image: "golf",
     interests: ["Golf", "Kaffi"],
     description: "Byrjendavænn hittingur með sameiginlegu kaffi eftir æfingu."
+   ,
+    attendeesList: ["Kristján Helgason","Margrét Líf"]
   },
   {
     id: "photo-harbor",
@@ -145,6 +153,8 @@ let events = [
     image: "photo",
     interests: ["Ljósmyndun", "Göngur"],
     description: "Róleg myndaganga þar sem allir velja eina uppáhaldsmynd í lokin."
+   ,
+    attendeesList: ["Sigríður Árnadóttir","Emma Jónsdóttir","Diljá Rún","Someone Else"]
   },
   {
     id: "soup-stories",
@@ -158,6 +168,8 @@ let events = [
     image: "food",
     interests: ["Matargerð", "Spjall"],
     description: "Hádegishittingur með einfaldri dagskrá og borði fráteknu fyrir hópinn."
+   ,
+    attendeesList: ["Margrét Líf","Kristján Helgason"]
   },
   {
     id: "music-listening",
@@ -171,6 +183,8 @@ let events = [
     image: "music",
     interests: ["Tónlist", "Kaffi"],
     description: "Allir koma með eitt lag og segja stutt frá því af hverju það skiptir máli."
+   ,
+    attendeesList: ["Jón Þórsson","Emma Jónsdóttir","Sigríður Árnadóttir","Someone Else","Another Person"]
   },
   {
     id: "morning-yoga",
@@ -184,6 +198,8 @@ let events = [
     image: "yoga",
     interests: ["Jóga", "Kaffi"],
     description: "Mjúk byrjun á deginum, engin reynsla nauðsynleg og kaffi eftir tímann."
+   ,
+    attendeesList: ["Emma Jónsdóttir","Diljá Rún","Margrét Líf"]
   }
 ];
 
@@ -210,6 +226,7 @@ let myInterests = JSON.parse(localStorage.getItem("bruinMyInterests") || '["Gön
 myInterests.forEach((interest) => {
   if (!allInterests.includes(interest)) allInterests.push(interest);
 });
+let myFriends = JSON.parse(localStorage.getItem("bruinFriends") || '[]');
 
 const tabs = document.querySelectorAll(".nav-item");
 const views = document.querySelectorAll(".view");
@@ -228,8 +245,13 @@ const eventInterestSelect = document.querySelector("#eventInterestSelect");
 const myInterestsList = document.querySelector("#myInterests");
 const availableInterestsList = document.querySelector("#availableInterests");
 const interestForm = document.querySelector("#interestForm");
-const detailModal = document.querySelector("#detailModal");
-const eventDetail = document.querySelector("#eventDetail");
+const eventDetailViewContent = document.getElementById('eventDetailViewContent');
+const userViewContent = document.getElementById('userViewContent');
+const backFromEventBtn = document.getElementById('backFromEvent');
+const backFromUserBtn = document.getElementById('backFromUser');
+const friendsCountEl = document.getElementById('friendsCount');
+const attendedCountEl = document.getElementById('attendedCount');
+const joinedEventsList = document.getElementById('joinedEventsList');
 
 tabs.forEach((tab) => {
   tab.addEventListener("click", () => showView(tab.dataset.view));
@@ -260,10 +282,7 @@ document.querySelector("#closeModal").addEventListener("click", closeModal);
 eventModal.addEventListener("click", (event) => {
   if (event.target === eventModal) closeModal();
 });
-document.querySelector("#closeDetailModal").addEventListener("click", closeDetailModal);
-detailModal.addEventListener("click", (event) => {
-  if (event.target === detailModal) closeDetailModal();
-});
+// detail modal removed; navigation uses views instead
 
 eventForm.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -281,6 +300,7 @@ eventForm.addEventListener("submit", (event) => {
     interests: [data.get("interest") || imageLabel(data.get("image"))],
     description: data.get("description").trim(),
     createdByMe: true
+    , attendeesList: [getCurrentUserName() || 'Þú']
   };
 
   events = [newEvent, ...events];
@@ -305,7 +325,7 @@ function renderPeople() {
   });
 
   peopleList.innerHTML = filtered.map((person) => `
-    <article class="person">
+    <article class="person" data-person="${person.name}">
       <div class="person-avatar" aria-hidden="true">${person.initials}</div>
       <div>
         <h3>${person.name}</h3>
@@ -315,14 +335,28 @@ function renderPeople() {
         </div>
         <div class="tags">${person.interests.map((interest) => `<span>${interest}</span>`).join("")}</div>
         <div class="person-actions">
-          <button class="primary" type="button" data-connect="${person.name}">Tengjast ✨</button>
+          <button class="primary" type="button" data-friend-add="${person.name}">${myFriends.includes(person.name) ? 'Vinur' : 'Tengjast ✨'}</button>
         </div>
       </div>
     </article>
   `).join("");
 
-  peopleList.querySelectorAll("[data-connect]").forEach((button) => {
-    button.addEventListener("click", () => showToast(`Beiðni send til ${button.dataset.connect}.`));
+  peopleList.querySelectorAll("[data-friend-add]").forEach((button) => {
+    button.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const name = button.dataset.friendAdd;
+      if (myFriends.includes(name)) {
+        removeFriend(name);
+        button.textContent = 'Tengjast ✨';
+      } else {
+        addFriend(name);
+        button.textContent = 'Vinur';
+      }
+    });
+  });
+
+  peopleList.querySelectorAll("[data-person]").forEach((el) => {
+    el.addEventListener("click", () => openUserView(el.dataset.person));
   });
 }
 
@@ -403,7 +437,15 @@ function renderEvents() {
   const filtered = events.filter((event) => {
     const ageMatch = age === "Allir" || event.age === "Allir" || event.age === age;
     const typeMatch = type === "Allt" || event.type === type;
-    const modeMatch = eventMode === "all" || joinedEvents.has(event.id) || event.createdByMe;
+    let modeMatch;
+    if (eventMode === "all") {
+      modeMatch = true;
+    } else if (eventMode === "mine") {
+      // show only events the user created
+      modeMatch = !!event.createdByMe;
+    } else {
+      modeMatch = true;
+    }
     return ageMatch && typeMatch && modeMatch;
   });
 
@@ -455,21 +497,27 @@ function renderEvents() {
   });
 
   eventList.querySelectorAll("[data-event-card]").forEach((card) => {
-    card.addEventListener("click", () => openDetailModal(card.dataset.eventCard));
+    card.addEventListener("click", () => openEventView(card.dataset.eventCard));
     card.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        openDetailModal(card.dataset.eventCard);
+        openEventView(card.dataset.eventCard);
       }
     });
   });
 }
 
-function openDetailModal(eventId) {
+function openEventView(eventId) {
   const event = events.find((item) => item.id === eventId);
   if (!event) return;
   const joined = joinedEvents.has(event.id);
-  eventDetail.innerHTML = `
+  const attendees = Array.isArray(event.attendeesList) ? event.attendeesList.slice(0, 12) : [];
+  const attendeesHtml = attendees.map((name) => {
+    const initials = name.split(" ").map(n => n[0]).slice(0,2).join("").toUpperCase();
+    return `<button class="chip attendee" type="button" data-attendee="${name}"><span class="person-avatar" aria-hidden="true">${initials}</span> ${name}</button>`;
+  }).join("");
+
+  eventDetailViewContent.innerHTML = `
     <div class="detail-image">
       <img src="${eventImage(event.image)}" alt="">
       <span class="badge">${event.interests[0]}</span>
@@ -485,32 +533,46 @@ function openDetailModal(eventId) {
         <article><span>✓</span><div><strong>Hópstjóri</strong><small>${event.host}</small></div></article>
       </div>
       <div class="tags detail-tags">${event.interests.map((interest) => `<span>${displayInterest(interest)}</span>`).join("")}</div>
+      <div style="margin:12px 0"><strong>Það koma:</strong></div>
+      <div class="chips attendees-list">${attendeesHtml || '<span class="muted">Engir skráðir enn</span>'}</div>
       <button class="primary detail-join ${joined ? "joined" : ""}" type="button" data-detail-join="${event.id}">
         ${joined ? "Afskrá mig" : "Skrá mig á viðburð"}
       </button>
     </div>
   `;
-  detailModal.classList.add("show");
-  detailModal.setAttribute("aria-hidden", "false");
-  eventDetail.querySelector("[data-detail-join]").addEventListener("click", () => {
-    toggleEventJoin(event);
-    openDetailModal(event.id);
+
+  // attach handlers
+  const joinBtn = eventDetailViewContent.querySelector('[data-detail-join]');
+  if (joinBtn) joinBtn.addEventListener('click', () => { toggleEventJoin(event); openEventView(event.id); });
+
+  eventDetailViewContent.querySelectorAll('[data-attendee]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      openUserView(btn.dataset.attendee);
+      e.stopPropagation();
+    });
   });
+
+  // navigate to the event detail view
+  showView('eventDetailView');
 }
 
-function closeDetailModal() {
-  detailModal.classList.remove("show");
-  detailModal.setAttribute("aria-hidden", "true");
-}
+// detail modal removed; no-op
 
 function toggleEventJoin(event) {
+  const me = getCurrentUserName() || "Þú";
+  if (!Array.isArray(event.attendeesList)) event.attendeesList = [];
   if (joinedEvents.has(event.id)) {
     joinedEvents.delete(event.id);
     event.attendees = Math.max(1, event.attendees - 1);
+    // remove user from attendeesList
+    const idx = event.attendeesList.indexOf(me);
+    if (idx !== -1) event.attendeesList.splice(idx, 1);
     showToast(`Þú ert ekki lengur skráð/ur á ${event.title}.`);
   } else {
     joinedEvents.add(event.id);
     event.attendees += 1;
+    // add user to attendeesList if not present
+    if (!event.attendeesList.includes(me)) event.attendeesList.unshift(me);
     showToast(`Þú ert skráð/ur á ${event.title}.`);
   }
   saveState();
@@ -573,6 +635,8 @@ function normalizeInterest(value) {
 function showView(viewName) {
   tabs.forEach((item) => item.classList.toggle("active", item.dataset.view === viewName));
   views.forEach((view) => view.classList.toggle("active", view.id === viewName));
+  // when opening profile, render the friend preview; otherwise ensure friend footer is removed
+  if (viewName === 'profile') renderFriendList();
 }
 
 function openModal() {
@@ -590,10 +654,54 @@ function updateJoinedCount() {
   joinedCount.textContent = joinedEvents.size;
 }
 
+function updateProfileStats() {
+  if (friendsCountEl) friendsCountEl.textContent = myFriends.length;
+  if (attendedCountEl) {
+    // use number of events the user created as 'Sótt' (hosted) when attendance history isn't tracked
+    const hosted = events.filter(e => !!e.createdByMe).length;
+    attendedCountEl.textContent = hosted;
+  }
+  updateJoinedCount();
+}
+
+function renderJoinedEvents() {
+  if (!joinedEventsList) return;
+  const joined = events.filter(e => joinedEvents.has(e.id));
+  if (joined.length === 0) {
+    joinedEventsList.innerHTML = `
+      <div class="empty-state">
+        <strong>Engir skráðir viðburðir</strong>
+        <p>Skráðu þig á viðburð eða skoðaðu alla viðburði.</p>
+        <button type="button" class="create-button" data-view-events>Fara á viðburði</button>
+      </div>
+    `;
+    const btn = joinedEventsList.querySelector('[data-view-events]');
+    if (btn) btn.addEventListener('click', () => showView('events'));
+    return;
+  }
+
+  joinedEventsList.innerHTML = joined.map((event) => `
+    <article class="event-card" data-joined-event="${event.id}">
+      <div class="event-body">
+        <h3>${event.title}</h3>
+        <div class="event-meta"><span>▣ ${event.time}</span><span>⌖ ${event.place}</span></div>
+      </div>
+    </article>
+  `).join('');
+
+  joinedEventsList.querySelectorAll('[data-joined-event]').forEach((el) => {
+    el.addEventListener('click', () => openEventView(el.dataset.joinedEvent));
+  });
+}
+
 function saveState() {
   localStorage.setItem("bruinEvents", JSON.stringify(events));
   localStorage.setItem("bruinJoinedEvents", JSON.stringify([...joinedEvents]));
   localStorage.setItem("bruinMyInterests", JSON.stringify(myInterests));
+  localStorage.setItem("bruinFriends", JSON.stringify(myFriends));
+  // update UI counts
+  updateProfileStats();
+  renderJoinedEvents();
 }
 
 function showToast(message) {
@@ -610,3 +718,283 @@ renderAvailableInterests();
 renderEventInterestOptions();
 updateJoinedCount();
 renderEvents();
+updateProfileStats();
+renderJoinedEvents();
+        
+// ---- Simple client-side login (first-visit) ----
+const loginModal = document.getElementById("loginModal");
+const loginForm = document.getElementById("loginForm");
+const logoutButton = document.getElementById("logoutButton");
+
+function setLogoutVisibility(visible) {
+  if (!logoutButton) return;
+  logoutButton.style.display = visible ? "block" : "none";
+}
+
+function getUser() {
+  try {
+    return JSON.parse(localStorage.getItem("bruinUser"));
+  } catch (e) {
+    return null;
+  }
+}
+
+function getCurrentUserName() {
+  const user = getUser();
+  return user && user.name ? user.name : null;
+}
+
+function addUserToJoinedEvents(userName) {
+  if (!userName) return;
+  let changed = false;
+  joinedEvents.forEach((eventId) => {
+    const ev = events.find(e => e.id === eventId);
+    if (!ev) return;
+    if (!Array.isArray(ev.attendeesList)) ev.attendeesList = [];
+    if (!ev.attendeesList.includes(userName)) {
+      ev.attendeesList.push(userName);
+      ev.attendees = (typeof ev.attendees === 'number' ? ev.attendees : ev.attendeesList.length) + 0;
+      changed = true;
+    }
+  });
+  if (changed) saveState();
+}
+
+function applyUserToUI(user) {
+  if (!user) return;
+  const initialsEl = document.querySelector(".profile-photo");
+  const profileNameEl = document.querySelector("#profile-title");
+  const initials = user.name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
+  if (initialsEl) initialsEl.textContent = initials;
+  if (profileNameEl) profileNameEl.textContent = user.name;
+  setLogoutVisibility(true);
+}
+
+function showLoginModal() {
+  if (!loginModal) return;
+  loginModal.classList.add("show");
+  loginModal.setAttribute("aria-hidden", "false");
+}
+
+function hideLoginModal() {
+  if (!loginModal) return;
+  loginModal.classList.remove("show");
+  loginModal.setAttribute("aria-hidden", "true");
+}
+
+function renderLoginInterests() {
+  const container = document.getElementById("loginInterests");
+  if (!container) return;
+  container.innerHTML = allInterests.map((interest) => `
+    <label class="login-interest">
+      <input type="checkbox" name="interest" value="${interest}">
+      <span>${displayInterest(interest)}</span>
+    </label>
+  `).join("");
+}
+
+if (loginForm) {
+  renderLoginInterests();
+  loginForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const name = (loginForm.elements.username.value || "").trim();
+    if (!name) return;
+    const selected = Array.from(loginForm.querySelectorAll('input[name="interest"]:checked')).map((i) => i.value);
+    if (selected.length === 0) {
+      showToast("Veldu að minnsta kosti eitt áhugamál.");
+      return;
+    }
+
+    // persist user and interests
+      localStorage.setItem("bruinUser", JSON.stringify({ name, interests: selected }));
+      myInterests = selected.slice();
+      // ensure this user appears in any events already marked as joined
+      addUserToJoinedEvents(name);
+      saveState();
+    applyUserToUI({ name });
+    setLogoutVisibility(true);
+    renderDiscoverChips();
+    renderProfileInterests();
+    renderAvailableInterests();
+    renderEventInterestOptions();
+    renderPeople();
+    hideLoginModal();
+    showToast(`Velkomin/n, ${name.split(" ")[0]}!`);
+  });
+}
+
+// ---- Friends and user profiles ----
+// user modal removed; we render into userViewContent and use back button
+
+function renderFriendList() {
+  const container = document.getElementById('friendList');
+  if (!container) return;
+
+  // if profile view is active and no explicit full render requested, show a small preview
+  const profileView = document.getElementById('profile');
+  const profileActive = profileView && profileView.classList.contains('active');
+  const previewLimit = profileActive ? 4 : null;
+
+  if (myFriends.length === 0) {
+    container.innerHTML = '<div class="empty-state"><p>Engir vinir enn — tengstu fólki!</p></div>';
+    return;
+  }
+
+  const limit = previewLimit;
+  const friendsToShow = limit ? myFriends.slice(0, limit) : myFriends.slice();
+  const nodes = friendsToShow.map((name) => {
+    const initials = name.split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase();
+    return `<article class="person" data-person="${name}"><div class="person-avatar">${initials}</div><div><h3>${name}</h3></div></article>`;
+  }).join('');
+
+  container.innerHTML = nodes;
+  container.querySelectorAll('[data-person]').forEach((el) => el.addEventListener('click', () => openUserView(el.dataset.person)));
+
+  // if we're in preview mode and there are more friends, show a "view all" control
+  if (limit && myFriends.length > limit) {
+    const existingFooter = container.parentNode.querySelector('.friend-list-footer');
+    if (existingFooter) existingFooter.remove();
+    const footer = document.createElement('div');
+    footer.className = 'friend-list-footer';
+    footer.style.marginTop = '8px';
+    footer.innerHTML = `<button class="ghost" id="viewAllFriends">Sjá alla vini (${myFriends.length})</button>`;
+    container.parentNode.appendChild(footer);
+    const btn = footer.querySelector('#viewAllFriends');
+    btn.addEventListener('click', () => {
+      // render full list in place
+      footer.remove();
+      const fullNodes = myFriends.map((name) => {
+        const initials = name.split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase();
+        return `<article class="person" data-person="${name}"><div class="person-avatar">${initials}</div><div><h3>${name}</h3></div></article>`;
+      }).join('');
+      container.innerHTML = fullNodes;
+      container.querySelectorAll('[data-person]').forEach((el) => el.addEventListener('click', () => openUserView(el.dataset.person)));
+      // add a "show less" button
+      const collapse = document.createElement('div');
+      collapse.className = 'friend-list-footer';
+      collapse.style.marginTop = '8px';
+      collapse.innerHTML = `<button class="ghost" id="collapseFriends">Sýna færri</button>`;
+      container.parentNode.appendChild(collapse);
+      collapse.querySelector('#collapseFriends').addEventListener('click', () => {
+        collapse.remove();
+        renderFriendList();
+      });
+    });
+  } else {
+    // remove any existing footer when showing full list or nothing to show
+    const existingFooter = container.parentNode.querySelector('.friend-list-footer');
+    if (existingFooter) existingFooter.remove();
+  }
+}
+
+function openUserView(name) {
+  const person = people.find(p => p.name === name) || { name, initials: name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase(), location: '', interests: [] };
+  const isFriend = myFriends.includes(person.name);
+  userViewContent.innerHTML = `
+    <div style="display:flex;gap:12px;align-items:center;">
+      <div class="person-avatar" style="width:64px;height:64px;border-radius:12px;">${person.initials}</div>
+      <div>
+        <h2 id="userModalTitle">${person.name}</h2>
+        <p style="margin:4px 0;color:var(--muted)">${person.location || ''}</p>
+        <div style="margin-top:8px">${person.interests.map(i=>`<span class="chip">${displayInterest(i)}</span>`).join(' ')}</div>
+      </div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px;">
+      <button class="primary" id="userFriendBtn">${isFriend ? 'Fjarlægja vin' : 'Bæta við vini'}</button>
+    </div>
+  `;
+
+  // Only show the user's joined events if they are a friend
+  if (isFriend) {
+    userViewContent.insertAdjacentHTML('beforeend', `
+      <section style="margin-top:14px;">
+        <h3>Viðburðir sem ${person.name.split(' ')[0]} er skráð/ur á</h3>
+        <div id="userJoinedEvents" class="event-list" style="margin-top:8px"></div>
+      </section>
+    `);
+
+    const userJoinedContainer = document.getElementById('userJoinedEvents');
+    if (userJoinedContainer) {
+      const friendEvents = events.filter(e => Array.isArray(e.attendeesList) && e.attendeesList.includes(person.name));
+      if (friendEvents.length === 0) {
+        userJoinedContainer.innerHTML = '<div class="empty-state"><p>Engir skráðir viðburðir fyrir þennan notanda.</p></div>';
+      } else {
+        userJoinedContainer.innerHTML = friendEvents.map(ev => `
+          <article class="event-card" data-friend-event="${ev.id}">
+            <div class="event-body"><h3>${ev.title}</h3><div class="event-meta"><span>▣ ${ev.time}</span><span>⌖ ${ev.place}</span></div></div>
+          </article>
+        `).join('');
+        userJoinedContainer.querySelectorAll('[data-friend-event]').forEach(el => {
+          el.addEventListener('click', () => openEventView(el.dataset.friendEvent));
+        });
+      }
+    }
+  }
+  document.getElementById('userFriendBtn').addEventListener('click', () => {
+    if (isFriend) {
+      removeFriend(person.name);
+      document.getElementById('userFriendBtn').textContent = 'Bæta við vini';
+    } else {
+      addFriend(person.name);
+      document.getElementById('userFriendBtn').textContent = 'Fjarlægja vin';
+    }
+    renderFriendList();
+    renderPeople();
+  });
+  showView('userView');
+}
+
+// back buttons for new views
+if (backFromEventBtn) backFromEventBtn.addEventListener('click', () => showView('events'));
+if (backFromUserBtn) backFromUserBtn.addEventListener('click', () => showView('discover'));
+
+function addFriend(name) {
+  if (!myFriends.includes(name)) myFriends.push(name);
+  saveState();
+  renderFriendList();
+  showToast(`${name} bætt við sem vin.`);
+}
+
+function removeFriend(name) {
+  myFriends = myFriends.filter(n => n !== name);
+  saveState();
+  renderFriendList();
+  showToast(`${name} fjarlægður úr vinum.`);
+}
+
+
+if (logoutButton) {
+  logoutButton.addEventListener("click", () => {
+    localStorage.removeItem("bruinUser");
+    setLogoutVisibility(false);
+    showLoginModal();
+    showToast("Þú hefur skráð þig út.");
+  });
+}
+
+const existingUser = getUser();
+if (existingUser) {
+  // if the saved user included interests, adopt them
+  if (Array.isArray(existingUser.interests) && existingUser.interests.length > 0) {
+    myInterests = existingUser.interests.slice();
+    saveState();
+  } else {
+    // if there are saved interests in localStorage from older flows, use them
+    const stored = JSON.parse(localStorage.getItem("bruinMyInterests") || 'null');
+    if (Array.isArray(stored) && stored.length > 0) myInterests = stored.slice();
+  }
+  applyUserToUI(existingUser);
+  setLogoutVisibility(true);
+  // make sure the saved user is added to any joined events
+  addUserToJoinedEvents(existingUser.name);
+  renderDiscoverChips();
+  renderProfileInterests();
+  renderAvailableInterests();
+  renderEventInterestOptions();
+  renderFriendList();
+} else {
+  // show login modal on first visit
+  renderLoginInterests();
+  showLoginModal();
+  setLogoutVisibility(false);
+}

@@ -69,18 +69,122 @@ p {
   background: linear-gradient(115deg, var(--purple) 0%, var(--pink) 58%, var(--orange) 100%);
 }
 
+/* logout shown in profile view only */
+.profile-logout {
+  display: block;
+  margin: 12px 18px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  border: 0;
+  font-weight: 800;
+}
+.profile-logout:hover {
+  background: #fbf7ff;
+}
+
 .brand-header h1 {
   margin: 0;
   font-size: 1.42rem;
   letter-spacing: 0;
 }
 
+.brand-header .brand-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  margin-right: 12px;
+  object-fit: contain;
+}
+
+/* Login modal tweaks */
+.modal.auth-modal {
+  align-items: center;
+}
+.modal.auth-modal .modal-card {
+  width: min(92%, 420px);
+  max-width: 420px;
+}
+.modal.auth-modal input[name="username"] {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+/* legacy id removed; using .profile-logout */
+
+/* Login interests */
+.login-interests {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.login-interest {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  background: #fbfbfd;
+  cursor: pointer;
+  font-weight: 800;
+  color: var(--muted);
+}
+.login-interest input {
+  display: none;
+}
+.login-interest span {
+  display: inline-block;
+}
+.login-interest input:checked + span {
+  color: white;
+  background: linear-gradient(115deg, var(--purple), var(--pink));
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+
+/* Full-screen internal views */
+.back-button {
+  border: 0;
+  background: transparent;
+  color: white;
+  font-weight: 800;
+}
+.view#eventDetailView,
+.view#userView {
+  display: none;
+  position: absolute;
+  top: 96px; /* below header */
+  bottom: 66px; /* above bottom nav */
+  left: 12px;
+  right: 12px;
+  z-index: 60; /* ensure above nav and toast */
+  background: white;
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+  box-shadow: 0 20px 40px rgba(20,22,38,0.12);
+  -webkit-backdrop-filter: blur(6px);
+}
+.view.active#eventDetailView,
+.view.active#userView {
+  display: block;
+  will-change: transform, opacity;
+}
+.panel.chips.attendees-list .attendee { cursor: pointer; }
+
 .view {
+  /* Default in-flow views (discover/events/profile) */
   height: calc(100% - 96px);
   display: none;
   overflow-y: auto;
   padding: 20px 16px 84px;
   scrollbar-width: none;
+  position: relative;
 }
 
 .view::-webkit-scrollbar {
@@ -216,6 +320,20 @@ p {
   border-radius: 20px;
   background: white;
   box-shadow: var(--shadow);
+}
+
+/* When rendering full-screen views (event/user) the container already
+   provides a card-like surface. Remove the inner card look for person/
+   profile elements inside those views to avoid a "box within a box". */
+.view#userView .person,
+.view#userView .profile-card,
+.view#eventDetailView .person,
+.view#eventDetailView .profile-card {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
 }
 
 .person {
