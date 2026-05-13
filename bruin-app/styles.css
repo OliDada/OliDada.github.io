@@ -224,6 +224,16 @@ p {
   display: block;
 }
 
+/* Make sure the login view leaves extra space above the bottom-nav so
+   form fields and interest chips can be scrolled into view on phones */
+.view#login {
+  padding-bottom: calc(200px + env(safe-area-inset-bottom, 0));
+}
+
+.view#login .panel {
+  padding-bottom: 8px;
+}
+
 .page-title {
   margin-bottom: 14px;
 }

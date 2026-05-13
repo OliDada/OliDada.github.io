@@ -335,6 +335,8 @@ const joinedEventsList = document.getElementById('joinedEventsList');
 const subscribeButton = document.getElementById('subscribeButton');
 const premiumBadgeEl = document.getElementById('premiumBadge');
 
+
+
 // Helper: enable pointer-drag horizontal scrolling on an element (works for touch and mouse)
 function enableDragScroll(el) {
   if (!el) return;
@@ -931,6 +933,23 @@ renderJoinedEvents();
 const loginView = document.getElementById("login");
 const loginForm = document.getElementById("loginForm");
 const logoutButton = document.getElementById("logoutButton");
+
+// Ensure login inputs are visible on focus (useful on mobile when keyboard opens)
+if (loginView) {
+  loginView.addEventListener('focusin', (e) => {
+    const target = /** @type {HTMLElement} */ (e.target);
+    if (!target) return;
+    // Small delay so mobile keyboard can start resizing viewport
+    window.setTimeout(() => {
+      try {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch (err) {
+        // fallback: scroll the view container
+        loginView.scrollTop = Math.max(0, target.offsetTop - 80);
+      }
+    }, 120);
+  });
+}
 
 function setLogoutVisibility(visible) {
   if (!logoutButton) return;
