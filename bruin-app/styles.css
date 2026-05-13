@@ -66,7 +66,7 @@ p {
 }
 
 .brand-header {
-  height: 120px;
+  height: 88px;
   display: flex;
   align-items: center;
   padding: 18px 22px 24px;
@@ -184,7 +184,7 @@ p {
 .view#userView {
   display: none;
   position: absolute;
-  top: 120px; /* below header */
+  top: 88px; /* below header */
   bottom: calc(86px + env(safe-area-inset-bottom, 0)); /* above bottom nav with extra scroll pad */
   left: 0; /* fill full width inside app-phone */
   right: 0;
@@ -204,7 +204,7 @@ p {
 
 .view {
   /* Default in-flow views (discover/events/profile) */
-  height: calc(100% - 120px);
+  height: calc(100% - 88px);
   display: none;
   overflow-y: auto;
   overflow-x: hidden;
@@ -996,7 +996,7 @@ input[type="checkbox"] {
 .modal-card {
   width: min(100%, 390px);
   /* constrain height so the modal doesn't go under the bottom-nav; allow internal scroll */
-  max-height: min(760px, calc(100vh - 120px - env(safe-area-inset-bottom, 0)));
+  max-height: min(760px, calc(100vh - 88px - env(safe-area-inset-bottom, 0)));
   overflow-y: auto;
   border-radius: 24px;
   padding: 18px;
