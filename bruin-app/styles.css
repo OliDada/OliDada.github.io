@@ -101,6 +101,7 @@ p {
 
 /* Login modal tweaks */
 .modal.auth-modal {
+  /* center auth modal so its actions are never hidden behind the bottom nav */
   align-items: center;
 }
 .modal.auth-modal .modal-card {
@@ -832,7 +833,8 @@ input[type="checkbox"] {
   display: none;
   align-items: end;
   justify-content: center;
-  padding: 18px;
+  /* leave extra bottom padding for the fixed bottom-nav and safe-area */
+  padding: 18px 18px calc(18px + 88px + env(safe-area-inset-bottom, 0));
   background: rgba(19, 20, 30, 0.42);
 }
 
@@ -842,12 +844,28 @@ input[type="checkbox"] {
 
 .modal-card {
   width: min(100%, 390px);
-  max-height: min(760px, calc(100vh - 36px));
+  /* constrain height so the modal doesn't go under the bottom-nav; allow internal scroll */
+  max-height: min(760px, calc(100vh - 120px - env(safe-area-inset-bottom, 0)));
   overflow-y: auto;
   border-radius: 24px;
   padding: 18px;
   background: white;
   box-shadow: 0 24px 70px rgba(19, 20, 30, 0.28);
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: calc(24px + env(safe-area-inset-bottom, 0));
+}
+
+/* ensure auth modal centers on narrow viewports (phones) */
+@media (max-width: 420px) {
+  .modal.auth-modal {
+    align-items: center;
+    padding: 18px 18px calc(18px + 24px + env(safe-area-inset-bottom, 0));
+  }
+  .modal-card {
+    width: min(96%, 390px);
+    max-height: calc(100vh - 140px - env(safe-area-inset-bottom, 0));
+    margin-bottom: calc(18px + env(safe-area-inset-bottom, 0));
+  }
 }
 
 .modal-head {

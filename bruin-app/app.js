@@ -1,3 +1,31 @@
+// Application version — increment this when you deploy changes to force clients
+// to clear local cache/storage and cookies. Example: '2026-05-13-1'
+const APP_VERSION = '2026-05-13-1';
+
+// If the stored version differs, reset storage and cookies so clients get a clean state
+try {
+  const storedVersion = localStorage.getItem('bruinAppVersion');
+  if (storedVersion !== APP_VERSION) {
+    // clear storage
+    localStorage.clear();
+    sessionStorage.clear();
+    // clear all cookies for current path/domain
+    document.cookie.split(';').forEach((c) => {
+      const name = c.split('=')[0].trim();
+      if (!name) return;
+      document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+      document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${location.hostname}`;
+    });
+    // mark version so we don't clear again on the same deployed version
+    localStorage.setItem('bruinAppVersion', APP_VERSION);
+    // reload so the app re-initializes with cleared storage
+    location.reload();
+  }
+} catch (e) {
+  // fail silently; do not block app
+  console.warn('Version check failed', e);
+}
+
 const people = [
   {
     name: "Sigríður Árnadóttir",
