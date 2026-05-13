@@ -61,10 +61,10 @@ p {
 }
 
 .brand-header {
-  height: 96px;
+  height: 120px;
   display: flex;
-  align-items: end;
-  padding: 0 22px 24px;
+  align-items: center;
+  padding: 18px 22px 24px;
   color: white;
   background: linear-gradient(115deg, var(--purple) 0%, var(--pink) 58%, var(--orange) 100%);
 }
@@ -116,6 +116,16 @@ p {
   border: 1px solid var(--line);
   background: #fff;
 }
+
+/* Login view (in-flow) tweaks - mirror the modal input sizing when used as a full view */
+.view#login input[name="username"] {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
 /* legacy id removed; using .profile-logout */
 
 /* Login interests */
@@ -127,26 +137,35 @@ p {
 .login-interest {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 0; /* span will provide padding/background */
   border-radius: 999px;
-  padding: 6px 10px;
   border: 1px solid var(--line);
-  background: #fbfbfd;
+  background: transparent;
   cursor: pointer;
   font-weight: 800;
   color: var(--muted);
+  padding: 0;
 }
 .login-interest input {
-  display: none;
+  position: absolute; /* keep accessible but hidden visually */
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  border: 0;
 }
 .login-interest span {
   display: inline-block;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #fbfbfd;
+  color: var(--muted);
 }
 .login-interest input:checked + span {
   color: white;
   background: linear-gradient(115deg, var(--purple), var(--pink));
-  padding: 6px 10px;
-  border-radius: 999px;
 }
 
 /* Full-screen internal views */
@@ -160,10 +179,10 @@ p {
 .view#userView {
   display: none;
   position: absolute;
-  top: 96px; /* below header */
+  top: 120px; /* below header */
   bottom: calc(66px + env(safe-area-inset-bottom, 0)); /* above bottom nav */
-  left: 12px;
-  right: 12px;
+  left: 0; /* fill full width inside app-phone */
+  right: 0;
   z-index: 60; /* ensure above nav and toast */
   background: white;
   border-top-left-radius: 18px;
@@ -337,6 +356,12 @@ p {
   padding: 0;
 }
 
+/* center profile-photo inside user view */
+.view#userView .profile-photo,
+.view#userView .person-avatar {
+  margin: 0 auto;
+}
+
 .person {
   display: grid;
   grid-template-columns: 84px 1fr;
@@ -354,7 +379,8 @@ p {
   border-radius: 50%;
   color: white;
   background: linear-gradient(145deg, #ffb36a, #df3e93 58%, #7639e8);
-  font-size: 1.45rem;
+  object-fit: cover;
+  object-position: center center;
   font-weight: 900;
 }
 
@@ -363,6 +389,16 @@ p {
   height: 100%;
   object-fit: cover;
   display: block;
+  border-radius: inherit;
+}
+
+/* ensure profile-photo images fill and are centered */
+.profile-photo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center;
   border-radius: inherit;
 }
 
@@ -654,6 +690,7 @@ p {
   height: 78px;
   display: grid;
   place-items: center;
+  overflow: hidden;
   border: 4px solid white;
   border-radius: 999px;
   color: white;
@@ -665,7 +702,7 @@ p {
 
 .profile-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1fr;
   gap: 12px;
   margin-top: 18px;
 }

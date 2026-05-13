@@ -12,7 +12,7 @@
       <section class="app-phone">
         <header class="brand-header">
           <img src="assets/bruin_logo.png" alt="Brúin logo" class="brand-logo" width="44" height="44">
-          <h1>Brúin</h1>
+          <h1 class="brand-title">Brúin</h1>
         </header>
 
         <!-- Event detail view (replaces modal) -->
@@ -101,22 +101,18 @@
                 <small>Meðlimur síðan jan. 2026</small>
               </div>
             </div>
-            <div class="profile-stats">
-              <article><strong id="friendsCount">0</strong><span>Vinir</span></article>
-              <article><strong id="attendedCount">0</strong><span>Sótt</span></article>
-              <article><strong id="joinedCount">0</strong><span>Skráð</span></article>
-            </div>
+            <!-- profile stats moved into Vinir panel -->
           </section>
 
           <button id="logoutButton" class="ghost profile-logout" type="button">Skrá út</button>
 
             <section class="panel">
-              <h2>Vinir</h2>
+              <h2>Vinir <small id="friendsCount">0</small></h2>
               <div class="people-list" id="friendList"></div>
             </section>
 
             <section class="panel">
-              <h2>Skráð viðburðir</h2>
+              <h2>Skráðir viðburðir</h2>
               <p class="panel-copy">Viðburðir sem þú hefur skráð þig á.</p>
               <div class="event-list" id="joinedEventsList"></div>
             </section>
@@ -136,11 +132,7 @@
             </form>
           </section>
 
-          <section class="panel trust-panel">
-            <h2>Öryggi</h2>
-            <label><span>Staðfestir notendur</span><input type="checkbox" checked></label>
-            <label><span>Má mæta með vini</span><input type="checkbox" checked></label>
-          </section>
+          <!-- Removed Öryggi panel per request -->
           <section class="panel subscription-panel">
             <h2>Áskrift</h2>
             <p class="panel-copy">Gerðu reynsluna betri með Brúin Premium.</p>
@@ -155,6 +147,33 @@
           </section>
         </section>
         
+
+        <!-- Login view: full-screen like other views (replaces previous modal) -->
+        <section class="view" id="login" aria-labelledby="loginTitle">
+          <div class="page-title">
+            <div>
+              <h2 id="loginTitle">Innskráning</h2>
+              <p>Velkomin/n! Skráðu þig inn til að halda áfram.</p>
+            </div>
+          </div>
+          <div class="panel">
+            <form id="loginForm">
+              <label>
+                Nafn
+                <input name="username" required placeholder="Hvað heitir þú?">
+              </label>
+
+              <div class="login-interests-wrapper">
+                <p style="margin:10px 0 6px;font-weight:800;color:var(--muted)">Veldu áhugamál (a.m.k. 1)</p>
+                <div class="login-interests" id="loginInterests" aria-live="polite"></div>
+              </div>
+
+              <div style="display:flex;gap:8px;margin-top:12px;">
+                <button class="primary" type="submit">Skrá inn</button>
+              </div>
+            </form>
+          </div>
+        </section>
 
         <nav class="bottom-nav" aria-label="Aðalvalmynd">
           <button class="nav-item active" type="button" data-view="discover"><span>♙</span>Uppgötva</button>
@@ -241,31 +260,17 @@
     </section>
 
     
-    <section class="modal auth-modal" id="loginModal" aria-hidden="true">
-      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
-        <div class="modal-head">
-          <div>
-            <h2 id="loginTitle">Innskráning</h2>
-            <p>Velkomin/n! Skráðu þig inn til að halda áfram.</p>
-          </div>
-        </div>
-        <form id="loginForm">
-          <label>
-            Heiti
-            <input name="username" required placeholder="Skrifaðu nafn þitt">
-          </label>
-
-          <div class="login-interests-wrapper">
-            <p style="margin:10px 0 6px;font-weight:800;color:var(--muted)">Veldu áhugamál (a.m.k. 1)</p>
-            <div class="login-interests" id="loginInterests" aria-live="polite"></div>
-          </div>
-
-          <div style="display:flex;gap:8px;margin-top:12px;">
-            <button class="primary" type="submit">Skrá inn</button>
-          </div>
-        </form>
-      </div>
-    </section>
-    <script src="app.js"></script>
+    
+    <script>
+      // Build/version used to bust cache for critical app script.
+      // Update this string when you deploy a new version to force clients to fetch latest files.
+      window.BRUIN_BUILD = '2026-05-13-1';
+      (function() {
+        var s = document.createElement('script');
+        s.src = 'app.js?v=' + window.BRUIN_BUILD;
+        s.defer = true;
+        document.body.appendChild(s);
+      })();
+    </script>
   </body>
 </html>

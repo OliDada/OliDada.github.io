@@ -316,7 +316,6 @@ const eventList = document.querySelector("#eventList");
 const searchInput = document.querySelector("#searchInput");
 const ageFilter = document.querySelector("#ageFilter");
 const typeFilter = document.querySelector("#typeFilter");
-const joinedCount = document.querySelector("#joinedCount");
 const toast = document.querySelector("#toast");
 const eventModes = document.querySelectorAll(".event-mode");
 const eventModal = document.querySelector("#eventModal");
@@ -330,7 +329,6 @@ const userViewContent = document.getElementById('userViewContent');
 const backFromEventBtn = document.getElementById('backFromEvent');
 const backFromUserBtn = document.getElementById('backFromUser');
 const friendsCountEl = document.getElementById('friendsCount');
-const attendedCountEl = document.getElementById('attendedCount');
 const joinedEventsList = document.getElementById('joinedEventsList');
 const subscribeButton = document.getElementById('subscribeButton');
 const premiumBadgeEl = document.getElementById('premiumBadge');
@@ -750,16 +748,12 @@ function closeModal() {
 }
 
 function updateJoinedCount() {
-  joinedCount.textContent = joinedEvents.size;
+  const el = document.getElementById('joinedCount');
+  if (el) el.textContent = joinedEvents.size;
 }
 
 function updateProfileStats() {
   if (friendsCountEl) friendsCountEl.textContent = myFriends.length;
-  if (attendedCountEl) {
-    // use number of events the user created as 'Sótt' (hosted) when attendance history isn't tracked
-    const hosted = events.filter(e => !!e.createdByMe).length;
-    attendedCountEl.textContent = hosted;
-  }
   updateJoinedCount();
 }
 
@@ -827,7 +821,7 @@ updateProfileStats();
 renderJoinedEvents();
         
 // ---- Simple client-side login (first-visit) ----
-const loginModal = document.getElementById("loginModal");
+const loginView = document.getElementById("login");
 const loginForm = document.getElementById("loginForm");
 const logoutButton = document.getElementById("logoutButton");
 
@@ -878,21 +872,26 @@ function applyUserToUI(user) {
     const stored = JSON.parse(localStorage.getItem('bruinUser') || 'null');
     const isPremium = stored && stored.premium;
     if (premiumBadgeEl) premiumBadgeEl.style.display = isPremium ? 'inline-block' : 'none';
+    // update subscribe button text
+    if (subscribeButton) subscribeButton.textContent = isPremium ? 'Hætta í Premium' : 'Gerast Premium';
   } catch (e) {
     if (premiumBadgeEl) premiumBadgeEl.style.display = 'none';
+    if (subscribeButton) subscribeButton.textContent = 'Gerast Premium';
   }
 }
 
 function showLoginModal() {
-  if (!loginModal) return;
-  loginModal.classList.add("show");
-  loginModal.setAttribute("aria-hidden", "false");
+  // open the login view like other views
+  if (!loginView) return;
+  showView('login');
+  // focus the username field if present
+  const input = loginView.querySelector('input[name="username"]');
+  if (input) input.focus();
 }
 
 function hideLoginModal() {
-  if (!loginModal) return;
-  loginModal.classList.remove("show");
-  loginModal.setAttribute("aria-hidden", "true");
+  // after successful login, navigate to main discover view
+  showView('discover');
 }
 
 function renderLoginInterests() {
@@ -921,6 +920,9 @@ if (loginForm) {
     // persist user and interests
       localStorage.setItem("bruinUser", JSON.stringify({ name, interests: selected }));
       myInterests = selected.slice();
+      // clear friends for new user
+      myFriends = [];
+      localStorage.setItem('bruinFriends', JSON.stringify(myFriends));
       // ensure this user appears in any events already marked as joined
       addUserToJoinedEvents(name);
       saveState();
@@ -945,10 +947,17 @@ if (subscribeButton) {
       showLoginModal();
       return;
     }
-    user.premium = true;
+    // toggle premium
+    user.premium = !user.premium;
     localStorage.setItem('bruinUser', JSON.stringify(user));
     applyUserToUI(user);
-    showToast('Takk! Þú ert nú Premium.');
+    if (user.premium) {
+      subscribeButton.textContent = 'Hætta í Premium';
+      showToast('Takk! Þú ert nú Premium.');
+    } else {
+      subscribeButton.textContent = 'Gerast Premium';
+      showToast('Þú hefur hætt í Premium.');
+    }
   });
 }
 
@@ -973,7 +982,9 @@ function renderFriendList() {
   const friendsToShow = limit ? myFriends.slice(0, limit) : myFriends.slice();
   const nodes = friendsToShow.map((name) => {
     const initials = name.split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase();
-    return `<article class="person" data-person="${name}"><div class="person-avatar">${initials}</div><div><h3>${name}</h3></div></article>`;
+    const personObj = people.find(p => p.name === name);
+    const avatar = personObj && personObj.image ? `<div class="person-avatar"><img src="${personObj.image}" alt="${name}"></div>` : `<div class="person-avatar">${initials}</div>`;
+    return `<article class="person" data-person="${name}">${avatar}<div><h3>${name}</h3></div></article>`;
   }).join('');
 
   container.innerHTML = nodes;
@@ -994,7 +1005,9 @@ function renderFriendList() {
       footer.remove();
       const fullNodes = myFriends.map((name) => {
         const initials = name.split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase();
-        return `<article class="person" data-person="${name}"><div class="person-avatar">${initials}</div><div><h3>${name}</h3></div></article>`;
+        const personObj = people.find(p => p.name === name);
+        const avatar = personObj && personObj.image ? `<div class="person-avatar"><img src="${personObj.image}" alt="${name}"></div>` : `<div class="person-avatar">${initials}</div>`;
+        return `<article class="person" data-person="${name}">${avatar}<div><h3>${name}</h3></div></article>`;
       }).join('');
       container.innerHTML = fullNodes;
       container.querySelectorAll('[data-person]').forEach((el) => el.addEventListener('click', () => openUserView(el.dataset.person)));
@@ -1020,17 +1033,21 @@ function openUserView(name) {
   const person = people.find(p => p.name === name) || { name, initials: name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase(), location: '', interests: [] };
   const isFriend = myFriends.includes(person.name);
   userViewContent.innerHTML = `
-    <div style="display:flex;gap:12px;align-items:center;">
-      <div class="person-avatar" style="width:64px;height:64px;border-radius:50%;">${person.image ? `<img src="${person.image}" alt="${person.name}" style="width:64px;height:64px;object-fit:cover;border-radius:50%">` : person.initials}</div>
-      <div>
-        <h2 id="userModalTitle">${person.name}</h2>
-        <p style="margin:4px 0;color:var(--muted)">${person.location || ''}</p>
-        <div style="margin-top:8px">${person.interests.map(i=>`<span class="chip">${displayInterest(i)}</span>`).join(' ')}</div>
+    <section class="profile-card" style="padding-top:14px;padding-bottom:12px;">
+      <div class="profile-top" style="flex-direction:column;align-items:center;gap:10px;text-align:center;padding-bottom:6px">
+        <div class="profile-photo" style="width:92px;height:92px;">
+          ${person.image ? `<img src="${person.image}" alt="${person.name}">` : `<span style="font-size:1.4rem;font-weight:900">${person.initials}</span>`}
+        </div>
+        <div>
+          <h2 id="userModalTitle">${person.name}</h2>
+          <p style="margin:4px 0;color:var(--muted)">${person.location || ''}</p>
+          <div style="margin-top:8px">${person.interests.map(i=>`<span class="chip">${displayInterest(i)}</span>`).join(' ')}</div>
+        </div>
       </div>
-    </div>
-    <div style="margin-top:14px;display:flex;gap:8px;">
-      <button class="primary" id="userFriendBtn">${isFriend ? 'Fjarlægja vin' : 'Bæta við vini'}</button>
-    </div>
+      <div style="display:flex;justify-content:center;margin-top:6px">
+        <button class="primary" id="userFriendBtn">${isFriend ? 'Fjarlægja vin' : 'Bæta við vini'}</button>
+      </div>
+    </section>
   `;
 
   // Only show the user's joined events if they are a friend
@@ -1062,13 +1079,13 @@ function openUserView(name) {
   document.getElementById('userFriendBtn').addEventListener('click', () => {
     if (isFriend) {
       removeFriend(person.name);
-      document.getElementById('userFriendBtn').textContent = 'Bæta við vini';
     } else {
       addFriend(person.name);
-      document.getElementById('userFriendBtn').textContent = 'Fjarlægja vin';
     }
+    // re-open the user view to refresh content (joined events appear for friends)
     renderFriendList();
     renderPeople();
+    openUserView(person.name);
   });
   showView('userView');
 }
@@ -1094,8 +1111,15 @@ function removeFriend(name) {
 
 if (logoutButton) {
   logoutButton.addEventListener("click", () => {
+    // clear current user and reset per-user state (friends should not carry over)
     localStorage.removeItem("bruinUser");
+    myFriends = [];
+    localStorage.setItem('bruinFriends', JSON.stringify(myFriends));
+    renderFriendList();
     setLogoutVisibility(false);
+    // reset subscribe button and premium badge
+    if (subscribeButton) subscribeButton.textContent = 'Gerast Premium';
+    if (premiumBadgeEl) premiumBadgeEl.style.display = 'none';
     showLoginModal();
     showToast("Þú hefur skráð þig út.");
   });
