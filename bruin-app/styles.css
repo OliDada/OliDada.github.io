@@ -160,7 +160,7 @@ p {
   display: none;
   position: absolute;
   top: 96px; /* below header */
-  bottom: 66px; /* above bottom nav */
+  bottom: calc(66px + env(safe-area-inset-bottom, 0)); /* above bottom nav */
   left: 12px;
   right: 12px;
   z-index: 60; /* ensure above nav and toast */
@@ -182,7 +182,7 @@ p {
   height: calc(100% - 96px);
   display: none;
   overflow-y: auto;
-  padding: 20px 16px 84px;
+  padding: 20px 16px calc(84px + env(safe-area-inset-bottom, 0));
   scrollbar-width: none;
   position: relative;
 }
@@ -767,16 +767,17 @@ input[type="checkbox"] {
 }
 
 .bottom-nav {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 90;
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: env(safe-area-inset-bottom, 0);
+  z-index: 999;
+  width: min(100%, 390px);
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   border-top: 1px solid var(--line);
-  border-radius: 22px 22px 0 0;
-  background: rgba(255, 255, 255, 0.94);
+  border-radius: 22px 22px 12px 12px;
+  background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 -12px 28px rgba(39, 39, 58, 0.08);
   backdrop-filter: blur(14px);
 }
