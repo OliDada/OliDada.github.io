@@ -158,10 +158,23 @@ p {
 @media (max-width: 420px) {
   .login-row {
     flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
   }
   .login-submit .primary {
     padding: 0 12px;
   }
+}
+
+/* allow the input to shrink properly inside a flex row */
+.login-name {
+  min-width: 0;
+}
+.login-name input {
+  min-width: 0;
+}
+.login-submit .primary {
+  white-space: nowrap;
 }
 /* legacy id removed; using .profile-logout */
 
