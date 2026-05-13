@@ -1023,24 +1023,24 @@ input[type="checkbox"] {
    and view top offset so users can scroll up more content on phones. */
 @media (max-width: 420px) {
   .brand-header {
-    height: 96px;
-    padding: 14px 16px 18px;
+    height: 64px;
+    padding: 10px 12px 12px;
   }
 
   .app-phone {
-    height: calc(100vh - 24px);
+    height: calc(100vh - 12px);
     min-height: 0;
   }
 
   .view {
-    height: calc(100% - 96px);
-    padding: 16px 12px calc(100px + env(safe-area-inset-bottom, 0));
+    height: calc(100% - 64px);
+    padding: 12px 12px calc(92px + env(safe-area-inset-bottom, 0));
   }
 
   .view#eventDetailView,
   .view#userView {
-    top: 96px;
-    bottom: calc(78px + env(safe-area-inset-bottom, 0));
+    top: 64px;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0));
   }
 }
 
