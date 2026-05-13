@@ -131,6 +131,38 @@ p {
   border: 1px solid var(--line);
   background: #fff;
 }
+
+/* login row: name input + submit button side-by-side */
+.login-row {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+}
+.login-name {
+  flex: 1 1 auto;
+}
+.login-name input {
+  width: 100%;
+  min-height: 44px;
+}
+.login-submit {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+.login-submit .primary {
+  min-height: 44px;
+  padding: 0 14px;
+}
+
+@media (max-width: 420px) {
+  .login-row {
+    flex-direction: row;
+  }
+  .login-submit .primary {
+    padding: 0 12px;
+  }
+}
 /* legacy id removed; using .profile-logout */
 
 /* Login interests */

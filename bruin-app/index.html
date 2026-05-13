@@ -162,18 +162,19 @@
           </div>
           <div class="panel">
             <form id="loginForm">
-              <label>
-                Nafn
-                <input name="username" required placeholder="Hvað heitir þú?">
-              </label>
+              <div class="login-row">
+                <label class="login-name">
+                  Nafn
+                  <input name="username" required placeholder="Hvað heitir þú?">
+                </label>
+                <div class="login-submit">
+                  <button class="primary" type="submit">Skrá inn</button>
+                </div>
+              </div>
 
               <div class="login-interests-wrapper">
                 <p style="margin:10px 0 6px;font-weight:800;color:var(--muted)">Veldu áhugamál (a.m.k. 1)</p>
                 <div class="login-interests" id="loginInterests" aria-live="polite"></div>
-              </div>
-
-              <div style="display:flex;gap:8px;margin-top:12px;">
-                <button class="primary" type="submit">Skrá inn</button>
               </div>
             </form>
           </div>
