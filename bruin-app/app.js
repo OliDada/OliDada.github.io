@@ -334,7 +334,17 @@ const subscribeButton = document.getElementById('subscribeButton');
 const premiumBadgeEl = document.getElementById('premiumBadge');
 
 tabs.forEach((tab) => {
-  tab.addEventListener("click", () => showView(tab.dataset.view));
+  tab.addEventListener("click", () => {
+    const targetView = tab.dataset.view;
+    // require login for all views except the login view itself
+    const user = getUser();
+    if (!user && targetView !== 'login') {
+      showToast('Skráðu þig inn til að halda áfram.');
+      showLoginModal();
+      return;
+    }
+    showView(targetView);
+  });
 });
 
 eventModes.forEach((button) => {
