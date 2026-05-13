@@ -2,6 +2,7 @@ const people = [
   {
     name: "Sigríður Árnadóttir",
     initials: "SÁ",
+    image: "assets/woman_1.jpeg",
     age: "26-45",
     location: "Reykjavík",
     interests: ["Göngur", "Ljósmyndun", "Kaffi"],
@@ -10,6 +11,7 @@ const people = [
   {
     name: "Jón Þórsson",
     initials: "JÞ",
+    image: "assets/man_1.jpeg",
     age: "46+",
     location: "Kópavogur",
     interests: ["Líkamsrækt", "Matargerð", "Tónlist"],
@@ -18,6 +20,7 @@ const people = [
   {
     name: "Emma Jónsdóttir",
     initials: "EJ",
+    image: "assets/woman_2.jpeg",
     age: "18-25",
     location: "Hafnarfjörður",
     interests: ["Spil", "Kaffi", "Ferðalög"],
@@ -26,6 +29,7 @@ const people = [
   {
     name: "Kristján Helgason",
     initials: "KH",
+    image: "assets/man_2.jpeg",
     age: "46+",
     location: "Garðabær",
     interests: ["Golf", "Kaffi", "Göngur"],
@@ -34,6 +38,7 @@ const people = [
   {
     name: "Diljá Rún",
     initials: "DR",
+    image: "assets/woman_3.jpeg",
     age: "18-25",
     location: "Reykjavík",
     interests: ["Dans", "Tónlist", "Kvikmyndir"],
@@ -42,6 +47,7 @@ const people = [
   {
     name: "Margrét Líf",
     initials: "ML",
+    image: "assets/man_3.jpeg",
     age: "46+",
     location: "Mosfellsbær",
     interests: ["Garðyrkja", "Bóklestur", "Matargerð"],
@@ -219,6 +225,52 @@ const imageThemes = {
   yoga: ["#ffb36d", "#e45ca0", "#553d91", "M82 128 C128 84 146 84 178 124 C210 84 236 82 294 128 L312 168 H62 Z"]
 };
 
+// photo assets pool for activities (used deterministically per event to avoid repeats)
+const activityAssets = [
+  'assets/activity_1.jpg',
+  'assets/activity_2.jpeg',
+  'assets/activity_3.jpeg',
+  'assets/activity_4.jpeg',
+  'assets/activity_5.jpeg',
+  'assets/activity_6.jpg'
+];
+
+// persistent mapping of event.id -> chosen asset to avoid repeats and keep stability
+let eventAssetsMap = JSON.parse(localStorage.getItem('bruinEventAssets') || '{}');
+
+function saveEventAssetsMap() {
+  localStorage.setItem('bruinEventAssets', JSON.stringify(eventAssetsMap));
+}
+
+function ensureEventAssets() {
+  // assign assets to events that don't have one yet; try to maximize unique usage
+  const used = new Set(Object.values(eventAssetsMap));
+  let assetIndex = 0;
+  for (const ev of events) {
+    if (!eventAssetsMap[ev.id]) {
+      // find first unused asset starting from assetIndex
+      let found = null;
+      for (let i = 0; i < activityAssets.length; i++) {
+        const idx = (assetIndex + i) % activityAssets.length;
+        const candidate = activityAssets[idx];
+        if (!used.has(candidate)) {
+          found = candidate;
+          assetIndex = idx + 1;
+          break;
+        }
+      }
+      if (!found) {
+        // all assets used; assign round-robin
+        found = activityAssets[assetIndex % activityAssets.length];
+        assetIndex++;
+      }
+      eventAssetsMap[ev.id] = found;
+      used.add(found);
+    }
+  }
+  saveEventAssetsMap();
+}
+
 let activeInterest = "all";
 let eventMode = "all";
 let joinedEvents = new Set(JSON.parse(localStorage.getItem("bruinJoinedEvents") || '["ellidaardalur-walk","hr-games"]'));
@@ -252,6 +304,8 @@ const backFromUserBtn = document.getElementById('backFromUser');
 const friendsCountEl = document.getElementById('friendsCount');
 const attendedCountEl = document.getElementById('attendedCount');
 const joinedEventsList = document.getElementById('joinedEventsList');
+const subscribeButton = document.getElementById('subscribeButton');
+const premiumBadgeEl = document.getElementById('premiumBadge');
 
 tabs.forEach((tab) => {
   tab.addEventListener("click", () => showView(tab.dataset.view));
@@ -326,7 +380,7 @@ function renderPeople() {
 
   peopleList.innerHTML = filtered.map((person) => `
     <article class="person" data-person="${person.name}">
-      <div class="person-avatar" aria-hidden="true">${person.initials}</div>
+      <div class="person-avatar" aria-hidden="true">${person.image ? `<img src="${person.image}" alt="${person.name}">` : person.initials}</div>
       <div>
         <h3>${person.name}</h3>
         <div class="meta">
@@ -466,7 +520,7 @@ function renderEvents() {
     return `
       <article class="event-card" data-event-card="${event.id}" tabindex="0" role="button" aria-label="Skoða ${event.title}">
         <div class="event-image">
-          <img src="${eventImage(event.image)}" alt="">
+          <img src="${eventImage(event.image, event.id)}" alt="">
           <span class="badge">${event.interests[0]}</span>
           ${event.createdByMe ? '<span class="owner-badge">Þinn</span>' : ""}
         </div>
@@ -519,7 +573,7 @@ function openEventView(eventId) {
 
   eventDetailViewContent.innerHTML = `
     <div class="detail-image">
-      <img src="${eventImage(event.image)}" alt="">
+      <img src="${eventImage(event.image, event.id)}" alt="">
       <span class="badge">${event.interests[0]}</span>
       ${event.createdByMe ? '<span class="owner-badge">Þinn</span>' : ""}
     </div>
@@ -580,7 +634,24 @@ function toggleEventJoin(event) {
   renderEvents();
 }
 
-function eventImage(type) {
+function hashCode(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = (h << 5) - h + str.charCodeAt(i);
+    h |= 0;
+  }
+  return h;
+}
+
+function eventImage(type, id) {
+  // prefer a previously assigned asset for this event
+  if (id && eventAssetsMap[id]) return eventAssetsMap[id];
+  // if no mapping yet, fall back to deterministic hash selection
+  if (id) {
+    const idx = Math.abs(hashCode(id)) % activityAssets.length;
+    return activityAssets[idx];
+  }
+  // fallback: try a photo by type if we had one, otherwise SVG theme
   const [sky, land, dark, path] = imageThemes[type] || imageThemes.walk;
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 190">
@@ -695,10 +766,14 @@ function renderJoinedEvents() {
 }
 
 function saveState() {
+  // ensure we have assigned assets for any new events before saving
+  ensureEventAssets();
   localStorage.setItem("bruinEvents", JSON.stringify(events));
   localStorage.setItem("bruinJoinedEvents", JSON.stringify([...joinedEvents]));
   localStorage.setItem("bruinMyInterests", JSON.stringify(myInterests));
   localStorage.setItem("bruinFriends", JSON.stringify(myFriends));
+  // persist event->asset map
+  saveEventAssetsMap();
   // update UI counts
   updateProfileStats();
   renderJoinedEvents();
@@ -717,6 +792,8 @@ renderProfileInterests();
 renderAvailableInterests();
 renderEventInterestOptions();
 updateJoinedCount();
+// make sure events have assigned images before rendering
+ensureEventAssets();
 renderEvents();
 updateProfileStats();
 renderJoinedEvents();
@@ -768,6 +845,14 @@ function applyUserToUI(user) {
   if (initialsEl) initialsEl.textContent = initials;
   if (profileNameEl) profileNameEl.textContent = user.name;
   setLogoutVisibility(true);
+  // show premium badge if user has premium flag
+  try {
+    const stored = JSON.parse(localStorage.getItem('bruinUser') || 'null');
+    const isPremium = stored && stored.premium;
+    if (premiumBadgeEl) premiumBadgeEl.style.display = isPremium ? 'inline-block' : 'none';
+  } catch (e) {
+    if (premiumBadgeEl) premiumBadgeEl.style.display = 'none';
+  }
 }
 
 function showLoginModal() {
@@ -820,6 +905,22 @@ if (loginForm) {
     renderPeople();
     hideLoginModal();
     showToast(`Velkomin/n, ${name.split(" ")[0]}!`);
+  });
+}
+
+// Subscribe flow: mark current user as premium
+if (subscribeButton) {
+  subscribeButton.addEventListener('click', () => {
+    const user = getUser();
+    if (!user) {
+      showToast('Skráðu þig inn til að gerast Premium.');
+      showLoginModal();
+      return;
+    }
+    user.premium = true;
+    localStorage.setItem('bruinUser', JSON.stringify(user));
+    applyUserToUI(user);
+    showToast('Takk! Þú ert nú Premium.');
   });
 }
 
@@ -892,7 +993,7 @@ function openUserView(name) {
   const isFriend = myFriends.includes(person.name);
   userViewContent.innerHTML = `
     <div style="display:flex;gap:12px;align-items:center;">
-      <div class="person-avatar" style="width:64px;height:64px;border-radius:12px;">${person.initials}</div>
+      <div class="person-avatar" style="width:64px;height:64px;border-radius:50%;">${person.image ? `<img src="${person.image}" alt="${person.name}" style="width:64px;height:64px;object-fit:cover;border-radius:50%">` : person.initials}</div>
       <div>
         <h2 id="userModalTitle">${person.name}</h2>
         <p style="margin:4px 0;color:var(--muted)">${person.location || ''}</p>

@@ -350,11 +350,19 @@ p {
   place-items: center;
   overflow: hidden;
   border: 4px solid #f2e2ff;
-  border-radius: 18px;
+  border-radius: 50%;
   color: white;
   background: linear-gradient(145deg, #ffb36a, #df3e93 58%, #7639e8);
   font-size: 1.45rem;
   font-weight: 900;
+}
+
+.person-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: inherit;
 }
 
 .person h3,
@@ -763,6 +771,7 @@ input[type="checkbox"] {
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: 90;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   border-top: 1px solid var(--line);

@@ -93,7 +93,10 @@
             <div class="profile-top">
               <div class="profile-photo">ÓD</div>
               <div>
-                <h2 id="profile-title">Ólafur Daðason</h2>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <h2 id="profile-title">Ólafur Daðason</h2>
+                  <small id="premiumBadge" style="display:none;color:var(--purple);font-weight:800;background:linear-gradient(115deg,var(--pink),var(--purple));-webkit-background-clip:text;background-clip:text">Premium</small>
+                </div>
                 <p>Reykjavík 📍</p>
                 <small>Meðlimur síðan jan. 2026</small>
               </div>
@@ -137,6 +140,18 @@
             <h2>Öryggi</h2>
             <label><span>Staðfestir notendur</span><input type="checkbox" checked></label>
             <label><span>Má mæta með vini</span><input type="checkbox" checked></label>
+          </section>
+          <section class="panel subscription-panel">
+            <h2>Áskrift</h2>
+            <p class="panel-copy">Gerðu reynsluna betri með Brúin Premium.</p>
+            <ul style="margin:8px 0 0 18px;line-height:1.45;color:var(--muted)">
+              <li>Engar auglýsingar og forgangur á vinsælum viðburðum</li>
+              <li>Sértækar tillögur byggðar á áhugamálum þínum</li>
+              <li>Auka sýnileiki fyrir viðburði sem þú býrð til</li>
+            </ul>
+            <div style="margin-top:12px">
+              <button class="create-button" id="subscribeButton" type="button">Gerast Premium</button>
+            </div>
           </section>
         </section>
         
