@@ -185,7 +185,7 @@ p {
   display: none;
   position: absolute;
   top: 88px; /* below header */
-  bottom: calc(86px + env(safe-area-inset-bottom, 0)); /* above bottom nav with extra scroll pad */
+  bottom: calc(120px + env(safe-area-inset-bottom, 0)); /* above bottom nav with extra scroll pad */
   left: 0; /* fill full width inside app-phone */
   right: 0;
   z-index: 60; /* ensure above nav and toast */
@@ -211,7 +211,7 @@ p {
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
   overscroll-behavior: contain;
-  padding: 20px 16px calc(110px + env(safe-area-inset-bottom, 0));
+  padding: 20px 16px calc(150px + env(safe-area-inset-bottom, 0));
   scrollbar-width: none;
   position: relative;
 }
@@ -1034,13 +1034,13 @@ input[type="checkbox"] {
 
   .view {
     height: calc(100% - 64px);
-    padding: 12px 12px calc(92px + env(safe-area-inset-bottom, 0));
+    padding: 12px 12px calc(132px + env(safe-area-inset-bottom, 0));
   }
 
   .view#eventDetailView,
   .view#userView {
     top: 64px;
-    bottom: calc(72px + env(safe-area-inset-bottom, 0));
+    bottom: calc(112px + env(safe-area-inset-bottom, 0));
   }
 }
 
