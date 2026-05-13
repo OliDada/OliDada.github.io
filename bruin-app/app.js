@@ -321,6 +321,8 @@ const eventModes = document.querySelectorAll(".event-mode");
 const eventModal = document.querySelector("#eventModal");
 const eventForm = document.querySelector("#eventForm");
 const eventInterestSelect = document.querySelector("#eventInterestSelect");
+const eventInterestChips = document.querySelector("#eventInterestChips");
+let activeEventInterest = 'All';
 const myInterestsList = document.querySelector("#myInterests");
 const availableInterestsList = document.querySelector("#availableInterests");
 const interestForm = document.querySelector("#interestForm");
@@ -332,6 +334,51 @@ const friendsCountEl = document.getElementById('friendsCount');
 const joinedEventsList = document.getElementById('joinedEventsList');
 const subscribeButton = document.getElementById('subscribeButton');
 const premiumBadgeEl = document.getElementById('premiumBadge');
+
+// Helper: enable pointer-drag horizontal scrolling on an element (works for touch and mouse)
+function enableDragScroll(el) {
+  if (!el) return;
+  let isDown = false;
+  let startX = 0;
+  let scrollLeft = 0;
+  let moved = false;
+
+  el.addEventListener('pointerdown', (e) => {
+    isDown = true;
+    moved = false;
+    startX = e.clientX;
+    scrollLeft = el.scrollLeft;
+    el.setPointerCapture(e.pointerId);
+  }, { passive: true });
+
+  el.addEventListener('pointermove', (e) => {
+    if (!isDown) return;
+    const dx = startX - e.clientX;
+    if (Math.abs(dx) > 2) moved = true;
+    el.scrollLeft = scrollLeft + dx;
+  }, { passive: true });
+
+  const up = (e) => {
+    if (!isDown) return;
+    isDown = false;
+    try { el.releasePointerCapture && el.releasePointerCapture(e.pointerId); } catch (err) {}
+    // if we moved, prevent click events from firing on the child that started the drag
+    if (moved) {
+      const preventClick = (ev) => { ev.stopImmediatePropagation(); ev.preventDefault(); };
+      // one-time capture: run on next microtask for any click
+      window.setTimeout(() => {
+        el.addEventListener('click', preventClick, { once: true, capture: true });
+      }, 0);
+    }
+  };
+
+  el.addEventListener('pointerup', up, { passive: true });
+  el.addEventListener('pointercancel', up, { passive: true });
+}
+
+// Attach drag-scroll to chips used on Discover and Events
+enableDragScroll(discoverChips);
+enableDragScroll(eventInterestChips);
 
 tabs.forEach((tab) => {
   tab.addEventListener("click", () => {
@@ -450,6 +497,36 @@ function renderPeople() {
   });
 }
 
+function renderEventInterestChips() {
+  if (!eventInterestChips) return;
+  const unique = Array.from(new Set([...(myInterests || []), ...allInterests]));
+  const items = [{ v: 'All', t: 'Allt' }, { v: 'mine-interests', t: 'Mín áhugamál' }].concat(unique.map(i => ({ v: i, t: displayInterest(i) })));
+  const onlyMy = activeEventInterest === 'mine-interests';
+  eventInterestChips.innerHTML = items.map(it => {
+    const isActive = (onlyMy && it.v === 'mine-interests') || (activeEventInterest === it.v);
+    const active = isActive ? 'active' : '';
+    return `<button class="chip ${active}" type="button" data-event-interest="${it.v}">${it.t}</button>`;
+  }).join('');
+
+  // wire chip handlers
+  eventInterestChips.querySelectorAll('[data-event-interest]').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const val = chip.dataset.eventInterest;
+      if (val === 'mine-interests') {
+        // toggle only-my mode
+        activeEventInterest = activeEventInterest === 'mine-interests' ? 'All' : 'mine-interests';
+      } else {
+        // selecting any other chip clears the only-my toggle
+        if (activeEventInterest === val) activeEventInterest = 'All'; else activeEventInterest = val;
+      }
+      renderEventInterestChips();
+      renderEvents();
+    });
+  });
+}
+
+// Note: only-my toggle removed; chips (`mine-interests`) are the single control.
+
 function renderDiscoverChips() {
   const chipInterests = ["all", ...allInterests];
   discoverChips.innerHTML = chipInterests.map((interest) => {
@@ -479,7 +556,7 @@ function renderProfileInterests() {
       saveState();
       renderProfileInterests();
       renderAvailableInterests();
-      renderEventInterestOptions();
+      syncInterestControls();
       showToast(`${displayInterest(removed)} fjarlægt.`);
     });
   });
@@ -503,6 +580,12 @@ function renderEventInterestOptions() {
   `).join("");
 }
 
+// keep the event interest filter in sync with profile interests
+function syncInterestControls() {
+  renderEventInterestOptions();
+  renderEventInterestChips();
+}
+
 function addInterest(interest) {
   if (!allInterests.includes(interest)) {
     allInterests.push(interest);
@@ -517,13 +600,15 @@ function addInterest(interest) {
   renderDiscoverChips();
   renderProfileInterests();
   renderAvailableInterests();
-  renderEventInterestOptions();
+  syncInterestControls();
   showToast(`${displayInterest(interest)} bætt við.`);
 }
 
 function renderEvents() {
   const age = ageFilter.value;
   const type = typeFilter.value;
+  const interestSel = typeof activeEventInterest !== 'undefined' ? activeEventInterest : 'All';
+  const onlyMy = activeEventInterest === 'mine-interests';
   const filtered = events.filter((event) => {
     const ageMatch = age === "Allir" || event.age === "Allir" || event.age === age;
     const typeMatch = type === "Allt" || event.type === type;
@@ -536,7 +621,15 @@ function renderEvents() {
     } else {
       modeMatch = true;
     }
-    return ageMatch && typeMatch && modeMatch;
+    // interest filter: toggle takes precedence
+    let interestMatch = true;
+    if (onlyMy) {
+      interestMatch = Array.isArray(event.interests) && event.interests.some(i => myInterests.includes(i));
+    } else if (interestSel && interestSel !== 'All') {
+      interestMatch = Array.isArray(event.interests) && event.interests.includes(interestSel);
+    }
+
+    return ageMatch && typeMatch && modeMatch && interestMatch;
   });
 
   if (filtered.length === 0) {
@@ -603,8 +696,12 @@ function openEventView(eventId) {
   const joined = joinedEvents.has(event.id);
   const attendees = Array.isArray(event.attendeesList) ? event.attendeesList.slice(0, 12) : [];
   const attendeesHtml = attendees.map((name) => {
+    const personObj = people.find(p => p.name === name);
     const initials = name.split(" ").map(n => n[0]).slice(0,2).join("").toUpperCase();
-    return `<button class="chip attendee" type="button" data-attendee="${name}"><span class="person-avatar" aria-hidden="true">${initials}</span> ${name}</button>`;
+    const avatar = personObj && personObj.image
+      ? `<div class="person-avatar" aria-hidden="true"><img src="${personObj.image}" alt="${name}"></div>`
+      : `<div class="person-avatar" aria-hidden="true">${initials}</div>`;
+    return `<button class="chip attendee" type="button" data-attendee="${name}">${avatar} ${name}</button>`;
   }).join("");
 
   eventDetailViewContent.innerHTML = `
@@ -822,7 +919,7 @@ renderDiscoverChips();
 renderPeople();
 renderProfileInterests();
 renderAvailableInterests();
-renderEventInterestOptions();
+syncInterestControls();
 updateJoinedCount();
 // make sure events have assigned images before rendering
 ensureEventAssets();
@@ -941,7 +1038,7 @@ if (loginForm) {
     renderDiscoverChips();
     renderProfileInterests();
     renderAvailableInterests();
-    renderEventInterestOptions();
+    syncInterestControls();
     renderPeople();
     hideLoginModal();
     showToast(`Velkomin/n, ${name.split(" ")[0]}!`);
@@ -1153,7 +1250,7 @@ if (existingUser) {
   renderDiscoverChips();
   renderProfileInterests();
   renderAvailableInterests();
-  renderEventInterestOptions();
+  syncInterestControls();
   renderFriendList();
 } else {
   // show login modal on first visit

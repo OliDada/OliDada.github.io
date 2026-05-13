@@ -24,6 +24,11 @@ body {
   color: var(--ink);
 }
 
+/* Prevent the whole page from scrolling horizontally when inner elements pan */
+html, body {
+  overflow-x: hidden;
+}
+
 button,
 input,
 select {
@@ -202,6 +207,10 @@ p {
   height: calc(100% - 120px);
   display: none;
   overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
   padding: 20px 16px calc(110px + env(safe-area-inset-bottom, 0));
   scrollbar-width: none;
   position: relative;
@@ -297,12 +306,103 @@ p {
   scrollbar-width: none;
 }
 
+/* Allow horizontal panning only on chips so the page doesn't pan sideways */
+.chips {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+}
+
+/* Improve swipe responsiveness: allow taps on chips while preserving horizontal pan */
+.chips .chip {
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+/* For the interest-filter row specifically ensure horizontal panning */
+.interest-filter-row .chips {
+  touch-action: pan-x;
+}
+
+/* Interest filter row in Events view */
+.interest-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chip.toggle {
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  background: #fbfbfd;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-weight: 850;
+}
+
+.chip.toggle[aria-pressed="true"],
+.chip.toggle.active {
+  color: white;
+  background: linear-gradient(115deg, var(--purple), var(--pink));
+  border: 0;
+  box-shadow: 0 8px 18px rgba(170,57,244,0.16);
+}
+
+.interest-filter-row select {
+  width: 100%;
+  min-height: 40px;
+  border-radius: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  background: #fbfbfd;
+}
+
+/* chips container inside the interest filter row */
+.interest-filter-row .chips {
+  margin: 0;
+  padding: 6px 4px;
+  gap: 6px;
+}
+
+.interest-filter-row .chip {
+  padding: 7px 10px;
+  font-size: 0.78rem;
+}
+
 .chips::-webkit-scrollbar {
   display: none;
 }
 
 .chips .chip {
   flex: 0 0 auto;
+}
+
+/* Ensure attendee chips keep a fixed-size avatar and don't stretch when names are long */
+.chips .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chips .chip .person-avatar {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  display: inline-grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 2px solid #f2e2ff;
+  font-size: 0.72rem;
+}
+
+.chips .chip .person-avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  border-radius: inherit;
 }
 
 .chip,
@@ -414,6 +514,11 @@ p {
   color: var(--muted);
   font-size: 0.82rem;
   line-height: 1.35;
+}
+
+/* Add extra spacing between the meta (location / note) and interest tags in person cards */
+.person .meta {
+  margin-bottom: 12px;
 }
 
 .person-actions,
