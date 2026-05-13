@@ -331,6 +331,15 @@ p {
   gap: 8px;
 }
 
+/* Ensure chips inside the interest filter behave like Discover chips */
+.interest-filter-row .chips {
+  display: flex;
+  overflow-x: auto;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+}
+
 .chip.toggle {
   padding: 8px 12px;
   border-radius: 999px;
@@ -1007,6 +1016,31 @@ input[type="checkbox"] {
     width: min(96%, 390px);
     max-height: calc(100vh - 140px - env(safe-area-inset-bottom, 0));
     margin-bottom: calc(18px + env(safe-area-inset-bottom, 0));
+  }
+}
+
+/* Mobile: increase usable vertical space by slightly reducing header height
+   and view top offset so users can scroll up more content on phones. */
+@media (max-width: 420px) {
+  .brand-header {
+    height: 96px;
+    padding: 14px 16px 18px;
+  }
+
+  .app-phone {
+    height: calc(100vh - 24px);
+    min-height: 0;
+  }
+
+  .view {
+    height: calc(100% - 96px);
+    padding: 16px 12px calc(100px + env(safe-area-inset-bottom, 0));
+  }
+
+  .view#eventDetailView,
+  .view#userView {
+    top: 96px;
+    bottom: calc(78px + env(safe-area-inset-bottom, 0));
   }
 }
 
