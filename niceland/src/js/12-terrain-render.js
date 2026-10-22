@@ -4,10 +4,12 @@
  * Ground colours and the terrain renderer that bakes the ground into cached chunks.
  *
  * Functions: loopOrder, chunkBounds, maxH, fetchF, zcT, hayTh, hayP, surfZ, seaDepth, seaBase, sCol,
- *     sCol0, renderSmooth, renderFine, chunkInF, dAcc, renderDetail, hSmoothF, hSmoothD, treeAt
- * State and constants: RW, RCOL, BLD, GWL, NAT, HU, HV, SR, SG, SB, SM, DRYV, VEG, AT, AH, AC, AB
+ *     sCol0, renderSmooth, renderFine, chunkInF, dAcc, renderDetail, hSmoothF, hSmoothD, treeAt, hillLine,
+ *     hillPt, hillBld, hillTree, clipAboveY, clipAboveLine
+ * State and constants: RW, RCOL, BLD, GWL, NAT, HU, HV, SR, SG, SB, SM, DRYV, VEG, AT, AH, AC, AB, HILL_V
  */
 
+const HILL_V = 0.3; // how much lighter or darker the ground gets on slopes facing towards or away from the camera
 const RW = [0, 16, 12, 10, 8, 6.5, 4, 5, 1.8, 1.8, 18],
   RCOL = [
     [0, 0, 0],
@@ -677,9 +679,13 @@ function renderSmooth(k, X0, Y0, NW, NH, acc, opts) {
       if (!water) {
         const dzx = GX[q] * w00 + GX[q + 1] * w10 + GX[q + MW] * w01 + GX[q + MW + 1] * w11,
           dzy = GY[q] * w00 + GY[q + 1] * w10 + GY[q + MW] * w01 + GY[q + MW + 1] * w11;
+        // light from the left of the screen, and (so hills also read when they rise towards or away from the
+        // camera) slopes that face the camera are lighter and those that face away darker
+        const gv = (dzx * SYx + dzy * SYy) * 1.4142; // rise per metre towards the viewer
         sh =
           1 +
           Math.max(-0.45, Math.min(0.45, (dzx * SXx + dzy * SXy) * 0.7071 * 3.6)) -
+          Math.max(-HILL_V, Math.min(HILL_V, gv * 2.4)) -
           Math.min(0.12, Math.hypot(dzx, dzy) * 0.35);
         sh *= 0.93 + 0.14 * Math.min(1, Math.max(0, z) / 110);
       }
@@ -1029,4 +1035,144 @@ function treeAt(c, sx, sy, k, kind, sd) {
   const sz = k * (0.75 + sd * 0.55);
   const s = treeSprite(kind, sd, sz, false, false);
   c.drawImage(s.cv, sx - s.ax, sy - s.ay);
+}
+
+/* ================= hills in front of things =================
+   Buildings, trees, people and animals are drawn after the ground, so a hill between them and the camera would not
+   hide them. hillLine follows the line of sight from a point on the ground towards the viewer (screen x fixed,
+   rising one metre for every metre of depth) and returns the highest screen row the ground in front of it reaches,
+   in the same units as PYw − z. Whatever is drawn at that point below that row is behind the hill.
+   The search stops once it is past the highest ground in the area, so on flat land it costs a few height samples. */
+const HILL_S = 900; // a high mountain can hide things this far (metres of depth) behind it
+let hlRot = -1,
+  hlDX = 0,
+  hlDY = 1,
+  HLMAX = null,
+  hlBudget = 0; // performance.now() deadline for new checks this frame (cached results are always used)
+const HLB = 3000; // block size of the height-maximum table
+function hlMaxInit() {
+  const bw = Math.ceil((C.W * C.CS) / HLB),
+    bh = Math.ceil((C.H * C.CS) / HLB),
+    m = new Int16Array(bw * bh),
+    per = HLB / C.CS;
+  for (let j = 0; j < C.H; j++)
+    for (let i = 0; i < C.W; i++) {
+      const c = i + j * C.W;
+      if (C.GT[c] === SEA) continue;
+      const q = ((i / per) | 0) + ((j / per) | 0) * bw;
+      if (C.HT[c] > m[q]) m[q] = C.HT[c];
+    }
+  HLMAX = { m, bw, bh };
+}
+function hlMaxIn(x0, y0, x1, y1) {
+  const { m, bw, bh } = HLMAX;
+  const i0 = Math.max(0, Math.floor((Math.min(x0, x1) - C.OX) / HLB)),
+    i1 = Math.min(bw - 1, Math.floor((Math.max(x0, x1) - C.OX) / HLB)),
+    j0 = Math.max(0, Math.floor((Math.min(y0, y1) - C.OY) / HLB)),
+    j1 = Math.min(bh - 1, Math.floor((Math.max(y0, y1) - C.OY) / HLB));
+  let h = 0;
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) if (m[i + j * bw] > h) h = m[i + j * bw];
+  return h + 25; // the 10 m ground adds a little noise above the 300 m grid
+}
+function hillLine(x, y, z, s0) {
+  if (!C) return Infinity;
+  if (!HLMAX) hlMaxInit();
+  if (hlRot !== ROT) {
+    // world step that keeps screen x and adds one metre of depth
+    const det = SXx * SYy - SXy * SYx || 1;
+    hlDX = -SXy / det;
+    hlDY = SXx / det;
+    hlRot = ROT;
+  }
+  let smax = Math.min(HILL_S, hlMaxIn(x, y, x + hlDX * HILL_S, y + hlDY * HILL_S) - z);
+  if (smax <= 1) return Infinity;
+  smax = Math.min(smax, hlMaxIn(x, y, x + hlDX * smax, y + hlDY * smax) - z);
+  const d0 = PYw(x, y);
+  let best = Infinity;
+  for (let s = s0 || 1.5; s <= smax; s += s < 40 ? 2 : s < 150 ? 5 : 12) {
+    const v = d0 + s - hAtFast(x + hlDX * s, y + hlDY * s);
+    if (v < best) best = v;
+  }
+  return best;
+}
+/* a thing at one spot (person, animal, tree, prop): 0 in view, 1 hidden, or the screen row (PYw − z units) the
+   hill in front reaches, when it covers only the lower part. Results are kept on o for a while. */
+function hillPt(o, x, y, z, hgt, frames) {
+  if (o.hlR === ROT && frameNo - o.hlF < frames && Math.abs(o.hlX - x) + Math.abs(o.hlY - y) < 2) return o.hl;
+  if (performance.now() > hlBudget) return o.hlR === ROT ? o.hl : 0;
+  const foot = PYw(x, y) - z,
+    hy = hillLine(x, y, z);
+  o.hlR = ROT;
+  o.hlF = frameNo - ((Math.random() * 8) | 0);
+  o.hlX = x;
+  o.hlY = y;
+  return (o.hl = hy >= foot - 0.4 ? 0 : hy <= foot - hgt ? 1 : hy);
+}
+// trees are indices, not objects: their results live in a small table that is cleared when the view turns
+let HLT = null,
+  hlTRot = -1;
+function hillTree(t, x, y) {
+  if (!HLT || hlTRot !== ROT) {
+    HLT = new Map();
+    hlTRot = ROT;
+  }
+  let o = HLT.get(t);
+  if (!o) {
+    if (HLT.size > 40000) HLT.clear();
+    o = {};
+    HLT.set(t, o);
+  }
+  if (o.hlR === ROT && frameNo - o.hlF < 600) return o.hl;
+  return hillPt(o, x, y, hAtFast(x, y), 9, 600);
+}
+/* a building: the hill line at each corner of the footprint (and the middle), so a ridge can cut across it.
+   0 in view, 1 hidden, or the list of [screen x, row] points to clip above. */
+function hillBld(b) {
+  if (b.hlR === ROT && frameNo - b.hlF < 600) return b.hl;
+  if (performance.now() > hlBudget) return b.hlR === ROT ? b.hl : 0;
+  const P = b.poly,
+    n = b.n,
+    z = b.z,
+    pts = [];
+  let foot = -Infinity,
+    top = Infinity,
+    lo = Infinity,
+    hi = -Infinity;
+  if (b.rr !== ROT) rotB(b);
+  // only ground in front of the whole building counts, not the slope it stands on
+  const add = (x, y) => {
+    const hy = hillLine(x, y, z, Math.max(1.5, b.dMax - PYw(x, y) + 2)),
+      fy = PYw(x, y) - z;
+    if (fy > foot) foot = fy;
+    if (fy < top) top = fy;
+    if (hy < lo) lo = hy;
+    if (hy > hi) hi = hy;
+    pts.push([PXw(x, y), hy]);
+  };
+  for (let j = 0; j < n; j++) add(P[2 * j], P[2 * j + 1]);
+  add(b.cx, b.cy);
+  top -= b.base + b.h + (b.spire || 0) + 8;
+  b.hlR = ROT;
+  b.hlF = frameNo - ((Math.random() * 30) | 0);
+  pts.sort((p, q) => p[0] - q[0]);
+  return (b.hl = lo >= foot - 1 ? 0 : hi <= top ? 1 : pts);
+}
+// clip the canvas to everything above a screen row / above a line through [screen x, row] points (PYw − z units)
+function clipAboveY(c, hy, k, cy) {
+  c.save();
+  c.beginPath();
+  c.rect(-1e4, -1e4, 3e4, hy * k - cy + 1e4);
+  c.clip();
+}
+function clipAboveLine(c, pts, k, cx, cy) {
+  c.save();
+  c.beginPath();
+  c.moveTo(pts[0][0] * k - cx - 400, -1e4);
+  c.lineTo(pts[0][0] * k - cx - 400, pts[0][1] * k - cy);
+  for (const p of pts) c.lineTo(p[0] * k - cx, p[1] * k - cy);
+  const l = pts[pts.length - 1];
+  c.lineTo(l[0] * k - cx + 400, l[1] * k - cy);
+  c.lineTo(l[0] * k - cx + 400, -1e4);
+  c.closePath();
+  c.clip();
 }

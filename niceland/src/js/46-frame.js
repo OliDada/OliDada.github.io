@@ -5,7 +5,7 @@
  *
  * Functions: drawFallback, chunkLists, prefetchPan, prefetchLevel, chunkList, ensure, ensure0, draw,
  *     tintCol, litLayer, drawTownGlow, drawPoolSteam, drawLamps, lavaQuad, drawLava, drawFlood,
- *     drawLabels, drawCompass, drawCursor
+ *     drawLabels, drawCompass, drawCursor, itemHill
  * State and constants: pfLast, pfVel, pending, RT
  */
 
@@ -281,6 +281,23 @@ function ensure0(L, t, i, j) {
   putChunk(L, t, i, j, v);
   return v;
 }
+/* hills in front of a sorted draw item (see hillLine): 0 in view, 1 hidden, or where to clip */
+function itemHill(it) {
+  const t = it[1],
+    o = it[2];
+  if (t === 0) return hillBld(o);
+  if (t === 1) {
+    return hillTree(o, TREES.x[o], TREES.y[o]);
+  }
+  if (t === 2) {
+    if (o === follow || (CTRL && CTRL.a === o) || o.hidden) return 0;
+    return hillPt(o, o.x, o.y, hAt(o.x, o.y) + (o.dz || 0), o.car ? 2.5 : 1.9, 15);
+  }
+  if (t === 3) return hillPt(o, o.x, o.y, o.z || hAt(o.x, o.y), 1.5, 15);
+  if (t === 4) return hillPt(o, o.x, o.y, hAt(o.x, o.y), 4, 600);
+  if (t === 7) return hillPt(o, o.x, o.y, hAt(o.x, o.y), 12, 30);
+  return 0;
+}
 function draw() {
   frameNo++;
   pending = 0;
@@ -450,7 +467,15 @@ function draw() {
     DK = k;
     BAKE = true;
     bsprBudget = performance.now() + 6;
+    hlBudget = performance.now() + 4;
     for (const it of items) {
+      // hills in front: leave out what is behind one, and cut off what is half behind a ridge
+      const hl = itemHill(it);
+      if (hl === 1) continue;
+      if (hl) {
+        if (it[1] === 0) clipAboveLine(ctx, hl, k, cx0, cy0);
+        else clipAboveY(ctx, hl, k, cy0);
+      }
       if (it[1] === 0) drawBldC(it[2], k);
       else if (it[1] === 1) drawTree(ctx, it[2], 1);
       else if (it[1] === 3) drawAnimal(it[2]);
@@ -461,6 +486,7 @@ function draw() {
       else if (it[1] === 8) drawPTower(it[2][0], it[2][1]);
       else if (it[1] === 9) drawExtraTall(it[2]);
       else drawAgent(it[2]);
+      if (hl) ctx.restore();
       DOX = cx0;
       DOY = cy0;
       DK = k;
@@ -500,17 +526,33 @@ function draw() {
       DK = k;
       flames(ctx, b, b.z + b.base + b.h);
     }
+    hlBudget = performance.now() + 3;
     if (k >= 0.27)
       for (const a of agents) {
         if (a.dead || a.hidden || (a.intun && a !== follow)) continue;
-        if (a.car) drawCar(a, hAt(a.x, a.y) + (a.dz || 0));
+        // the buildings are already drawn: leave out whoever is behind one (unless you are following them)
+        const z = hAt(a.x, a.y) + (a.dz || 0),
+          s = sp_(a.x, a.y, z);
+        if (s[0] < -40 || s[0] > VW + 40 || s[1] < -60 || s[1] > VH + 40) continue;
+        if (
+          a !== follow &&
+          !(CTRL && CTRL.a === a) &&
+          (behindBld(a, a.x, a.y, z + (a.car ? 0.8 : 0.9)) || hillPt(a, a.x, a.y, z, 1.7, 15))
+        )
+          continue;
+        if (a.car) drawCar(a, z);
         else {
-          const s = sp_(a.x, a.y, hAt(a.x, a.y) + (a.dz || 0));
           ctx.fillStyle = C_(a.shirt, 1);
           ctx.fillRect(Math.round(s[0]), Math.round(s[1] - 2), 1, 2);
         }
       }
-    if (k >= 0.27) for (const a of animals) if (!a.dead && !a.fly) anDot(a);
+    if (k >= 0.27)
+      for (const a of animals) {
+        if (a.dead || a.fly) continue;
+        const z = a.z || hAt(a.x, a.y);
+        if (behindBld(a, a.x, a.y, z + 0.3) || hillPt(a, a.x, a.y, z, 0.6, 15)) continue;
+        anDot(a);
+      }
   }
   drawLifts();
   drawSkiers();

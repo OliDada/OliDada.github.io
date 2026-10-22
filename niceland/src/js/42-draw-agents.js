@@ -3,10 +3,80 @@
  *
  * How people, cars, ploughs and speech bubbles are drawn.
  *
- * Functions: drawAgent, drawAgent0, drawBubbles, drawPlough, drawCar, headBeam
+ * Functions: drawAgent, drawAgent0, drawBubbles, drawPlough, drawCar, headBeam, behindBld
  * State and constants: BUBBLES, sp_
  */
 
+/* Below the close-up zoom the buildings are baked into cached chunks and everything that moves is drawn on top,
+   so a person walking behind a house would show through it. behindBld says whether a building stands between a
+   point and the camera: follow the line of sight from the point towards the viewer (screen x fixed, depth rising
+   one metre per metre of height) and see whether it passes through a building's walls on the way up.
+   Results are kept on the agent for a few frames, since this runs for every person, car and animal on screen. */
+const OCC_HMAX = 80; // the tallest buildings (Hallgrímskirkja, Smáratorg) are under this
+let occRot = -1,
+  occDX = 0,
+  occDY = 1;
+function behindBld(o, x, y, z) {
+  if (occRot !== ROT) {
+    // world step that keeps screen x and adds one metre of depth
+    const det = SXx * SYy - SXy * SYx || 1;
+    occDX = -SXy / det;
+    occDY = SXx / det;
+    occRot = ROT;
+  }
+  if (o.ocR === ROT && frameNo - o.ocF < 10 && Math.abs(o.ocX - x) + Math.abs(o.ocY - y) < 1.5) return o.oc;
+  o.ocR = ROT;
+  o.ocF = frameNo - ((Math.random() * 4) | 0); // stagger the re-checks
+  o.ocX = x;
+  o.ocY = y;
+  const ex = x + occDX * OCC_HMAX,
+    ey = y + occDY * OCC_HMAX,
+    pad = 40;
+  let hit = false;
+  eachB(
+    BBUCK,
+    Math.min(x, ex) - pad,
+    Math.min(y, ey) - pad,
+    Math.max(x, ex) + pad,
+    Math.max(y, ey) + pad,
+    b => {
+      if (hit || b.state === 2 || b.state === 9 || b.hide) return;
+      const top = b.z + b.base + b.h * (b.prog === undefined ? 1 : b.prog);
+      // heights along the sight line at which it is inside this building's walls
+      const t0 = Math.max(0.3, b.z + b.base - z),
+        t1 = Math.min(OCC_HMAX, top - z);
+      if (t1 <= t0) return;
+      const ax = x + occDX * t0,
+        ay = y + occDY * t0,
+        bx = x + occDX * t1,
+        by = y + occDY * t1;
+      if (
+        Math.max(ax, bx) < b.minx ||
+        Math.min(ax, bx) > b.maxx ||
+        Math.max(ay, by) < b.miny ||
+        Math.min(ay, by) > b.maxy
+      )
+        return;
+      if (pip(b.poly, ax, ay) || pip(b.poly, bx, by) || segHitsPoly(b.poly, ax, ay, bx, by)) hit = true;
+    }
+  );
+  return (o.oc = hit);
+}
+function segHitsPoly(P, ax, ay, bx, by) {
+  const n = P.length / 2;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const cx = P[2 * j],
+      cy = P[2 * j + 1],
+      dx = P[2 * i],
+      dy = P[2 * i + 1];
+    const d1 = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax),
+      d2 = (bx - ax) * (dy - ay) - (by - ay) * (dx - ax),
+      d3 = (dx - cx) * (ay - cy) - (dy - cy) * (ax - cx),
+      d4 = (dx - cx) * (by - cy) - (dy - cy) * (bx - cx);
+    if (d1 * d2 < 0 && d3 * d4 < 0) return true;
+  }
+  return false;
+}
 function drawAgent(a) {
   drawAgent0(a);
   if (a.plough && !a.dead) drawPlough(a);
