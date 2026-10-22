@@ -1,0 +1,5 @@
+tools/data/
+dist/
+tests/out/
+node_modules/
+__pycache__/

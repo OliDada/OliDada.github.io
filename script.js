@@ -241,45 +241,14 @@ async function renderCabinets() {
             const title = document.getElementById('playerTitle');
             const openNewTab = document.getElementById('openNewTab');
             if (player && frame) {
-                player.style.display = 'block';
+                document.body.classList.add('is-playing');
+                player.style.display = '';
                 player.setAttribute('aria-hidden', 'false');
-                const aspectBox = document.getElementById('playerAspectBox');
-                // set aspect based on project metadata if available
-                if (match && match.aspect && aspectBox) {
-                    aspectBox.setAttribute('data-aspect', match.aspect);
-                    const parts = match.aspect.split(':').map(Number);
-                    if (parts.length === 2 && parts[0] > 0) {
-                        const paddingTop = (parts[1] / parts[0]) * 100;
-                        aspectBox.style.paddingTop = paddingTop + '%';
-                    }
-                } else if (aspectBox) {
-                    // fallback: reset to default 16:9 and attempt to probe iframe content later
-                    aspectBox.setAttribute('data-aspect', '16:9');
-                    aspectBox.style.paddingTop = '56.25%';
-                }
-
-                // reset any previous inline sizing applied by earlier games
-                try {
-                    frame.style.width = '';
-                    frame.style.height = '';
-                    frame.style.maxWidth = '';
-                    frame.style.maxHeight = '';
-                    // clear any positioning overrides applied when a previous game used playSize
-                    frame.style.position = '';
-                    frame.style.top = '';
-                    frame.style.left = '';
-                    frame.style.right = '';
-                    frame.style.bottom = '';
-                    if (aspectBox) {
-                        aspectBox.style.height = '';
-                        aspectBox.style.display = '';
-                        aspectBox.style.justifyContent = '';
-                        aspectBox.style.alignItems = '';
-                        // clear any explicit width set for previous playSize
-                        aspectBox.style.width = '';
-                        aspectBox.style.maxWidth = '';
-                    }
-                } catch (e) {}
+                setPlayerFit(fitForProject(match, path));
+                requestAnimationFrame(() => {
+                    fitPlayer();
+                    player.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
 
                 // set iframe src to embed path
                 try {
@@ -325,79 +294,9 @@ async function renderCabinets() {
                     requestAnimationFrame(() => focusIframeAndCanvas(frame));
                 } catch (err) { /* best-effort, ignore */ }
 
-                // Keep the player title static as 'Now playing' (do not append the game name)
-                if (title) title.textContent = 'Now playing';
+                // Show the game's name in the player bar
+                if (title) title.textContent = (match && match.title) || anchor.closest('.cabinet')?.querySelector('.label')?.textContent || 'Now playing';
                 if (openNewTab) openNewTab.href = path;
-
-                // Per-game sizing overrides for embeds that don't report sizing
-                try {
-                    // If the project explicitly provides a playSize, use it first (pixel-perfect)
-                    if (match && match.playSize && (match.playSize.width || match.playSize.height)) {
-                        const w = Number(match.playSize.width) || '';
-                        const h = Number(match.playSize.height) || '';
-                        // ensure the iframe uses its inline width/height instead of being stretched by absolute positioning
-                        frame.style.position = 'relative';
-                        // clear any inset offsets that CSS may have applied for absolute positioning
-                        frame.style.top = '';
-                        frame.style.left = '';
-                        frame.style.right = '';
-                        frame.style.bottom = '';
-                        if (w) frame.style.width = w + 'px';
-                        if (h) frame.style.height = h + 'px';
-                        frame.style.maxWidth = '100%';
-                        frame.style.maxHeight = '80vh';
-                        if (aspectBox) {
-                            aspectBox.style.paddingTop = '0';
-                            // set explicit pixel height so the surrounding player-area background shrinks to fit
-                            if (h) {
-                                aspectBox.style.height = h + 'px';
-                            } else {
-                                aspectBox.style.height = 'auto';
-                            }
-                            aspectBox.style.display = 'flex';
-                            aspectBox.style.justifyContent = 'center';
-                            aspectBox.style.alignItems = 'center';
-                            // constrain the aspect box to the explicit width so it doesn't expand to the default max-width
-                            if (w) {
-                                aspectBox.style.width = w + 'px';
-                                aspectBox.style.maxWidth = '100%';
-                            }
-                        }
-                    } else {
-                        // ensure default absolute positioning is used for aspect-box based sizing
-                        frame.style.position = '';
-                        const lookup = (match && (match.path || match.source || match.title)) || path || '';
-                        const key = String(lookup).toLowerCase();
-                        // Flappy Bird: portrait, keep reasonably small
-                        if (key.includes('flappybird') || key.includes('flappy')) {
-                            frame.style.width = '384px';
-                            frame.style.height = '512px';
-                            frame.style.maxWidth = '100%';
-                            frame.style.maxHeight = '80vh';
-                            if (aspectBox) {
-                                aspectBox.style.paddingTop = '';
-                                aspectBox.style.height = 'auto';
-                                aspectBox.style.display = 'flex';
-                                aspectBox.style.justifyContent = 'center';
-                                aspectBox.style.alignItems = 'center';
-                            }
-                        }
-                        // Snake: square canvas
-                        else if (key.includes('/snake') || key.includes('snake')) {
-                            frame.style.width = '600px';
-                            frame.style.height = '600px';
-                            frame.style.maxWidth = '100%';
-                            frame.style.maxHeight = '80vh';
-                            if (aspectBox) {
-                                aspectBox.style.paddingTop = '';
-                                aspectBox.style.height = 'auto';
-                                aspectBox.style.display = 'flex';
-                                aspectBox.style.justifyContent = 'center';
-                                aspectBox.style.alignItems = 'center';
-                            }
-                        }
-                    }
-                } catch (e) {}
 
                 // Update the hero header to reflect the currently playing game
                 try {
@@ -453,13 +352,10 @@ async function renderCabinets() {
                             // ignore subtitle probing errors
                         }
                         const canvas = iframeDoc.querySelector('canvas') || iframeDoc.getElementById('gravity-dash-canvas')?.querySelector('canvas');
-                        if (canvas && aspectBox) {
+                        if (canvas && playerFit.probe) {
                             const w = canvas.width || canvas.clientWidth || canvas.offsetWidth;
                             const h = canvas.height || canvas.clientHeight || canvas.offsetHeight;
-                            if (w && h) {
-                                const pad = (h / w) * 100;
-                                aspectBox.style.paddingTop = pad + '%';
-                            }
+                            if (w && h) setPlayerFit({ mode: 'ratio', ratio: w / h, probe: false });
                         }
                     } catch (e) {
                         // cross-origin or other access denied — silently ignore
@@ -486,34 +382,10 @@ async function renderCabinets() {
                         const descEl = document.getElementById('playerDescription');
                         if (descEl && data.description) descEl.textContent = data.description;
 
-                        // If the embedded frame reports exact pixel width/height, size the iframe to those dimensions
-                        if (data.width && data.height) {
-                            try {
-                                // set iframe to reported pixel size but allow it to scale down with max-width/max-height
-                                frame.style.width = (Number(data.width) || 0) + 'px';
-                                frame.style.height = (Number(data.height) || 0) + 'px';
-                                frame.style.maxWidth = '100%';
-                                frame.style.maxHeight = '80vh';
-                                // make the aspect box auto-size and center the iframe
-                                if (aspectBox) {
-                                    aspectBox.style.paddingTop = '';
-                                    aspectBox.style.height = 'auto';
-                                    aspectBox.style.display = 'flex';
-                                    aspectBox.style.justifyContent = 'center';
-                                    aspectBox.style.alignItems = 'center';
-                                }
-                            } catch (e) {}
-                        } else if (data.widthRatio && data.heightRatio && aspectBox) {
-                            // if a ratio is provided (widthRatio/heightRatio), compute paddingTop
-                            const pad = (Number(data.heightRatio) / Number(data.widthRatio)) * 100;
-                            if (!Number.isNaN(pad)) aspectBox.style.paddingTop = pad + '%';
-                        } else if (data.aspect && aspectBox) {
-                            const parts = String(data.aspect).split(':').map(Number);
-                            if (parts.length === 2 && parts[0] > 0) {
-                                const pad = (parts[1] / parts[0]) * 100;
-                                aspectBox.style.paddingTop = pad + '%';
-                            }
-                        }
+                        // The game reports its size: fixed pixels (scaled to fit) or an aspect ratio
+                        if (data.width && data.height) setPlayerFit({ mode: 'native', w: +data.width, h: +data.height });
+                        else if (data.widthRatio && data.heightRatio) setPlayerFit({ mode: 'ratio', ratio: data.widthRatio / data.heightRatio });
+                        else if (parseAspect(data.aspect)) setPlayerFit({ mode: 'ratio', ratio: parseAspect(data.aspect) });
                     }
                 };
                 window.addEventListener('message', onGameAspect);
@@ -814,8 +686,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (closePlayer) closePlayer.addEventListener('click', () => {
         const player = document.getElementById('playerArea');
         const frame = document.getElementById('playerFrameMain');
-        if (player) { player.style.display = 'none'; player.setAttribute('aria-hidden', 'true'); }
+        if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+        if (player) { player.style.display = 'none'; player.setAttribute('aria-hidden', 'true'); player.classList.remove('fullscreen'); }
         if (frame) frame.src = 'about:blank';
+        document.body.classList.remove('is-playing');
+        setFsLabel(false);
         // restore hero header when player closes
         try { if (window && typeof window.resetHero === 'function') window.resetHero(); } catch (e) {}
     });
@@ -858,7 +733,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     if (document.fullscreenElement) await document.exitFullscreen();
                     player.classList.remove('fullscreen');
-                    toggleFs.textContent = 'Fullscreen';
+                    setFsLabel(false);
                 } catch (e) { console.warn('Exit fullscreen failed', e) }
                 return;
             }
@@ -870,12 +745,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     await player.requestFullscreen({ navigationUI: 'hide' });
                 }
                 player.classList.add('fullscreen');
-                toggleFs.textContent = 'Exit Fullscreen';
+                setFsLabel(true);
             } catch (err) {
                 // fallback: add class that simulates fullscreen
                 console.warn('Fullscreen request failed, falling back to CSS fullscreen', err);
                 player.classList.add('fullscreen');
-                toggleFs.textContent = 'Exit Fullscreen';
+                setFsLabel(true);
             }
         });
     }
@@ -886,9 +761,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const toggleFs = document.getElementById('toggleFullscreen');
         if (!document.fullscreenElement) {
             if (player) player.classList.remove('fullscreen');
-            if (toggleFs) toggleFs.textContent = 'Fullscreen';
+            if (toggleFs) setFsLabel(false);
         } else {
-            if (toggleFs) toggleFs.textContent = 'Exit Fullscreen';
+            setFsLabel(true);
         }
     });
 
@@ -938,3 +813,104 @@ function focusIframeAndCanvas(frame) {
 }
 
 
+
+// ---- Player sizing ---------------------------------------------------------
+// The in-page player uses as much of the screen as it can. Each game is one of:
+//   fill   – the iframe takes all available space (games that resize themselves)
+//   ratio  – the largest box with the game's aspect ratio that fits
+//   native – the game page has a fixed pixel size; it is rendered at that size
+//            and CSS-scaled to fit (up to 2x), so it shrinks on phones instead of cropping
+const playerFit = { mode: 'ratio', ratio: 16 / 9, w: 0, h: 0, probe: false };
+
+function parseAspect(a) {
+    const p = String(a || '').split(':').map(Number);
+    return p.length === 2 && p[0] > 0 && p[1] > 0 ? p[0] / p[1] : 0;
+}
+
+function fitForProject(match, path) {
+    if (match && match.aspect === 'fill') return { mode: 'fill', probe: false };
+    const ps = match && match.playSize;
+    if (ps && ps.width && ps.height) return { mode: 'native', w: +ps.width, h: +ps.height, probe: false };
+    const key = String((match && (match.path || match.source || match.title)) || path || '').toLowerCase();
+    if (key.includes('flappy')) return { mode: 'native', w: 384, h: 512, probe: false };
+    const r = parseAspect(match && match.aspect);
+    return { mode: 'ratio', ratio: r || 16 / 9, probe: !r };
+}
+
+function setPlayerFit(fit) {
+    Object.assign(playerFit, fit);
+    fitPlayer();
+}
+
+function fitPlayer() {
+    const player = document.getElementById('playerArea');
+    const stage = document.getElementById('playerStage');
+    const box = document.getElementById('playerAspectBox');
+    const frame = document.getElementById('playerFrameMain');
+    if (!player || !stage || !box || !frame || player.style.display === 'none') return;
+
+    // On phones / fullscreen the player is a fixed overlay and the stage flexes to fill it.
+    // Otherwise the stage is as tall as the viewport minus the player bar.
+    if (getComputedStyle(player).position === 'fixed') {
+        stage.style.height = '';
+    } else {
+        const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        const header = player.querySelector('.player-header');
+        const chrome = (header ? header.offsetHeight : 0) + 32; // player padding + gap + breathing room
+        stage.style.height = Math.max(280, Math.round(vh - chrome)) + 'px';
+    }
+    const W = stage.clientWidth;
+    const H = stage.clientHeight;
+    let bw = W;
+    let bh = H;
+    frame.style.width = '';
+    frame.style.height = '';
+    frame.style.transform = '';
+    if (playerFit.mode === 'native' && playerFit.w && playerFit.h) {
+        const s = Math.min(W / playerFit.w, H / playerFit.h, 2);
+        bw = playerFit.w * s;
+        bh = playerFit.h * s;
+        frame.style.width = playerFit.w + 'px';
+        frame.style.height = playerFit.h + 'px';
+        frame.style.transform = 'scale(' + s + ')';
+    } else if (playerFit.mode === 'ratio') {
+        bw = Math.min(W, H * playerFit.ratio);
+        bh = bw / playerFit.ratio;
+    }
+    box.style.width = Math.floor(bw) + 'px';
+    box.style.height = Math.floor(bh) + 'px';
+}
+
+function setFsLabel(on) {
+    const btn = document.getElementById('toggleFullscreen');
+    if (!btn) return;
+    const lbl = btn.querySelector('.lbl');
+    if (lbl) lbl.textContent = on ? 'Exit fullscreen' : 'Fullscreen';
+    btn.title = on ? 'Exit fullscreen' : 'Fullscreen';
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+}
+
+(function watchPlayerSize() {
+    let raf = 0;
+    const refit = () => {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(fitPlayer);
+    };
+    window.addEventListener('resize', refit);
+    window.addEventListener('orientationchange', refit);
+    document.addEventListener('fullscreenchange', refit);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+    if (window.ResizeObserver) {
+        document.addEventListener('DOMContentLoaded', () => {
+            const header = document.querySelector('#playerArea .player-header');
+            const player = document.getElementById('playerArea');
+            const ro = new ResizeObserver(refit);
+            if (header) ro.observe(header);
+            if (player) ro.observe(player);
+        });
+    }
+    // CSS fullscreen fallback toggles a class rather than firing fullscreenchange
+    document.addEventListener('click', e => {
+        if (e.target.closest && e.target.closest('#toggleFullscreen')) setTimeout(refit, 50);
+    });
+})();

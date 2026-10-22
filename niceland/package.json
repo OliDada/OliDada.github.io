@@ -1,0 +1,14 @@
+{
+  "name": "niceland",
+  "private": true,
+  "description": "An isometric pixel-art god sandbox of Iceland",
+  "scripts": {
+    "build": "python3 build.py",
+    "format": "prettier --write \"src/**/*.js\" \"tests/*.js\"",
+    "test": "sh tests/run.sh"
+  },
+  "devDependencies": {
+    "playwright": "1.47.2",
+    "prettier": "3.3.3"
+  }
+}

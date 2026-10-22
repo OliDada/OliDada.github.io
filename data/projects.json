@@ -1,5 +1,15 @@
 [
   {
+    "title": "Niceland",
+    "path": "/niceland/index.html",
+    "source": "/niceland/README.md",
+    "aspect": "fill",
+    "thumbnail": "data/thumbnails/niceland-thumbnail.png",
+    "description": "An isometric pixel-art god sandbox of Iceland: every house at true scale. Drag to pan, scroll to zoom, Q/E to rotate.",
+    "tags": ["game", "sandbox", "iceland"],
+    "featured": true
+  },
+  {
     "title": "RPG Game",
     "path": "/zelda-game/index.html",
     "source": "/zelda-game/",

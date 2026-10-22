@@ -1,0 +1,55 @@
+
+<canvas id="cv" aria-label="Isometric pixel map of Iceland built from OpenStreetMap"></canvas>
+
+<div id="loading"><div class="box panel"><h1>NICELAND</h1><p id="ldtxt">Loading Iceland…</p><div class="bar"><i id="ldbar" style="width:5%"></i></div></div></div>
+
+<div id="hud">
+  <div class="brand">NICELAND<small>Iceland · every house, at true scale</small></div>
+  <div id="stats" class="panel">
+    <div class="stat"><b id="sPop">0</b><span>Íbúar · residents</span></div>
+    <div class="stat"><b id="sOut">0</b><span>Á ferli · out</span></div>
+    <div class="stat"><b id="sBld">0</b><span>Hús · buildings</span></div>
+    <div class="stat" id="sFireBox"><b id="sFire">0</b><span>Eldar · fires</span></div>
+    <div class="stat"><b id="sClock">12:00</b><span id="sDay">Laugardagur</span></div>
+    <div class="stat"><b id="sWx">Skýjað</b><span id="sSeas">Haust · veður</span></div>
+  </div>
+</div>
+
+<button class="btn" id="bMenu" aria-label="Menu" aria-expanded="false" aria-controls="ctrl">☰</button>
+<div id="ctrl">
+  <div id="search"><input id="q" class="btn" type="search" placeholder="Search places, streets, buildings…  /" aria-label="Search for a place" autocomplete="off" spellcheck="false"><div id="qres" class="panel" hidden></div></div>
+  <select class="btn" id="goto" aria-label="Go to a place"></select>
+  <select class="btn" id="season" aria-label="Season"></select>
+  <select class="btn" id="weather" aria-label="Weather"></select>
+  <div class="grp" role="group" aria-label="Simulation speed">
+    <button class="btn" data-s="0">Pause</button>
+    <button class="btn on" data-s="1">1×</button>
+    <button class="btn" data-s="4">4×</button>
+  </div>
+  <button class="btn" id="bPlayer" title="Become a person in the city: steal cars, cause trouble, outrun the police">Play</button>
+  <div class="grp" role="group" aria-label="Rotate view">
+    <button class="btn" id="rotL" title="Rotate left (Q)" aria-label="Rotate left">↺</button>
+    <button class="btn on" id="rotN" title="North up" aria-label="North up">N↑</button>
+    <button class="btn" id="rotR" title="Rotate right (E)" aria-label="Rotate right">↻</button>
+  </div>
+  <button class="btn" id="bNight">Night</button>
+  <button class="btn on" id="bRebuild" aria-pressed="true">Rebuild</button>
+  <div class="grp" role="group" aria-label="Save">
+    <button class="btn" id="bSave">Save</button>
+    <button class="btn" id="bLoad">Load</button>
+    <button class="btn" id="bShare" title="Copy a code that recreates this exact scene: time, weather, view and everything you built or broke">Share</button>
+    <button class="btn" id="bReset">Reset</button>
+  </div>
+</div>
+
+<aside id="insp" class="panel" aria-live="polite"></aside>
+
+<nav id="dock" class="panel" aria-label="God tools">
+  <div id="cats" role="tablist"></div>
+  <div id="tools"></div>
+  <div id="foot"><div id="desc"></div><div id="mobinfo"></div><div id="brush" hidden><span>Brush</span><button data-b="1">8 m</button><button data-b="2" class="on">20 m</button><button data-b="3">45 m</button></div></div>
+</nav>
+<div id="toast" class="panel" hidden></div>
+<div id="wanted" class="panel" hidden></div>
+<div id="banner" hidden></div>
+<div id="credit">Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors · Terrain: Terrarium tiles</div>
