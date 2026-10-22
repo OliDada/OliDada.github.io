@@ -24,7 +24,7 @@
     "title": "Solar System",
     "path": "/solar-system/index.html",
     "source": "/solar-system/index.js",
-    "thumbnail": "data/thumbnails/solar-system-thumbnail.png",
+    "thumbnail": "data/thumbnails/solar-system-thumbnail.webp",
     "subtitle": "Press 'H' to toggle instructions.",
     "tags": ["3d", "threejs"],
     "featured": true
@@ -33,7 +33,7 @@
     "title": "Neon Rush",
     "path": "/worm-hole/index.html",
     "source": "/worm-hole/index.js",
-    "thumbnail": "data/thumbnails/neon-rush-thumbnail.png",
+    "thumbnail": "data/thumbnails/neon-rush-thumbnail.webp",
     "tags": ["game", "neon"],
     "featured": true
   },
