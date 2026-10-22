@@ -1463,7 +1463,8 @@ function setDetRoof(b, d, tag) {
  *
  * Hand-set heights and materials for landmarks such as Hallgrímskirkja, Harpa and Perlan.
  *
- * State and constants: LANDMARKS
+ * Functions: fitCircle, setupPerlan
+ * State and constants: LANDMARKS, PERLAN_TANK_H, PERLAN_TOP
  */
 
 // w wall colour, r roof colour (only used where no aerial colour), h height, rs roof shape, tw tower {at:'N'|'S'|'E'|'W', s:size, h:height, sp:spire height}
@@ -1530,6 +1531,127 @@ const LANDMARKS = {
   'Viðeyjarkirkja': { w: [236, 232, 222], r: [52, 54, 58], h: 6, rs: 'gable', rp: 0.9 },
   'Höfði': { w: [244, 242, 236], r: [70, 74, 82], h: 9, rs: 'gable', rp: 0.8 }
 };
+
+/* Perlan. OpenStreetMap maps the six hot-water tanks as six buildings round the central hall, each one cut off where
+   it meets the hall, so on their own they come out as low crescents. Here they become part of Perlan itself: a full
+   round tank is fitted to the outer arc of each outline, and drawPerlan draws the hall, the tanks and the glass dome
+   that rests on them as one landmark. The tanks hold about 4 million litres each; with the mapped footprints that
+   makes them about 14 m tall, and the top of the dome is 25.7 m above the ground. */
+const PERLAN_TANK_H = 14,
+  PERLAN_TOP = 25.7;
+// least-squares circle through points [[x, y], …]: [cx, cy, r]
+function fitCircle(P) {
+  let sx = 0,
+    sy = 0,
+    sxx = 0,
+    syy = 0,
+    sxy = 0,
+    sxz = 0,
+    syz = 0,
+    sz = 0;
+  const n = P.length,
+    mx = P.reduce((a, p) => a + p[0], 0) / n,
+    my = P.reduce((a, p) => a + p[1], 0) / n;
+  for (const [x0, y0] of P) {
+    const x = x0 - mx,
+      y = y0 - my,
+      z = x * x + y * y;
+    sx += x;
+    sy += y;
+    sxx += x * x;
+    syy += y * y;
+    sxy += x * y;
+    sxz += x * z;
+    syz += y * z;
+    sz += z;
+  }
+  // solve [sxx sxy sx; sxy syy sy; sx sy n] [D E F] = -[sxz syz sz]
+  const A = [
+      [sxx, sxy, sx, -sxz],
+      [sxy, syy, sy, -syz],
+      [sx, sy, n, -sz]
+    ],
+    m = 3;
+  for (let i = 0; i < m; i++) {
+    let p = i;
+    for (let r = i + 1; r < m; r++) if (Math.abs(A[r][i]) > Math.abs(A[p][i])) p = r;
+    [A[i], A[p]] = [A[p], A[i]];
+    if (Math.abs(A[i][i]) < 1e-9) return null;
+    for (let r = 0; r < m; r++) {
+      if (r === i) continue;
+      const f = A[r][i] / A[i][i];
+      for (let c = i; c <= m; c++) A[r][c] -= f * A[i][c];
+    }
+  }
+  const D = A[0][3] / A[0][0],
+    E = A[1][3] / A[1][1],
+    F = A[2][3] / A[2][2],
+    cx = -D / 2,
+    cy = -E / 2,
+    r2 = cx * cx + cy * cy - F;
+  return r2 > 0 ? [cx + mx, cy + my, Math.sqrt(r2)] : null;
+}
+function setupPerlan() {
+  const b = B.find(o => o.sp === 3);
+  if (!b || b.tanks) return;
+  const tanks = [];
+  for (const o of B) {
+    if (o === b || o.sp || o.n < 12 || o.area < 120 || o.area > 700) continue;
+    const d0 = Math.hypot(o.cx - b.cx, o.cy - b.cy);
+    if (d0 > b.r + 25) continue;
+    // the outline's far side from the hall is the tank's own wall
+    const pts = [];
+    for (let j = 0; j < o.n; j++) {
+      const x = o.poly[2 * j],
+        y = o.poly[2 * j + 1];
+      if (Math.hypot(x - b.cx, y - b.cy) >= d0) pts.push([x, y]);
+    }
+    if (pts.length < 5) continue;
+    const t = fitCircle(pts);
+    if (!t || t[2] < 5 || t[2] > 16) continue;
+    tanks.push(t);
+    o.hide = 1;
+  }
+  if (tanks.length < 4) return;
+  let ring = 0,
+    tr = 0,
+    R = 0;
+  for (const t of tanks) {
+    const d = Math.hypot(t[0] - b.cx, t[1] - b.cy);
+    ring += d / tanks.length;
+    tr += t[2] / tanks.length;
+    R = Math.max(R, d + t[2]);
+  }
+  b.tanks = tanks;
+  b.ringR = ring;
+  b.tankR = tr;
+  b.hallPoly = b.poly;
+  // the record's footprint becomes a circle round the whole building, so bounds, picking and caches hold all of it
+  const P = new Float32Array(ngon(b.cx, b.cy, R + 0.5, 36));
+  let minx = 1e12,
+    maxx = -1e12,
+    miny = 1e12,
+    maxy = -1e12;
+  for (let j = 0; j < P.length; j += 2) {
+    minx = Math.min(minx, P[j]);
+    maxx = Math.max(maxx, P[j]);
+    miny = Math.min(miny, P[j + 1]);
+    maxy = Math.max(maxy, P[j + 1]);
+  }
+  Object.assign(b, {
+    poly: P,
+    n: P.length / 2,
+    minx,
+    maxx,
+    miny,
+    maxy,
+    r: R + 0.5,
+    h: PERLAN_TOP,
+    obb: null
+  });
+  b.rr = -1;
+  rotB(b);
+}
 
 // ---- 05-brands.js ----
 /**
@@ -2627,6 +2749,7 @@ function drawStoreRoof(c, b, zb, z1) {
 }
 
 function applyLandmarks() {
+  setupPerlan();
   const add = [];
   const seen = new Set();
   const HP = new Set();
@@ -3241,11 +3364,11 @@ function rotB(b) {
  * The 10 m capital grid (F), the 300 m Iceland grid (C) and generated 10 m detail tiles for the rest of
  * the country.
  *
- * Functions: initDetail, maskOff, clsFast, vn, fbm, ccH, crm, hInterp, coarseLandT, getTile, genTile, dz,
- *     cellAt, dRef, gT, gTfast, gH, gCov, sCov, gLV, sLV, gLH, sLH, sT, gName, nb4, cellCenter, cvH, hC,
- *     hAt, hAtFast
+ * Functions: initDetail, maskOff, clsFast, vn, fbm, ccH, crm, hInterp, coarseLandT, getTile, seaDist, townW,
+ *     shoreCap, genTile, dz, cellAt, dRef, gT, gTfast, gH, gCov, sCov, gLV, sLV, gLH, sLH, sT, gName, nb4,
+ *     cellCenter, cvH, hC, hAt, hAtFast
  * State and constants: inF, DT, DCS, DKMIN, DB, DGW, DGH, DTW, DTH, MASKI, MASKB, ALLOWGEN, TILES, CLS_T,
- *     HI_R
+ *     HI_R, SHORE_M, SHORE_D0, SHORE_D1, SHORE_TOWN, SHORE_LAND
  */
 
 const inF = (x, y) => F && x >= F.OX && y >= F.OY && x < F.x1 && y < F.y1;
@@ -3372,12 +3495,90 @@ function getTile(ti, tj, gen) {
   }
   return t;
 }
+/* The 300 m height grid averages each cell, so a town on a strip of flat land under a mountain (Ísafjörður, the
+   Eastfjords) gets part of the mountain's height and ends up on a plateau above the sea. Real shores rise gently:
+   the ground near the sea is held under a ceiling that climbs with distance from the water, slowly in towns and
+   faster elsewhere, so fjord walls still rise steeply. The ceiling fades out between SHORE_D0 and SHORE_D1 metres
+   inland, so ground further from the sea is left as it was. */
+const SHORE_M = 50, // cells of margin round a tile for the distance to the sea
+  SHORE_D0 = 300,
+  SHORE_D1 = 500,
+  SHORE_TOWN = 0.12, // metres of rise per metre inland, in towns
+  SHORE_LAND = 0.4; // … and elsewhere
+function seaDist(ti, tj) {
+  const M = SHORE_M,
+    W = DT + 2 * M,
+    D = new Float32Array(W * W),
+    BIG = 1e6;
+  let any = false;
+  for (let b = 0; b < W; b++)
+    for (let a = 0; a < W; a++) {
+      const sea = clsFast(ti * DT + a - M, tj * DT + b - M) === 1;
+      D[a + b * W] = sea ? 0 : BIG;
+      if (sea) any = true;
+    }
+  if (!any) return null;
+  const R2 = DCS * Math.SQRT2;
+  for (let b = 0; b < W; b++)
+    for (let a = 0; a < W; a++) {
+      const i = a + b * W;
+      let v = D[i];
+      if (a > 0) v = Math.min(v, D[i - 1] + DCS);
+      if (b > 0) {
+        v = Math.min(v, D[i - W] + DCS);
+        if (a > 0) v = Math.min(v, D[i - W - 1] + R2);
+        if (a < W - 1) v = Math.min(v, D[i - W + 1] + R2);
+      }
+      D[i] = v;
+    }
+  for (let b = W - 1; b >= 0; b--)
+    for (let a = W - 1; a >= 0; a--) {
+      const i = a + b * W;
+      let v = D[i];
+      if (a < W - 1) v = Math.min(v, D[i + 1] + DCS);
+      if (b < W - 1) {
+        v = Math.min(v, D[i + W] + DCS);
+        if (a < W - 1) v = Math.min(v, D[i + W + 1] + R2);
+        if (a > 0) v = Math.min(v, D[i + W - 1] + R2);
+      }
+      D[i] = v;
+    }
+  return { D, W, M };
+}
+// how much of a place is town, 0–1, blended between the 300 m cells
+function townW(x, y) {
+  const fx = (x - C.OX) / C.CS - 0.5,
+    fy = (y - C.OY) / C.CS - 0.5,
+    i = Math.floor(fx),
+    j = Math.floor(fy),
+    u = fx - i,
+    v = fy - j;
+  let w = 0;
+  for (let q = 0; q < 4; q++) {
+    const a = Math.max(0, Math.min(C.W - 1, i + (q & 1))),
+      b = Math.max(0, Math.min(C.H - 1, j + (q >> 1)));
+    if (C.GT[a + b * C.W] === URBAN) w += (q & 1 ? u : 1 - u) * (q >> 1 ? v : 1 - v);
+  }
+  return w;
+}
+function shoreCap(SD, a, b, x, y, h) {
+  if (!SD) return h;
+  const d = SD.D[a + SD.M + (b + SD.M) * SD.W];
+  if (d >= SHORE_D1) return h;
+  const tw = townW(x, y),
+    cap = 1 + d * (SHORE_TOWN * tw + SHORE_LAND * (1 - tw));
+  if (h <= cap) return h;
+  const f = d <= SHORE_D0 ? 1 : 1 - (d - SHORE_D0) / (SHORE_D1 - SHORE_D0),
+    ff = f * f * (3 - 2 * f);
+  return h - (h - cap) * ff;
+}
 function genTile(ti, tj) {
   const N = DT * DT,
     GT = new Uint8Array(N),
     HT = new Int16Array(N),
     ox = C.OX + ti * DT * DCS,
-    oy = C.OY + tj * DT * DCS;
+    oy = C.OY + tj * DT * DCS,
+    SD = seaDist(ti, tj);
   let LAVC = null;
   for (let b = 0; b < DT; b++)
     for (let a = 0; a < DT; a++) {
@@ -3392,8 +3593,9 @@ function genTile(ti, tj) {
         HT[i] = 0;
         continue;
       }
-      const h = hInterp(x, y),
-        amp = 1.2 + Math.min(11, HI_R / 22) + (h > 300 ? 2 : 0),
+      const h0 = hInterp(x, y),
+        h = shoreCap(SD, a, b, x, y, h0),
+        amp = (1.2 + Math.min(11, HI_R / 22) + (h > 300 ? 2 : 0)) * (h < h0 ? h / h0 : 1),
         n = fbm(x, y);
       if (k === 3) {
         GT[i] = GLACIER;
@@ -5527,54 +5729,155 @@ function area2(o) {
   }
   return a;
 }
+/* Perlan: the six hot-water tanks (fitted to their mapped outlines in setupPerlan), the hall between them and the
+   aluminium-framed glass dome that rests on the tanks. Without mapped tanks it falls back to a ring round the hall. */
 function drawPerlan(c, b, mode) {
   const k = DK,
     z = b.z,
-    R0 = Math.max(14, b.r * 0.62),
-    tr = R0 * 0.42,
-    th = Math.min(24, b.h * 0.55 + 6) * b.prog;
-  const sx = PXw(b.cx, b.cy) * k - DOX,
-    sy = (PYw(b.cx, b.cy) - z - th) * k - DOY;
+    pr = b.prog,
+    tankH = PERLAN_TANK_H * pr,
+    ringR = b.ringR || Math.max(14, b.r * 0.62),
+    tr = b.tankR || ringR * 0.42,
+    tanks =
+      b.tanks ||
+      [0, 1, 2, 3, 4, 5].map(i => {
+        const a = (i * Math.PI) / 3 + 0.3;
+        return [b.cx + Math.cos(a) * ringR, b.cy + Math.sin(a) * ringR, tr];
+      }),
+    Rd = ringR * 0.85 * pr, // the dome rests on the inner halves of the tanks
+    Hd = Math.max(2, (PERLAN_TOP - PERLAN_TANK_H) * pr);
+  const S = (x, y, h) => [PXw(x, y) * k - DOX, (PYw(x, y) - z - h) * k - DOY];
+  const ctr = S(b.cx, b.cy, tankH);
+  // dome outline: the silhouette of a half-ellipsoid, sampled in world space so it is right in every view
+  const domePt = (a, t) =>
+    S(b.cx + Rd * Math.cos(t) * Math.cos(a), b.cy + Rd * Math.cos(t) * Math.sin(a), tankH + Hd * Math.sin(t));
+  const domeShape = () => {
+    c.beginPath();
+    // the lower rim towards the viewer, then over the top
+    for (let i = 0; i <= 48; i++) {
+      const a = (i / 48) * 2 * Math.PI,
+        p = domePt(a, 0);
+      i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]);
+    }
+    c.closePath();
+    // upper part: the rim is an upright ellipse on screen; over it the dome's outline is close to an ellipse of the
+    // same width reaching up by the dome's height
+    const rx = Rd * k * Math.hypot(SXx, SXy),
+      ryBase = Rd * k * Math.hypot(SYx, SYy),
+      ry = Math.sqrt(ryBase * ryBase + Hd * k * (Hd * k));
+    c.ellipse(ctr[0], ctr[1], rx, ry, 0, Math.PI, 0);
+  };
   if (mode === 2) {
     if (k >= 0.3) {
       c.fillStyle = 'rgba(255,214,150,.9)';
-      c.beginPath();
-      c.ellipse(sx, sy, R0 * k * 1.414, R0 * k, 0, Math.PI, 0);
+      domeShape();
       c.fill();
     }
     return;
   }
-  const tanks = [];
-  for (let i = 0; i < 6; i++) {
-    const a = (i * Math.PI) / 3 + 0.3;
-    tanks.push([b.cx + Math.cos(a) * R0 * 0.8, b.cy + Math.sin(a) * R0 * 0.8]);
+  const items = tanks.map(t => [PYw(t[0], t[1]), 0, t]);
+  items.push([PYw(b.cx, b.cy), 1, null]);
+  items.sort((p, q) => p[0] - q[0]);
+  for (const it of items) {
+    if (it[1] === 1) {
+      // the hall between the tanks: dark glass behind light frames
+      prism(
+        c,
+        b.hallPoly || ngon(b.cx, b.cy, ringR * 0.75, 20),
+        z - 1,
+        z + tankH - 1.5,
+        [96, 112, 124],
+        [150, 156, 160]
+      );
+      continue;
+    }
+    const t = it[2];
+    prism(c, ngon(t[0], t[1], t[2], 28), z - 1, z + tankH, [212, 214, 216], [196, 200, 204]);
+    if (k >= 0.9) {
+      // the seams where the tank's steel plates meet
+      c.strokeStyle = col([176, 180, 186], 1);
+      c.lineWidth = Math.max(1, k * 0.15);
+      c.beginPath();
+      for (const f of [0.33, 0.66]) {
+        let first = true;
+        for (let i = 0; i <= 28; i++) {
+          const a = (i / 28) * 2 * Math.PI,
+            x = t[0] + t[2] * Math.cos(a),
+            y = t[1] + t[2] * Math.sin(a);
+          if (faces(Math.cos(a), Math.sin(a)) <= 0) {
+            first = true;
+            continue;
+          }
+          const p = S(x, y, tankH * f);
+          first ? c.moveTo(p[0], p[1]) : c.lineTo(p[0], p[1]);
+          first = false;
+        }
+      }
+      c.stroke();
+    }
   }
-  tanks.sort((p, q) => PYw(p[0], p[1]) - PYw(q[0], q[1]));
-  for (const t of tanks.slice(0, 3))
-    prism(c, ngon(t[0], t[1], tr, 10), z - 1, z + th, [196, 200, 206], [208, 212, 216]);
-  prism(c, ngon(b.cx, b.cy, R0 * 0.55, 10), z - 1, z + th, [170, 176, 182], [200, 204, 208]);
-  for (const t of tanks.slice(3))
-    prism(c, ngon(t[0], t[1], tr, 10), z - 1, z + th, [196, 200, 206], [208, 212, 216]);
-  const rx = R0 * k * 1.414;
-  c.fillStyle = BAKE && night ? 'rgba(255,214,150,.95)' : col([132, 178, 204], 1);
-  c.beginPath();
-  c.ellipse(sx, sy, rx, R0 * k, 0, Math.PI, 0);
+  // the glass dome
+  const lit = BAKE && night;
+  c.fillStyle = lit ? 'rgba(255,214,150,.95)' : col([128, 176, 204], 1);
+  domeShape();
   c.fill();
-  c.strokeStyle = col([92, 138, 168], 1);
-  c.lineWidth = Math.max(1, k * 0.5);
-  c.beginPath();
-  c.ellipse(sx, sy, rx * 0.5, R0 * k, 0, Math.PI, 0);
-  c.moveTo(sx - rx * 0.92, sy - R0 * k * 0.4);
-  c.lineTo(sx + rx * 0.92, sy - R0 * k * 0.4);
-  c.stroke();
-  c.fillStyle = col([226, 240, 248], 1);
-  c.fillRect(
-    Math.round(sx - rx * 0.42),
-    Math.round(sy - R0 * k * 0.72),
-    Math.max(1, k * 1.5),
-    Math.max(1, k)
-  );
-  if (b.fire > 0 && mode !== 0) flames(c, b, z + th + R0);
+  if (!lit) {
+    // the sky catches the top and the side away from the light
+    c.save();
+    domeShape();
+    c.clip();
+    c.fillStyle = col([170, 206, 226], 1);
+    c.beginPath();
+    c.ellipse(ctr[0] - Rd * k * 0.35, ctr[1] - Hd * k * 0.75, Rd * k * 0.6, Hd * k * 0.55, 0, 0, 7);
+    c.fill();
+    c.restore();
+  }
+  if (k >= 0.4) {
+    // the aluminium frame: parallels and meridians on the side facing the viewer
+    c.strokeStyle = col(lit ? [190, 150, 90] : [86, 128, 156], 1);
+    c.lineWidth = Math.max(1, k * 0.22);
+    c.beginPath();
+    for (const tt of [0.35, 0.7]) {
+      const t = tt * (Math.PI / 2);
+      let first = true;
+      for (let i = 0; i <= 40; i++) {
+        const a = (i / 40) * 2 * Math.PI;
+        if (faces(Math.cos(a), Math.sin(a)) <= 0) {
+          first = true;
+          continue;
+        }
+        const p = domePt(a, t);
+        first ? c.moveTo(p[0], p[1]) : c.lineTo(p[0], p[1]);
+        first = false;
+      }
+    }
+    for (let m = 0; m < 12; m++) {
+      const a = (m / 12) * 2 * Math.PI;
+      if (faces(Math.cos(a), Math.sin(a)) <= 0.05) continue;
+      for (let i = 0; i <= 8; i++) {
+        const p = domePt(a, (i / 8) * (Math.PI / 2));
+        i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]);
+      }
+    }
+    c.stroke();
+    // the viewing deck and restaurant ring at the foot of the dome
+    c.strokeStyle = col([226, 230, 232], 1);
+    c.lineWidth = Math.max(1, k * 0.45);
+    c.beginPath();
+    let first = true;
+    for (let i = 0; i <= 48; i++) {
+      const a = (i / 48) * 2 * Math.PI;
+      if (faces(Math.cos(a), Math.sin(a)) <= 0) {
+        first = true;
+        continue;
+      }
+      const p = domePt(a, 0.02);
+      first ? c.moveTo(p[0], p[1]) : c.lineTo(p[0], p[1]);
+      first = false;
+    }
+    c.stroke();
+  }
+  if (b.fire > 0 && mode !== 0) flames(c, b, z + tankH + Hd);
 }
 /* Sólfarið (Jón Gunnar Árnason, 1990): a dream boat of polished stainless steel on a round granite plinth by Sæbraut */
 function drawVoyager(c, b, mode) {
@@ -8242,15 +8545,31 @@ function renderBld(L, cx, cy, lights) {
   for (const b of cc.bs) items.push([b.key + b.base * 0.01, 0, b]);
   if (!lights) for (const t of cc.ts) items.push([PYw(TREES.x[t], TREES.y[t]), 1, t]);
   items.sort((a, b) => a[0] - b[0] || (a[2].base || 0) - (b[2].base || 0));
-  if (lights) {
-    for (const it of items) if (it[1] === 0) drawBld(c, it[2], 2);
-  } else
-    for (const it of items) {
-      if (it[1] === 0) {
-        if (k < 0.18) lodBld(c, it[2]);
-        else drawBld(c, it[2], 0);
-      } else drawTree(c, it[2], 0);
+  // hills in front (see hillLine): a chunk is baked once, so every check is done now, whatever the frame budget
+  const hb = hlBudget,
+    hills = k >= 0.18;
+  hlBudget = Infinity;
+  const hillOf = it =>
+    !hills ? 0 : it[1] === 0 ? hillBld(it[2]) : hillTree(it[2], TREES.x[it[2]], TREES.y[it[2]]);
+  for (const it of items) {
+    if (lights && it[1] !== 0) continue;
+    const hl = hillOf(it);
+    if (hl === 1) continue;
+    if (hl) {
+      if (it[1] === 0) clipAboveLine(c, hl, k, ox, oy);
+      else clipAboveY(c, hl, k, oy);
     }
+    if (lights) drawBld(c, it[2], 2);
+    else if (it[1] === 0) {
+      if (k < 0.18) lodBld(c, it[2]);
+      else drawBld(c, it[2], 0);
+    } else drawTree(c, it[2], 0);
+    if (hl) c.restore();
+    DOX = ox;
+    DOY = oy;
+    DK = k;
+  }
+  hlBudget = hb;
   BAKE = true;
   return { cv: cvs, ox, oy, w: cvs.width, h: cvs.height };
 }

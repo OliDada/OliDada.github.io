@@ -4,11 +4,11 @@
  * The 10 m capital grid (F), the 300 m Iceland grid (C) and generated 10 m detail tiles for the rest of
  * the country.
  *
- * Functions: initDetail, maskOff, clsFast, vn, fbm, ccH, crm, hInterp, coarseLandT, getTile, genTile, dz,
- *     cellAt, dRef, gT, gTfast, gH, gCov, sCov, gLV, sLV, gLH, sLH, sT, gName, nb4, cellCenter, cvH, hC,
- *     hAt, hAtFast
+ * Functions: initDetail, maskOff, clsFast, vn, fbm, ccH, crm, hInterp, coarseLandT, getTile, seaDist, townW,
+ *     shoreCap, genTile, dz, cellAt, dRef, gT, gTfast, gH, gCov, sCov, gLV, sLV, gLH, sLH, sT, gName, nb4,
+ *     cellCenter, cvH, hC, hAt, hAtFast
  * State and constants: inF, DT, DCS, DKMIN, DB, DGW, DGH, DTW, DTH, MASKI, MASKB, ALLOWGEN, TILES, CLS_T,
- *     HI_R
+ *     HI_R, SHORE_M, SHORE_D0, SHORE_D1, SHORE_TOWN, SHORE_LAND
  */
 
 const inF = (x, y) => F && x >= F.OX && y >= F.OY && x < F.x1 && y < F.y1;
@@ -135,12 +135,90 @@ function getTile(ti, tj, gen) {
   }
   return t;
 }
+/* The 300 m height grid averages each cell, so a town on a strip of flat land under a mountain (Ísafjörður, the
+   Eastfjords) gets part of the mountain's height and ends up on a plateau above the sea. Real shores rise gently:
+   the ground near the sea is held under a ceiling that climbs with distance from the water, slowly in towns and
+   faster elsewhere, so fjord walls still rise steeply. The ceiling fades out between SHORE_D0 and SHORE_D1 metres
+   inland, so ground further from the sea is left as it was. */
+const SHORE_M = 50, // cells of margin round a tile for the distance to the sea
+  SHORE_D0 = 300,
+  SHORE_D1 = 500,
+  SHORE_TOWN = 0.12, // metres of rise per metre inland, in towns
+  SHORE_LAND = 0.4; // … and elsewhere
+function seaDist(ti, tj) {
+  const M = SHORE_M,
+    W = DT + 2 * M,
+    D = new Float32Array(W * W),
+    BIG = 1e6;
+  let any = false;
+  for (let b = 0; b < W; b++)
+    for (let a = 0; a < W; a++) {
+      const sea = clsFast(ti * DT + a - M, tj * DT + b - M) === 1;
+      D[a + b * W] = sea ? 0 : BIG;
+      if (sea) any = true;
+    }
+  if (!any) return null;
+  const R2 = DCS * Math.SQRT2;
+  for (let b = 0; b < W; b++)
+    for (let a = 0; a < W; a++) {
+      const i = a + b * W;
+      let v = D[i];
+      if (a > 0) v = Math.min(v, D[i - 1] + DCS);
+      if (b > 0) {
+        v = Math.min(v, D[i - W] + DCS);
+        if (a > 0) v = Math.min(v, D[i - W - 1] + R2);
+        if (a < W - 1) v = Math.min(v, D[i - W + 1] + R2);
+      }
+      D[i] = v;
+    }
+  for (let b = W - 1; b >= 0; b--)
+    for (let a = W - 1; a >= 0; a--) {
+      const i = a + b * W;
+      let v = D[i];
+      if (a < W - 1) v = Math.min(v, D[i + 1] + DCS);
+      if (b < W - 1) {
+        v = Math.min(v, D[i + W] + DCS);
+        if (a < W - 1) v = Math.min(v, D[i + W + 1] + R2);
+        if (a > 0) v = Math.min(v, D[i + W - 1] + R2);
+      }
+      D[i] = v;
+    }
+  return { D, W, M };
+}
+// how much of a place is town, 0–1, blended between the 300 m cells
+function townW(x, y) {
+  const fx = (x - C.OX) / C.CS - 0.5,
+    fy = (y - C.OY) / C.CS - 0.5,
+    i = Math.floor(fx),
+    j = Math.floor(fy),
+    u = fx - i,
+    v = fy - j;
+  let w = 0;
+  for (let q = 0; q < 4; q++) {
+    const a = Math.max(0, Math.min(C.W - 1, i + (q & 1))),
+      b = Math.max(0, Math.min(C.H - 1, j + (q >> 1)));
+    if (C.GT[a + b * C.W] === URBAN) w += (q & 1 ? u : 1 - u) * (q >> 1 ? v : 1 - v);
+  }
+  return w;
+}
+function shoreCap(SD, a, b, x, y, h) {
+  if (!SD) return h;
+  const d = SD.D[a + SD.M + (b + SD.M) * SD.W];
+  if (d >= SHORE_D1) return h;
+  const tw = townW(x, y),
+    cap = 1 + d * (SHORE_TOWN * tw + SHORE_LAND * (1 - tw));
+  if (h <= cap) return h;
+  const f = d <= SHORE_D0 ? 1 : 1 - (d - SHORE_D0) / (SHORE_D1 - SHORE_D0),
+    ff = f * f * (3 - 2 * f);
+  return h - (h - cap) * ff;
+}
 function genTile(ti, tj) {
   const N = DT * DT,
     GT = new Uint8Array(N),
     HT = new Int16Array(N),
     ox = C.OX + ti * DT * DCS,
-    oy = C.OY + tj * DT * DCS;
+    oy = C.OY + tj * DT * DCS,
+    SD = seaDist(ti, tj);
   let LAVC = null;
   for (let b = 0; b < DT; b++)
     for (let a = 0; a < DT; a++) {
@@ -155,8 +233,9 @@ function genTile(ti, tj) {
         HT[i] = 0;
         continue;
       }
-      const h = hInterp(x, y),
-        amp = 1.2 + Math.min(11, HI_R / 22) + (h > 300 ? 2 : 0),
+      const h0 = hInterp(x, y),
+        h = shoreCap(SD, a, b, x, y, h0),
+        amp = (1.2 + Math.min(11, HI_R / 22) + (h > 300 ? 2 : 0)) * (h < h0 ? h / h0 : 1),
         n = fbm(x, y);
       if (k === 3) {
         GT[i] = GLACIER;

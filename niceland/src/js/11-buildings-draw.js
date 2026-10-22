@@ -953,54 +953,155 @@ function area2(o) {
   }
   return a;
 }
+/* Perlan: the six hot-water tanks (fitted to their mapped outlines in setupPerlan), the hall between them and the
+   aluminium-framed glass dome that rests on the tanks. Without mapped tanks it falls back to a ring round the hall. */
 function drawPerlan(c, b, mode) {
   const k = DK,
     z = b.z,
-    R0 = Math.max(14, b.r * 0.62),
-    tr = R0 * 0.42,
-    th = Math.min(24, b.h * 0.55 + 6) * b.prog;
-  const sx = PXw(b.cx, b.cy) * k - DOX,
-    sy = (PYw(b.cx, b.cy) - z - th) * k - DOY;
+    pr = b.prog,
+    tankH = PERLAN_TANK_H * pr,
+    ringR = b.ringR || Math.max(14, b.r * 0.62),
+    tr = b.tankR || ringR * 0.42,
+    tanks =
+      b.tanks ||
+      [0, 1, 2, 3, 4, 5].map(i => {
+        const a = (i * Math.PI) / 3 + 0.3;
+        return [b.cx + Math.cos(a) * ringR, b.cy + Math.sin(a) * ringR, tr];
+      }),
+    Rd = ringR * 0.85 * pr, // the dome rests on the inner halves of the tanks
+    Hd = Math.max(2, (PERLAN_TOP - PERLAN_TANK_H) * pr);
+  const S = (x, y, h) => [PXw(x, y) * k - DOX, (PYw(x, y) - z - h) * k - DOY];
+  const ctr = S(b.cx, b.cy, tankH);
+  // dome outline: the silhouette of a half-ellipsoid, sampled in world space so it is right in every view
+  const domePt = (a, t) =>
+    S(b.cx + Rd * Math.cos(t) * Math.cos(a), b.cy + Rd * Math.cos(t) * Math.sin(a), tankH + Hd * Math.sin(t));
+  const domeShape = () => {
+    c.beginPath();
+    // the lower rim towards the viewer, then over the top
+    for (let i = 0; i <= 48; i++) {
+      const a = (i / 48) * 2 * Math.PI,
+        p = domePt(a, 0);
+      i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]);
+    }
+    c.closePath();
+    // upper part: the rim is an upright ellipse on screen; over it the dome's outline is close to an ellipse of the
+    // same width reaching up by the dome's height
+    const rx = Rd * k * Math.hypot(SXx, SXy),
+      ryBase = Rd * k * Math.hypot(SYx, SYy),
+      ry = Math.sqrt(ryBase * ryBase + Hd * k * (Hd * k));
+    c.ellipse(ctr[0], ctr[1], rx, ry, 0, Math.PI, 0);
+  };
   if (mode === 2) {
     if (k >= 0.3) {
       c.fillStyle = 'rgba(255,214,150,.9)';
-      c.beginPath();
-      c.ellipse(sx, sy, R0 * k * 1.414, R0 * k, 0, Math.PI, 0);
+      domeShape();
       c.fill();
     }
     return;
   }
-  const tanks = [];
-  for (let i = 0; i < 6; i++) {
-    const a = (i * Math.PI) / 3 + 0.3;
-    tanks.push([b.cx + Math.cos(a) * R0 * 0.8, b.cy + Math.sin(a) * R0 * 0.8]);
+  const items = tanks.map(t => [PYw(t[0], t[1]), 0, t]);
+  items.push([PYw(b.cx, b.cy), 1, null]);
+  items.sort((p, q) => p[0] - q[0]);
+  for (const it of items) {
+    if (it[1] === 1) {
+      // the hall between the tanks: dark glass behind light frames
+      prism(
+        c,
+        b.hallPoly || ngon(b.cx, b.cy, ringR * 0.75, 20),
+        z - 1,
+        z + tankH - 1.5,
+        [96, 112, 124],
+        [150, 156, 160]
+      );
+      continue;
+    }
+    const t = it[2];
+    prism(c, ngon(t[0], t[1], t[2], 28), z - 1, z + tankH, [212, 214, 216], [196, 200, 204]);
+    if (k >= 0.9) {
+      // the seams where the tank's steel plates meet
+      c.strokeStyle = col([176, 180, 186], 1);
+      c.lineWidth = Math.max(1, k * 0.15);
+      c.beginPath();
+      for (const f of [0.33, 0.66]) {
+        let first = true;
+        for (let i = 0; i <= 28; i++) {
+          const a = (i / 28) * 2 * Math.PI,
+            x = t[0] + t[2] * Math.cos(a),
+            y = t[1] + t[2] * Math.sin(a);
+          if (faces(Math.cos(a), Math.sin(a)) <= 0) {
+            first = true;
+            continue;
+          }
+          const p = S(x, y, tankH * f);
+          first ? c.moveTo(p[0], p[1]) : c.lineTo(p[0], p[1]);
+          first = false;
+        }
+      }
+      c.stroke();
+    }
   }
-  tanks.sort((p, q) => PYw(p[0], p[1]) - PYw(q[0], q[1]));
-  for (const t of tanks.slice(0, 3))
-    prism(c, ngon(t[0], t[1], tr, 10), z - 1, z + th, [196, 200, 206], [208, 212, 216]);
-  prism(c, ngon(b.cx, b.cy, R0 * 0.55, 10), z - 1, z + th, [170, 176, 182], [200, 204, 208]);
-  for (const t of tanks.slice(3))
-    prism(c, ngon(t[0], t[1], tr, 10), z - 1, z + th, [196, 200, 206], [208, 212, 216]);
-  const rx = R0 * k * 1.414;
-  c.fillStyle = BAKE && night ? 'rgba(255,214,150,.95)' : col([132, 178, 204], 1);
-  c.beginPath();
-  c.ellipse(sx, sy, rx, R0 * k, 0, Math.PI, 0);
+  // the glass dome
+  const lit = BAKE && night;
+  c.fillStyle = lit ? 'rgba(255,214,150,.95)' : col([128, 176, 204], 1);
+  domeShape();
   c.fill();
-  c.strokeStyle = col([92, 138, 168], 1);
-  c.lineWidth = Math.max(1, k * 0.5);
-  c.beginPath();
-  c.ellipse(sx, sy, rx * 0.5, R0 * k, 0, Math.PI, 0);
-  c.moveTo(sx - rx * 0.92, sy - R0 * k * 0.4);
-  c.lineTo(sx + rx * 0.92, sy - R0 * k * 0.4);
-  c.stroke();
-  c.fillStyle = col([226, 240, 248], 1);
-  c.fillRect(
-    Math.round(sx - rx * 0.42),
-    Math.round(sy - R0 * k * 0.72),
-    Math.max(1, k * 1.5),
-    Math.max(1, k)
-  );
-  if (b.fire > 0 && mode !== 0) flames(c, b, z + th + R0);
+  if (!lit) {
+    // the sky catches the top and the side away from the light
+    c.save();
+    domeShape();
+    c.clip();
+    c.fillStyle = col([170, 206, 226], 1);
+    c.beginPath();
+    c.ellipse(ctr[0] - Rd * k * 0.35, ctr[1] - Hd * k * 0.75, Rd * k * 0.6, Hd * k * 0.55, 0, 0, 7);
+    c.fill();
+    c.restore();
+  }
+  if (k >= 0.4) {
+    // the aluminium frame: parallels and meridians on the side facing the viewer
+    c.strokeStyle = col(lit ? [190, 150, 90] : [86, 128, 156], 1);
+    c.lineWidth = Math.max(1, k * 0.22);
+    c.beginPath();
+    for (const tt of [0.35, 0.7]) {
+      const t = tt * (Math.PI / 2);
+      let first = true;
+      for (let i = 0; i <= 40; i++) {
+        const a = (i / 40) * 2 * Math.PI;
+        if (faces(Math.cos(a), Math.sin(a)) <= 0) {
+          first = true;
+          continue;
+        }
+        const p = domePt(a, t);
+        first ? c.moveTo(p[0], p[1]) : c.lineTo(p[0], p[1]);
+        first = false;
+      }
+    }
+    for (let m = 0; m < 12; m++) {
+      const a = (m / 12) * 2 * Math.PI;
+      if (faces(Math.cos(a), Math.sin(a)) <= 0.05) continue;
+      for (let i = 0; i <= 8; i++) {
+        const p = domePt(a, (i / 8) * (Math.PI / 2));
+        i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]);
+      }
+    }
+    c.stroke();
+    // the viewing deck and restaurant ring at the foot of the dome
+    c.strokeStyle = col([226, 230, 232], 1);
+    c.lineWidth = Math.max(1, k * 0.45);
+    c.beginPath();
+    let first = true;
+    for (let i = 0; i <= 48; i++) {
+      const a = (i / 48) * 2 * Math.PI;
+      if (faces(Math.cos(a), Math.sin(a)) <= 0) {
+        first = true;
+        continue;
+      }
+      const p = domePt(a, 0.02);
+      first ? c.moveTo(p[0], p[1]) : c.lineTo(p[0], p[1]);
+      first = false;
+    }
+    c.stroke();
+  }
+  if (b.fire > 0 && mode !== 0) flames(c, b, z + tankH + Hd);
 }
 /* Sólfarið (Jón Gunnar Árnason, 1990): a dream boat of polished stainless steel on a round granite plinth by Sæbraut */
 function drawVoyager(c, b, mode) {

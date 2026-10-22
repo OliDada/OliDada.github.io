@@ -510,6 +510,7 @@ function drawStoreRoof(c, b, zb, z1) {
 }
 
 function applyLandmarks() {
+  setupPerlan();
   const add = [];
   const seen = new Set();
   const HP = new Set();

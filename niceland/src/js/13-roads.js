@@ -1276,15 +1276,31 @@ function renderBld(L, cx, cy, lights) {
   for (const b of cc.bs) items.push([b.key + b.base * 0.01, 0, b]);
   if (!lights) for (const t of cc.ts) items.push([PYw(TREES.x[t], TREES.y[t]), 1, t]);
   items.sort((a, b) => a[0] - b[0] || (a[2].base || 0) - (b[2].base || 0));
-  if (lights) {
-    for (const it of items) if (it[1] === 0) drawBld(c, it[2], 2);
-  } else
-    for (const it of items) {
-      if (it[1] === 0) {
-        if (k < 0.18) lodBld(c, it[2]);
-        else drawBld(c, it[2], 0);
-      } else drawTree(c, it[2], 0);
+  // hills in front (see hillLine): a chunk is baked once, so every check is done now, whatever the frame budget
+  const hb = hlBudget,
+    hills = k >= 0.18;
+  hlBudget = Infinity;
+  const hillOf = it =>
+    !hills ? 0 : it[1] === 0 ? hillBld(it[2]) : hillTree(it[2], TREES.x[it[2]], TREES.y[it[2]]);
+  for (const it of items) {
+    if (lights && it[1] !== 0) continue;
+    const hl = hillOf(it);
+    if (hl === 1) continue;
+    if (hl) {
+      if (it[1] === 0) clipAboveLine(c, hl, k, ox, oy);
+      else clipAboveY(c, hl, k, oy);
     }
+    if (lights) drawBld(c, it[2], 2);
+    else if (it[1] === 0) {
+      if (k < 0.18) lodBld(c, it[2]);
+      else drawBld(c, it[2], 0);
+    } else drawTree(c, it[2], 0);
+    if (hl) c.restore();
+    DOX = ox;
+    DOY = oy;
+    DK = k;
+  }
+  hlBudget = hb;
   BAKE = true;
   return { cv: cvs, ox, oy, w: cvs.width, h: cvs.height };
 }
