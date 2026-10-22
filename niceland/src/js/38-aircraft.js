@@ -288,7 +288,7 @@ function rkvDay(day) {
 function stepPlanes(dt) {
   if (!AIRPORTS.length) return;
   try {
-    stepCruise();
+    stepCruise(dt);
   } catch (e) {
     console.warn(e);
   }
@@ -335,6 +335,8 @@ function stepPlanes(dt) {
         p.d = -5500;
         p.v = T.sp;
         p.name = e.al + ' · flight from ' + e.dest;
+        // the approach takes over from the cross-country leg, even if that is still flying at real speed on screen
+        for (const c of CRUISE) if (c.arr && c.dest === e.dest && c.on) c.u = 1.0001;
       } else {
         p.st = 'lineup';
         p.d = 40;

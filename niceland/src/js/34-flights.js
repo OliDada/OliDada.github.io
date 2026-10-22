@@ -9,7 +9,7 @@
 
 /* ================= domestic flights across the country =================
    Each departure from Reykjavík climbs out locally and then crosses the island at cruise height to its destination;
-   arrivals cross back and hand over to the approach. Positions follow the game clock (flight times as scheduled). */
+   arrivals cross back and hand over to the approach. Flights keep to their timetable, but fly at real cruise speed while on screen (see stepCruise). */
 const DESTC = {
   'Akureyri': [65.66, -18.0727, 45],
   'Egilsstaðir': [65.2833, -14.4014, 60],
@@ -46,6 +46,7 @@ function buildCruise(day) {
         cruise: 1,
         t0: day * 1440 + e.t - dur + 6,
         t1: day * 1440 + e.t - 1,
+        arr: 1,
         a: far,
         b: near,
         t: e.type,
@@ -74,14 +75,37 @@ function buildCruise(day) {
       });
   }
 }
-function stepCruise() {
+/* real cruise speeds, m/s */
+const CRUISE_V = { dhc6: 75, q400: 150, tp: 130, light: 60, jet: 230, wide: 250 };
+let cruiseDt = 0;
+function stepCruise(dt) {
+  cruiseDt = Math.min(dt || 0, 0.5);
   const day = Math.floor(gameMin / 1440);
   if (day !== cruiseDay) {
     cruiseDay = day;
     buildCruise(day);
   }
   for (const p of CRUISE) {
-    const u = (gameMin - p.t0) / (p.t1 - p.t0);
+    /* The schedule runs on the game clock, which would fly a 45-minute flight across the country in 22 seconds.
+       While a plane can be seen it flies at its real cruise speed instead; once both it and its scheduled position
+       are off screen it catches up with the timetable. */
+    const us = (gameMin - p.t0) / (p.t1 - p.t0),
+      L = Math.hypot(p.b[0] - p.a[0], p.b[1] - p.a[1]) || 1;
+    if (p.u === undefined || p.u < 0) p.u = us;
+    const vis = u => {
+      if (u < 0 || u > 1) return false;
+      const x = p.a[0] + (p.b[0] - p.a[0]) * u,
+        y = p.a[1] + (p.b[1] - p.a[1]) * u,
+        q = sp_(x, y, p.alt0 || p.alt);
+      return q[0] > -150 && q[0] < VW + 150 && q[1] > -250 && q[1] < VH + 150;
+    };
+    if (follow === p || vis(p.u) || vis(us)) {
+      if (us >= 0 && p.u < 1) {
+        const v = CRUISE_V[p.t] || 140;
+        p.u = Math.min(1.0001, Math.max(p.u, 0) + (v * cruiseDt) / L, Math.max(p.u, us));
+      }
+    } else p.u = us;
+    const u = p.u;
     p.on = u >= 0 && u <= 1;
     if (!p.on) {
       p.x = undefined;
@@ -95,6 +119,5 @@ function stepCruise() {
     p.z = Math.max(hAt(p.x, p.y) + 300, p.alt);
     p.fly = 1;
     p.fade = u < 0.03 ? u / 0.03 - 1 : u > 0.97 ? (1 - u) / 0.03 - 1 : 0;
-    p.u = u;
   }
 }

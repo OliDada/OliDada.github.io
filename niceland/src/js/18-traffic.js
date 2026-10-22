@@ -1097,8 +1097,22 @@ function arrive(a) {
       a.crewT = 40;
       a.siren = 1;
     } else {
-      a.dead = true;
       trucksBusy.delete(b);
+      const nb2 = nextFire(a.x, a.y, a);
+      if (nb2) {
+        a.target = nb2;
+        trucksBusy.add(nb2);
+        const s = a.path && a.path.length ? a.path[a.path.length - 1] : nearestNode(a.x, a.y, GD, 100),
+          t = nearestNode(nb2.cx, nb2.cy, GD, 250),
+          p = s >= 0 && t >= 0 ? astar(GD, s, t, 8000) : null;
+        if (p && p.length > 1) {
+          a.path = p;
+          a.pi = 0;
+          a.t = 0;
+          return;
+        }
+      }
+      a.dead = true;
     }
     return;
   }
@@ -1259,6 +1273,36 @@ function behave() {
     if (a.kind !== 'truck' || a.dead || a.state !== 'parked') continue;
     const b = a.target;
     a.crewT -= 0.25;
+    if (a.crewT <= 0 && b && b.fire > 0 && b.state !== 2) {
+      // still burning: the crew stays on it rather than driving off
+      a.crewT = 40;
+      for (const f of agents) if (f.truck === a && !f.dead) f.idle = 40;
+      continue;
+    }
+    if (!b || b.fire <= 0 || b.state === 2) {
+      // this building is out (or down): the crew moves on to the next one burning nearby, if there is one
+      const nb2 = nextFire(a.x, a.y, a);
+      if (nb2) {
+        trucksBusy.delete(b);
+        trucksBusy.add(nb2);
+        a.target = nb2;
+        a.crewT = 40;
+        const d = Math.hypot(nb2.cx - a.x, nb2.cy - a.y),
+          q = Math.min(1, (nb2.r + 10) / Math.max(1, d));
+        for (const f of agents)
+          if (f.truck === a && !f.dead) {
+            f.target = nb2;
+            f.state = 'spray';
+            f.idle = 40;
+            f.act = 'Fighting the fire at ' + (nb2.addr || nb2.name || 'a building');
+            f.x = nb2.cx + (a.x - nb2.cx) * q + (R() - 0.5) * 8;
+            f.y = nb2.cy + (a.y - nb2.cy) * q + (R() - 0.5) * 8;
+            f.vx = nb2.cx - f.x;
+            f.vy = nb2.cy - f.y;
+          }
+        continue;
+      }
+    }
     if (!b || b.fire <= 0 || a.crewT <= 0 || b.state === 2) {
       for (const f of agents) if (f.truck === a) f.dead = true;
       trucksBusy.delete(b);

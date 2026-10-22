@@ -69,16 +69,22 @@ function clearCells(b) {
       if (F.CBLD[c] === b.id) F.CBLD[c] = -1;
     }
 }
-function ignite(b) {
+/* gen: 0 for a fire that was started (by you, lightning, an explosion…), 1 for one that caught from a neighbour.
+   Only a fire that was started spreads, and only to the buildings and trees touching it, so a house fire can take
+   the house next door but does not run on down the street. */
+function ignite(b, gen) {
   if (!b || b.state === 2 || b.state === 9 || b.fire > 0 || b.sp === 5) return;
   b.fire = 0.01;
+  b.fgen = gen || 0;
   burning.add(b);
   dirtyB(b);
   hazards.push({ x: b.cx, y: b.cy, r: 60, t: 4, kind: 'fire' });
   requestTruck(b);
 }
-function igniteTree(i) {
+const TFGEN = new Map(); // tree index -> generation of its fire (as for buildings)
+function igniteTree(i, gen) {
   if (TREES.s[i] === 0) {
+    TFGEN.set(i, gen || 0);
     TREES.s[i] = 1;
     TREES.f[i] = 0;
     burningT.add(i);
@@ -450,13 +456,57 @@ const STATIONS = [
   [65.264, -14.4]
 ];
 let trucksBusy = new Set();
+/* Fire engines respond to an incident, not to every burning building: one engine for a single house, more as the
+   fire spreads (Slökkvilið höfuðborgarsvæðisins sends two or three to a house fire with others nearby), at most
+   four, and engines already at the scene move on to the next burning building. */
+const INCIDENT_R = 200;
+function enginesNear(x, y) {
+  let n = 0;
+  for (const a of agents)
+    if (a.kind === 'truck' && !a.dead && a.siren && a.target && Math.hypot(a.target.cx - x, a.target.cy - y) < INCIDENT_R)
+      n++;
+  return n;
+}
+function enginesWanted(x, y) {
+  let n = 0;
+  for (const o of burning) if (Math.hypot(o.cx - x, o.cy - y) < INCIDENT_R) n++;
+  return n <= 1 ? 1 : n <= 3 ? 2 : n <= 6 ? 3 : 4;
+}
+let truckPending = 0;
 function requestTruck(b) {
   if (trucksBusy.has(b) || K < 0.27) return;
+  if (enginesNear(b.cx, b.cy) + truckPending >= enginesWanted(b.cx, b.cy)) return;
   trucksBusy.add(b);
-  setTimeout(() => dispatchTruck(b), 400);
+  truckPending++;
+  setTimeout(() => {
+    truckPending--;
+    dispatchTruck(b);
+  }, 400);
+}
+// the next building in the same incident that needs an engine: burning, and with the fewest engines on it
+function nextFire(x, y, self) {
+  let best = null,
+    bs = 1e18;
+  for (const o of burning) {
+    if (o.fire <= 0 || o.state === 2) continue;
+    const d = Math.hypot(o.cx - x, o.cy - y);
+    if (d > INCIDENT_R) continue;
+    let on = 0;
+    for (const a of agents) if (a !== self && a.kind === 'truck' && !a.dead && a.target === o) on++;
+    const sc = on * 1e6 + d;
+    if (sc < bs) {
+      bs = sc;
+      best = o;
+    }
+  }
+  return best;
 }
 function dispatchTruck(b) {
   if (b.fire <= 0) {
+    trucksBusy.delete(b);
+    return;
+  }
+  if (enginesNear(b.cx, b.cy) >= enginesWanted(b.cx, b.cy)) {
     trucksBusy.delete(b);
     return;
   }

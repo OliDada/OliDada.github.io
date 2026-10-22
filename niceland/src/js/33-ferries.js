@@ -11,13 +11,15 @@
 /* ================= scheduled ferries: Herjólfur, Baldur, Sævar (Hrísey) and Sæfari (Grímsey) =================
    Timetables follow the published patterns (Herjólfur: seven round trips a day between Vestmannaeyjar and Landeyjahöfn,
    35 minutes each way; Baldur: Stykkishólmur–Flatey–Brjánslækur, a second sailing in summer; Sævar every two hours;
-   Sæfari Monday, Wednesday and Friday). Boats run on the game clock; cars drive off on arrival and queue up to board. */
+   Sæfari Monday, Wednesday and Friday). Boats keep to the game-clock timetable, but sail at their real speed while on screen (see stepFerry);
+   cars drive off on arrival and queue up to board. */
 const HM = s => {
   const [h, m] = s.split(':');
   return +h * 60 + (+m || 0);
 };
 const FERRIES = {
   herjolfur: {
+    kn: 15, // service speed: how fast it sails while you can see it
     name: 'Herjólfur',
     en: 'Car ferry · Vestmannaeyjar–Landeyjahöfn',
     L: 70,
@@ -40,6 +42,7 @@ const FERRIES = {
     ]
   },
   baldur: {
+    kn: 12, // service speed: how fast it sails while you can see it
     name: 'Baldur',
     en: 'Car ferry · Stykkishólmur–Flatey–Brjánslækur',
     L: 68,
@@ -68,6 +71,7 @@ const FERRIES = {
     ]
   },
   saevar: {
+    kn: 9, // service speed: how fast it sails while you can see it
     name: 'Sævar',
     en: 'Ferry · Árskógssandur–Hrísey',
     L: 24,
@@ -87,6 +91,7 @@ const FERRIES = {
     ]
   },
   saefari: {
+    kn: 13, // service speed: how fast it sails while you can see it
     name: 'Sæfari',
     en: 'Ferry · Dalvík–Grímsey',
     L: 40,
@@ -169,19 +174,50 @@ function stepFerry(b, dt) {
     m = gameMin % 1440,
     S = ferryState(Ln, m);
   const prev = b.st;
-  b.st = S.st;
   const ease = u => (u < 0.08 ? (u * u) / 0.16 : u > 0.92 ? 1 - ((1 - u) * (1 - u)) / 0.16 : u); // slow out of and into harbour
-  const u = S.st === 'out' ? ease(S.u) : S.st === 'back' ? 1 - ease(S.u) : S.u;
-  b.s = u * Ln.len;
-  const p = boatPos(Ln, Math.min(Ln.len - 0.01, Math.max(0.01, b.s)));
+  const sched = (S.st === 'out' ? ease(S.u) : S.st === 'back' ? 1 - ease(S.u) : S.u) * Ln.len;
+  /* The timetable runs on the game clock (an hour every 30 s), which would send the boat across at hundreds of
+     metres a second. While it can be seen it sails at its real service speed instead, finishing the crossing it is
+     on and leaving late if need be; once both it and its timetable position are off screen it catches up. */
+  const at = s => boatPos(Ln, Math.min(Ln.len - 0.01, Math.max(0.01, s)));
+  const pNow = b.trip ? at(b.s) : null,
+    pSch = at(sched),
+    seen =
+      pNow && (follow === b || onScr(pNow[0], pNow[1], 120) || onScr(pSch[0], pSch[1], 120));
+  let mv = 0;
+  if (!seen) {
+    b.trip = S.st;
+    b.s = sched;
+  } else {
+    if (b.trip === 'dock' && S.st === 'out') b.trip = 'out';
+    else if (b.trip === 'dock2' && S.st === 'back') b.trip = 'back';
+    if (b.trip === 'out' || b.trip === 'back') {
+      const fwd = b.trip === 'out' ? 1 : -1,
+        goal = S.st === b.trip ? sched : fwd > 0 ? Ln.len : 0,
+        ends = Math.min(b.s, Ln.len - b.s),
+        vmax = (Ln.kn || 12) * 0.514 * Math.max(0.3, Math.min(1, ends / 600)),
+        step = Math.max(0, Math.min(vmax * dt, (goal - b.s) * fwd));
+      b.s += step * fwd;
+      mv = step / Math.max(dt, 1e-6);
+      if (fwd > 0 && b.s >= Ln.len - 0.5) {
+        b.s = Ln.len;
+        b.trip = 'dock2';
+      } else if (fwd < 0 && b.s <= 0.5) {
+        b.s = 0;
+        b.trip = 'dock';
+      }
+    }
+  }
+  b.st = b.trip;
+  const p = at(b.s);
   b.x = p[0];
   b.y = p[1];
-  const hd = p[2] + (S.st === 'back' ? Math.PI : 0);
-  if (S.st === 'out' || S.st === 'back') {
+  const hd = p[2] + (b.st === 'back' ? Math.PI : 0);
+  if (b.st === 'out' || b.st === 'back') {
     let dh = hd - b.hd;
     dh = Math.atan2(Math.sin(dh), Math.cos(dh));
     b.hd += dh * Math.min(1, dt * 2);
-    b.v = S.u < 0.08 || S.u > 0.92 ? 3 : 9;
+    b.v = seen ? mv : 9;
   } else b.v = 0;
   if (S.st === 'out' && prev !== 'out')
     b.pax = Math.round((Ln.cars ? Ln.cars * 2.2 : 30) * (0.4 + R() * 0.6));

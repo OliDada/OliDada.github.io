@@ -340,19 +340,38 @@ function hallFace(c, b, j, P, dx, dy, zb, z1, sh) {
     // belfry tiers: clock on the first, louvres above
     if (L < 2.5) return;
     if (b.base < 46 && L >= 6) {
-      const ctr = S(0.5, bot + b.h * 0.55),
-        r = Math.max(1.5, k * Math.min(2.4, L * 0.22));
+      // the dial lies in the wall: one axis along the wall (foreshortened and sloped on screen), one straight up
+      const zc = bot + b.h * 0.55,
+        ctr = S(0.5, zc),
+        R = Math.max(1.5 / k, Math.min(2.4, L * 0.22)),
+        e = S(0.5 + 1 / L, zc);
+      let ux = e[0] - ctr[0],
+        uy = e[1] - ctr[1];
+      if (ux < 0) {
+        // keep the wall's "right" on the right of the screen, so the hands are never mirrored
+        ux = -ux;
+        uy = -uy;
+      }
+      if (Math.abs(ux) < k * 0.25) return; // nearly edge-on: no room for a dial
+      const at = (a, rr) => [ctr[0] + ux * Math.cos(a) * rr, ctr[1] + (uy * Math.cos(a) - k * Math.sin(a)) * rr];
       c.fillStyle = col([238, 236, 228], 1);
       c.beginPath();
-      c.ellipse(ctr[0], ctr[1], r * Math.max(0.35, Math.abs(nx * SXx + ny * SXy) / 1.42), r * 0.95, 0, 0, 7);
+      for (let i = 0; i < 24; i++) {
+        const p = at((i / 24) * 2 * Math.PI, R);
+        if (i) c.lineTo(p[0], p[1]);
+        else c.moveTo(p[0], p[1]);
+      }
+      c.closePath();
       c.fill();
       c.strokeStyle = col([40, 44, 50], 1);
       c.lineWidth = Math.max(1, k * 0.18);
+      const mh = at(Math.PI / 2, R * 0.75), // minute hand at twelve
+        hh2 = at(-Math.PI / 6, R * 0.45); // hour hand at four
       c.beginPath();
       c.moveTo(ctr[0], ctr[1]);
-      c.lineTo(ctr[0], ctr[1] - r * 0.75);
+      c.lineTo(mh[0], mh[1]);
       c.moveTo(ctr[0], ctr[1]);
-      c.lineTo(ctr[0] + r * 0.3, ctr[1] + r * 0.15);
+      c.lineTo(hh2[0], hh2[1]);
       c.stroke();
       return;
     }

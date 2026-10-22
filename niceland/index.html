@@ -1194,19 +1194,38 @@ function hallFace(c, b, j, P, dx, dy, zb, z1, sh) {
     // belfry tiers: clock on the first, louvres above
     if (L < 2.5) return;
     if (b.base < 46 && L >= 6) {
-      const ctr = S(0.5, bot + b.h * 0.55),
-        r = Math.max(1.5, k * Math.min(2.4, L * 0.22));
+      // the dial lies in the wall: one axis along the wall (foreshortened and sloped on screen), one straight up
+      const zc = bot + b.h * 0.55,
+        ctr = S(0.5, zc),
+        R = Math.max(1.5 / k, Math.min(2.4, L * 0.22)),
+        e = S(0.5 + 1 / L, zc);
+      let ux = e[0] - ctr[0],
+        uy = e[1] - ctr[1];
+      if (ux < 0) {
+        // keep the wall's "right" on the right of the screen, so the hands are never mirrored
+        ux = -ux;
+        uy = -uy;
+      }
+      if (Math.abs(ux) < k * 0.25) return; // nearly edge-on: no room for a dial
+      const at = (a, rr) => [ctr[0] + ux * Math.cos(a) * rr, ctr[1] + (uy * Math.cos(a) - k * Math.sin(a)) * rr];
       c.fillStyle = col([238, 236, 228], 1);
       c.beginPath();
-      c.ellipse(ctr[0], ctr[1], r * Math.max(0.35, Math.abs(nx * SXx + ny * SXy) / 1.42), r * 0.95, 0, 0, 7);
+      for (let i = 0; i < 24; i++) {
+        const p = at((i / 24) * 2 * Math.PI, R);
+        if (i) c.lineTo(p[0], p[1]);
+        else c.moveTo(p[0], p[1]);
+      }
+      c.closePath();
       c.fill();
       c.strokeStyle = col([40, 44, 50], 1);
       c.lineWidth = Math.max(1, k * 0.18);
+      const mh = at(Math.PI / 2, R * 0.75), // minute hand at twelve
+        hh2 = at(-Math.PI / 6, R * 0.45); // hour hand at four
       c.beginPath();
       c.moveTo(ctr[0], ctr[1]);
-      c.lineTo(ctr[0], ctr[1] - r * 0.75);
+      c.lineTo(mh[0], mh[1]);
       c.moveTo(ctr[0], ctr[1]);
-      c.lineTo(ctr[0] + r * 0.3, ctr[1] + r * 0.15);
+      c.lineTo(hh2[0], hh2[1]);
       c.stroke();
       return;
     }
@@ -8509,16 +8528,22 @@ function clearCells(b) {
       if (F.CBLD[c] === b.id) F.CBLD[c] = -1;
     }
 }
-function ignite(b) {
+/* gen: 0 for a fire that was started (by you, lightning, an explosion…), 1 for one that caught from a neighbour.
+   Only a fire that was started spreads, and only to the buildings and trees touching it, so a house fire can take
+   the house next door but does not run on down the street. */
+function ignite(b, gen) {
   if (!b || b.state === 2 || b.state === 9 || b.fire > 0 || b.sp === 5) return;
   b.fire = 0.01;
+  b.fgen = gen || 0;
   burning.add(b);
   dirtyB(b);
   hazards.push({ x: b.cx, y: b.cy, r: 60, t: 4, kind: 'fire' });
   requestTruck(b);
 }
-function igniteTree(i) {
+const TFGEN = new Map(); // tree index -> generation of its fire (as for buildings)
+function igniteTree(i, gen) {
   if (TREES.s[i] === 0) {
+    TFGEN.set(i, gen || 0);
     TREES.s[i] = 1;
     TREES.f[i] = 0;
     burningT.add(i);
@@ -8890,13 +8915,57 @@ const STATIONS = [
   [65.264, -14.4]
 ];
 let trucksBusy = new Set();
+/* Fire engines respond to an incident, not to every burning building: one engine for a single house, more as the
+   fire spreads (Slökkvilið höfuðborgarsvæðisins sends two or three to a house fire with others nearby), at most
+   four, and engines already at the scene move on to the next burning building. */
+const INCIDENT_R = 200;
+function enginesNear(x, y) {
+  let n = 0;
+  for (const a of agents)
+    if (a.kind === 'truck' && !a.dead && a.siren && a.target && Math.hypot(a.target.cx - x, a.target.cy - y) < INCIDENT_R)
+      n++;
+  return n;
+}
+function enginesWanted(x, y) {
+  let n = 0;
+  for (const o of burning) if (Math.hypot(o.cx - x, o.cy - y) < INCIDENT_R) n++;
+  return n <= 1 ? 1 : n <= 3 ? 2 : n <= 6 ? 3 : 4;
+}
+let truckPending = 0;
 function requestTruck(b) {
   if (trucksBusy.has(b) || K < 0.27) return;
+  if (enginesNear(b.cx, b.cy) + truckPending >= enginesWanted(b.cx, b.cy)) return;
   trucksBusy.add(b);
-  setTimeout(() => dispatchTruck(b), 400);
+  truckPending++;
+  setTimeout(() => {
+    truckPending--;
+    dispatchTruck(b);
+  }, 400);
+}
+// the next building in the same incident that needs an engine: burning, and with the fewest engines on it
+function nextFire(x, y, self) {
+  let best = null,
+    bs = 1e18;
+  for (const o of burning) {
+    if (o.fire <= 0 || o.state === 2) continue;
+    const d = Math.hypot(o.cx - x, o.cy - y);
+    if (d > INCIDENT_R) continue;
+    let on = 0;
+    for (const a of agents) if (a !== self && a.kind === 'truck' && !a.dead && a.target === o) on++;
+    const sc = on * 1e6 + d;
+    if (sc < bs) {
+      bs = sc;
+      best = o;
+    }
+  }
+  return best;
 }
 function dispatchTruck(b) {
   if (b.fire <= 0) {
+    trucksBusy.delete(b);
+    return;
+  }
+  if (enginesNear(b.cx, b.cy) >= enginesWanted(b.cx, b.cy)) {
     trucksBusy.delete(b);
     return;
   }
@@ -10892,8 +10961,22 @@ function arrive(a) {
       a.crewT = 40;
       a.siren = 1;
     } else {
-      a.dead = true;
       trucksBusy.delete(b);
+      const nb2 = nextFire(a.x, a.y, a);
+      if (nb2) {
+        a.target = nb2;
+        trucksBusy.add(nb2);
+        const s = a.path && a.path.length ? a.path[a.path.length - 1] : nearestNode(a.x, a.y, GD, 100),
+          t = nearestNode(nb2.cx, nb2.cy, GD, 250),
+          p = s >= 0 && t >= 0 ? astar(GD, s, t, 8000) : null;
+        if (p && p.length > 1) {
+          a.path = p;
+          a.pi = 0;
+          a.t = 0;
+          return;
+        }
+      }
+      a.dead = true;
     }
     return;
   }
@@ -11054,6 +11137,36 @@ function behave() {
     if (a.kind !== 'truck' || a.dead || a.state !== 'parked') continue;
     const b = a.target;
     a.crewT -= 0.25;
+    if (a.crewT <= 0 && b && b.fire > 0 && b.state !== 2) {
+      // still burning: the crew stays on it rather than driving off
+      a.crewT = 40;
+      for (const f of agents) if (f.truck === a && !f.dead) f.idle = 40;
+      continue;
+    }
+    if (!b || b.fire <= 0 || b.state === 2) {
+      // this building is out (or down): the crew moves on to the next one burning nearby, if there is one
+      const nb2 = nextFire(a.x, a.y, a);
+      if (nb2) {
+        trucksBusy.delete(b);
+        trucksBusy.add(nb2);
+        a.target = nb2;
+        a.crewT = 40;
+        const d = Math.hypot(nb2.cx - a.x, nb2.cy - a.y),
+          q = Math.min(1, (nb2.r + 10) / Math.max(1, d));
+        for (const f of agents)
+          if (f.truck === a && !f.dead) {
+            f.target = nb2;
+            f.state = 'spray';
+            f.idle = 40;
+            f.act = 'Fighting the fire at ' + (nb2.addr || nb2.name || 'a building');
+            f.x = nb2.cx + (a.x - nb2.cx) * q + (R() - 0.5) * 8;
+            f.y = nb2.cy + (a.y - nb2.cy) * q + (R() - 0.5) * 8;
+            f.vx = nb2.cx - f.x;
+            f.vy = nb2.cy - f.y;
+          }
+        continue;
+      }
+    }
     if (!b || b.fire <= 0 || a.crewT <= 0 || b.state === 2) {
       for (const f of agents) if (f.truck === a) f.dead = true;
       trucksBusy.delete(b);
@@ -21388,13 +21501,15 @@ function extraCard(x, y) {
 /* ================= scheduled ferries: Herjólfur, Baldur, Sævar (Hrísey) and Sæfari (Grímsey) =================
    Timetables follow the published patterns (Herjólfur: seven round trips a day between Vestmannaeyjar and Landeyjahöfn,
    35 minutes each way; Baldur: Stykkishólmur–Flatey–Brjánslækur, a second sailing in summer; Sævar every two hours;
-   Sæfari Monday, Wednesday and Friday). Boats run on the game clock; cars drive off on arrival and queue up to board. */
+   Sæfari Monday, Wednesday and Friday). Boats keep to the game-clock timetable, but sail at their real speed while on screen (see stepFerry);
+   cars drive off on arrival and queue up to board. */
 const HM = s => {
   const [h, m] = s.split(':');
   return +h * 60 + (+m || 0);
 };
 const FERRIES = {
   herjolfur: {
+    kn: 15, // service speed: how fast it sails while you can see it
     name: 'Herjólfur',
     en: 'Car ferry · Vestmannaeyjar–Landeyjahöfn',
     L: 70,
@@ -21417,6 +21532,7 @@ const FERRIES = {
     ]
   },
   baldur: {
+    kn: 12, // service speed: how fast it sails while you can see it
     name: 'Baldur',
     en: 'Car ferry · Stykkishólmur–Flatey–Brjánslækur',
     L: 68,
@@ -21445,6 +21561,7 @@ const FERRIES = {
     ]
   },
   saevar: {
+    kn: 9, // service speed: how fast it sails while you can see it
     name: 'Sævar',
     en: 'Ferry · Árskógssandur–Hrísey',
     L: 24,
@@ -21464,6 +21581,7 @@ const FERRIES = {
     ]
   },
   saefari: {
+    kn: 13, // service speed: how fast it sails while you can see it
     name: 'Sæfari',
     en: 'Ferry · Dalvík–Grímsey',
     L: 40,
@@ -21546,19 +21664,50 @@ function stepFerry(b, dt) {
     m = gameMin % 1440,
     S = ferryState(Ln, m);
   const prev = b.st;
-  b.st = S.st;
   const ease = u => (u < 0.08 ? (u * u) / 0.16 : u > 0.92 ? 1 - ((1 - u) * (1 - u)) / 0.16 : u); // slow out of and into harbour
-  const u = S.st === 'out' ? ease(S.u) : S.st === 'back' ? 1 - ease(S.u) : S.u;
-  b.s = u * Ln.len;
-  const p = boatPos(Ln, Math.min(Ln.len - 0.01, Math.max(0.01, b.s)));
+  const sched = (S.st === 'out' ? ease(S.u) : S.st === 'back' ? 1 - ease(S.u) : S.u) * Ln.len;
+  /* The timetable runs on the game clock (an hour every 30 s), which would send the boat across at hundreds of
+     metres a second. While it can be seen it sails at its real service speed instead, finishing the crossing it is
+     on and leaving late if need be; once both it and its timetable position are off screen it catches up. */
+  const at = s => boatPos(Ln, Math.min(Ln.len - 0.01, Math.max(0.01, s)));
+  const pNow = b.trip ? at(b.s) : null,
+    pSch = at(sched),
+    seen =
+      pNow && (follow === b || onScr(pNow[0], pNow[1], 120) || onScr(pSch[0], pSch[1], 120));
+  let mv = 0;
+  if (!seen) {
+    b.trip = S.st;
+    b.s = sched;
+  } else {
+    if (b.trip === 'dock' && S.st === 'out') b.trip = 'out';
+    else if (b.trip === 'dock2' && S.st === 'back') b.trip = 'back';
+    if (b.trip === 'out' || b.trip === 'back') {
+      const fwd = b.trip === 'out' ? 1 : -1,
+        goal = S.st === b.trip ? sched : fwd > 0 ? Ln.len : 0,
+        ends = Math.min(b.s, Ln.len - b.s),
+        vmax = (Ln.kn || 12) * 0.514 * Math.max(0.3, Math.min(1, ends / 600)),
+        step = Math.max(0, Math.min(vmax * dt, (goal - b.s) * fwd));
+      b.s += step * fwd;
+      mv = step / Math.max(dt, 1e-6);
+      if (fwd > 0 && b.s >= Ln.len - 0.5) {
+        b.s = Ln.len;
+        b.trip = 'dock2';
+      } else if (fwd < 0 && b.s <= 0.5) {
+        b.s = 0;
+        b.trip = 'dock';
+      }
+    }
+  }
+  b.st = b.trip;
+  const p = at(b.s);
   b.x = p[0];
   b.y = p[1];
-  const hd = p[2] + (S.st === 'back' ? Math.PI : 0);
-  if (S.st === 'out' || S.st === 'back') {
+  const hd = p[2] + (b.st === 'back' ? Math.PI : 0);
+  if (b.st === 'out' || b.st === 'back') {
     let dh = hd - b.hd;
     dh = Math.atan2(Math.sin(dh), Math.cos(dh));
     b.hd += dh * Math.min(1, dt * 2);
-    b.v = S.u < 0.08 || S.u > 0.92 ? 3 : 9;
+    b.v = seen ? mv : 9;
   } else b.v = 0;
   if (S.st === 'out' && prev !== 'out')
     b.pax = Math.round((Ln.cars ? Ln.cars * 2.2 : 30) * (0.4 + R() * 0.6));
@@ -21677,7 +21826,7 @@ function ferryCardTxt(b) {
 
 /* ================= domestic flights across the country =================
    Each departure from Reykjavík climbs out locally and then crosses the island at cruise height to its destination;
-   arrivals cross back and hand over to the approach. Positions follow the game clock (flight times as scheduled). */
+   arrivals cross back and hand over to the approach. Flights keep to their timetable, but fly at real cruise speed while on screen (see stepCruise). */
 const DESTC = {
   'Akureyri': [65.66, -18.0727, 45],
   'Egilsstaðir': [65.2833, -14.4014, 60],
@@ -21714,6 +21863,7 @@ function buildCruise(day) {
         cruise: 1,
         t0: day * 1440 + e.t - dur + 6,
         t1: day * 1440 + e.t - 1,
+        arr: 1,
         a: far,
         b: near,
         t: e.type,
@@ -21742,14 +21892,37 @@ function buildCruise(day) {
       });
   }
 }
-function stepCruise() {
+/* real cruise speeds, m/s */
+const CRUISE_V = { dhc6: 75, q400: 150, tp: 130, light: 60, jet: 230, wide: 250 };
+let cruiseDt = 0;
+function stepCruise(dt) {
+  cruiseDt = Math.min(dt || 0, 0.5);
   const day = Math.floor(gameMin / 1440);
   if (day !== cruiseDay) {
     cruiseDay = day;
     buildCruise(day);
   }
   for (const p of CRUISE) {
-    const u = (gameMin - p.t0) / (p.t1 - p.t0);
+    /* The schedule runs on the game clock, which would fly a 45-minute flight across the country in 22 seconds.
+       While a plane can be seen it flies at its real cruise speed instead; once both it and its scheduled position
+       are off screen it catches up with the timetable. */
+    const us = (gameMin - p.t0) / (p.t1 - p.t0),
+      L = Math.hypot(p.b[0] - p.a[0], p.b[1] - p.a[1]) || 1;
+    if (p.u === undefined || p.u < 0) p.u = us;
+    const vis = u => {
+      if (u < 0 || u > 1) return false;
+      const x = p.a[0] + (p.b[0] - p.a[0]) * u,
+        y = p.a[1] + (p.b[1] - p.a[1]) * u,
+        q = sp_(x, y, p.alt0 || p.alt);
+      return q[0] > -150 && q[0] < VW + 150 && q[1] > -250 && q[1] < VH + 150;
+    };
+    if (follow === p || vis(p.u) || vis(us)) {
+      if (us >= 0 && p.u < 1) {
+        const v = CRUISE_V[p.t] || 140;
+        p.u = Math.min(1.0001, Math.max(p.u, 0) + (v * cruiseDt) / L, Math.max(p.u, us));
+      }
+    } else p.u = us;
+    const u = p.u;
     p.on = u >= 0 && u <= 1;
     if (!p.on) {
       p.x = undefined;
@@ -21763,7 +21936,6 @@ function stepCruise() {
     p.z = Math.max(hAt(p.x, p.y) + 300, p.alt);
     p.fly = 1;
     p.fade = u < 0.03 ? u / 0.03 - 1 : u > 0.97 ? (1 - u) / 0.03 - 1 : 0;
-    p.u = u;
   }
 }
 
@@ -24058,7 +24230,7 @@ function rkvDay(day) {
 function stepPlanes(dt) {
   if (!AIRPORTS.length) return;
   try {
-    stepCruise();
+    stepCruise(dt);
   } catch (e) {
     console.warn(e);
   }
@@ -24105,6 +24277,8 @@ function stepPlanes(dt) {
         p.d = -5500;
         p.v = T.sp;
         p.name = e.al + ' · flight from ' + e.dest;
+        // the approach takes over from the cross-country leg, even if that is still flying at real speed on screen
+        for (const c of CRUISE) if (c.arr && c.dest === e.dest && c.on) c.u = 1.0001;
       } else {
         p.st = 'lineup';
         p.d = 40;
@@ -29596,11 +29770,12 @@ function tick(dt) {
   for (const b of burning) {
     b.hp -= (dt * 3) / (1 + b.area / 600);
     b.fire += dt;
-    if (b.fire > 4 && R() < dt * 0.3 && b.nb)
-      for (const o of b.nb) if (o.state === 0 && o.fire <= 0 && R() < 0.12) ignite(o);
-    if (R() < dt * 0.6)
+    const spreads = !b.fgen; // only a fire that was started spreads, and only to what touches it
+    if (spreads && b.fire > 4 && R() < dt * 0.3 && b.nb)
+      for (const o of b.nb) if (o.state === 0 && o.fire <= 0 && R() < 0.12) ignite(o, 1);
+    if (spreads && R() < dt * 0.6)
       nearT(b.cx, b.cy, b.r + 10, t => {
-        if (R() < 0.3) igniteTree(t);
+        if (R() < 0.3) igniteTree(t, 1);
       });
     if (R() < 0.0008 || (rainT > 0 && R() < 0.04) || flood > b.z) b.fire = 0;
     if (R() < dt * 1.6) smoke(b.cx, b.cy, b.z + b.base + b.h, true, 1, Math.min(14, 4 + b.r / 3));
@@ -29613,18 +29788,22 @@ function tick(dt) {
   }
   for (const t of burningT) {
     TREES.f[t] += dt;
-    if (R() < dt * 0.5)
+    // a wildfire you started runs from tree to tree and can catch the houses beside it; a tree that caught from a
+    // burning house just burns
+    const tg = TFGEN.get(t) || 0;
+    if (!tg && R() < dt * 0.5)
       nearT(TREES.x[t], TREES.y[t], 12, u => {
-        if (R() < 0.4) igniteTree(u);
+        if (R() < 0.4) igniteTree(u, 0);
       });
-    if (R() < dt * 0.6)
+    if (!tg && R() < dt * 0.6)
       nearB(TREES.x[t], TREES.y[t], 20, b => {
-        if (Math.hypot(b.cx - TREES.x[t], b.cy - TREES.y[t]) < b.r + 6 && R() < 0.2) ignite(b);
+        if (Math.hypot(b.cx - TREES.x[t], b.cy - TREES.y[t]) < b.r + 6 && R() < 0.2) ignite(b, 1);
       });
     if (R() < dt * 2) smoke(TREES.x[t], TREES.y[t], hAt(TREES.x[t], TREES.y[t]) + 6, true, 1, 2);
     if (TREES.f[t] > 6 + R() * 6 || (rainT > 0 && R() < 0.05)) {
       TREES.s[t] = 2;
       burningT.delete(t);
+      TFGEN.delete(t);
       dirtyWorld(TREES.x[t], TREES.y[t], false, true);
     }
   }

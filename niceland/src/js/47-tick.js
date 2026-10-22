@@ -77,11 +77,12 @@ function tick(dt) {
   for (const b of burning) {
     b.hp -= (dt * 3) / (1 + b.area / 600);
     b.fire += dt;
-    if (b.fire > 4 && R() < dt * 0.3 && b.nb)
-      for (const o of b.nb) if (o.state === 0 && o.fire <= 0 && R() < 0.12) ignite(o);
-    if (R() < dt * 0.6)
+    const spreads = !b.fgen; // only a fire that was started spreads, and only to what touches it
+    if (spreads && b.fire > 4 && R() < dt * 0.3 && b.nb)
+      for (const o of b.nb) if (o.state === 0 && o.fire <= 0 && R() < 0.12) ignite(o, 1);
+    if (spreads && R() < dt * 0.6)
       nearT(b.cx, b.cy, b.r + 10, t => {
-        if (R() < 0.3) igniteTree(t);
+        if (R() < 0.3) igniteTree(t, 1);
       });
     if (R() < 0.0008 || (rainT > 0 && R() < 0.04) || flood > b.z) b.fire = 0;
     if (R() < dt * 1.6) smoke(b.cx, b.cy, b.z + b.base + b.h, true, 1, Math.min(14, 4 + b.r / 3));
@@ -94,18 +95,22 @@ function tick(dt) {
   }
   for (const t of burningT) {
     TREES.f[t] += dt;
-    if (R() < dt * 0.5)
+    // a wildfire you started runs from tree to tree and can catch the houses beside it; a tree that caught from a
+    // burning house just burns
+    const tg = TFGEN.get(t) || 0;
+    if (!tg && R() < dt * 0.5)
       nearT(TREES.x[t], TREES.y[t], 12, u => {
-        if (R() < 0.4) igniteTree(u);
+        if (R() < 0.4) igniteTree(u, 0);
       });
-    if (R() < dt * 0.6)
+    if (!tg && R() < dt * 0.6)
       nearB(TREES.x[t], TREES.y[t], 20, b => {
-        if (Math.hypot(b.cx - TREES.x[t], b.cy - TREES.y[t]) < b.r + 6 && R() < 0.2) ignite(b);
+        if (Math.hypot(b.cx - TREES.x[t], b.cy - TREES.y[t]) < b.r + 6 && R() < 0.2) ignite(b, 1);
       });
     if (R() < dt * 2) smoke(TREES.x[t], TREES.y[t], hAt(TREES.x[t], TREES.y[t]) + 6, true, 1, 2);
     if (TREES.f[t] > 6 + R() * 6 || (rainT > 0 && R() < 0.05)) {
       TREES.s[t] = 2;
       burningT.delete(t);
+      TFGEN.delete(t);
       dirtyWorld(TREES.x[t], TREES.y[t], false, true);
     }
   }
