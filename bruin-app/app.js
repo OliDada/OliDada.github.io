@@ -356,7 +356,8 @@ function enableDragScroll(el) {
   el.addEventListener('pointermove', (e) => {
     if (!isDown) return;
     const dx = startX - e.clientX;
-    if (Math.abs(dx) > 2) moved = true;
+    // use a slightly larger threshold to avoid treating tiny taps as drags
+    if (Math.abs(dx) > 6) moved = true;
     el.scrollLeft = scrollLeft + dx;
   }, { passive: true });
 
@@ -367,9 +368,9 @@ function enableDragScroll(el) {
     // if we moved, prevent click events from firing on the child that started the drag
     if (moved) {
       const preventClick = (ev) => { ev.stopImmediatePropagation(); ev.preventDefault(); };
-      // one-time capture: run on next microtask for any click
+      // capture the next click on the document so child elements (chips) aren't falsely blocked
       window.setTimeout(() => {
-        el.addEventListener('click', preventClick, { once: true, capture: true });
+        document.addEventListener('click', preventClick, { once: true, capture: true });
       }, 0);
     }
   };
