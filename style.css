@@ -1148,9 +1148,6 @@ body:has(.player-area.fullscreen) { overflow: hidden; }
   object-fit: cover;    /* fill the container and crop if needed */
   object-position: center;
 }
-.cabinet img.thumb[src="data/thumbnails/niceland-thumbnail.png"] {
-  object-fit: contain;
-}
 .cabinet .label { font-weight:700; color:#ffd166 }
 .cabinet .sub { font-size:0.85rem; color:#b8c1c9 }
 
