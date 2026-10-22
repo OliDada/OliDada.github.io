@@ -39,7 +39,9 @@ files next to `index.html` (or `$NICELAND_OUT`). `tools/data/` is large (about 4
 | `extract/extras.py` | `iceland.osm.pbf` | `extra.json` |
 | `world/build_world.py` | all of the above, the elevation grids, `reykjavik-osm.json`, `rvk/` | `world.txt`, `detail.txt`, `bldx.txt`, `roadx.txt` |
 | `pack/*.py` | the JSON files | the remaining `*.txt` |
-| `sample/aerial_roofs.py` | aerial photo bundles, `rvk/bl_isn93.json` | `rvk/osm_roof.json` |
+| `sample/aerial_roofs.py` | aerial photo bundles, `rvk/bl_isn93.json` | `aerial/smaey-aerial-*.bin` | The 2025 aerial photo of Reykjavík in 500 m tiles (ISN93), saved from the city's map service (`lukrgatt.reykjavik.is`, layer Loftmynd_2025) with `smaey-sampler/sampler.html`. Input of `sample/aerial_roofs.py`. |
+| `dsm/smaey-dsm-*.bin.gz` | Not used. 370 tiles of 512 × 512 heights in decimetres (stored column by column) from the same service: despite the name a bare-earth terrain model (no buildings or trees), and its tile numbers have not been tied to coordinates yet. |
+| `rvk/osm_roof.json` |
 
 ## Inputs to put in `data/`
 
@@ -54,3 +56,8 @@ files next to `index.html` (or `$NICELAND_OUT`). `tools/data/` is large (about 4
 | `rvk/osm_roof.json` | Roof colours and shapes measured from the 2025 aerial photo (made by `sample/aerial_roofs.py`; optional — without it `build_world.py` writes `rvk/bl_isn93.json` for the sampler instead). |
 
 The scripts that made the two elevation grids and `reykjavik-osm.json` were not kept; the files are inputs as they stand.
+
+Land and sea: every region the coastlines cut the map into is sea or land by the side of the coastline it lies on
+(OpenStreetMap draws coastlines with land on the left), at 100 m for the whole country and at 10 m in each detail
+tile; the elevation model only decides regions that no coastline touches. Year built comes from the Reykjavík register
+where it has the building, otherwise from OSM `start_date` (osm3d.json).

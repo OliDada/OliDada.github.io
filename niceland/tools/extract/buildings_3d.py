@@ -1,4 +1,4 @@
-"""OSM building:part pieces and 3D tags on whole buildings (roof shape and colour, heights, levels).
+"""OSM building:part pieces and 3D tags on whole buildings (roof shape and colour, heights, levels, year built).
 In: iceland.osm.pbf   Out: data/osm3d.json
 """
 
@@ -23,6 +23,7 @@ KEYS = (
     'roof:material',
     'building:material',
     'roof:orientation',
+    'start_date',
 )
 
 
@@ -52,6 +53,7 @@ class H(osmium.SimpleHandler):
                     'roof:levels',
                     'building:material',
                     'roof:height',
+                    'start_date',
                 )
             )
         ):

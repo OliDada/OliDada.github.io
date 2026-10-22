@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Repair coastline blocks that the world build filled on the wrong side of the shore.
 
+Note: since October 2026 the world build itself decides land and sea by coastline direction (build_world.py and
+steps/detail_mask.py), so a fresh build no longer has these faults and this tool finds nothing to fix; it is kept for
+map files made by older builds.
+
 The 300 m grid was filled sea/land in blocks of 100 x 100 cells, and in some blocks the fill went the wrong way:
 land turned to sea (the hole west of Landeyjahöfn) or a fjord filled in as land. Such a block shows a dead straight
 coast along the block line with no 10 m shore mask on either side. The heights tell which side is wrong: the build

@@ -1,4 +1,4 @@
-"""Real 3D detail from OSM: building:part pieces (towers, wings, stacked volumes) and roof/colour tags.
+"""Real 3D detail from OSM: building:part pieces (towers, wings, stacked volumes), roof/colour tags and year built.
 Run by world/build_world.py (not on its own).
 """
 
@@ -130,6 +130,11 @@ def _tags(b, d):
     if rc and 'rgb' not in b:
         b['rgb'] = rc
         b['rgbT'] = 1
+    # year built (start_date, mapped on about 40% of Iceland's buildings): the city register wins where it has one
+    y = _re.match(r'\s*(\d{4})', d.get('start_date') or '')
+    if y and not b.get('yr') and 1700 <= int(y.group(1)) <= 2035:
+        b['yr'] = int(y.group(1))
+        b['yrT'] = 1
 
 
 _nt = 0

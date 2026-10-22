@@ -71,6 +71,30 @@ for tj in range(0, CH, TILE):
                 tot = ndimage.sum(np.ones_like(lab), lab, index=np.arange(1, nl + 1))
                 seav = ndimage.sum(coarse_sea, lab, index=np.arange(1, nl + 1))
                 is_sea = np.concatenate([[False], (seav / np.maximum(tot, 1)) > 0.5])
+                # A region is sea or land by the side of the coastline it lies on (OpenStreetMap draws coastlines
+                # with land on the left), as in the capital grid. The elevation vote alone put whole regions of
+                # low-lying land (Landeyjar, Ölfus: about 2 m above the sea) into the sea, one 100-cell tile at a
+                # time; it is kept only for regions no coastline touches.
+                lv = np.zeros(nl + 1)
+                sv = np.zeros(nl + 1)
+                for c in cl:
+                    xs, ys = pl(c)
+                    for k in range(len(xs) - 1):
+                        dx, dy = xs[k + 1] - xs[k], ys[k + 1] - ys[k]
+                        L = (dx * dx + dy * dy) ** 0.5
+                        if L < 0.5:
+                            continue
+                        mx, my = (xs[k] + xs[k + 1]) / 2, (ys[k] + ys[k + 1]) / 2
+                        nx, ny = dy / L, -dx / L  # land side (y points south)
+                        for sgn, acc in ((1, lv), (-1, sv)):
+                            for off in (2.5, 4.0):
+                                px, py = int(mx + nx * off * sgn), int(my + ny * off * sgn)
+                                if 0 <= px < PW and 0 <= py < PH and lab[py, px]:
+                                    acc[lab[py, px]] += 1
+                by_dir_sea = (sv > lv * 1.5) & (sv >= 3)
+                by_dir_land = (lv > sv * 1.5) & (lv >= 3)
+                is_sea = np.where(by_dir_sea, True, np.where(by_dir_land, False, is_sea))
+                is_sea[0] = False
                 sea = is_sea[lab]
                 # walls take the class of the majority of their neighbours
                 nb = ndimage.uniform_filter(sea.astype(np.float32), 3)

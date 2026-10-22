@@ -302,6 +302,51 @@ csea = cdem <= 2
 lab, nl = ndimage.label(csea)
 edge = set(np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))) - {0}
 csea = np.isin(lab, list(edge))
+# Land and sea from the coastlines themselves, at 100 m: every region the coastlines cut Iceland into is sea or land
+# by the side of the coastline it lies on (OpenStreetMap draws coastlines with land on the left). The elevation test
+# above called low-lying land sea (the Landeyjar and Ölfus flats are about 2 m above the sea, and the elevation
+# model's 300 m cells round them down); it now only decides regions that no coastline touches.
+_coast = json.load(open(D + 'coast.json'))
+_R = 100.0
+_W, _H = int(CW * CCS / _R), int(CH * CCS / _R)
+_wim = Image.new('1', (_W, _H), 0)
+_wd = ImageDraw.Draw(_wim)
+_lines = []
+for _c in _coast:
+    _p = [((_c[i] / 2 - COX) / _R, (_c[i + 1] / 2 - COY) / _R) for i in range(0, len(_c), 2)]
+    _lines.append(_p)
+    _wd.line(_p, fill=1, width=1)
+_wall = np.array(_wim, dtype=bool)
+_lab, _n = ndimage.label(~_wall)
+_lv = np.zeros(_n + 1)
+_sv = np.zeros(_n + 1)
+for _p in _lines:
+    for (x1, y1), (x2, y2) in zip(_p, _p[1:]):
+        dx, dy = x2 - x1, y2 - y1
+        L = (dx * dx + dy * dy) ** 0.5
+        if L < 0.3:
+            continue
+        mx, my = (x1 + x2) / 2, (y1 + y2) / 2
+        nx, ny = dy / L, -dx / L  # land side (y points south)
+        for sgn, acc in ((1, _lv), (-1, _sv)):
+            for off in (1.5, 3.0):
+                px, py = int(mx + nx * off * sgn), int(my + ny * off * sgn)
+                if 0 <= px < _W and 0 <= py < _H and _lab[py, px]:
+                    acc[_lab[py, px]] += 1
+_dsea = np.kron(csea, np.ones((3, 3), bool))[:_H, :_W]
+_rs = ndimage.mean(_dsea, _lab, index=np.arange(_n + 1)) > 0.5  # elevation vote for regions no coastline touches
+_rs = np.where((_sv > _lv * 1.5) & (_sv >= 3), True, np.where((_lv > _sv * 1.5) & (_lv >= 3), False, _rs))
+_rs[0] = False
+_fsea = _rs[_lab]
+_fsea = np.where(_wall, ndimage.uniform_filter(_fsea.astype(np.float32), 3) > 0.5, _fsea)
+_csea2 = _fsea[: CH * 3, : CW * 3].reshape(CH, 3, CW, 3).mean(axis=(1, 3)) > 0.5
+# the capital has its own 10 m land/sea from its coastlines: leave the coarse cells under it as they were
+_gj, _gi = np.mgrid[0:CH, 0:CW]
+_ccx, _ccy = COX + (_gi + 0.5) * CCS, COY + (_gj + 0.5) * CCS
+_incap = (_ccx > OX) & (_ccx < OX + W * CS) & (_ccy > OY) & (_ccy < OY + H * CS)
+_csea2[_incap] = csea[_incap]
+print('coast-direction land/sea: cells changed', int((_csea2 != csea).sum()), 'to land', int((csea & ~_csea2).sum()))
+csea = _csea2
 ch = np.where(
     csea, np.minimum(cdem, -1), np.maximum(1, cdem)
 )  # the national DEM is already relative to sea level (unlike the capital DSM)
