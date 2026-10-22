@@ -219,181 +219,188 @@ async function renderCabinets() {
 
     // Make Play embed the game in-page on normal left-click, but allow modifier clicks to open in new tab
     grid.querySelectorAll('.play').forEach(anchor => {
-        anchor.addEventListener('click', async (e) => {
+        anchor.addEventListener('click', (e) => {
             // modifiers or middle-click -> allow default behavior (open in new tab)
             if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
             e.preventDefault();
-            // prefer an embed-specific path if the project defines one
-            const datasetPath = anchor.getAttribute('data-path') || anchor.getAttribute('href');
-            let path = datasetPath;
-            let match = null;
-            try {
-                // find the corresponding project entry in the loaded data if available
-                const projects = await loadProjects();
-                match = projects.find(p => p.path === datasetPath || p.embed === datasetPath || p.title === anchor.closest('.cabinet')?.querySelector('.label')?.textContent);
-                if (match && match.embed) path = match.embed;
-            } catch (err) {
-                // ignore and use datasetPath
-            }
-            // open in the in-page player
-            const player = document.getElementById('playerArea');
-            const frame = document.getElementById('playerFrameMain');
-            const title = document.getElementById('playerTitle');
-            const openNewTab = document.getElementById('openNewTab');
-            if (player && frame) {
-                document.body.classList.add('is-playing');
-                player.style.display = '';
-                player.setAttribute('aria-hidden', 'false');
-                setPlayerFit(fitForProject(match, path));
-                requestAnimationFrame(() => {
-                    fitPlayer();
-                    player.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                });
-
-                // set iframe src to embed path
-                try {
-                    let embedPath = path;
-                    // Heuristic: if the path points to a nested src/index.html, prefer the parent folder root
-                    // e.g. /dungeon-crawler-game/src/index.html -> /dungeon-crawler-game/
-                    try {
-                        const lower = String(path).toLowerCase();
-                        if (lower.includes('/src/index.html') || /\/src\/index\.html$/i.test(path)) {
-                            embedPath = path.replace(/\/src\/index\.html$/i, '/');
-                            embedPath = embedPath.replace(/\/index\.html$/i, '/');
-                        }
-                        // If the project references the Game of Life source, prefer the playable gol.html inside its folder
-                        try {
-                            if ((match && (match.title || '').toLowerCase().includes('game of life')) || String(path).toLowerCase().includes('game_of_life')) {
-                                // prefer the internal gol.html which loads the game's script
-                                embedPath = '/Game of Life/gol.html';
-                            }
-                            if (match && match.source && String(match.source).toLowerCase().includes('game_of_life.js')) {
-                                embedPath = '/Game of Life/gol.html';
-                            }
-                        } catch (e) {}
-                        // also handle patterns like /some/path/index.html where the file might be a raw HTML viewer
-                        // prefer the directory if that file exists as an entry point
-                    } catch (e) {}
-                    if (embedPath !== path) console.info('Adjusted embed path from', path, 'to', embedPath);
-                    frame.src = addEmbedParam(embedPath);
-                } catch (e) {
-                    frame.src = addEmbedParam(path);
-                }
-
-                // focus iframe so keyboard works immediately (added)
-                try {
-                    frame.tabIndex = -1;
-                    frame.style.outline = 'none';
-                    // focus as soon as it loads
-                    const __focusOnLoad = () => {
-                        requestAnimationFrame(() => focusIframeAndCanvas(frame));
-                        frame.removeEventListener('load', __focusOnLoad);
-                    };
-                    frame.addEventListener('load', __focusOnLoad);
-                    // also try immediately (user gesture)
-                    requestAnimationFrame(() => focusIframeAndCanvas(frame));
-                } catch (err) { /* best-effort, ignore */ }
-
-                // Show the game's name in the player bar
-                if (title) title.textContent = (match && match.title) || anchor.closest('.cabinet')?.querySelector('.label')?.textContent || 'Now playing';
-                if (openNewTab) openNewTab.href = path;
-
-                // Update the hero header to reflect the currently playing game
-                try {
-                    const playingTitle = (match && match.title) || anchor.closest('.cabinet')?.querySelector('.label')?.textContent || 'Now playing';
-                    const playingSubtitle = (match && match.subtitle) || '';
-                    if (window && typeof window.setHeroForGame === 'function') window.setHeroForGame(playingTitle, playingSubtitle);
-                } catch (e) {}
-
-                // set player subtitle from metadata if available
-                const subtitleEl = document.getElementById('playerSubtitle');
-                if (subtitleEl) {
-                    if (match && match.subtitle) {
-                        subtitleEl.textContent = match.subtitle;
-                    } else {
-                        subtitleEl.textContent = ''; // clear until we probe the iframe
-                    }
-                }
-
-                // set player description from metadata if available
-                const descEl = document.getElementById('playerDescription');
-                if (descEl) {
-                    if (match && (match.description || match.longDescription)) {
-                        descEl.textContent = match.description || match.longDescription;
-                    } else {
-                        descEl.textContent = '';
-                    }
-                }
-
-                // Try to adjust aspect by probing the embedded page's canvas once it loads
-                frame.addEventListener('load', function adjustAspect() {
-                    try {
-                        // If the parent provided an explicit playSize, skip probing the iframe content
-                        // — the playSize should be authoritative and probing can resize the aspect box unexpectedly.
-                        if (match && match.playSize) {
-                            frame.removeEventListener('load', adjustAspect);
-                            return;
-                        }
-                        const iframeDoc = frame.contentDocument || frame.contentWindow.document;
-                        // probe for subtitle-like elements inside the embedded page if we don't have metadata
-                        try {
-                            const subtitleEl = document.getElementById('playerSubtitle');
-                            if (subtitleEl && (!match || !match.subtitle)) {
-                                const found = iframeDoc.querySelector('.sub_title, .player-subtitle, .sub, #subtitle');
-                                if (found && found.textContent) subtitleEl.textContent = found.textContent.trim();
-                            }
-                            // try to probe for a description inside the iframe if we don't have one in metadata
-                            const descEl = document.getElementById('playerDescription');
-                            if (descEl && (!match || !(match.description || match.longDescription))) {
-                                const foundDesc = iframeDoc.querySelector('.description, .desc, .player-description, #description');
-                                if (foundDesc && foundDesc.textContent) descEl.textContent = foundDesc.textContent.trim();
-                            }
-                        } catch (e) {
-                            // ignore subtitle probing errors
-                        }
-                        const canvas = iframeDoc.querySelector('canvas') || iframeDoc.getElementById('gravity-dash-canvas')?.querySelector('canvas');
-                        if (canvas && playerFit.probe) {
-                            const w = canvas.width || canvas.clientWidth || canvas.offsetWidth;
-                            const h = canvas.height || canvas.clientHeight || canvas.offsetHeight;
-                            if (w && h) setPlayerFit({ mode: 'ratio', ratio: w / h, probe: false });
-                        }
-                    } catch (e) {
-                        // cross-origin or other access denied — silently ignore
-                    }
-                    frame.removeEventListener('load', adjustAspect);
-                });
-                // Listen for aspect messages from the embedded iframe (safer than probing in cross-origin cases)
-                // Ensure we remove any previous listener first
-                if (window.__gameAspectListener) {
-                    window.removeEventListener('message', window.__gameAspectListener);
-                    window.__gameAspectListener = null;
-                }
-                const onGameAspect = function(e) {
-                    // Only accept messages coming from the current iframe's contentWindow
-                    try {
-                        if (e.source !== frame.contentWindow) return;
-                    } catch (err) {
-                        return; // can't access source — ignore
-                    }
-                    const data = e.data || {};
-                    if (data && data.type === 'game-aspect') {
-                        const subtitleEl = document.getElementById('playerSubtitle');
-                        if (subtitleEl && data.subtitle) subtitleEl.textContent = data.subtitle;
-                        const descEl = document.getElementById('playerDescription');
-                        if (descEl && data.description) descEl.textContent = data.description;
-
-                        // The game reports its size: fixed pixels (scaled to fit) or an aspect ratio
-                        if (data.width && data.height) setPlayerFit({ mode: 'native', w: +data.width, h: +data.height });
-                        else if (data.widthRatio && data.heightRatio) setPlayerFit({ mode: 'ratio', ratio: data.widthRatio / data.heightRatio });
-                        else if (parseAspect(data.aspect)) setPlayerFit({ mode: 'ratio', ratio: parseAspect(data.aspect) });
-                    }
-                };
-                window.addEventListener('message', onGameAspect);
-                window.__gameAspectListener = onGameAspect;
-            }
+            playFromAnchor(anchor);
         });
     });
 }
+
+// Open the project an anchor points at (its data-path or href) in the in-page player.
+// Used by the cabinet grid above and by site.js on the redesigned pages.
+async function playFromAnchor(anchor) {
+    // prefer an embed-specific path if the project defines one
+    const datasetPath = anchor.getAttribute('data-path') || anchor.getAttribute('href');
+    let path = datasetPath;
+    let match = null;
+    try {
+        // find the corresponding project entry in the loaded data if available
+        const projects = await loadProjects();
+        match = projects.find(p => p.path === datasetPath || p.embed === datasetPath || p.title === anchor.closest('.cabinet')?.querySelector('.label')?.textContent);
+        if (match && match.embed) path = match.embed;
+    } catch (err) {
+        // ignore and use datasetPath
+    }
+    // open in the in-page player
+    const player = document.getElementById('playerArea');
+    const frame = document.getElementById('playerFrameMain');
+    const title = document.getElementById('playerTitle');
+    const openNewTab = document.getElementById('openNewTab');
+    if (player && frame) {
+        document.body.classList.add('is-playing');
+        player.style.display = '';
+        player.setAttribute('aria-hidden', 'false');
+        setPlayerFit(fitForProject(match, path));
+        requestAnimationFrame(() => {
+            fitPlayer();
+            player.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+
+        // set iframe src to embed path
+        try {
+            let embedPath = path;
+            // Heuristic: if the path points to a nested src/index.html, prefer the parent folder root
+            // e.g. /dungeon-crawler-game/src/index.html -> /dungeon-crawler-game/
+            try {
+                const lower = String(path).toLowerCase();
+                if (lower.includes('/src/index.html') || /\/src\/index\.html$/i.test(path)) {
+                    embedPath = path.replace(/\/src\/index\.html$/i, '/');
+                    embedPath = embedPath.replace(/\/index\.html$/i, '/');
+                }
+                // If the project references the Game of Life source, prefer the playable gol.html inside its folder
+                try {
+                    if ((match && (match.title || '').toLowerCase().includes('game of life')) || String(path).toLowerCase().includes('game_of_life')) {
+                        // prefer the internal gol.html which loads the game's script
+                        embedPath = '/Game of Life/gol.html';
+                    }
+                    if (match && match.source && String(match.source).toLowerCase().includes('game_of_life.js')) {
+                        embedPath = '/Game of Life/gol.html';
+                    }
+                } catch (e) {}
+                // also handle patterns like /some/path/index.html where the file might be a raw HTML viewer
+                // prefer the directory if that file exists as an entry point
+            } catch (e) {}
+            if (embedPath !== path) console.info('Adjusted embed path from', path, 'to', embedPath);
+            frame.src = addEmbedParam(embedPath);
+        } catch (e) {
+            frame.src = addEmbedParam(path);
+        }
+
+        // focus iframe so keyboard works immediately (added)
+        try {
+            frame.tabIndex = -1;
+            frame.style.outline = 'none';
+            // focus as soon as it loads
+            const __focusOnLoad = () => {
+                requestAnimationFrame(() => focusIframeAndCanvas(frame));
+                frame.removeEventListener('load', __focusOnLoad);
+            };
+            frame.addEventListener('load', __focusOnLoad);
+            // also try immediately (user gesture)
+            requestAnimationFrame(() => focusIframeAndCanvas(frame));
+        } catch (err) { /* best-effort, ignore */ }
+
+        // Show the game's name in the player bar
+        if (title) title.textContent = (match && match.title) || anchor.closest('.cabinet')?.querySelector('.label')?.textContent || 'Now playing';
+        if (openNewTab) openNewTab.href = path;
+
+        // Update the hero header to reflect the currently playing game
+        try {
+            const playingTitle = (match && match.title) || anchor.closest('.cabinet')?.querySelector('.label')?.textContent || 'Now playing';
+            const playingSubtitle = (match && match.subtitle) || '';
+            if (window && typeof window.setHeroForGame === 'function') window.setHeroForGame(playingTitle, playingSubtitle);
+        } catch (e) {}
+
+        // set player subtitle from metadata if available
+        const subtitleEl = document.getElementById('playerSubtitle');
+        if (subtitleEl) {
+            if (match && match.subtitle) {
+                subtitleEl.textContent = match.subtitle;
+            } else {
+                subtitleEl.textContent = ''; // clear until we probe the iframe
+            }
+        }
+
+        // set player description from metadata if available
+        const descEl = document.getElementById('playerDescription');
+        if (descEl) {
+            if (match && (match.description || match.longDescription)) {
+                descEl.textContent = match.description || match.longDescription;
+            } else {
+                descEl.textContent = '';
+            }
+        }
+
+        // Try to adjust aspect by probing the embedded page's canvas once it loads
+        frame.addEventListener('load', function adjustAspect() {
+            try {
+                // If the parent provided an explicit playSize, skip probing the iframe content
+                // — the playSize should be authoritative and probing can resize the aspect box unexpectedly.
+                if (match && match.playSize) {
+                    frame.removeEventListener('load', adjustAspect);
+                    return;
+                }
+                const iframeDoc = frame.contentDocument || frame.contentWindow.document;
+                // probe for subtitle-like elements inside the embedded page if we don't have metadata
+                try {
+                    const subtitleEl = document.getElementById('playerSubtitle');
+                    if (subtitleEl && (!match || !match.subtitle)) {
+                        const found = iframeDoc.querySelector('.sub_title, .player-subtitle, .sub, #subtitle');
+                        if (found && found.textContent) subtitleEl.textContent = found.textContent.trim();
+                    }
+                    // try to probe for a description inside the iframe if we don't have one in metadata
+                    const descEl = document.getElementById('playerDescription');
+                    if (descEl && (!match || !(match.description || match.longDescription))) {
+                        const foundDesc = iframeDoc.querySelector('.description, .desc, .player-description, #description');
+                        if (foundDesc && foundDesc.textContent) descEl.textContent = foundDesc.textContent.trim();
+                    }
+                } catch (e) {
+                    // ignore subtitle probing errors
+                }
+                const canvas = iframeDoc.querySelector('canvas') || iframeDoc.getElementById('gravity-dash-canvas')?.querySelector('canvas');
+                if (canvas && playerFit.probe) {
+                    const w = canvas.width || canvas.clientWidth || canvas.offsetWidth;
+                    const h = canvas.height || canvas.clientHeight || canvas.offsetHeight;
+                    if (w && h) setPlayerFit({ mode: 'ratio', ratio: w / h, probe: false });
+                }
+            } catch (e) {
+                // cross-origin or other access denied — silently ignore
+            }
+            frame.removeEventListener('load', adjustAspect);
+        });
+        // Listen for aspect messages from the embedded iframe (safer than probing in cross-origin cases)
+        // Ensure we remove any previous listener first
+        if (window.__gameAspectListener) {
+            window.removeEventListener('message', window.__gameAspectListener);
+            window.__gameAspectListener = null;
+        }
+        const onGameAspect = function(e) {
+            // Only accept messages coming from the current iframe's contentWindow
+            try {
+                if (e.source !== frame.contentWindow) return;
+            } catch (err) {
+                return; // can't access source — ignore
+            }
+            const data = e.data || {};
+            if (data && data.type === 'game-aspect') {
+                const subtitleEl = document.getElementById('playerSubtitle');
+                if (subtitleEl && data.subtitle) subtitleEl.textContent = data.subtitle;
+                const descEl = document.getElementById('playerDescription');
+                if (descEl && data.description) descEl.textContent = data.description;
+
+                // The game reports its size: fixed pixels (scaled to fit) or an aspect ratio
+                if (data.width && data.height) setPlayerFit({ mode: 'native', w: +data.width, h: +data.height });
+                else if (data.widthRatio && data.heightRatio) setPlayerFit({ mode: 'ratio', ratio: data.widthRatio / data.heightRatio });
+                else if (parseAspect(data.aspect)) setPlayerFit({ mode: 'ratio', ratio: parseAspect(data.aspect) });
+            }
+        };
+        window.addEventListener('message', onGameAspect);
+        window.__gameAspectListener = onGameAspect;
+    }
+}
+window.playFromAnchor = playFromAnchor;
 
 // Add ?embed=1 to a URL safely (handles relative paths)
 function addEmbedParam(path) {
@@ -658,7 +665,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 return !!(window.WebGLRenderingContext && (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
             } catch (e) { return false }
         }
-        if (!prefersReduced && hasWebGL()) {
+        // site.js stores the visitor's choice of floaties; 'none' means they turned the 3D background off
+        let floatiesOff = false;
+        try { floatiesOff = (JSON.parse(localStorage.getItem('floaties') || '{}').shape === 'none'); } catch (e) {}
+        if (!prefersReduced && !floatiesOff && hasWebGL()) {
             // Slight delay to allow paint and avoid blocking
             setTimeout(async () => {
                 try {

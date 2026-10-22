@@ -1,305 +1,337 @@
-// Minimal decorative three.js scene (ES module)
-// This file lazy-loads three via CDN and renders a slow-moving particle field.
-// It attaches to the canvas with id "three-canvas" and exposes window.__threeScene with a stop() method.
+// Decorative three.js background ("floaties").
+// Lazy-loads three from a CDN and renders a slow-moving field of floating things behind the page.
+// It attaches to the canvas with id "three-canvas" and exposes window.__threeScene with
+// stop(), pause(), resume(), setOptions(opts) and poke().
+//
+// Options (also read from localStorage 'floaties' at start-up; site.js writes them):
+//   shape:  'sparkles' | 'bubbles' | 'cubes' | 'dolphins' | 'snow'
+//   amount: 'few' | 'some' | 'loads'
+//   speed:  0.25 .. 3 (multiplier)
+//   color:  'auto' or '#rrggbb'
+//   follow: true/false – the scene leans towards the mouse (or the phone's tilt)
 
 const THREE_CDN = 'https://unpkg.com/three@0.158.0/build/three.module.js';
+const AMOUNTS = { few: 260, some: 800, loads: 2200 };
+const DEFAULTS = { shape: 'sparkles', amount: 'some', speed: 1, color: 'auto', follow: true };
+
+let THREE = null;
 let rafId = null;
-let renderer, scene, camera, particles;
-let firstFrameLogged = false;
+let renderer, scene, camera, group, lights;
 let _paused = false;
+let opts = Object.assign({}, DEFAULTS);
+let mouse = { x: 0, y: 0 };
+let whoosh = 0;
+let bgHex = null; // current page background as an int, or null when it's an image
+let objects = null; // { kind, obj, data }
+
+function readSaved() {
+  try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('floaties') || '{}')); }
+  catch (e) { return Object.assign({}, DEFAULTS); }
+}
+
+function parseColor(s) {
+  if (!s || typeof s !== 'string') return null;
+  s = s.trim().replace(/"|'/g, '');
+  if (s.startsWith('#')) {
+    if (s.length === 4) s = '#' + s[1] + s[1] + s[2] + s[2] + s[3] + s[3];
+    const n = parseInt(s.slice(1, 7), 16);
+    return Number.isNaN(n) ? null : n;
+  }
+  const m = s.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  return m ? (+m[1] << 16) + (+m[2] << 8) + +m[3] : null;
+}
+
+// Pick a floatie colour that shows up on the current background:
+// same hue as the page, much lighter on dark pages and much darker on light ones.
+function autoColor() {
+  if (bgHex === null) return new THREE.Color(0xffb347);
+  const c = new THREE.Color(bgHex);
+  const hsl = {}; c.getHSL(hsl);
+  const lum = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+  if (lum < 0.35) return new THREE.Color().setHSL(hsl.h, Math.min(1, hsl.s + 0.1), 0.8);
+  return new THREE.Color().setHSL(hsl.h, Math.min(1, hsl.s * 0.9 + 0.1), Math.max(0.18, hsl.l - 0.38));
+}
+function floatieColor() {
+  const n = opts.color && opts.color !== 'auto' ? parseColor(opts.color) : null;
+  return n === null ? autoColor() : new THREE.Color(n);
+}
+
+// Small canvas textures so points are round dots / bubbles / snowflakes rather than squares
+function makeTexture(kind) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  if (kind === 'bubble') {
+    g.strokeStyle = '#fff'; g.lineWidth = 5;
+    g.beginPath(); g.arc(32, 32, 26, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,.35)'; g.fill();
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(22, 22, 6, 0, Math.PI * 2); g.fill();
+  } else if (kind === 'flake') {
+    g.strokeStyle = '#fff'; g.lineWidth = 4; g.lineCap = 'round';
+    for (let i = 0; i < 3; i++) {
+      const a = i * Math.PI / 3;
+      g.beginPath(); g.moveTo(32 - Math.cos(a) * 26, 32 - Math.sin(a) * 26); g.lineTo(32 + Math.cos(a) * 26, 32 + Math.sin(a) * 26); g.stroke();
+    }
+  } else {
+    const grd = g.createRadialGradient(32, 32, 0, 32, 32, 30);
+    grd.addColorStop(0, '#fff'); grd.addColorStop(0.55, '#fff'); grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd; g.beginPath(); g.arc(32, 32, 30, 0, Math.PI * 2); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+function disposeObjects() {
+  if (!objects) return;
+  const o = objects.obj;
+  group.remove(o);
+  try { o.geometry && o.geometry.dispose(); } catch (e) {}
+  try { if (o.material) { o.material.map && o.material.map.dispose(); o.material.dispose(); } } catch (e) {}
+  objects = null;
+}
+
+function build() {
+  disposeObjects();
+  const shape = opts.shape;
+  let count = AMOUNTS[opts.amount] || AMOUNTS.some;
+  const col = floatieColor();
+
+  if (shape === 'cubes') {
+    count = Math.round(count / 6);
+    const geo = new THREE.BoxGeometry(2.2, 2.2, 2.2);
+    const mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.5, metalness: 0.1, flatShading: true });
+    const mesh = new THREE.InstancedMesh(geo, mat, count);
+    const data = [];
+    const m = new THREE.Matrix4();
+    for (let i = 0; i < count; i++) {
+      const d = {
+        p: new THREE.Vector3((Math.random() - 0.5) * 380, (Math.random() - 0.5) * 200, -130 + Math.random() * 150),
+        r: new THREE.Euler(Math.random() * 6, Math.random() * 6, 0),
+        s: 0.5 + Math.random() * 1.3,
+        w: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(0.03)
+      };
+      data.push(d);
+      m.compose(d.p, new THREE.Quaternion().setFromEuler(d.r), new THREE.Vector3(d.s, d.s, d.s));
+      mesh.setMatrixAt(i, m);
+    }
+    group.add(mesh);
+    objects = { kind: 'cubes', obj: mesh, data };
+    return;
+  }
+
+  if (shape === 'dolphins') count = Math.round(count / 4); // they're big, so fewer of them
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  const seeds = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    positions[i * 3] = (Math.random() - 0.5) * 400;
+    positions[i * 3 + 1] = (Math.random() - 0.5) * 200;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * 200;
+    seeds[i] = Math.random() * 100;
+  }
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+  let mat;
+  if (shape === 'dolphins') {
+    // points are square sprites, so draw the (wide) logo into a square canvas without stretching it
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(128 / img.width, 128 / img.height);
+      const w = img.width * s, h = img.height * s;
+      c.getContext('2d').drawImage(img, (128 - w) / 2, (128 - h) / 2, w, h);
+      tex.needsUpdate = true;
+    };
+    img.src = '/images/dolphin1.png';
+    mat = new THREE.PointsMaterial({ size: 15, map: tex, transparent: true, alphaTest: 0.2, color: 0xffffff, depthWrite: false });
+  } else if (shape === 'bubbles') {
+    mat = new THREE.PointsMaterial({ size: 7, map: makeTexture('bubble'), transparent: true, depthWrite: false, color: col, opacity: 0.85 });
+  } else if (shape === 'snow') {
+    mat = new THREE.PointsMaterial({ size: 5, map: makeTexture('flake'), transparent: true, depthWrite: false, color: col, opacity: 0.9 });
+  } else {
+    mat = new THREE.PointsMaterial({ size: 3, map: makeTexture('dot'), transparent: true, depthWrite: false, color: col, opacity: 0.9 });
+  }
+  const pts = new THREE.Points(geometry, mat);
+  group.add(pts);
+  objects = { kind: shape, obj: pts, data: seeds };
+}
+
+function recolor() {
+  if (!objects) return;
+  const mat = objects.obj.material;
+  if (objects.kind === 'dolphins') return; // dolphins keep their own colours
+  mat.color = floatieColor();
+  mat.needsUpdate = true;
+}
+
+function updateRendererBackground() {
+  if (!renderer) return;
+  try {
+    const rootStyle = window.getComputedStyle(document.documentElement);
+    const pageBg = (rootStyle.getPropertyValue('--page-bg') || '').trim();
+    let hex = null;
+    if (pageBg && !pageBg.toLowerCase().startsWith('url(')) hex = parseColor(pageBg);
+    if (hex === null) {
+      renderer.setClearColor(0x000000, 0);
+      scene.background = null;
+    } else {
+      renderer.setClearColor(hex, 1);
+      scene.background = new THREE.Color(hex);
+    }
+    const changed = hex !== bgHex;
+    bgHex = hex;
+    if (changed && opts.color === 'auto') recolor();
+  } catch (e) {}
+}
+
+let bgObserver = null;
+function onMouse(e) {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = (e.clientY / window.innerHeight) * 2 - 1;
+}
+function onTilt(e) {
+  if (e.gamma == null) return;
+  mouse.x = Math.max(-1, Math.min(1, e.gamma / 30));
+  mouse.y = Math.max(-1, Math.min(1, (e.beta - 40) / 30));
+}
+function onWindowResize() {
+  if (!camera || !renderer) return;
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+}
+
+let t = 0;
+function animate() {
+  if (_paused || !renderer) return;
+  const sp = Math.max(0.1, +opts.speed || 1);
+  const boost = 1 + whoosh * 14;
+  whoosh *= 0.96;
+  t += 0.002 * sp * boost;
+
+  group.rotation.y = t * 0.6;
+  group.rotation.x = Math.sin(t * 0.4) * 0.2;
+
+  if (objects && (objects.kind === 'bubbles' || objects.kind === 'snow')) {
+    // bubbles rise and snow falls, both drift a little sideways
+    const pos = objects.obj.geometry.attributes.position;
+    const a = pos.array, seeds = objects.data;
+    const dir = objects.kind === 'bubbles' ? 1 : -1;
+    for (let i = 0; i < seeds.length; i++) {
+      a[i * 3 + 1] += dir * (0.08 + (seeds[i] % 1) * 0.12) * sp * boost;
+      a[i * 3] += Math.sin(t * 20 + seeds[i]) * 0.04 * sp;
+      if (a[i * 3 + 1] > 110) a[i * 3 + 1] = -110;
+      if (a[i * 3 + 1] < -110) a[i * 3 + 1] = 110;
+    }
+    pos.needsUpdate = true;
+    group.rotation.x = 0;
+    group.rotation.y = t * 0.15;
+  } else if (objects && objects.kind === 'cubes') {
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+    // cubes drift sideways instead of orbiting, so none of them swing up close to the camera
+    group.rotation.y = Math.sin(t * 0.5) * 0.25;
+    group.rotation.x = Math.sin(t * 0.3) * 0.1;
+    objects.data.forEach((d, i) => {
+      d.p.x += (0.05 + d.s * 0.04) * sp * boost;
+      if (d.p.x > 200) d.p.x = -200;
+      d.r.x += d.w.x * sp * boost; d.r.y += d.w.y * sp * boost; d.r.z += d.w.z * sp * boost;
+      sc.set(d.s, d.s, d.s);
+      m.compose(d.p, q.setFromEuler(d.r), sc);
+      objects.obj.setMatrixAt(i, m);
+    });
+    objects.obj.instanceMatrix.needsUpdate = true;
+  }
+
+  // lean towards the mouse / phone tilt
+  const tx = opts.follow ? mouse.x * 22 : 0;
+  const ty = opts.follow ? -mouse.y * 14 : 0;
+  camera.position.x += (tx - camera.position.x) * 0.05;
+  camera.position.y += (ty - camera.position.y) * 0.05;
+  camera.lookAt(0, 0, 0);
+
+  renderer.render(scene, camera);
+  rafId = requestAnimationFrame(animate);
+}
 
 async function initThree() {
-  console.info('[three-scene] initThree start');
-  // If a previous instance exists, try to stop it to ensure a clean state
-  try {
-    if (window.__threeScene && typeof window.__threeScene.stop === 'function') {
-      console.info('[three-scene] previous instance detected, stopping it before init');
-      window.__threeScene.stop();
-    }
-  } catch (e) {
-    console.warn('[three-scene] error while stopping previous instance', e);
-  }
-  const THREE = await import(THREE_CDN);
+  try { if (window.__threeScene && typeof window.__threeScene.stop === 'function') window.__threeScene.stop(); } catch (e) {}
+  THREE = await import(THREE_CDN);
   const canvas = document.getElementById('three-canvas');
   if (!canvas) return;
-
-  // ensure DOM canvas element itself is transparent (avoid white default background)
   try { canvas.style.background = 'transparent'; } catch (e) {}
 
-  // Diagnostic info: log canvas sizing and computed styles to help debug WebGL failures
-  let explicitGL = null;
-  try {
-    const cs = window.getComputedStyle(canvas);
-    console.info('[three-scene] canvas computed styles: display=%s, visibility=%s, width=%s, height=%s', cs.display, cs.visibility, cs.width, cs.height);
-    console.info('[three-scene] canvas client size: clientWidth=%d, clientHeight=%d, offsetWidth=%d, offsetHeight=%d', canvas.clientWidth, canvas.clientHeight, canvas.offsetWidth, canvas.offsetHeight);
-
-    // Some browsers refuse to create a GL context for hidden canvases. Make the canvas visible (but keep it invisible to the user) while probing.
-    const prevVisibility = canvas.style.visibility;
-    const prevOpacity = canvas.style.opacity;
-    try {
-      canvas.style.visibility = 'visible';
-      canvas.style.opacity = '0';
-    } catch (e) {}
-
-    // try explicit context creation with a few options
-    try {
-      const opts = { antialias: true, alpha: true };
-      explicitGL = canvas.getContext('webgl2', opts) || canvas.getContext('webgl', opts) || canvas.getContext('experimental-webgl', opts);
-    } catch (e) {
-      explicitGL = null;
-    }
-    console.info('[three-scene] probe WebGL context present?', !!explicitGL, explicitGL && explicitGL.constructor && explicitGL.constructor.name);
-
-    // restore inline visibility/opactiy for now; we'll set proper styles after renderer created
-    try {
-      canvas.style.visibility = prevVisibility;
-      canvas.style.opacity = prevOpacity;
-    } catch (e) {}
-  } catch (e) {
-    console.warn('[three-scene] failed to log canvas diagnostics', e);
-  }
-
-  try {
-    // If we managed to create a raw GL context, hand it to three.js so it reuses that context.
-    if (explicitGL) {
-      renderer = new THREE.WebGLRenderer({ canvas, context: explicitGL, antialias: true, alpha: true });
-    } else {
-      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    }
-  } catch (e) {
-    console.error('[three-scene] WebGLRenderer construction failed. canvas size/client info:', {
-      clientWidth: canvas.clientWidth,
-      clientHeight: canvas.clientHeight,
-      offsetWidth: canvas.offsetWidth,
-      offsetHeight: canvas.offsetHeight,
-      display: (window.getComputedStyle && window.getComputedStyle(canvas).display) || canvas.style.display,
-      visibility: (window.getComputedStyle && window.getComputedStyle(canvas).visibility) || canvas.style.visibility
-    }, e);
-    throw e;
-  }
-  renderer.setPixelRatio(window.devicePixelRatio || 1);
-  // Ensure we don't call setSize with zero dimensions which can prevent context creation in some environments
-  const w = canvas.clientWidth || canvas.offsetWidth || window.innerWidth;
-  const h = canvas.clientHeight || canvas.offsetHeight || window.innerHeight;
-  renderer.setSize(w || window.innerWidth, h || window.innerHeight, false);
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
 
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
   camera.position.z = 80;
+  group = new THREE.Group();
+  scene.add(group);
+  lights = [new THREE.AmbientLight(0xffffff, 1.1), new THREE.DirectionalLight(0xffffff, 1.6)];
+  lights[1].position.set(40, 60, 80);
+  lights.forEach(l => scene.add(l));
 
-  // Keep the three.js clear color in sync with the page background color when possible.
-  // If the page uses a background-image we keep the canvas transparent so the image shows through.
-  let bgObserver = null;
-  function rgbStringToHex(str) {
-    // expected formats: 'rgb(r, g, b)' or 'rgba(r, g, b, a)'
-    const m = str.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
-    if (!m) return 0x000000;
-    const r = parseInt(m[1], 10);
-    const g = parseInt(m[2], 10);
-    const b = parseInt(m[3], 10);
-    return (r << 16) + (g << 8) + b;
-  }
-  function parseHexColorString(s) {
-    // s expected like '#rrggbb' or '#rgb'
-    if (!s || typeof s !== 'string') return null;
-    s = s.trim();
-    if (!s.startsWith('#')) return null;
-    if (s.length === 4) {
-      s = '#' + s[1] + s[1] + s[2] + s[2] + s[3] + s[3];
-    }
-    const r = parseInt(s.substr(1,2), 16);
-    const g = parseInt(s.substr(3,2), 16);
-    const b = parseInt(s.substr(5,2), 16);
-    if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return null;
-    return (r << 16) + (g << 8) + b;
-  }
-
-  function updateRendererBackground() {
-    try {
-      // Prefer the CSS custom property --page-bg set on :root/documentElement by script.js
-      const rootStyle = window.getComputedStyle(document.documentElement);
-      let pageBg = rootStyle.getPropertyValue('--page-bg') || '';
-      pageBg = pageBg.trim();
-
-      // If the custom property is empty, fall back to computed body background
-      if (!pageBg) {
-        const comp = window.getComputedStyle(document.body || document.documentElement);
-        const bgImage = comp.backgroundImage || '';
-        const bgColor = comp.backgroundColor || 'rgb(0,0,0)';
-        if (bgImage && bgImage !== 'none' && bgImage !== 'initial') {
-          if (renderer) renderer.setClearColor(0x000000, 0);
-          if (scene) scene.background = null;
-          return;
-        }
-        const hex = rgbStringToHex(bgColor);
-        if (renderer) renderer.setClearColor(hex, 1);
-        try { if (scene) scene.background = new THREE.Color(hex); } catch (e) { /* ignore */ }
-        return;
-      }
-
-      // pageBg might be a url(...) (image) or a color like '#aabbcc' or 'rgb(...)'
-      const lower = pageBg.toLowerCase();
-      if (lower.startsWith('url(')) {
-        // image -> keep renderer transparent so page image shows through
-        if (renderer) renderer.setClearColor(0x000000, 0);
-        if (scene) scene.background = null;
-        return;
-      }
-
-      // Try hex color
-      let hexInt = parseHexColorString(pageBg.replace(/"|'/g, ''));
-      if (hexInt !== null) {
-        if (renderer) renderer.setClearColor(hexInt, 1);
-        try { if (scene) scene.background = new THREE.Color(hexInt); } catch (e) {}
-        return;
-      }
-
-      // Try rgb string
-      const rgbMatch = pageBg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
-      if (rgbMatch) {
-        const r = parseInt(rgbMatch[1],10), g = parseInt(rgbMatch[2],10), b = parseInt(rgbMatch[3],10);
-        const intCol = (r << 16) + (g << 8) + b;
-        if (renderer) renderer.setClearColor(intCol, 1);
-        try { if (scene) scene.background = new THREE.Color(intCol); } catch (e) {}
-        return;
-      }
-
-      // fallback: transparent
-      if (renderer) renderer.setClearColor(0x000000, 0);
-      if (scene) scene.background = null;
-    } catch (e) {
-      // ignore failures
-    }
-  }
-  // initial sync
-  // run an initial sync and another sync a tick later to ensure styles applied
+  opts = readSaved();
   updateRendererBackground();
-  setTimeout(() => {
-    try { updateRendererBackground(); } catch (e) {}
-  }, 50);
-  // observe body style/class changes to update background dynamically
+  build();
+  setTimeout(updateRendererBackground, 50);
   try {
-    bgObserver = new MutationObserver(() => updateRendererBackground());
-    // Observe both documentElement and body since script writes --page-bg to documentElement.style
-    if (document.documentElement) bgObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] });
+    bgObserver = new MutationObserver(updateRendererBackground);
+    bgObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] });
     if (document.body) bgObserver.observe(document.body, { attributes: true, attributeFilter: ['style', 'class'] });
-    // also listen for storage events (background change saved to localStorage)
     window.addEventListener('storage', updateRendererBackground);
-  } catch (e) {
-    bgObserver = null;
-  }
-
-  // particles
-  const count = 800;
-  const geometry = new THREE.BufferGeometry();
-  const positions = new Float32Array(count * 3);
-  for (let i = 0; i < count * 3; i += 3) {
-    positions[i] = (Math.random() - 0.5) * 400;
-    positions[i + 1] = (Math.random() - 0.5) * 200;
-    positions[i + 2] = (Math.random() - 0.5) * 200;
-  }
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-  const material = new THREE.PointsMaterial({ size: 2.6, color: 0xffb347, transparent: true, opacity: 0.9 });
-  particles = new THREE.Points(geometry, material);
-  scene.add(particles);
+  } catch (e) { bgObserver = null; }
 
   window.addEventListener('resize', onWindowResize);
+  window.addEventListener('pointermove', onMouse, { passive: true });
+  window.addEventListener('deviceorientation', onTilt, { passive: true });
 
-  let t = 0;
-  function animate() {
-    if (_paused) return; // do not continue animating while paused
-    t += 0.002;
-    particles.rotation.y = t * 0.6;
-    particles.rotation.x = Math.sin(t * 0.4) * 0.2;
-    renderer.render(scene, camera);
-    if (!firstFrameLogged) {
-      console.info('[three-scene] first render complete');
-      firstFrameLogged = true;
-    }
-    rafId = requestAnimationFrame(animate);
-  }
+  _paused = false;
   animate();
 
-  // expose stop
   window.__threeScene = {
-    stop: () => {
-      // fully stop and dispose everything
+    setOptions(o) {
+      const prev = opts;
+      opts = Object.assign({}, opts, o || {});
+      if (!THREE || !group) return;
+      if (opts.shape !== prev.shape || opts.amount !== prev.amount) build();
+      else if (opts.color !== prev.color) recolor();
+    },
+    poke() { whoosh = 1; },
+    pause() {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = null;
+      _paused = true;
+    },
+    resume() {
+      if (!_paused) return;
+      _paused = false;
+      if (!rafId) rafId = requestAnimationFrame(animate);
+    },
+    stop() {
       if (rafId) cancelAnimationFrame(rafId);
       rafId = null;
       _paused = false;
       try {
-        if (particles) {
-          if (particles.geometry) particles.geometry.dispose();
-          if (particles.material) particles.material.dispose();
-          scene.remove(particles);
-          particles = null;
-        }
-        if (renderer) {
-          try {
-            // If three.js exposes a context, try to lose it explicitly
-            if (renderer.getContext && renderer.getContext().loseContext) {
-              try { renderer.getContext().loseContext(); } catch (e) {}
-            }
-          } catch (e) {}
-          renderer.forceContextLoss && renderer.forceContextLoss();
-          renderer.dispose();
-          renderer = null;
-        }
-        if (scene) {
-          // dispose children
-          scene = null;
-        }
-        // disconnect observer and listeners
-        try {
-          if (bgObserver) { bgObserver.disconnect(); bgObserver = null; }
-          window.removeEventListener('storage', updateRendererBackground);
-        } catch (e) {}
-      } catch (e) {
-        console.warn('Error while stopping three scene', e);
-      }
+        disposeObjects();
+        if (renderer) { renderer.forceContextLoss && renderer.forceContextLoss(); renderer.dispose(); renderer = null; }
+        scene = null;
+        if (bgObserver) { bgObserver.disconnect(); bgObserver = null; }
+        window.removeEventListener('storage', updateRendererBackground);
+      } catch (e) { console.warn('Error while stopping three scene', e); }
       window.removeEventListener('resize', onWindowResize);
-      // reset first-frame flag so future inits will log again
-      firstFrameLogged = false;
-      // restore transparent canvas background to avoid leaving an opaque fill
+      window.removeEventListener('pointermove', onMouse);
+      window.removeEventListener('deviceorientation', onTilt);
       try { const c = document.getElementById('three-canvas'); if (c) c.style.background = 'transparent'; } catch (e) {}
     }
   };
-
-  // add pause/resume helpers so host can toggle without disposing the GL context
-  try {
-    const prev = window.__threeScene;
-    window.__threeScene = Object.assign({}, prev, {
-      pause: function() {
-        try {
-          if (rafId) cancelAnimationFrame(rafId);
-          rafId = null;
-          _paused = true;
-          console.info('[three-scene] paused');
-        } catch (e) {}
-      },
-      resume: function() {
-        try {
-          if (!_paused) return;
-          _paused = false;
-          // restart the animation loop
-          if (!rafId) {
-            rafId = requestAnimationFrame(animate);
-            console.info('[three-scene] resumed');
-          }
-        } catch (e) {}
-      }
-    });
-  } catch (e) {}
-
-  function onWindowResize() {
-    if (!camera || !renderer) return;
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight, false);
-  }
 }
 
-// Named export so host page can initialize on demand (useful when toggling)
 export { initThree };
 export default { initThree };

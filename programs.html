@@ -1,58 +1,43 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
   <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Oli.is - Programs</title>
-  <script src="draw.js" defer></script>
-  <script src="script.js" defer></script>
-  <link rel="icon" href="images/dolphin2.png" type="image/x-icon">
-  <link href="style.css" rel="stylesheet" type="text/css" media="all">
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
-
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="icon" href="images/dolphin2.png" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Bungee&family=Comic+Neue:wght@700&family=Nunito:wght@500;600;700;800&family=Pixelify+Sans:wght@500;700&display=swap" rel="stylesheet">
+    <link href="site.css" rel="stylesheet">
+    <script src="script.js" defer></script>
+    <script src="site.js" defer></script>
+    <title>Oli.is – Programs</title>
   </head>
-<body class="arcade">
+  <body>
     <canvas id="three-canvas" class="three-canvas" aria-hidden="true"></canvas>
-
-    <header class="site-header">
-      <div class="brand">
-        <a href="/" class="brand-link" aria-label="Home">
-          <img src="images/dolphin1.png" alt="logo" class="logo">
+    <div class="wrap">
+      <header class="site-header">
+        <a class="brand" href="/">
+          <img src="images/dolphin1.png" alt="">
+          <span>
+            <span class="brand-name disp">Oli.is</span>
+            <span class="brand-tag">Games and stuff</span>
+          </span>
         </a>
-        <div>
-          <a href="/" class="brand-link"><h1 class="site-title">Oli.is</h1></a>
-          <p class="site-tag">Programs & experiments</p>
-        </div>
-      </div>
-      <div class="center-controls">
-        <a id="homeBtn" class="btn home-btn" href="/">Home</a>
-        <a id="programsBtn" class="btn" href="programs.html">Programs</a>
-        <a id="jokesBtn" class="btn" href="jokes.html">Jokes</a>
-      </div>
-      <nav class="top-nav">
-        <div class="bg-controls">
-            <div class="bg-label"><p>Change background color</p></div>
-            <div class="bg-buttons">
-              <div class="color-picker-wrap" data-tooltip="Pick a background color">
-                <input type="color" id="pageColorPicker" value="#ffa500" aria-label="Page color picker" title="Pick background color">
-                <span id="pageColorDisplay" class="color-display" aria-hidden="true"></span>
-              </div>
-              <button id="randomBgBtn" class="btn small" data-tooltip="Set a random background color">Random</button>
-              <button id="revertBgBtn" class="btn small" data-tooltip="Revert to the default background image">Revert</button>
-              <button id="toggle-3d" class="btn small">3D</button>
-            </div>
-          </div>
-      </nav>
-    </header>
-
-    
-  <div class="arcade-layout">
-      <main class="text-container">
-          <section id="hero" class="hero">
-            <h2 class="hero-title">Programs</h2>
-          </section>
-          <p>These are my programs:</p>
-        
+        <nav class="site-nav" aria-label="Main">
+          <a class="btn" href="/">Games</a>
+          <a class="btn" href="/jokes.html">Jokes</a>
+          <button type="button" id="customiseBtn" class="btn btn-yellow" aria-expanded="false" aria-controls="customise">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 2-.8 2-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10.5" cy="7.5" r="1.2"/><circle cx="15" cy="7.5" r="1.2"/></svg>
+            <span class="btn-label">Customise</span>
+          </button>
+        </nav>
+      </header>
+      <main style="display:flex;flex-direction:column;gap:36px">
+        <section class="hero">
+          <h1 class="disp">Programs</h1>
+          <p>Older school projects and small experiments.</p>
+        </section>
+        <div class="text-panel stk">
           <ul>
             <li><a href="Verkefni00-HalloHeimur/index.html">Verkefni 00 - Halló heimur</a></li>
             <li><a href="Verkefni01-Mondrain/index.html">Verkefni 01 - Mondrain</a></li>
@@ -72,7 +57,8 @@
             <li><a href="flappybird/index.html">Flappy Bird</a></li>
             <li><a href="minesweeper/index.html">Minesweeper</a></li>
           </ul>
+        </div>
       </main>
-  </div>
-</body>
+    </div>
+  </body>
 </html>

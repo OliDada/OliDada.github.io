@@ -14,7 +14,7 @@
         if (!c) return;
         const w = c.width || c.clientWidth || c.offsetWidth;
         const h = c.height || c.clientHeight || c.offsetHeight;
-        window.parent.postMessage({ type: 'game-aspect', width: w, height: h, subtitle: document.title || '' }, '*');
+        window.parent.postMessage({ type: 'game-aspect', subtitle: document.title || '' }, '*');
       } catch (e) {}
     }
     const sendAfter = () => { postCanvasSize(); setTimeout(postCanvasSize, 500); };

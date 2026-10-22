@@ -42,7 +42,7 @@
     "path": "/gravity_dash.html",
     "embed": "/embeds/gravity_dash.html",
     "source": "/gravity_dash.js",
-    "aspect": "4:3",
+    "aspect": "fill",
     "thumbnail": "data/thumbnails/gravity-dash-thumbnail.png",
     "tags": ["game", "physics"],
     "featured": true
