@@ -88,7 +88,11 @@ function startPlayer() {
   releaseCops(true);
   playAs(w);
   if (K < 2) zoomTo(3, x, y);
-  toast('You are ' + w.name.split(' ')[0] + ' · WASD walk, Shift run, F steal the nearest car, Esc stop');
+  toast(
+    'You are ' +
+      w.name.split(' ')[0] +
+      tipK(' · WASD walk, Shift run, F steal the nearest car, Esc stop', ' · use the stick to walk, Get in to take a car, ✕ to stop')
+  );
   updPlayBtn();
 }
 function updPlayBtn() {

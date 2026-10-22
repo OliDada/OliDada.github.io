@@ -57,8 +57,10 @@ function playAs(a) {
   setTimeout(updPlayBtn, 0);
   toast(
     CTRL.mode === 'car'
-      ? 'Driving: W/S speed, A/D steer, F to get out'
-      : 'Playing as ' + a.name.split(' ')[0] + ': WASD to walk, Shift to run, F to get in a car or plane'
+      ? tipK('Driving: W/S speed, A/D steer, F to get out', 'Driving: push the stick up to go, down to brake, sideways to steer')
+      : 'Playing as ' +
+          a.name.split(' ')[0] +
+          tipK(': WASD to walk, Shift to run, F to get in a car or plane', ': use the stick to walk, Get in for a car or plane')
   );
 }
 function stopPlay() {
@@ -112,7 +114,12 @@ function flyPlane(s) {
   CTRL = { mode: 'plane', a: p, pilot: CTRL && CTRL.a };
   follow = p;
   selected = p;
-  toast('Flying: W/S throttle, A/D turn, Space climb, X descend, F to get out on the ground');
+  toast(
+    tipK(
+      'Flying: W/S throttle, A/D turn, Space climb, X descend, F to get out on the ground',
+      'Flying: stick up/down for throttle, sideways to turn, hold Climb or Descend'
+    )
+  );
 }
 function playKey(kk) {
   if (!CTRL) return false;
@@ -146,7 +153,7 @@ function playKey(kk) {
         toast(
           'You get into the ' +
             (best.vname ? best.vname.split(' · ')[1] : 'car') +
-            '. W/S speed, A/D steer, F to get out'
+            tipK('. W/S speed, A/D steer, F to get out', '. Use the stick to drive')
         );
         return true;
       }
@@ -254,12 +261,20 @@ function stepPlay(dt) {
     lf = ks.has('a') || ks.has('arrowleft'),
     rt = ks.has('d') || ks.has('arrowright');
   if (CTRL.mode === 'walk') {
-    const run = ks.has('shift');
+    let run = ks.has('shift');
     let sx = (rt ? 1 : 0) - (lf ? 1 : 0),
-      sy = (dn ? 1 : 0) - (up ? 1 : 0);
+      sy = (dn ? 1 : 0) - (up ? 1 : 0),
+      amt = 1;
+    // the touch joystick walks in any direction, slower near the middle
+    const jm = typeof TOUCH !== 'undefined' && TOUCH.on ? Math.hypot(TOUCH.jx, TOUCH.jy) : 0;
+    if (jm > 0.15) {
+      sx = TOUCH.jx;
+      sy = TOUCH.jy;
+      amt = Math.min(1, 0.35 + jm);
+    }
     if (sx || sy) {
       const d = scrDir(sx, sy),
-        sp = (run ? 6.5 : 2.6) * (a.scale < 0.8 ? 0.85 : 1);
+        sp = (run ? 6.5 : 2.6) * amt * (a.scale < 0.8 ? 0.85 : 1);
       const nx = a.x + d[0] * sp * dt,
         ny = a.y + d[1] * sp * dt;
       if (a.dz > 2.5 || !blockedAt(nx, ny)) {

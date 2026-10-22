@@ -17,7 +17,7 @@ python3 -m http.server 8000      # then open http://localhost:8000/
 | --- | --- |
 | `index.html` | The built game: one page with all the code inlined. Made by `build.py`; do not edit by hand. |
 | `*.txt` | The map files the page loads (see *Map files* below). Made by `tools/`. |
-| `src/js/` | The game code, in 52 modules (below). |
+| `src/js/` | The game code, in 53 modules (below). |
 | `src/ui/` | `body.html` (the page's controls), `style.css`, and `phone-menu.js` (the ☰ menu on phones). |
 | `build.py` | Joins `src/` into `index.html` (and `dist/artifact.html`). |
 | `tools/` | The data pipeline that turns OpenStreetMap and other sources into the map files. See `tools/README.md`. |
@@ -92,6 +92,7 @@ Code style: [Prettier](https://prettier.io) with `.prettierrc.json` (`npx pretti
 | `49-input.js` | Mouse, touch and keyboard: panning, pinching, rotating and hovering. |
 | `50-ui.js` | Buttons, toasts, Go-to menu, saving and share codes, and the inspector panel. |
 | `51-main.js` | The animation frame loop and the start-up sequence that loads all data. |
+| `52-touch-controls.js` | On phones and tablets, a joystick and buttons for walking, driving and flying in play mode. |
 
 ## How it works
 
