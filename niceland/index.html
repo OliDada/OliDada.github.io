@@ -24408,10 +24408,10 @@ function gotoEvent(e) {
 /**
  * Aircraft
  *
- * Airports from OSM runways, parked planes, take-offs, landings and the Reykjavík timetable.
+ * Airports from OSM runways, parked planes, take-offs, landings, and the Reykjavík and Keflavík timetables.
  *
- * Functions: initAir, rkvDay, stepPlanes, planeAll, drawPlane, planeCard
- * State and constants: AIRPORTS, PLANES, PTYPE, LIVERY, AIRL, DESTS, RKV_ROUTES
+ * Functions: initAir, rkvDay, kefDay, kefStandAirline, stepPlanes, planeAll, drawPlane, planeCard
+ * State and constants: AIRPORTS, PLANES, PTYPE, LIVERY, AIRL, DESTS, RKV_ROUTES, KEF_ROUTES
  */
 
 let AIRPORTS = [],
@@ -24514,7 +24514,63 @@ const AIRL = {
     title: [245, 245, 245],
     noStripe: 1
   },
-  'Norlandair': { body: [240, 242, 244], belly: [200, 204, 210], tail: [240, 242, 244], noStripe: 1 }
+  'Norlandair': { body: [240, 242, 244], belly: [200, 204, 210], tail: [240, 242, 244], noStripe: 1 },
+  // the airlines at Keflavík, in the colours they are best known by (simplified to body, belly, tail and a tail mark)
+  'easyJet': {
+    body: [244, 244, 242],
+    belly: [226, 226, 224],
+    tail: [255, 102, 0],
+    title: [255, 102, 0],
+    eng: [255, 102, 0],
+    noStripe: 1
+  },
+  'Wizz Air': {
+    body: [244, 244, 246],
+    belly: [92, 40, 120],
+    tail: [198, 0, 126],
+    eng: [198, 0, 126],
+    noStripe: 1
+  },
+  'Norwegian': { body: [244, 244, 244], belly: [220, 222, 226], tail: [215, 25, 32], noStripe: 1 },
+  'SAS': { body: [236, 238, 240], belly: [206, 210, 216], tail: [0, 38, 100], noStripe: 1 },
+  'Finnair': {
+    body: [244, 244, 246],
+    belly: [214, 218, 224],
+    tail: [0, 47, 135],
+    mark: [244, 244, 246],
+    noStripe: 1
+  },
+  'British Airways': {
+    body: [240, 240, 242],
+    belly: [26, 40, 86],
+    tail: [26, 40, 86],
+    mark: [204, 24, 30],
+    noStripe: 1
+  },
+  'Lufthansa': {
+    body: [242, 242, 244],
+    belly: [210, 214, 220],
+    tail: [5, 22, 77],
+    mark: [242, 242, 244],
+    noStripe: 1
+  },
+  'Jet2': { body: [244, 244, 244], belly: [214, 218, 222], tail: [220, 30, 40], noStripe: 1 },
+  'Transavia': { body: [244, 244, 244], belly: [214, 218, 222], tail: [0, 163, 108], noStripe: 1 },
+  'Delta': { body: [242, 242, 244], belly: [0, 40, 95], tail: [0, 40, 95], mark: [200, 16, 46], noStripe: 1 },
+  'United': {
+    body: [240, 242, 246],
+    belly: [0, 40, 110],
+    tail: [0, 51, 160],
+    mark: [240, 242, 246],
+    noStripe: 1
+  },
+  'Air Canada': {
+    body: [242, 242, 244],
+    belly: [30, 30, 32],
+    tail: [20, 20, 22],
+    mark: [216, 30, 5],
+    noStripe: 1
+  }
 };
 const DESTS = {
   intl: [
@@ -24586,6 +24642,11 @@ function initAir(d) {
       ap.rkv = 1;
       ap.name = 'Reykjavíkurflugvöllur';
     }
+    const K0 = LL(63.985, -22.6056);
+    if (Math.hypot(ap.cx - K0[0], ap.cy - K0[1]) < 3500 && ap.cls === 'intl') {
+      ap.kef = 1;
+      ap.name = 'Keflavíkurflugvöllur';
+    }
   }
   for (const fl of d.ap || []) {
     const n = fl.length / 2;
@@ -24632,8 +24693,9 @@ function initAir(d) {
   }
   for (const ap of AIRPORTS)
     for (const A of ap.aprons) {
-      const types =
-        ap.cls === 'intl'
+      const types = ap.kef
+        ? ['jet']
+        : ap.cls === 'intl'
           ? ['jet', 'jet', 'jet', 'wide', 'tp']
           : ap.cls === 'dom'
             ? ['tp', 'tp', 'light', 'tp']
@@ -24659,7 +24721,8 @@ function initAir(d) {
             alt: 0,
             plane: 1,
             name: 'Parked aircraft',
-            dest: pickA(DESTS[ap.cls === 'intl' ? 'intl' : 'dom'])
+            dest: pickA(DESTS[ap.cls === 'intl' ? 'intl' : 'dom']),
+            airline: ap.kef ? kefStandAirline(h32(i, A.cx | 0, 7)) : undefined
           });
         u += T.span + 8;
         i++;
@@ -24692,6 +24755,122 @@ function rkvDay(day) {
   });
   return ev.sort((a, b) => a.t - b.t);
 }
+/* Keflavík International: Icelandair's hub works in two banks. Flights from North America land at about 6–7 and the
+   European flights leave at about 7:30–8:20, so passengers change planes; the European flights come back in the
+   middle of the afternoon and the North American flights leave at about 16:30–17:30. Foreign airlines come and go
+   through the day and turn round in about an hour; the American ones arrive overnight and leave mid-morning.
+   [airline, destinations, aircraft, flights a day in summer, pattern, share of them flown in winter]
+   The airlines are the ones serving Keflavík in 2025–26 (Play stopped flying in September 2025); the counts and
+   times are a believable pattern, not the real timetable. */
+const KEF_ROUTES = [
+  [
+    'Icelandair',
+    [
+      'Copenhagen',
+      'London',
+      'Oslo',
+      'Stockholm',
+      'Paris',
+      'Amsterdam',
+      'Frankfurt',
+      'Berlin',
+      'Helsinki',
+      'Dublin',
+      'Manchester',
+      'Munich',
+      'Zürich',
+      'Glasgow',
+      'Bergen',
+      'Brussels',
+      'Madrid',
+      'Milan'
+    ],
+    'jet',
+    14,
+    'eu',
+    0.7
+  ],
+  [
+    'Icelandair',
+    [
+      'Boston',
+      'New York',
+      'Seattle',
+      'Toronto',
+      'Chicago',
+      'Denver',
+      'Minneapolis',
+      'Washington',
+      'Orlando',
+      'Vancouver',
+      'Halifax'
+    ],
+    'jet',
+    9,
+    'na',
+    0.6
+  ],
+  [
+    'easyJet',
+    ['London', 'Manchester', 'Edinburgh', 'Bristol', 'Geneva', 'Milan', 'Belfast'],
+    'jet',
+    5,
+    'day',
+    0.7
+  ],
+  ['Wizz Air', ['Budapest', 'Warsaw', 'Gdańsk', 'London', 'Katowice', 'Vilnius'], 'jet', 3, 'day', 0.6],
+  ['Norwegian', ['Oslo', 'Stockholm', 'Copenhagen'], 'jet', 2, 'day', 0.5],
+  ['SAS', ['Copenhagen', 'Oslo', 'Stockholm'], 'jet', 2, 'day', 0.8],
+  ['Finnair', ['Helsinki'], 'jet', 1, 'day', 0.5],
+  ['British Airways', ['London'], 'jet', 1, 'day', 0.8],
+  ['Lufthansa', ['Frankfurt', 'Munich'], 'jet', 1, 'day', 0.3],
+  ['Jet2', ['Manchester', 'Leeds', 'Birmingham', 'Glasgow'], 'jet', 1, 'day', 1.6], // northern-lights breaks
+  ['Transavia', ['Amsterdam', 'Paris'], 'jet', 1, 'day', 0.4],
+  ['Delta', ['New York', 'Boston', 'Minneapolis', 'Detroit'], 'jet', 2, 'us', 0.3],
+  ['United', ['Newark', 'Chicago', 'Washington'], 'jet', 2, 'us', 0],
+  ['Air Canada', ['Toronto', 'Montréal'], 'jet', 1, 'us', 0]
+];
+function kefDay(day) {
+  const ev = [],
+    sum = SEAS === 'summer' || SEAS === 'spring' ? 1 : 0;
+  const at = (a, b, q) => (a + (b - a) * h32(day, q, 43)) * 60; // a time of day between a and b hours
+  KEF_ROUTES.forEach(([al, dests, type, n0, pat, win], ri) => {
+    const n = sum ? n0 : n0 * win,
+      m = Math.floor(n) + (h32(day, ri, 44) < n - Math.floor(n) ? 1 : 0);
+    for (let i = 0; i < m; i++) {
+      const q = ri * 100 + i,
+        dest = dests[(i + day) % dests.length];
+      let arr, dep;
+      if (pat === 'eu') {
+        // most go out in the morning bank and come back in the afternoon; a few go out in the afternoon
+        if (i % 4 !== 3) {
+          dep = at(7.3, 8.35, q);
+          arr = at(14.4, 15.6, q + 1);
+        } else {
+          dep = at(16.3, 17.3, q);
+          arr = at(22.8, 23.9, q + 1);
+        }
+      } else if (pat === 'na') {
+        arr = at(5.8, 6.9, q);
+        dep = at(16.4, 17.6, q + 1);
+      } else if (pat === 'us') {
+        arr = at(6, 8.2, q);
+        dep = arr + 85 + h32(day, q, 45) * 20;
+      } else {
+        arr = at(8, 21.5, q);
+        dep = arr + 55 + h32(day, q, 45) * 25;
+      }
+      ev.push({ t: arr, arr: 1, al, dest, type }, { t: dep, arr: 0, al, dest, type });
+    }
+  });
+  return ev.filter(e => e.t < 1440).sort((a, b) => a.t - b.t);
+}
+// who is parked at a Keflavík stand: mostly Icelandair
+function kefStandAirline(r) {
+  if (r < 0.72) return 'Icelandair';
+  const o = ['easyJet', 'Wizz Air', 'SAS', 'Norwegian', 'British Airways', 'Finnair', 'Delta', 'Jet2'];
+  return o[Math.floor(((r - 0.72) / 0.28) * o.length) % o.length];
+}
 function stepPlanes(dt) {
   if (!AIRPORTS.length) return;
   try {
@@ -24701,11 +24880,11 @@ function stepPlanes(dt) {
   }
   const vr = viewRect(6000, 0);
   for (const ap of AIRPORTS) {
-    if (!ap.rkv || ap.cx < vr[0] || ap.cx > vr[2] || ap.cy < vr[1] || ap.cy > vr[3]) continue;
+    if (!(ap.rkv || ap.kef) || ap.cx < vr[0] || ap.cx > vr[2] || ap.cy < vr[1] || ap.cy > vr[3]) continue;
     const day = Math.floor(gameMin / 1440),
       now = gameMin % 1440;
     if (ap.evDay !== day || now < (ap.lastNow || 0) - 1) {
-      if (ap.evDay !== day) ap.ev = rkvDay(day);
+      if (ap.evDay !== day) ap.ev = ap.kef ? kefDay(day) : rkvDay(day);
       ap.evDay = day;
       ap.evI = ap.ev.findIndex(e => e.t >= now);
       if (ap.evI < 0) ap.evI = ap.ev.length;
@@ -24713,7 +24892,16 @@ function stepPlanes(dt) {
     ap.lastNow = now;
     while (ap.evI < ap.ev.length && ap.ev[ap.evI].t <= now) {
       const e = ap.ev[ap.evI++];
-      if (PLANES.filter(p => p.ap === ap).length >= 3 || entDim() > 0) continue;
+      if (entDim() > 0) continue;
+      if (ap.kef) {
+        // planes fly at real speed while the clock runs fast, so only a few of a bank's flights can be in the air
+        // at once: keep room for both directions so arrivals and departures both show
+        const inb = PLANES.filter(
+            p => p.ap === ap && (p.st === 'app' || p.st === 'roll' || p.st === 'taxi')
+          ).length,
+          outb = PLANES.filter(p => p.ap === ap && (p.st === 'lineup' || p.st === 'tko')).length;
+        if (e.arr ? inb >= 3 : outb >= 2) continue;
+      } else if (PLANES.filter(p => p.ap === ap).length >= 3) continue;
       const rw = ap.rws.slice().sort((a, b) => b.L - a.L)[0];
       let dir = rw.ux * WIND[0] + rw.uy * WIND[1] > 0 ? -1 : 1;
       const ux = rw.ux * dir,
@@ -24755,7 +24943,7 @@ function stepPlanes(dt) {
     }
   }
   for (const ap of AIRPORTS) {
-    if (ap.rkv || ap.cx < vr[0] || ap.cx > vr[2] || ap.cy < vr[1] || ap.cy > vr[3]) continue;
+    if (ap.rkv || ap.kef || ap.cx < vr[0] || ap.cx > vr[2] || ap.cy < vr[1] || ap.cy > vr[3]) continue;
     ap.next -= dt;
     if (ap.next > 0 || entDim() > 0) continue;
     ap.next = (ap.cls === 'intl' ? 50 : ap.cls === 'dom' ? 90 : 200) * (0.6 + R() * 0.8);

@@ -15,6 +15,16 @@ Without --only it lists every suspect edge it finds (always run with --dry first
 also sits at the -1 clamp, so a fjord that crosses a block line can look like a hole). With --only it fixes just the
 suspects that fall inside the given boxes of 300 m cells (rows r0..r1, columns c0..c1).
 
+Already applied to the map files in the repo (October 2026), each suspect checked by hand:
+  fixed, sea -> land: 1095:1125:675:705 (Landeyjar, west of Landeyjahöfn), 970:1005:515:580 (Ölfus, west of Selfoss).
+    Both held road nodes and buildings inside the "sea"; the remaining sea -> land suspects hold none, and most have
+    mapped shores along their sides (Hvalfjörður is one), so they are real water and were left alone.
+  fixed, land -> sea: 360:400:296:345 (fjords off Barðaströnd), 100:135:296:335 (Ísafjarðardjúp),
+    498:509:560:570 (head of Hrútafjörður), 598:604:236:252 (Snæfellsnes, north shore): fjord-shaped channels of flat
+    2 m "land" with no roads, cut off on a block line.
+  left: 200:242:265:299 and 848:870:1492:1499 (roads inside, so land), 308:324:700:701 (a one-cell strip on a straight
+    coast; flipping it only moves the straight edge).
+
 Rewrites both files in place (only the coarse land-type and height arrays in world.txt, and new masks appended to
 detail.txt); everything else is kept byte for byte.
 """
