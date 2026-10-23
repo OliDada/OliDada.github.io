@@ -2,16 +2,41 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
         <title>Zelda Game</title>
-      <script type="module" crossorigin src="/zelda-game/assets/index-Dzgo8sZ0.js"></script>
+        <link rel="icon" type="image/png" href="assets/favicon.png">
+      <script type="module" crossorigin src="/zelda-game/assets/index-CJ-v2xdQ.js"></script>
     </head>
     <body>
         <style>
             body {
                 background: rgb(27, 29, 52);
+                margin: 0;
+                overflow: hidden;
+                touch-action: none;
+                overscroll-behavior: none;
             }
 
         </style>
+        <!-- On-screen controls for phones and tablets (touchpad.js lives at the root of the website,
+             so they only show up on the site, not in `npm run dev`) -->
+        <script src="/touchpad.js"></script>
+        <script>
+            window.TouchPad && TouchPad.create({
+                target: () => document.querySelector('canvas'),
+                landscapeHint: true,
+                buttons: [
+                    { label: 'A', name: 'Attack / talk', keys: [' ', 'Enter'], big: true },
+                    { label: 'Use', name: 'Use (E)', keys: ['e'] },
+                    { label: 'Dash', name: 'Dash (Shift)', keys: ['Shift'] }
+                ],
+                menu: [
+                    { label: 'Bag', keys: ['i'] },
+                    { label: 'Map', keys: ['m'] },
+                    { label: 'Potion', keys: ['h'] },
+                    { label: 'Sound', keys: ['p'] }
+                ]
+            });
+        </script>
     </body>
 </html>
