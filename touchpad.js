@@ -7,7 +7,6 @@
 //     stick: true,                                       // joystick that presses the arrow keys
 //     buttons: [{ label: 'A', keys: [' '], big: true }], // round action buttons, bottom right
 //     menu:    [{ label: 'Map', keys: ['m'] }],          // small buttons along the top
-//     landscapeHint: true,                               // suggest turning the phone when it's upright
 //   });
 //
 // Only shows on touch screens (add ?touch=1 to the URL to force it on a computer).
@@ -64,11 +63,9 @@
         .tp-btn.on { background: rgba(255,255,255,.55); transform: scale(.94); }
         .tp-menu { position: absolute; top: max(10px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: flex; gap: 8px; pointer-events: none; }
         .tp-menu .tp-btn { width: auto; height: 36px; border-radius: 999px; padding: 0 14px; font-size: 13px; }
-        .tp-hide { position: absolute; top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); pointer-events: auto; width: 36px; height: 36px; border-radius: 50%;
+        .tp-hide { position: absolute; bottom: max(10px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); pointer-events: auto; width: 36px; height: 36px; border-radius: 50%;
             border: 2px solid rgba(255,255,255,.6); background: rgba(0,0,0,.25); color: #fff; font-size: 16px; }
         .tp.off > :not(.tp-hide) { display: none; }
-        .tp-rotate { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); color: rgba(255,255,255,.8); font-size: 14px; font-weight: 700; text-align: center; display: none; }
-        @media (orientation: portrait) { .tp-rotate { display: block; } }
         `;
         document.head.appendChild(css);
 
@@ -164,14 +161,6 @@
             m.className = 'tp-menu';
             opts.menu.forEach(b => m.appendChild(makeBtn(b)));
             root.appendChild(m);
-        }
-
-        // games that are wider than tall get a nudge to turn the phone
-        if (opts.landscapeHint) {
-            const r = document.createElement('div');
-            r.className = 'tp-rotate';
-            r.textContent = 'Turn your phone sideways for a bigger view';
-            root.appendChild(r);
         }
 
         // little toggle to hide the controls (e.g. if someone plugs in a keyboard)

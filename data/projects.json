@@ -16,6 +16,19 @@
     "aspect": "fill",
     "thumbnail": "data/thumbnails/rpg-thumbnail.png",
     "description": "Start by going in the house and talking to the old man.",
+    "controls": [
+      ["Arrows / WASD", "move"],
+      ["Space", "attack / talk"],
+      ["E", "use / pull"],
+      ["Shift", "charged attack"],
+      ["F", "fire"],
+      ["R", "ram"],
+      ["Q", "show / hide hint"],
+      ["I", "bag"],
+      ["M", "map"],
+      ["H", "potion"],
+      ["P", "sound"]
+    ],
     "tags": ["game", "rpg"],
     "featured": true
   },

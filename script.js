@@ -250,6 +250,8 @@ async function playFromAnchor(anchor) {
     const openNewTab = document.getElementById('openNewTab');
     if (player && frame) {
         document.body.classList.add('is-playing');
+        // stop the 3D background while a game runs, so the two don't fight over the graphics card
+        try { if (window.__threeScene && window.__threeScene.pause) window.__threeScene.pause(); } catch (e) {}
         player.style.display = '';
         player.setAttribute('aria-hidden', 'false');
         setPlayerFit(fitForProject(match, path));
@@ -312,6 +314,9 @@ async function playFromAnchor(anchor) {
             const playingSubtitle = (match && match.subtitle) || '';
             if (window && typeof window.setHeroForGame === 'function') window.setHeroForGame(playingTitle, playingSubtitle);
         } catch (e) {}
+
+        // Keyboard controls for games that list them in projects.json
+        showPlayerControls(match && match.controls);
 
         // set player subtitle from metadata if available
         const subtitleEl = document.getElementById('playerSubtitle');
@@ -401,6 +406,36 @@ async function playFromAnchor(anchor) {
     }
 }
 window.playFromAnchor = playFromAnchor;
+
+// The controls strip under the player's title. Open or closed is remembered.
+function showPlayerControls(controls) {
+    const list = document.getElementById('playerControls');
+    const btn = document.getElementById('toggleControls');
+    if (!list || !btn) return;
+    const has = Array.isArray(controls) && controls.length > 0;
+    btn.hidden = !has;
+    if (!has) { list.hidden = true; list.innerHTML = ''; return; }
+    const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    list.innerHTML = controls.map(([key, what]) => `<li><kbd>${esc(key)}</kbd>${esc(what)}</li>`).join('');
+    let open = true;
+    try { open = localStorage.getItem('player-controls') !== 'hidden'; } catch (e) {}
+    list.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+    try { if (typeof fitPlayer === 'function') fitPlayer(); } catch (e) {}
+    if (!btn.__wired) {
+        btn.__wired = true;
+        btn.addEventListener('click', () => {
+            const nowOpen = list.hidden;
+            list.hidden = !nowOpen;
+            btn.setAttribute('aria-expanded', String(nowOpen));
+            try { localStorage.setItem('player-controls', nowOpen ? 'shown' : 'hidden'); } catch (e) {}
+            try { if (typeof fitPlayer === 'function') fitPlayer(); } catch (e) {}
+            // give the keyboard back to the game
+            const frame = document.getElementById('playerFrameMain');
+            try { if (frame && typeof focusIframeAndCanvas === 'function') focusIframeAndCanvas(frame); } catch (e) {}
+        });
+    }
+}
 
 // Add ?embed=1 to a URL safely (handles relative paths)
 function addEmbedParam(path) {
@@ -699,7 +734,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
         if (player) { player.style.display = 'none'; player.setAttribute('aria-hidden', 'true'); player.classList.remove('fullscreen'); }
         if (frame) frame.src = 'about:blank';
+        showPlayerControls(null);
         document.body.classList.remove('is-playing');
+        try {
+            const bg = document.getElementById('three-canvas');
+            if (bg && bg.style.visibility !== 'hidden' && window.__threeScene && window.__threeScene.resume) window.__threeScene.resume();
+        } catch (e) {}
         setFsLabel(false);
         // restore hero header when player closes
         try { if (window && typeof window.resetHero === 'function') window.resetHero(); } catch (e) {}
@@ -866,7 +906,9 @@ function fitPlayer() {
     } else {
         const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
         const header = player.querySelector('.player-header');
-        const chrome = (header ? header.offsetHeight : 0) + 32; // player padding + gap + breathing room
+        const controls = document.getElementById('playerControls');
+        const strip = controls && !controls.hidden && controls.offsetHeight ? controls.offsetHeight + 8 : 0;
+        const chrome = (header ? header.offsetHeight : 0) + strip + 32; // player padding + gap + breathing room
         stage.style.height = Math.max(280, Math.round(vh - chrome)) + 'px';
     }
     const W = stage.clientWidth;

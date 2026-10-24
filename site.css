@@ -190,6 +190,11 @@ body.is-playing .player-area { width: calc(100vw - 24px); margin-left: calc(50% 
 .player-desc { flex-basis: 100%; color: rgba(255, 250, 240, .75); font-size: .85rem; line-height: 1.35; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .player-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .player-actions .ico { font-size: 1rem; line-height: 1; }
+.player-controls { list-style: none; margin: 0; padding: 0 4px; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .85rem; color: rgba(255, 250, 240, .85); }
+.player-controls[hidden] { display: none; }
+.player-controls li { display: flex; align-items: center; gap: 6px; }
+.player-controls kbd { font: inherit; font-weight: 800; font-size: .78rem; color: var(--ink); background: var(--cream); border-radius: 6px; padding: 1px 7px; box-shadow: 0 2px 0 rgba(255, 250, 240, .35); white-space: nowrap; }
+@media (hover: none) and (pointer: coarse) { .player-controls, #toggleControls { display: none !important; } }
 .player-stage { display: flex; align-items: center; justify-content: center; min-height: 0; overflow: hidden; }
 .player-aspect-box { position: relative; flex: none; width: 100%; height: 100%; background: #000; border-radius: 8px; overflow: hidden; }
 .player-aspect-box iframe, .player-area iframe#playerFrameMain { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; background: #000; transform-origin: 0 0; }
@@ -200,6 +205,7 @@ body.is-playing .player-area { width: calc(100vw - 24px); margin-left: calc(50% 
 .player-area.fullscreen .player-stage { flex: 1; }
 .player-area.fullscreen .player-aspect-box { border-radius: 0; }
 .player-area.fullscreen .player-desc, .player-area.fullscreen .player-subtitle { display: none; }
+.player-area.fullscreen .player-controls { font-size: .75rem; }
 body:has(.player-area.fullscreen) { overflow: hidden; }
 
 .modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 50; background: rgba(0, 0, 0, .6); }
@@ -225,7 +231,7 @@ body:has(.player-area.fullscreen) { overflow: hidden; }
   body.is-playing .player-aspect-box { border-radius: 4px; }
   .player-header { min-height: 32px; gap: 8px; }
   .player-title { font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-  .player-subtitle, .player-desc { display: none; }
+  .player-subtitle, .player-desc, .player-controls { display: none !important; }
   .player-actions .lbl { display: none; }
   .player-actions .btn { padding: 6px 10px; min-width: 36px; }
 }

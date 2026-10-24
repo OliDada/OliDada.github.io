@@ -47,11 +47,13 @@
               <div id="playerDescription" class="player-desc" aria-live="polite"></div>
             </div>
             <div class="player-actions">
+              <button id="toggleControls" class="btn small" title="Show or hide the controls" hidden aria-expanded="true" aria-controls="playerControls"><span class="ico" aria-hidden="true">&#x2328;</span><span class="lbl">Controls</span></button>
               <a id="openNewTab" class="btn small" href="#" target="_blank" rel="noopener" title="Open in new tab"><span class="ico" aria-hidden="true">&#8599;</span><span class="lbl">New tab</span></a>
               <button id="toggleFullscreen" class="btn small" title="Fullscreen"><span class="ico" aria-hidden="true">&#x26F6;</span><span class="lbl">Fullscreen</span></button>
               <button id="closePlayer" class="btn small" title="Close"><span class="ico" aria-hidden="true">&#x2715;</span><span class="lbl">Close</span></button>
             </div>
           </div>
+          <ul id="playerControls" class="player-controls" hidden></ul>
           <div id="playerStage" class="player-stage">
             <div id="playerAspectBox" class="player-aspect-box">
               <iframe id="playerFrameMain" src="about:blank" title="Game player" allowfullscreen allow="fullscreen; autoplay; gamepad"></iframe>
