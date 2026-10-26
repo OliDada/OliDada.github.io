@@ -5,7 +5,8 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
         <title>Zelda Game</title>
         <link rel="icon" type="image/png" href="/zelda-game/assets/favicon-CYVFKXMN.png">
-      <script type="module" crossorigin src="/zelda-game/assets/index-BkwvZz9A.js"></script>
+      <script type="module" crossorigin src="/zelda-game/assets/index-CDMygtxY.js"></script>
+      <link rel="stylesheet" crossorigin href="/zelda-game/assets/index-CvaqphJ1.css">
     </head>
     <body>
         <style>
@@ -18,28 +19,5 @@
             }
 
         </style>
-        <!-- On-screen controls for phones and tablets (touchpad.js lives at the root of the website,
-             so they only show up on the site, not in `npm run dev`) -->
-        <script src="/touchpad.js"></script>
-        <script>
-            window.TouchPad && TouchPad.create({
-                target: () => document.querySelector('canvas'),
-                landscapeHint: true,
-                buttons: [
-                    { label: 'A', name: 'Attack / talk', keys: [' ', 'Enter'], big: true },
-                    { label: 'Use', name: 'Use (E)', keys: ['e'] },
-                    { label: 'Charge', name: 'Charged attack (Shift)', keys: ['Shift'] },
-                    { label: 'Fire', name: 'Breathe fire (F)', keys: ['f'] },
-                    { label: 'Ram', name: 'Ram (R)', keys: ['r'] }
-                ],
-                menu: [
-                    { label: 'Hint', keys: ['q'] },
-                    { label: 'Bag', keys: ['i'] },
-                    { label: 'Map', keys: ['m'] },
-                    { label: 'Potion', keys: ['h'] },
-                    { label: 'Sound', keys: ['p'] }
-                ]
-            });
-        </script>
     </body>
 </html>
