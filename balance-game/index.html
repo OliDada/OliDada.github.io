@@ -2,19 +2,59 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Balance Game</title>
     <!-- Load p5.js from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+    <script src="physics.js" defer></script>
     <!-- Link your game script -->
     <script src="main.js" defer></script>
     <style>
       body {
         margin: 0;
-        background: #111;
-        overflow: hidden;
+        background: #fff9e7;
+        min-height: 100svh;
+        display: grid;
+        place-items: center;
+      }
+      main { width: min(92vw, 560px, calc(80svh - 56px)); }
+      body { align-content: center; gap: 10px; padding: 12px 0; box-sizing: border-box; }
+      #game-ui { width: min(92vw, 640px); font: 13px "Trebuchet MS", sans-serif; color: #354f45; }
+      .actions { display:flex; justify-content:center; gap:12px; }
+      button { font:inherit; color:#354f45; border:1px solid #354f45; background:#fff9e7; padding:9px 18px; border-radius:3px; cursor:pointer; touch-action:none; user-select:none; }
+      button:disabled { opacity:.4; cursor:default; }
+      button:focus-visible { outline:3px solid #d6a16a; outline-offset:3px; }
+      button.held { background:#edc754; }
+      .touch-controls { display:none; justify-content:space-between; gap:14px; margin-top:12px; }
+      .touch-controls > div { flex:1; text-align:center; }
+      .touch-controls span { display:block; margin-bottom:5px; }
+      .touch-controls button { width:45%; min-height:48px; padding:8px; font-size:22px; }
+      .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+      @media (hover:none) and (pointer:coarse) and (max-width:700px), (hover:none) and (pointer:coarse) and (max-height:500px) { main { width:min(92vw, calc(80svh - 140px)); } .touch-controls:not([hidden]) { display:flex; } }
+      @media (max-width:700px) and (orientation:portrait) {
+        body { height:100dvh; min-height:0; padding: max(8px, env(safe-area-inset-top)) 12px max(8px, env(safe-area-inset-bottom)); align-content:start; gap:8px; }
+        main { width:100%; height:calc(100dvh - 164px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); min-height:180px; }
+        #game-ui { width:100%; }
+        main canvas { height:100% !important; box-sizing:border-box; }
+      }
+      canvas {
+        display: block;
+        width: 100% !important;
+        height: auto !important;
+        border-radius: 3px;
+        border: 1.5px solid #354f45;
       }
     </style>
   </head>
-  <body></body>
+  <body>
+    <main id="game-canvas"></main>
+    <section id="game-ui" aria-label="Game controls">
+      <div class="actions"><button id="action">Play</button><button id="pause" disabled>Pause</button></div>
+      <div id="touch-controls" class="touch-controls" hidden>
+        <div><span>Move</span><button data-control="KeyA" aria-label="Move left">←</button> <button data-control="KeyD" aria-label="Move right">→</button></div>
+        <div><span>Tilt</span><button data-control="ArrowLeft" aria-label="Tilt left">↶</button> <button data-control="ArrowRight" aria-label="Tilt right">↷</button></div>
+      </div>
+      <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+    </section>
+  </body>
 </html>

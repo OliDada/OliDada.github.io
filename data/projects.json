@@ -104,11 +104,12 @@
     "title": "Balance Ball",
     "path": "/balance-game/index.html",
     "source": "/balance-game/main.js",
-    "aspect": "1:1",
-    "playSize": { "width": 400, "height": 400 },
-    "thumbnail": "data/thumbnails/balance-ball-thumbnail.png",
+    "aspect": "fill",
+    "thumbnail": "data/thumbnails/balance-ball-thumbnail.svg",
+    "description": "Balance your little buddy on a rising beam, from sunny meadows to outer space. Six stages, drifting hazards, and a personal-best height to beat.",
+    "controls": [["A / D", "move"], ["Left / Right", "tilt"], ["P / Esc", "pause"], ["R", "retry"], ["Phone", "on-screen move and tilt controls"]],
     "tags": ["game", "physics"],
-    "featured": false
+    "featured": true
   },
   {
     "title": "Farm Frenzy",

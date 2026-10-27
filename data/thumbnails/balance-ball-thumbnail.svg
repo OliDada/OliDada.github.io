@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
+<title>Balance Ball — from the meadow to space</title>
+<rect width="800" height="500" fill="#c7e5e8"/>
+<path d="M420 0H800V500H735Q640 330 540 240T420 0" fill="#727fa4"/>
+<path d="M560 0H800V500Q745 305 680 214T560 0" fill="#242d49"/>
+<g fill="#fff9e7"><circle cx="620" cy="48" r="2"/><circle cx="742" cy="52" r="2.6"/><circle cx="706" cy="163" r="2"/><circle cx="771" cy="248" r="1.7"/><circle cx="695" cy="302" r="2"/><circle cx="596" cy="126" r="1.5"/><path d="M661 84v12m-6-6h12" stroke="#fff9e7" stroke-width="2"/></g>
+<circle cx="733" cy="104" r="28" fill="#f2ebcc"/><g fill="#c1bdb1"><ellipse cx="724" cy="98" rx="6" ry="5"/><circle cx="744" cy="114" r="4"/></g>
+<path d="M0 420Q120 348 237 401T560 443L590 500H0" fill="#afc984"/>
+<path d="M0 470Q178 398 310 458T633 500H0" fill="#84ae72"/>
+<g stroke="#354f45" stroke-width="2" stroke-linejoin="round">
+<path d="M58 249C29 246 34 221 54 223C49 190 90 189 102 211C124 193 147 211 144 225C178 221 177 250 154 252Z" fill="#fff9e7"/>
+<path d="M555 229l25 31-25 38-26-38Z" fill="#eaa395"/><path d="M555 229v69m-26-38h51m-25 38q20 14 0 29t0 21" fill="none"/>
+<g transform="translate(367 332) rotate(-6)">
+<path d="M-157-13L156-15 158 15-156 16Z" fill="#d6a16a"/>
+<path d="M0-13V-5" fill="none"/>
+<path d="M-135 5h75m100-3h91" stroke="#a5744e"/>
+<ellipse cx="-109" cy="-1" rx="9" ry="3" fill="none" stroke="#a5744e"/>
+<g transform="translate(0 -56)">
+<path d="M-43 0C-45-25-24-44 1-43C27-44 44-23 43 2C43 27 24 44-2 43C-27 42-44 24-43 0Z" fill="#edc754" stroke-width="3"/>
+<g fill="#354f45" stroke="none"><ellipse cx="-13" cy="-3" rx="3.5" ry="5"/><ellipse cx="14" cy="-5" rx="3.7" ry="5.1"/></g>
+<path d="M-8 12q9 13 20-3" stroke-width="3" fill="none" stroke-linecap="round"/>
+</g></g>
+<path d="M640 369l19-15 24 6 12 24-13 22-29-2-17-18Z" fill="#b6aba0"/><ellipse cx="659" cy="373" rx="7" ry="5" fill="#978f89"/>
+</g>
+<g fill="#354f45" font-family="Trebuchet MS, sans-serif"><text x="49" y="93" font-size="53" font-weight="bold" transform="rotate(-2 49 93)">balance ball</text><text x="52" y="133" font-size="20">a little further up.</text></g>
+<g stroke="#5c875b" fill="none" stroke-width="2"><path d="M45 469l5 7 3-10m129-11 4 7 4-8m280 30 4 5 3-7"/></g>
+<g transform="translate(111 453)"><path d="M0 16L2 0" stroke="#354f45" stroke-width="2"/><g fill="#fff9e7"><ellipse cx="-3" cy="0" rx="4" ry="3"/><ellipse cx="3" cy="-3" rx="3" ry="4"/><ellipse cx="6" cy="2" rx="4" ry="3"/><ellipse cx="1" cy="5" rx="3" ry="4"/></g><circle cx="2" cy="1" r="2.5" fill="#edc754"/></g>
+</svg>
