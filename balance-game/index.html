@@ -29,6 +29,8 @@
       .touch-controls > div { flex:1; text-align:center; }
       .touch-controls span { display:block; margin-bottom:5px; }
       .touch-controls button { width:45%; min-height:48px; padding:8px; font-size:22px; }
+      .motion-controls button { width:auto; min-height:36px; font-size:12px; margin:2px; }
+      canvas { touch-action:none; }
       .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
       @media (hover:none) and (pointer:coarse) and (max-width:700px), (hover:none) and (pointer:coarse) and (max-height:500px) { main { width:min(92vw, calc(80svh - 140px)); } .touch-controls:not([hidden]) { display:flex; } }
       @media (max-width:700px) and (orientation:portrait) {
@@ -51,8 +53,8 @@
     <section id="game-ui" aria-label="Game controls">
       <div class="actions"><button id="action">Play</button><button id="pause" disabled>Pause</button></div>
       <div id="touch-controls" class="touch-controls" hidden>
-        <div><span>Move</span><button data-control="KeyA" aria-label="Move left">←</button> <button data-control="KeyD" aria-label="Move right">→</button></div>
-        <div><span>Tilt</span><button data-control="ArrowLeft" aria-label="Tilt left">↶</button> <button data-control="ArrowRight" aria-label="Tilt right">↷</button></div>
+        <div class="motion-controls"><span id="touch-hint">Drag on the game to move</span><button id="motion">Enable phone tilt</button><button id="recenter" hidden>Recenter</button></div>
+        <div id="tilt-fallback"><span>Tilt</span><button data-control="ArrowLeft" aria-label="Tilt left">↶</button> <button data-control="ArrowRight" aria-label="Tilt right">↷</button></div>
       </div>
       <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
     </section>

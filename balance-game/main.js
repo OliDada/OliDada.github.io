@@ -86,6 +86,47 @@ let feedbackTimer = 0;
 const heldKeys = new Set();
 const heldPointers = new Map();
 const PHONE_CONTROLS_QUERY = '(hover: none) and (pointer: coarse) and (max-width: 700px), (hover: none) and (pointer: coarse) and (max-height: 500px)';
+const gameplayTouches = new Set();
+let dragPointer = null;
+let dragStartX = 0, dragStartBeam = 0, dragTarget = null;
+let phoneTiltEnabled = false, phoneTiltReady = false;
+let tiltNeutral = null, tiltSample = null, tiltTarget = 0, tiltSampleTime = 0;
+let motionRequestPending = false;
+function screenRoll(beta, gamma, angle) {
+  const radians = angle * Math.PI / 180;
+  return gamma * Math.cos(radians) + beta * Math.sin(radians);
+}
+function receiveTilt(event) {
+  if (!phoneTiltEnabled || !Number.isFinite(event.beta) || !Number.isFinite(event.gamma)) return;
+  const angle = window.screen?.orientation?.angle ?? window.orientation ?? 0;
+  tiltSample = screenRoll(event.beta, event.gamma, angle);
+  if (tiltNeutral === null) tiltNeutral = tiltSample;
+  const degrees = tiltSample - tiltNeutral;
+  tiltTarget = Math.max(-.42, Math.min(.42, (Math.abs(degrees) < 1 ? 0 : degrees) * .018));
+  tiltSampleTime = Date.now();
+  if (!phoneTiltReady) { phoneTiltReady = true; syncControls(); }
+}
+function recenterTilt() { tiltNeutral = tiltSample; tiltTarget = 0; }
+async function enablePhoneTilt() {
+  if (motionRequestPending) return;
+  if (phoneTiltEnabled) { phoneTiltEnabled = false; phoneTiltReady = false; syncControls(); return; }
+  if (!window.isSecureContext || !window.DeviceOrientationEvent) {
+    announce('Phone tilt unavailable here. Use tilt buttons.'); return;
+  }
+  motionRequestPending = true;
+  setPaused(true);
+  try {
+    const api = window.DeviceOrientationEvent;
+    const permission = typeof api.requestPermission === 'function' ? await api.requestPermission() : 'granted';
+    if (permission !== 'granted') { announce('Motion access declined. Tilt buttons still work.'); return; }
+    phoneTiltEnabled = true; phoneTiltReady = false; tiltNeutral = null; tiltSample = null; tiltTarget = 0;
+    announce('Hold comfortably, then resume. Drag to move.');
+    setTimeout(() => {
+      if (phoneTiltEnabled && !phoneTiltReady) { phoneTiltEnabled = false; announce('No motion signal. Use tilt buttons.'); syncControls(); }
+    }, 5000);
+  } catch { announce('Motion access unavailable. Use tilt buttons.'); }
+  finally { motionRequestPending = false; syncControls(); }
+}
 function saveBest() {
   bestAltitude = Math.max(bestAltitude, Math.floor(altitude));
   try { localStorage.setItem(HEIGHT_KEY, String(bestAltitude)); } catch {}
@@ -93,6 +134,7 @@ function saveBest() {
 function isHeld(code) { return heldKeys.has(code) || [...heldPointers.values()].includes(code); }
 function clearInput() {
   heldKeys.clear(); heldPointers.clear();
+  dragPointer = null; dragTarget = null;
   document.querySelectorAll('[data-control]').forEach(button => button.classList.remove('held'));
 }
 function announce(message) {
@@ -100,7 +142,12 @@ function announce(message) {
   document.getElementById('announcement').textContent = message;
 }
 function syncControls() {
-  document.getElementById('touch-controls').hidden = gameState !== 'playing' || gameOver || paused;
+  const motionActive = phoneTiltEnabled && phoneTiltReady;
+  document.getElementById('touch-controls').hidden = gameState !== 'playing' || gameOver || (!paused && motionActive);
+  document.getElementById('tilt-fallback').hidden = paused || motionActive;
+  document.getElementById('touch-hint').textContent = paused ? 'Phone controls' : 'Drag on the game to move';
+  document.getElementById('motion').textContent = phoneTiltEnabled ? 'Use tilt buttons' : 'Enable phone tilt';
+  document.getElementById('recenter').hidden = !paused || !phoneTiltEnabled;
   const action = document.getElementById('action');
   action.textContent = gameState === 'menu' ? 'Play' : gameOver ? 'Play again' : paused ? 'Resume' : 'Restart';
   action.hidden = gameState === 'playing' && !gameOver;
@@ -115,6 +162,24 @@ function setPaused(value) {
   if (paused) saveBest();
 }
 function installControls(canvas) {
+  window.addEventListener('deviceorientation', receiveTilt);
+  window.screen?.orientation?.addEventListener('change', () => { tiltNeutral = null; tiltTarget = 0; clearInput(); setPaused(true); });
+  document.getElementById('motion').addEventListener('click', enablePhoneTilt);
+  document.getElementById('recenter').addEventListener('click', recenterTilt);
+  canvas.addEventListener('pointerdown', event => {
+    if (event.pointerType === 'mouse' || dragPointer !== null || gameState !== 'playing' || paused || gameOver) return;
+    event.preventDefault(); canvas.setPointerCapture(event.pointerId);
+    gameplayTouches.add(event.pointerId);
+    dragPointer = event.pointerId; dragStartX = event.clientX; dragStartBeam = barPosX; dragTarget = barPosX;
+  });
+  canvas.addEventListener('pointermove', event => {
+    if (event.pointerId !== dragPointer) return;
+    event.preventDefault();
+    const logicalDelta = (event.clientX - dragStartX) * width / canvas.getBoundingClientRect().width;
+    dragTarget = constrain(dragStartBeam + logicalDelta, -width/2 + baseBarLength*currentWidenFactor/2, width/2 - baseBarLength*currentWidenFactor/2);
+  });
+  const endDrag = event => { if(event.pointerId === dragPointer) { dragPointer = null; dragTarget = null; } };
+  canvas.addEventListener('pointercancel', event => { gameplayTouches.delete(event.pointerId); endDrag(event); }); canvas.addEventListener('lostpointercapture', endDrag);
   document.getElementById('action').addEventListener('click', () => paused ? setPaused(false) : startGame());
   document.getElementById('pause').addEventListener('click', () => setPaused(!paused));
   document.querySelectorAll('[data-control]').forEach(button => {
@@ -139,6 +204,7 @@ function installControls(canvas) {
   document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
   window.addEventListener('pagehide', saveBest);
   canvas.addEventListener('pointerup', event => {
+    if (gameplayTouches.delete(event.pointerId)) { endDrag(event); return; }
     if (paused) { setPaused(false); return; }
     if (gameOver) { startGame(); return; }
     const rect = canvas.getBoundingClientRect();
@@ -209,7 +275,7 @@ function startGame() {
   simulationTick = 0; accumulator = 0; skipElapsed = true;
   nextGustTick = 600; feedback = ''; feedbackTimer = 0;
   lastPowerUpFrame = 0; lastSpawnFrame = 0;
-  clearInput(); syncControls();
+  clearInput(); recenterTilt(); syncControls();
 
   loop();
 }
@@ -273,12 +339,16 @@ function updateGame() {
   if (feedbackTimer > 0) feedbackTimer--;
   const previousBarX = barPosX, previousBarAngle = barAngle;
   barVelX += (Number(isHeld('KeyD')) - Number(isHeld('KeyA'))) * .48;
-  barVelX = constrain(barVelX * .9, -4.5, 4.5);
+  barVelX = dragTarget !== null ? constrain((dragTarget - barPosX) * .25, -4.5, 4.5) : constrain(barVelX * .9, -4.5, 4.5);
   currentWidenFactor = lerp(currentWidenFactor, widenTimer > 0 ? widenMultiplier : 1, .08);
   const maxX = width / 2 - baseBarLength * currentWidenFactor / 2;
   barPosX = constrain(barPosX + barVelX, -maxX, maxX);
   if (abs(barPosX) >= maxX) barVelX = 0;
-  barAngle = constrain(barAngle + (Number(isHeld('ArrowRight')) - Number(isHeld('ArrowLeft'))) * .014, -.42, .42);
+  if (phoneTiltEnabled && phoneTiltReady) {
+    if (Date.now() - tiltSampleTime > 2000) { phoneTiltEnabled = false; phoneTiltReady = false; announce('Motion signal lost. Use tilt buttons.'); syncControls(); }
+    else barAngle += (tiltTarget - barAngle) * .12;
+  }
+  if (!phoneTiltEnabled || !phoneTiltReady) barAngle = constrain(barAngle + (Number(isHeld('ArrowRight')) - Number(isHeld('ArrowLeft'))) * .014, -.42, .42);
 
   const difficulty = 1 + altitude / 200;
   const spawnInterval = Math.max(65, Math.floor(baseSpawnInterval / Math.sqrt(difficulty)));
@@ -541,7 +611,7 @@ function drawMenu() {
   push();translate(200,53);rotate(-.025);textStyle(BOLD);textSize(32);text('balance ball',0,0);pop();
   textStyle(NORMAL);textSize(10);text('a little further up.',200,83);
   push();translate(200,height*.43);rotate(sin(animationTick*.018)*.04);drawRail(192);drawBuddy(0,-32,22,animationTick*.008);pop();
-  fill(ink);textSize(12);if(matchMedia(PHONE_CONTROLS_QUERY).matches){text('Move + tilt buttons appear when you play',200,height*.60);}else{text('A / D  move',154,height*.60);text('← / →  tilt',257,height*.60);}
+  fill(ink);textSize(12);if(matchMedia(PHONE_CONTROLS_QUERY).matches){text('Drag to move. Enable phone tilt to balance.',200,height*.60);}else{text('A / D  move',154,height*.60);text('← / →  tilt',257,height*.60);}
   textSize(10);text('From the meadow to space. How far can you go?',200,height*.67);
   // The start target keeps the original size, without a decorative panel.
   textStyle(BOLD);textSize(17);text('play  →',200,height*.82);

@@ -7,7 +7,7 @@ const {stepBalanceBall,circleHitsShard}=require('../physics.js');
 function game(storage=new Map()) {
   const nodes=new Map();
   const node=id=>{if(!nodes.has(id))nodes.set(id,{textContent:'',hidden:false,disabled:false,classList:{remove(){}}});return nodes.get(id);};
-  const context=vm.createContext({document:{getElementById:node,querySelectorAll:()=>[]},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},Math,width:400,height:400,random:(a,b)=>Array.isArray(a)?a[0]:b===undefined?(a===undefined?.5:a/2):(a+b)/2,constrain:(n,a,b)=>Math.max(a,Math.min(b,n)),lerp:(a,b,t)=>a+(b-a)*t,abs:Math.abs,loop(){},stepBalanceBall,circleHitsShard,TWO_PI:Math.PI*2});
+  const context=vm.createContext({window:{screen:{orientation:{angle:0}}},document:{getElementById:node,querySelectorAll:()=>[]},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},Math,width:400,height:400,random:(a,b)=>Array.isArray(a)?a[0]:b===undefined?(a===undefined?.5:a/2):(a+b)/2,constrain:(n,a,b)=>Math.max(a,Math.min(b,n)),lerp:(a,b,t)=>a+(b-a)*t,abs:Math.abs,loop(){},stepBalanceBall,circleHitsShard,TWO_PI:Math.PI*2});
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../main.js'),'utf8'),context);
   return source=>vm.runInContext(source,context);
 }
@@ -76,4 +76,39 @@ test('six stages progress to space and remain there for endless climbing',()=>{
 });
 test('thin air and space do not start new wind gusts',()=>{
   const run=game();run('startGame(); altitude=800;cameraTravel=8000;nextGustTick=0;updateGame()');assert.equal(run('gustTimer'),0);
+});
+test('drag follows a target with capped speed and releases on pause',()=>{
+  const run=game();run('startGame();dragTarget=100;updateGame()');
+  assert.ok(run('barPosX')>0);assert.ok(run('barPosX')<=4.5);
+  run('setPaused(true)');assert.equal(run('dragTarget'),null);
+});
+test('phone tilt calibrates neutral, smooths motion and can be recentered',()=>{
+  const run=game();run('startGame();phoneTiltEnabled=true;receiveTilt({beta:30,gamma:10})');
+  assert.equal(run('tiltTarget'),0);
+  run('receiveTilt({beta:30,gamma:25});updateGame()');
+  assert.ok(run('barAngle')>0);assert.ok(run('barAngle')<run('tiltTarget'));
+  run('recenterTilt()');assert.equal(run('tiltTarget'),0);
+  run('receiveTilt({beta:30,gamma:25})');assert.equal(run('tiltTarget'),0);
+});
+test('orientation mapping handles landscape and rejects missing sensor values',()=>{
+  const run=game();assert.ok(Math.abs(run('screenRoll(20,0,90)')-20)<1e-8);
+  assert.ok(Math.abs(run('screenRoll(20,0,270)')+20)<1e-8);
+  run('phoneTiltEnabled=true;receiveTilt({beta:null,gamma:null})');assert.equal(run('phoneTiltReady'),false);
+});
+test('a stale tilt signal returns to button controls',()=>{
+  const run=game();run('startGame();phoneTiltEnabled=true;phoneTiltReady=true;tiltSampleTime=0;updateGame()');
+  assert.equal(run('phoneTiltEnabled'),false);assert.match(run('feedback'),/signal lost/);
+});
+test('motion options are hidden during play and available only when paused',()=>{
+  const run=game();run('startGame();phoneTiltEnabled=true;phoneTiltReady=true;syncControls()');
+  assert.equal(run("document.getElementById('touch-controls').hidden"),true);
+  run('setPaused(true)');
+  assert.equal(run("document.getElementById('touch-controls').hidden"),false);
+  assert.equal(run("document.getElementById('recenter').hidden"),false);
+  assert.equal(run("document.getElementById('tilt-fallback').hidden"),true);
+  run('setPaused(false)');
+  assert.equal(run("document.getElementById('touch-controls').hidden"),true);
+  run('phoneTiltEnabled=false;phoneTiltReady=false;syncControls()');
+  assert.equal(run("document.getElementById('touch-controls').hidden"),false);
+  assert.equal(run("document.getElementById('tilt-fallback').hidden"),false);
 });
