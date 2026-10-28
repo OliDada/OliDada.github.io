@@ -9,6 +9,7 @@ import { LineMaterial } from 'jsm/lines/LineMaterial.js';
 import { LineGeometry } from 'jsm/lines/LineGeometry.js';
 import StyleManager from './styleManager.js';
 import TUBE_STYLES from './styles.js';
+import { createTouchControls } from './touchControls.js';
 // We need a renderer, a scene, and a camera
 
 const width = window.innerWidth;
@@ -308,7 +309,7 @@ let lateralVelocity = new THREE.Vector2(0, 0);
 const LATERAL_SPEED = 0.5; // units per second
 const MAX_LATERAL = 0.45; // maximum radial offset (keep inside tube radius ~0.65)
 // forward loop duration (ms) - increase to slow down camera along the path
-let FORWARD_LOOP_DURATION = 120000; // 120 seconds per loop (slower)
+let FORWARD_LOOP_DURATION = 100000; // 100 seconds per loop
 const LATERAL_ACCEL = 18.0; // how fast velocity moves toward target
 const keyState = { w: false, a: false, s: false, d: false };
 
@@ -370,6 +371,7 @@ try {
 const styleEl = document.createElement('style');
 styleEl.textContent = `
 .score-panel {
+    pointer-events: none;
     position: fixed;
     left: 24px;
     top: 18px;
@@ -386,6 +388,7 @@ styleEl.textContent = `
 .score-panel .bar .fill { height:100%; width:0%; background: linear-gradient(90deg, var(--hud-accent, #66f5ffff), rgba(255,255,255,0.12)); transition: width 350ms ease; }
 /* start overlay shown at game start */
 .start-overlay {
+    pointer-events: none;
     position: fixed;
     left: 0; right: 0; top: 0; bottom: 0;
     display: flex;
@@ -415,6 +418,32 @@ styleEl.textContent = `
 .start-overlay .title { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
 .start-overlay .hint { font-size: 14px; opacity: 0.9; }
 .start-overlay.fade-out { opacity: 0; pointer-events: none; transform: translateY(-6px); }
+.touch-joystick {
+    display: none;
+    position: fixed;
+    width: 96px; height: 96px;
+    margin: -48px 0 0 -48px;
+    border: 1px solid var(--hud-accent, #66f5ff);
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.2);
+    pointer-events: none;
+    z-index: 9998;
+}
+.touch-joystick.active { display: block; }
+.touch-joystick-thumb {
+    position: absolute;
+    left: 32px; top: 32px;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--hud-accent, #66f5ff);
+    opacity: 0.7;
+}
+@media (pointer: coarse) {
+    .start-overlay { padding-top: max(110px, 18vh); }
+    .start-overlay .title { font-size: 22px; }
+    .score-panel { left: max(12px, env(safe-area-inset-left)); top: max(12px, env(safe-area-inset-top)); }
+    .score-panel .big { font-size: 36px; }
+}
 /* ensure game over overlay uses the HUD font and accent color */
 #game-over-overlay, #game-over-overlay * {
     font-family: var(--hud-font, 'ConthraxSemi', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif) !important;
@@ -490,10 +519,11 @@ let startOverlay = null;
 try {
     startOverlay = document.createElement('div');
     startOverlay.className = 'start-overlay';
-    startOverlay.innerHTML = `<div class="panel"><div class="title">Use WASD to move</div>`;
+    const touchDevice = window.matchMedia('(any-pointer: coarse)').matches;
+    startOverlay.innerHTML = `<div class="panel"><div class="title">${touchDevice ? 'Touch and drag to steer' : 'Use WASD to move'}</div>${touchDevice ? '<div class="hint">Release to stop steering</div>' : ''}</div>`;
     document.body.appendChild(startOverlay);
     // hide overlay on click
-    startOverlay.addEventListener('click', () => {
+    renderer.domElement.addEventListener('click', () => {
         startOverlay.classList.add('fade-out');
         setTimeout(() => { try { startOverlay.remove(); } catch (e) {} }, 480);
     }, { once: true });
@@ -512,6 +542,12 @@ try {
 }
 
 // ...highscore initialized above
+const touchControls = createTouchControls(renderer.domElement, () => {
+    if (startOverlay) {
+        startOverlay.classList.add('fade-out');
+        setTimeout(() => startOverlay?.remove(), 480);
+    }
+});
 
 function updateScoreDisplay() {
     // update numeric fields
@@ -588,6 +624,7 @@ let gameOver = false;
 function endGame() {
     if (gameOver) return;
     gameOver = true;
+    touchControls.reset();
     // disable controls
     if (controls) controls.enabled = false;
     // overlay
@@ -757,6 +794,8 @@ function updateCamera(t) {
     if (keyState.s) want.y -= 1;
     if (keyState.d) want.x -= 1;
     if (keyState.a) want.x += 1;
+    want.x = THREE.MathUtils.clamp(want.x + touchControls.input.x, -1, 1);
+    want.y = THREE.MathUtils.clamp(want.y + touchControls.input.y, -1, 1);
 
     // accelerate velocity toward that target
     lateralVelocity.x = THREE.MathUtils.lerp(lateralVelocity.x, want.x * LATERAL_SPEED, Math.min(1, LATERAL_ACCEL * deltaSec));
