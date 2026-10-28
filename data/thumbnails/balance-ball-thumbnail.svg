@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
-<title>Balance Ball — from the meadow to space</title>
+<title>A Little Higher — from the meadow to space</title>
 <rect width="800" height="500" fill="#c7e5e8"/>
 <path d="M420 0H800V500H735Q640 330 540 240T420 0" fill="#727fa4"/>
 <path d="M560 0H800V500Q745 305 680 214T560 0" fill="#242d49"/>
@@ -22,7 +22,7 @@
 </g></g>
 <path d="M640 369l19-15 24 6 12 24-13 22-29-2-17-18Z" fill="#b6aba0"/><ellipse cx="659" cy="373" rx="7" ry="5" fill="#978f89"/>
 </g>
-<g fill="#354f45" font-family="Trebuchet MS, sans-serif"><text x="49" y="93" font-size="53" font-weight="bold" transform="rotate(-2 49 93)">balance ball</text><text x="52" y="133" font-size="20">a little further up.</text></g>
+<g fill="#354f45" font-family="Trebuchet MS, sans-serif"><text x="49" y="93" font-size="53" font-weight="bold" transform="rotate(-2 49 93)">A Little Higher</text></g>
 <g stroke="#5c875b" fill="none" stroke-width="2"><path d="M45 469l5 7 3-10m129-11 4 7 4-8m280 30 4 5 3-7"/></g>
 <g transform="translate(111 453)"><path d="M0 16L2 0" stroke="#354f45" stroke-width="2"/><g fill="#fff9e7"><ellipse cx="-3" cy="0" rx="4" ry="3"/><ellipse cx="3" cy="-3" rx="3" ry="4"/><ellipse cx="6" cy="2" rx="4" ry="3"/><ellipse cx="1" cy="5" rx="3" ry="4"/></g><circle cx="2" cy="1" r="2.5" fill="#edc754"/></g>
 </svg>

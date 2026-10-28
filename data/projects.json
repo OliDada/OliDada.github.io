@@ -101,12 +101,11 @@
     "featured": false
   },
   {
-    "title": "Balance Ball",
+    "title": "A Little Higher",
     "path": "/balance-game/index.html",
     "source": "/balance-game/main.js",
     "aspect": "fill",
     "thumbnail": "data/thumbnails/balance-ball-thumbnail.svg",
-    "description": "Balance your little buddy on a rising beam, from sunny meadows to outer space. Six stages, drifting hazards, and a personal-best height to beat.",
     "controls": [["A / D", "move"], ["Left / Right", "tilt"], ["P / Esc", "pause"], ["R", "retry"], ["Phone", "drag to move; enable phone tilt or use tilt buttons"]],
     "tags": ["game", "physics"],
     "featured": true

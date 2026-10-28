@@ -3,24 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Balance Game</title>
+    <title>A Little Higher</title>
     <!-- Load p5.js from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
     <script src="physics.js" defer></script>
     <!-- Link your game script -->
-    <script src="main.js?v=20261028-touch" defer></script>
+    <script src="main.js?v=20261028-nine-stages" defer></script>
     <style>
       body {
         margin: 0;
+        font-family:"Trebuchet MS", sans-serif;
         background: #fff9e7;
         min-height: 100svh;
         display: grid;
         place-items: center;
       }
-      main { width: min(92vw, 560px, calc(80svh - 56px)); }
-      body { align-content: center; gap: 10px; padding: 12px 0; box-sizing: border-box; }
+      main { position:relative; width:100%; height:100dvh; }
+      body { height:100dvh; overflow:hidden; gap:0; padding:0; box-sizing:border-box; }
       #game-ui { width: min(92vw, 640px); font: 13px "Trebuchet MS", sans-serif; color: #354f45; }
-      .actions { display:flex; justify-content:center; gap:12px; }
+      .actions { position:absolute; left:50%; top:82%; transform:translate(-50%,-50%); z-index:2; }
+      #action { border:0; border-bottom:2px solid currentColor; border-radius:0; background:transparent; font:700 clamp(22px, 3.6dvh, 28px)/1.1 "Trebuchet MS", sans-serif; padding:8px 20px; min-height:44px; }
+      #action:hover { background:rgba(237,199,84,.3); }
+      #game-ui { position:fixed; left:50%; transform:translateX(-50%); bottom:10px; pointer-events:none; }
+      #game-ui button { pointer-events:auto; }
       button { font:inherit; color:#354f45; border:1px solid #354f45; background:#fff9e7; padding:9px 18px; border-radius:3px; cursor:pointer; touch-action:none; user-select:none; }
       button:disabled { opacity:.4; cursor:default; }
       button:focus-visible { outline:3px solid #d6a16a; outline-offset:3px; }
@@ -35,25 +40,34 @@
       #motion-status { margin:6px 0; font-size:12px; text-align:center; line-height:1.4; }
       .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
       @media (hover:none) and (pointer:coarse) and (max-width:700px), (hover:none) and (pointer:coarse) and (max-height:500px) { main { width:min(92vw, calc(80svh - 140px)); } .touch-controls:not([hidden]) { display:flex; } }
-      @media (max-width:700px) and (orientation:portrait) {
-        body { height:100dvh; min-height:0; padding: max(8px, env(safe-area-inset-top)) 12px max(8px, env(safe-area-inset-bottom)); align-content:start; gap:8px; }
-        main { width:100%; height:calc(100dvh - 164px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); min-height:180px; }
-        #game-ui { width:100%; }
-        main canvas { height:100% !important; box-sizing:border-box; }
-      }
+      #pause { position:absolute; z-index:2; right:8px; top:48px; width:44px; height:44px; padding:0; border:0; background:transparent; font-size:22px; opacity:.55; }
+      #pause::before, #pause::after { content:""; position:absolute; top:13px; width:5px; height:18px; border-radius:1px; background:currentColor; }
+      #pause::before { left:14px; } #pause::after { right:14px; }
+      #pause.is-paused::before { left:17px; top:12px; width:0; height:0; border-top:10px solid transparent; border-bottom:10px solid transparent; border-left:15px solid currentColor; background:none; border-radius:0; }
+      #pause.is-paused::after { display:none; }
+      #pause:hover, #pause:focus-visible { opacity:1; }
+      #pause:disabled { display:none; }
+      body.phone-controls { height:100dvh; min-height:0; padding:0; gap:0; overflow:hidden; display:block; }
+      .phone-controls main { width:100%; height:100dvh; }
+      .phone-controls main canvas { height:100% !important; border:0; border-radius:0; }
+      .phone-controls #pause { right:max(6px, env(safe-area-inset-right)); top:max(48px, env(safe-area-inset-top)); }
+      .phone-controls #game-ui { position:fixed; z-index:3; bottom:max(8px, env(safe-area-inset-bottom)); left:0; transform:none; width:100%; box-sizing:border-box; padding:0 12px; pointer-events:none; }
+      .phone-controls #game-ui button { pointer-events:auto; }
+      .phone-controls .touch-controls { margin-top:4px; gap:8px; align-items:end; }
+      .phone-controls .touch-controls button { background:rgba(255,249,231,.75); }
+      .phone-controls #motion-status { background:rgba(255,249,231,.88); border-radius:4px; padding:6px; }
       canvas {
         display: block;
         width: 100% !important;
-        height: auto !important;
-        border-radius: 3px;
-        border: 1.5px solid #354f45;
+        height: 100% !important;
+        border-radius:0;
+        border:0;
       }
     </style>
   </head>
   <body>
-    <main id="game-canvas"></main>
+    <main id="game-canvas"><button id="pause" aria-label="Pause" title="Pause" disabled></button><div class="actions"><button id="action">Play →</button></div></main>
     <section id="game-ui" aria-label="Game controls">
-      <div class="actions"><button id="action">Play</button><button id="pause" disabled>Pause</button></div>
       <div id="touch-controls" class="touch-controls" hidden>
         <div class="motion-controls"><span id="touch-hint">Drag on the game to move</span><button id="motion">Enable phone tilt</button><button id="recenter" hidden>Recenter</button></div>
         <div id="tilt-fallback"><span>Tilt</span><button data-control="ArrowLeft" aria-label="Tilt left">↶</button> <button data-control="ArrowRight" aria-label="Tilt right">↷</button></div>

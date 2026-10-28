@@ -257,7 +257,7 @@ async function playFromAnchor(anchor) {
         setPlayerFit(fitForProject(match, path));
         requestAnimationFrame(() => {
             fitPlayer();
-            player.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            player.scrollIntoView({ behavior: 'instant', block: 'start' });
         });
 
         // set iframe src to embed path
@@ -296,7 +296,11 @@ async function playFromAnchor(anchor) {
             frame.style.outline = 'none';
             // focus as soon as it loads
             const __focusOnLoad = () => {
-                requestAnimationFrame(() => focusIframeAndCanvas(frame));
+                requestAnimationFrame(() => {
+                    focusIframeAndCanvas(frame);
+                    fitPlayer();
+                    player.scrollIntoView({ behavior: 'instant', block: 'start' });
+                });
                 frame.removeEventListener('load', __focusOnLoad);
             };
             frame.addEventListener('load', __focusOnLoad);
@@ -433,6 +437,10 @@ function showPlayerControls(controls) {
             // give the keyboard back to the game
             const frame = document.getElementById('playerFrameMain');
             try { if (frame && typeof focusIframeAndCanvas === 'function') focusIframeAndCanvas(frame); } catch (e) {}
+            requestAnimationFrame(() => {
+                fitPlayer();
+                document.getElementById('playerArea')?.scrollIntoView({ behavior: 'instant', block: 'start' });
+            });
         });
     }
 }
@@ -842,9 +850,7 @@ function focusIframeAndCanvas(frame) {
     frame.tabIndex = -1;
     frame.style.outline = 'none';
 
-    if (frame.contentWindow && typeof frame.contentWindow.focus === 'function') {
-      frame.contentWindow.focus();
-    }
+    frame.focus({ preventScroll: true });
 
     const doc = frame.contentDocument;
     if (doc) {
@@ -852,7 +858,7 @@ function focusIframeAndCanvas(frame) {
       if (innerCanvas) {
         innerCanvas.tabIndex = -1;
         innerCanvas.style.outline = 'none';
-        try { innerCanvas.focus(); } catch (_) {}
+        try { innerCanvas.focus({ preventScroll: true }); } catch (_) {}
       }
     }
 
@@ -899,18 +905,13 @@ function fitPlayer() {
     const frame = document.getElementById('playerFrameMain');
     if (!player || !stage || !box || !frame || player.style.display === 'none') return;
 
-    // On phones / fullscreen the player is a fixed overlay and the stage flexes to fill it.
-    // Otherwise the stage is as tall as the viewport minus the player bar.
-    if (getComputedStyle(player).position === 'fixed') {
-        stage.style.height = '';
-    } else {
-        const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-        const header = player.querySelector('.player-header');
-        const controls = document.getElementById('playerControls');
-        const strip = controls && !controls.hidden && controls.offsetHeight ? controls.offsetHeight + 8 : 0;
-        const chrome = (header ? header.offsetHeight : 0) + strip + 32; // player padding + gap + breathing room
-        stage.style.height = Math.max(280, Math.round(vh - chrome)) + 'px';
-    }
+    // Let flex layout account for the actual header, controls, borders and gaps.
+    // Reserve the same 10px inset used by scroll-margin-top on desktop.
+    const fixed = getComputedStyle(player).position === 'fixed';
+    const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    player.style.height = fixed ? '' : Math.max(1, Math.floor(vh - 20)) + 'px';
+    stage.style.height = '';
+    stage.style.flex = '1 1 0px';
     const W = stage.clientWidth;
     const H = stage.clientHeight;
     let bw = W;

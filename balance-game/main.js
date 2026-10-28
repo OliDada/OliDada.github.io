@@ -7,16 +7,30 @@ const HEIGHT_KEY = 'balance-ball-height-v1';
 const zones = [
   { name: 'Meadow', from: 0, hazard: 'leaf' },
   { name: 'Treetops', from: 60, hazard: 'kite' },
-  { name: 'Above the clouds', from: 180, hazard: 'plane' },
+  { name: 'Cloudbanks', from: 180, hazard: 'plane' },
   { name: 'Sunset', from: 320, hazard: 'balloon' },
-  { name: 'Thin air', from: 500, hazard: 'satellite' },
-  { name: 'Space', from: 750, hazard: 'asteroid' },
+  { name: 'Thunderclouds', from: 500, hazard: 'storm' },
+  { name: 'Aurora', from: 700, hazard: 'crystal' },
+  { name: 'Orbit', from: 950, hazard: 'satellite' },
+  { name: 'Meteor Field', from: 1250, hazard: 'asteroid' },
+  { name: 'Deep Space', from: 1600, hazard: 'comet' },
 ];
 function zoneAt(height) {
   for(let i=zones.length-1;i>=0;i--) if(height>=zones[i].from) return i;
   return 0;
 }
-function climbPerTick() { return (1.2 + Math.min(altitude / 600, .6)) * (slowTimer > 0 ? .45 : 1); }
+function baseClimbPerTick() { return 1.2 + Math.min(altitude / 600, .6); }
+function climbPerTick() { return baseClimbPerTick() * (boostTimer > 0 ? 2.5 : slowTimer > 0 ? .75 : 1); }
+function hazardTimeScale() { return boostTimer > 0 ? 1 : slowTimer > 0 ? .55 : 1; }
+function obstacleInterval() {
+  const density=Math.min(1.7,Math.sqrt(Math.max(1,width/400)));
+  return Math.max(42,120/Math.sqrt(1+altitude/350)/density);
+}
+function spawnNearBeam(radius) { return constrain(width/2+barPosX+random(-radius,radius),45,width-45); }
+function lightningActive(o) { return o.kind==='storm' && o.age>=90 && o.age<108; }
+function obstacleHitsBall(o,x,y) {
+  return circleHitsShard(x,y,15,o) || (lightningActive(o) && Math.abs(x-o.x)<23 && y>=o.y+15);
+}
 function readAltitudeBest() {
   try { const n = Number(localStorage.getItem(HEIGHT_KEY)); return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0; } catch { return 0; }
 }
@@ -48,25 +62,16 @@ let powerUpSpawnInterval = 600; // frames between power-up spawns (~10s at 60fps
 let lastPowerUpFrame = 0;
 let baseBarLength = 200;
 let widenTimer = 0;
-let widenMultiplier = 1.5;
+let widenMultiplier = 1.6;
 let currentWidenFactor = 1; // smoothed factor used for drawing and pickup sizing
 let slowTimer = 0;
 let shieldTimer = 0;
+let boostTimer = 0;
+const BOOST_DURATION = 180;
+const WIDE_DURATION = 480, SLOW_DURATION = 480, SHIELD_DURATION = 720;
+let shieldGraceTimer = 0;
+let hazardSpawnTicks = 0;
 let originalGravity = gravity;
-// occasional gusts/wind to nudge the ball and make tilting meaningful
-let lastGustFrame = 0;
-let gustIntervalBase = 600; // frames between gusts (~10s)
-let gustDuration = 24; // frames the gust is active
-let gustTimer = 0;
-let gustForce = 0;
-let gustStrengthBase = 1.5;
-// indicator hold so arrow stays visible a bit after gust starts/ends
-let indicatorHoldTimer = 0;
-let indicatorHoldDuration = 60; // frames to keep the indicator visible (~1s)
-// visual wind streaks
-let windStreaks = [];
-let windSpawnRate = 3; // frames between spawning streaks while gusting
-
 // simple scene state: 'menu' or 'playing'
 let gameState = "menu";
 
@@ -80,7 +85,6 @@ let simulationTick = 0;
 let animationTick = 0;
 let accumulator = 0;
 let skipElapsed = true;
-let nextGustTick = 600;
 let feedback = '';
 let feedbackTimer = 0;
 const heldKeys = new Set();
@@ -192,11 +196,13 @@ function syncControls() {
   document.getElementById('motion').textContent = phoneTiltEnabled ? 'Use tilt buttons' : 'Enable phone tilt';
   document.getElementById('recenter').hidden = !paused || !phoneTiltEnabled;
   const action = document.getElementById('action');
-  action.textContent = gameState === 'menu' ? 'Play' : gameOver ? 'Play again' : paused ? 'Resume' : 'Restart';
-  action.hidden = gameState === 'playing' && !gameOver;
+  action.textContent = gameState === 'menu' ? 'Play →' : gameOver ? 'Play again' : paused ? 'Resume' : 'Restart';
+  action.hidden = gameState !== 'menu';
   const button = document.getElementById('pause');
   button.disabled = gameState === 'menu' || gameOver;
-  button.textContent = paused ? 'Resume' : 'Pause';
+  button.classList.toggle('is-paused', paused);
+  button.ariaLabel = button.title = paused ? 'Resume' : 'Pause';
+  if(button.style)button.style.color=altitude>=500?'#fff9e7':'#354f45';
   document.querySelectorAll('[data-control]').forEach(button => button.disabled = gameState !== 'playing' || gameOver || paused);
 }
 function setPaused(value) {
@@ -314,7 +320,7 @@ function installControls(canvas) {
     if (gameOver) { startFromGesture(); return; }
     const rect = canvas.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width * width, y = (event.clientY - rect.top) / rect.height * height;
-    if (gameState === 'menu' && abs(x - 200) < 90 && abs(y - height * .82) < 30) startFromGesture();
+    if (gameState === 'menu' && abs(x - width/2) < 90 && abs(y - height * .82) < 30) startFromGesture();
   }
   syncControls();
 }
@@ -352,7 +358,6 @@ function startGame() {
   obstacles = [];
   powerUps = [];
   particles = [];
-  windStreaks = [];
 
   ballX = 0;
   ballY = -60;
@@ -370,15 +375,11 @@ function startGame() {
   widenTimer = 0;
   slowTimer = 0;
   shieldTimer = 0;
+  boostTimer = 0; shieldGraceTimer = 0; hazardSpawnTicks = 0;
   gravity = originalGravity;
 
-  gustTimer = 0;
-  gustForce = 0;
-  indicatorHoldTimer = 0;
-  lastGustFrame = 0;
-
   simulationTick = 0; accumulator = 0; skipElapsed = true;
-  nextGustTick = 600; feedback = ''; feedbackTimer = 0;
+  feedback = ''; feedbackTimer = 0;
   lastPowerUpFrame = 0; lastSpawnFrame = 0;
   clearInput(); recenterTilt(); syncControls();
 
@@ -388,16 +389,19 @@ function startGame() {
 function beamY() { return height - 100; }
 function fitPlayfield() {
   const host = document.getElementById('game-canvas');
-  const portrait = matchMedia('(max-width:700px) and (orientation:portrait)').matches;
+  const phone = isPhone();
   const box = host.getBoundingClientRect();
-  const nextHeight = portrait ? Math.max(1, Math.round(400 * box.height / box.width)) : 500;
-  if (height !== nextHeight) {
+  if (!box.width || !box.height) return;
+  const nextHeight = phone ? Math.max(1, Math.round(400 * box.height / box.width)) : 500;
+  const nextWidth = phone ? 400 : Math.max(1, Math.round(500 * box.width / box.height));
+  if (height !== nextHeight || width !== nextWidth) {
+    const shiftX = (nextWidth - width) / 2;
     const shift = nextHeight - height;
     // Preserve the distance of active objects from the beam during rotation.
-    obstacles.forEach(o => o.y += shift);
-    powerUps.forEach(p => p.y += shift);
-    particles.forEach(p => p.y += shift);
-    resizeCanvas(400, nextHeight);
+    obstacles.forEach(o => { o.y += shift; o.x += shiftX; });
+    powerUps.forEach(p => { p.y += shift; p.x += shiftX; });
+    particles.forEach(p => { p.y += shift; p.x += shiftX; });
+    resizeCanvas(nextWidth, nextHeight);
   }
 }
 function windowResized() { fitPlayfield(); }
@@ -405,6 +409,7 @@ function windowResized() { fitPlayfield(); }
 function setup() {
   const canvas = createCanvas(400, 500);
   canvas.parent("game-canvas");
+  document.body.classList.toggle('phone-controls', isPhone());
   fitPlayfield();
   new ResizeObserver(fitPlayfield).observe(document.getElementById("game-canvas"));
   bestAltitude = readAltitudeBest();
@@ -440,7 +445,7 @@ function updateGame() {
   cameraTravel += climb;
   altitude = cameraTravel / 10;
   const nextZone = zoneAt(altitude);
-  if (nextZone !== zoneIndex) { zoneIndex = nextZone; announce(zones[zoneIndex].name + ' · ' + Math.floor(altitude) + 'm'); }
+  if (nextZone !== zoneIndex) { zoneIndex = nextZone; announce(zones[zoneIndex].name + ' · ' + Math.floor(altitude) + 'm'); syncControls(); }
   if (feedbackTimer > 0) feedbackTimer--;
   const previousBarX = barPosX, previousBarAngle = barAngle;
   barVelX += (Number(isHeld('KeyD')) - Number(isHeld('KeyA'))) * .48;
@@ -455,33 +460,28 @@ function updateGame() {
   }
   if (!phoneTiltEnabled || !phoneTiltReady) barAngle = constrain(barAngle + (Number(isHeld('ArrowRight')) - Number(isHeld('ArrowLeft'))) * .014, -.42, .42);
 
-  const difficulty = 1 + altitude / 200;
-  const spawnInterval = Math.max(65, Math.floor(baseSpawnInterval / Math.sqrt(difficulty)));
-  if (simulationTick - lastSpawnFrame >= spawnInterval) {
-    lastSpawnFrame = simulationTick; const o = skyObstacle(); obstacles.push(o);
+  hazardSpawnTicks += hazardTimeScale();
+  const spawnInterval=obstacleInterval();
+  if (hazardSpawnTicks >= spawnInterval) {
+    hazardSpawnTicks -= spawnInterval;
+    lastSpawnFrame = simulationTick; obstacles.push(skyObstacle());
   }
   if (simulationTick - lastPowerUpFrame >= powerUpSpawnInterval) {
     lastPowerUpFrame = simulationTick; powerUps.push(spawnPowerUp());
   }
-  if (altitude < 500 && simulationTick >= nextGustTick) {
-    gustTimer = gustDuration; gustForce = (random() < .5 ? -1 : 1) * (gustStrengthBase + random(-.6,1.2));
-    nextGustTick = simulationTick + gustIntervalBase + Math.floor(random(-180,180));
-  }
-  if (gustTimer > 0) { ballVelX += gustForce * .06 * gustTimer / gustDuration; gustTimer--; }
   const ball = stepBalanceBall(
     {x:ballX,y:ballY,vx:ballVelX,vy:ballVelY,spin:ballSpin,rotation:ballRotation},
     {x:barPosX,previousX:previousBarX,angle:barAngle,previousAngle:previousBarAngle,length:baseBarLength*currentWidenFactor}, 1, gravity);
   ballX=ball.x; ballY=ball.y; ballVelX=ball.vx; ballVelY=ball.vy; ballSpin=ball.spin; ballRotation=ball.rotation;
   const bx=width/2+barPosX+ballX, by=beamY()+ballY;
   for (let i=obstacles.length-1;i>=0;i--) {
-    const o=obstacles[i], factor=slowTimer>0?.45:1;
-    // Objects occupy the sky: camera ascent carries them downward on screen.
-    o.y+=climb; o.x+=o.drift*factor; o.rotation+=o.spin*factor;
-    if(o.x<25||o.x>width-25)o.drift*=-1;
-    if (o.y>height+60) { obstacles.splice(i,1); continue; }
-    if (circleHitsShard(bx,by,15,o)) {
+    const o=obstacles[i];
+    moveObstacle(o,climb,hazardTimeScale());
+    if (o.y>height+90 || o.x < -100 || o.x > width+100) { obstacles.splice(i,1); continue; }
+    if (obstacleHitsBall(o,bx,by)) {
       spawnHitParticles(o.x,o.y,14,[125,139,151]);
-      if (shieldTimer>0) { shieldTimer=0; obstacles.splice(i,1); announce('Shield saved you!'); }
+      if (boostTimer>0 || shieldGraceTimer>0) { obstacles.splice(i,1); }
+      else if (shieldTimer>0) { shieldTimer=0; shieldGraceTimer=60; obstacles.splice(i,1); announce('Shield saved you!'); }
       else { endGame(); return; }
     }
   }
@@ -492,75 +492,111 @@ function updateGame() {
   }
   if (abs(ballY)>80) { endGame(); return; }
   if (widenTimer>0) widenTimer--;
-  if (slowTimer>0 && --slowTimer===0) gravity=originalGravity;
-  if (shieldTimer>0) shieldTimer--;
+  if (slowTimer>0 && boostTimer===0) slowTimer--;
+  if (shieldTimer>0 && boostTimer===0) shieldTimer--;
+  if (shieldGraceTimer>0) shieldGraceTimer--;
+  if (boostTimer>0 && --boostTimer===0) announce('Boost finished · watch the obstacles');
 }
 function draw() {
   advanceGame(deltaTime);
   drawBackdrop(); noStroke();
   if (gameState==='menu') { drawMenu(); return; }
   if (gameOver) { drawFinishedScene(); return; }
-  obstacles.forEach(drawObstacle); powerUps.forEach(drawDroplet); drawParticles();
+  obstacles.forEach(drawObstacle); powerUps.forEach(drawPickup); drawParticles();
   push();translate(width/2+barPosX,beamY());push();rotate(barAngle);drawRail(baseBarLength*currentWidenFactor);pop();
-  if(shieldTimer>0){noFill();stroke(ink);strokeWeight(1);ellipse(ballX,ballY,42);}
+  if(boostTimer>0){
+    stroke('#e3974e');strokeWeight(2);noFill();ellipse(ballX,ballY,46);
+    for(let i=-1;i<=1;i++){const x=i*55;line(x,15,x,30+(animationTick%12)*2);}
+  }
+  if(shieldTimer>0 || shieldGraceTimer>0){noFill();stroke(ink);strokeWeight(1);ellipse(ballX,ballY,42);}
   drawBuddy(ballX,ballY,15,ballRotation);pop();drawHeight();drawEffects();
-  if(paused){push();noStroke();fill(paper);rect(200,height*.44,230,97,2);fill(ink);textAlign(CENTER,CENTER);textSize(25);text('paused',200,height*.44-18);textSize(11);text('Tap here or press P to resume',200,height*.44+20);pop();}
+  if(paused){push();noStroke();fill(paper);rect(width/2,height*.44,230,97,2);fill(ink);textAlign(CENTER,CENTER);textSize(25);text('paused',width/2,height*.44-18);textSize(11);text('Tap here or press P to resume',width/2,height*.44+20);pop();}
 }
 function drawEffects() {
   push();noStroke();fill(altitude>=500?paper:ink);textAlign(CENTER,TOP);textSize(10);
-  const effects=[['Wide beam',widenTimer],['Slow climb',slowTimer],['Shield',shieldTimer]].filter(([,time])=>time>0);
-  effects.forEach(([label,time],i)=>{const x=200+(i-(effects.length-1)/2)*100; fill(altitude>=500?paper:ink); text(label+' '+Math.ceil(time/60)+'s',x,62);fill('#9caeaa');rect(x,79,74,2);fill(ink);rect(x-37+37*time/360,79,74*time/360,2);});
+  const effects=[['Wide beam',widenTimer,WIDE_DURATION],['Slow motion',slowTimer,SLOW_DURATION],['Shield',shieldTimer,SHIELD_DURATION],['Boost',boostTimer,BOOST_DURATION]].filter(([,time])=>time>0);
+  effects.forEach(([label,time,duration=360],i)=>{const x=width/2+(i-(effects.length-1)/2)*100; fill(altitude>=500?paper:ink); text(label+' '+Math.ceil(time/60)+'s',x,62);fill('#9caeaa');rect(x,79,74,2);fill(ink);rect(x-37+37*time/duration,79,74*time/duration,2);});
   fill(altitude>=500?paper:ink);
-  if(feedbackTimer>0) text(feedback,200,97);
-  if(altitude<500 && nextGustTick-simulationTick<=90 && nextGustTick>simulationTick) text('Breeze in '+Math.ceil((nextGustTick-simulationTick)/60)+'s',200,125);
-  else if(gustTimer>0) text(gustForce>0?'Breeze →':'← Breeze',200,125);
+  if(feedbackTimer>0) text(feedback,width/2,97);
   pop();
 }
 
-function skyObstacle() {
-  const kind=zones[zoneIndex].hazard;
+const obstaclePools = [
+  ['leaf','leaf','seed'], ['kite','bird','seed'], ['plane','plane','bird'],
+  ['balloon','balloon','bird'], ['storm','storm','plane'], ['crystal','crystal','comet'],
+  ['satellite','satellite','asteroid'], ['asteroid','comet','asteroid'], ['comet','satellite','asteroid'],
+];
+function moveObstacle(o,climb,factor=1) {
+  const previousAge=o.age;
+  o.age+=factor;
+  o.y+=climb+o.rise*factor;
+  if (o.kind==='leaf' || o.kind==='seed' || o.kind==='kite' || o.kind==='balloon') {
+    const amplitude={leaf:23,seed:36,kite:30,balloon:12}[o.kind];
+    const rate={leaf:.025,seed:.014,kite:.018,balloon:.012}[o.kind];
+    o.x+=amplitude*(Math.sin(o.phase+o.age*rate)-Math.sin(o.phase+previousAge*rate));
+    o.rotation=Math.sin(o.phase+o.age*rate)*({leaf:.45,seed:.2,kite:.16,balloon:.06}[o.kind]);
+  } else {
+    o.x+=o.drift*factor;
+    if(o.kind==='asteroid' || o.kind==='crystal')o.rotation+=o.spin*factor;
+    if(o.kind==='bird')o.y+=.2*(Math.sin(o.age*.045)-Math.sin(previousAge*.045));
+  }
+}
+function skyObstacle(kind=random(obstaclePools[zoneIndex])) {
   // The painted silhouette is also the collision polygon.
   const shapes={
-    leaf:[[-22,0],[-10,-10],[7,-9],[22,0],[9,10],[-8,9]],
+    // Sample a curved, pointed leaf so its collision outline matches the art.
+    leaf:Array.from({length:32},(_,i)=>{
+      const t=i<=16?i/16:(32-i)/16;
+      return [-22+44*t, -4*t + (i<=16?-12:10)*Math.sin(Math.PI*t)];
+    }),
     kite:[[0,-25],[18,-3],[0,23],[-18,-3]],
     plane:[[-24,-12],[25,0],[-24,13],[-13,0]],
     balloon:[[-17,-10],[-11,-22],[9,-23],[18,-11],[15,5],[5,20],[-5,20],[-15,5]],
     satellite:[[-29,-13],[-11,-13],[-11,-6],[11,-6],[11,-13],[29,-13],[29,13],[11,13],[11,6],[-11,6],[-11,13],[-29,13]],
+    seed:Array.from({length:16},(_,i)=>[Math.cos(i*Math.PI/8)*3,Math.sin(i*Math.PI/8)*7]),
+    bird:Array.from({length:24},(_,i)=>[Math.cos(i*Math.PI/12)*17,Math.sin(i*Math.PI/12)*9]),
+    comet:Array.from({length:16},(_,i)=>[Math.cos(i*Math.PI/8)*15,Math.sin(i*Math.PI/8)*15]),
+    storm:[[-30,5],[-32,-5],[-23,-13],[-13,-11],[-7,-23],[9,-24],[20,-13],[29,-10],[34,0],[28,10],[-24,10]],
+    crystal:[[0,-23],[13,-5],[9,15],[0,23],[-11,12],[-14,-5]],
     asteroid:[[-22,-8],[-12,-20],[8,-22],[21,-9],[18,13],[4,20],[-16,15]],
   };
-  return {kind,x:random(40,width-40),y:-42,
-    points:shapes[kind].map(([x,y])=>({x,y})),
-    rotation:kind==='leaf'?random(-.5,.5):random(-.15,.15),
-    spin:['leaf','asteroid','satellite'].includes(kind)?random(-.009,.009):0,
-    drift:kind==='plane'?random(-.6,.6):random(-.15,.15),
+  const direction=random()<.5?-1:1;
+  const crossing=['plane','bird','satellite','comet'].includes(kind);
+  const rise={balloon:-.38,seed:-.15,plane:.15,bird:0,satellite:0,comet:.75,crystal:.2}[kind] || 0;
+  const x=crossing?(direction>0?-38:width+38):(random()<.7?spawnNearBeam(165):random(45,width-45));
+  const y=crossing?Math.min(beamY()-160,Math.max(45,beamY()-random(210,290))):-42;
+  // Birds and paper planes use open-sky lanes, independent of player position.
+  const targetX=['bird','plane'].includes(kind) ? random(width*.15,width*.85) : spawnNearBeam(85);
+  const travelTicks=(beamY()-25-y)/(baseClimbPerTick()+rise);
+  // Choose a path once at spawn. Width changes its speed, never its destination timing.
+  const drift=crossing?(targetX-x)/travelTicks:direction*random(.08,.22);
+  return {kind,x,y,targetX,travelTicks,
+    points:shapes[kind].map(([x,y])=>({x:kind==='bird'?x*direction:x,y})),
+    rotation:['plane','comet'].includes(kind)?Math.atan2(baseClimbPerTick()+rise,drift):0,
+    spin:random(-.012,.012),drift,rise,direction,age:0,phase:random(0,Math.PI*2),
     tint:random()>.5,
   };
 }
 
 // power-up factory
 function spawnPowerUp() {
-  const types = ["widen", "slow", "shield"];
+  const available=[['widen',widenTimer],['slow',slowTimer],['shield',shieldTimer],['boost',boostTimer]].filter(([,timer])=>timer===0).map(([type])=>type);
+  const types = available.length ? available : ['widen','slow','shield','boost'];
   return {
     type: random(types),
-    x: random(50, width - 50),
+    x: spawnNearBeam(110),
     y: -40,
-    size: 18,
+    size: 32,
     speed: 1.2 + random(0, 0.8),
   };
 }
 
 function applyPowerUp(type) {
-  announce({widen:'Wider beam · 6 seconds',slow:'Slower climb · 6 seconds',shield:'Shield · blocks one hit'}[type]);
-  // Durations in fixed simulation ticks.
-  if (type === "widen") {
-    widenTimer = 60 * 6; // 6 seconds
-  } else if (type === "slow") {
-    slowTimer = 60 * 6;
-    // Slow the journey and passing hazards, preserving the ball’s weight.
-  } else if (type === "shield") {
-    shieldTimer = 60 * 6;
-
-  }
+  announce({widen:'60% wider beam · 8 seconds',slow:'Slow motion · fewer hazards for 8 seconds',shield:'Shield · one hit, up to 12 seconds',boost:'Boost · protected climb for 3 seconds'}[type]);
+  if (type === 'widen') widenTimer = WIDE_DURATION;
+  else if (type === 'slow') slowTimer = SLOW_DURATION;
+  else if (type === 'shield') shieldTimer = SHIELD_DURATION;
+  else if (type === 'boost') boostTimer = BOOST_DURATION;
 }
 
 // Fixed, slightly irregular contours: the drawing stays still instead of jittering.
@@ -584,37 +620,51 @@ function createMeadow() {
   });
   return layer;
 }
-function drawCloud(x,y,size) {
+function drawCloud(x,y,size,tint=paper) {
   push();translate(x,y);scale(size);
-  const c=drawingContext;c.fillStyle=paper;c.strokeStyle=ink;c.lineWidth=1.1;
+  const c=drawingContext;c.fillStyle=tint;c.strokeStyle=ink;c.lineWidth=1.1;
   c.beginPath();c.moveTo(-29,8);c.bezierCurveTo(-43,6,-38,-8,-27,-7);c.bezierCurveTo(-28,-25,-6,-27,0,-14);c.bezierCurveTo(10,-24,24,-13,23,-4);c.bezierCurveTo(40,-6,40,9,29,10);c.bezierCurveTo(7,13,-11,8,-29,8);c.closePath();c.fill();c.stroke();
   pop();
 }
 function drawBackdrop() {
   const travel=gameState==='menu'?0:cameraTravel;
   const h=gameState==='menu'?0:altitude;
-  const palette=['#c7e5e8','#c7e5e8','#a9cfe3','#eab7a6','#727fa4','#242d49'];
+  const palette=['#c7e5e8','#c7e5e8','#a9cfe3','#eab7a6','#59677e','#294e62','#28364f','#302e49','#1b233c'];
   const stage=zoneAt(h);
   const sky=lerpColor(color(palette[Math.max(0,stage-1)]),color(palette[stage]),constrain((h-zones[stage].from)/60,0,1));
   background(sky);
   // Foreground terrain drops away faster than distant clouds.
   if(travel*.72<height) drawingContext.drawImage(meadow,0,height-400+travel*.72,width,400);
-  if(gameState!=='menu') {
-    drawTree(-12,height-35+travel*.85,440,.9);
-    drawTree(411,height+250+travel*.5,1050,1);
-    drawTree(-17,height+150+travel*.5,1000,.9);
+  if(h>=700) drawSpaceScenery(h,travel);
+  if(stage===4) {
+    push();drawingContext.globalAlpha=.45;
+    for(let i=0;i<5;i++)drawCloud((i+.5)*width/5,90+(i%2)*55,1.7);
+    pop();
   }
-  if(h>=500) drawSpaceScenery(h,travel);
+  if(stage===5) {
+    push();noFill();
+    for(let band=0;band<3;band++){
+      stroke(band===1?'#79c6ae':'#859dc7');strokeWeight(5-band);
+      drawingContext.globalAlpha=.35;
+      beginShape();for(let x=0;x<=width;x+=8)vertex(x,100+band*28+Math.sin(x*.012+animationTick*.003+band)*32);endShape();
+    }pop();
+  }
   push();stroke(ink);strokeWeight(1.2);fill('#edc754');
   const sunY=65+Math.min(travel*.014,45)+Math.max(0,h-320)*1.7;
-  beginShape();for(let i=0;i<30;i++){const a=i*TWO_PI/30,r=18+sin(i*1.7)*.65;vertex(342+cos(a)*r,sunY+sin(a)*r);}endShape(CLOSE);
-  for(let i=0;i<7;i++){const a=i*TWO_PI/7;line(342+cos(a)*27,sunY+sin(a)*27,342+cos(a)*33,sunY+sin(a)*33);}pop();
+  beginShape();for(let i=0;i<30;i++){const a=i*TWO_PI/30,r=18+sin(i*1.7)*.65;vertex((width-58)+cos(a)*r,sunY+sin(a)*r);}endShape(CLOSE);
+  for(let i=0;i<7;i++){const a=i*TWO_PI/7;line((width-58)+cos(a)*27,sunY+sin(a)*27,(width-58)+cos(a)*33,sunY+sin(a)*33);}pop();
   push();drawingContext.globalAlpha=constrain((550-h)/180,0,1);
   for(let i=0;i<(gameState==='menu'?2:4);i++) {
     const y=gameState==='menu'?[111,186][i]:((111+i*173+travel*(.22+i*.025)+80)%(height+200))-80;
-    drawCloud([59,290,143,355][i],y,[.9,.48,.65,.8][i]);
+    drawCloud([.1475,.725,.3575,.8875][i]*width,y,[.9,.48,.65,.8][i]);
   }
   pop();
+  // Trees are foreground scenery, in front of the sun and distant clouds.
+  if(gameState!=='menu') {
+    drawTree(-12,height-35+travel*.85,440,.9);
+    drawTree(width+11,height+250+travel*.5,1050,1);
+    drawTree(-17,height+150+travel*.5,1000,.9);
+  }
   // Altitude ticks make the ascent readable even in open sky.
   if(gameState!=='menu') {
     push();const tickInk=h>=500?paper:ink;stroke(tickInk);strokeWeight(.7);fill(tickInk);textSize(7);textAlign(LEFT,CENTER);
@@ -625,32 +675,59 @@ function drawBackdrop() {
 }
 function drawSpaceScenery(h,travel) {
   push();noStroke();
-  const fade=constrain((h-500)/90,0,1);
+  const fade=constrain((h-700)/90,0,1);
   fill(255,249,231,200*fade);
   for(let i=0;i<42;i++){
-    const x=(i*97+29)%400,y=((i*71+travel*.035)%(height+70))-35;
+    const x=(i*97+29)%width,y=((i*71+travel*.035)%(height+70))-35;
     ellipse(x,y,i%7===0?2.5:1.2);
   }
   // A distant moon, followed by the curve of the world below.
-  if(h>620){fill(242,235,204,220*constrain((h-620)/80,0,1));ellipse(322,115,42);fill(193,189,177,120);ellipse(315,110,8);ellipse(330,120,5);}
-  if(h>700){
-    const horizon=height+10-Math.min(35,(h-700)*.1);
-    fill('#a9cfe3');ellipse(200,horizon+330,1080,710);
-    fill('#6e9daa');ellipse(200,horizon+336,1060,710);
-    fill('#84ae92');ellipse(110,horizon+20,120,19);ellipse(290,horizon+12,75,14);
+  if(h>950){fill(242,235,204,220*constrain((h-950)/80,0,1));ellipse(322,115,42);fill(193,189,177,120);ellipse(315,110,8);ellipse(330,120,5);}
+  if(h>950){
+    const horizon=height+10-Math.min(35,(h-950)*.1);
+    const earthWidth=Math.max(1080,width*1.4);
+    fill('#a9cfe3');ellipse(width/2,horizon+330,earthWidth,710);
+    fill('#6e9daa');ellipse(width/2,horizon+336,earthWidth-20,710);
+    // Land shares the planet's coordinates and cannot spill into the sky.
+    const c=drawingContext;c.save();c.beginPath();
+    c.ellipse(width/2,horizon+336,(earthWidth-20)/2,355,0,0,Math.PI*2);c.clip();
+    fill('#84ae92');ellipse(width/2-earthWidth*.16,horizon+20,earthWidth*.16,24);
+    ellipse(width/2+earthWidth*.12,horizon+12,earthWidth*.10,18);
+    c.restore();
   }
   pop();
 }
-function drawTree(x,base,height,scaleFactor) {
-  if(base-height>450||base<-100)return;
-  push();translate(x,base);scale(scaleFactor);stroke(ink);strokeWeight(1);fill('#c19569');
-  beginShape();vertex(-8,0);vertex(-5,-height);vertex(5,-height);vertex(11,0);endShape(CLOSE);
-  for(let i=0;i<4;i++){
-    const y=-height+35+i*48;
-    line(0,y+35,32,y+8);line(0,y+39,-26,y+3);
-    fill(i%2?'#afc984':'#84ae72');
-    beginShape();vertex(-42,y+12);bezierVertex(-64,y-15,-23,y-42,2,y-27);bezierVertex(29,y-51,58,y-14,42,y+8);bezierVertex(49,y+33,-25,y+40,-42,y+12);endShape(CLOSE);
-  }
+function drawTree(x,base,treeHeight,scaleFactor) {
+  if(base-treeHeight*scaleFactor>height+160||base<-100)return;
+  push();translate(x,base);scale(scaleFactor);
+  const c=drawingContext;
+  // One rounded crown, with a few overlapping boughs rather than stacked blobs.
+  c.fillStyle='#b98d63';c.strokeStyle='#6e7950';c.lineWidth=1.1;
+  c.beginPath();c.moveTo(-11,0);c.bezierCurveTo(-8,-treeHeight*.42,-12,-treeHeight*.7,-3,-treeHeight+55);
+  c.lineTo(6,-treeHeight+55);c.bezierCurveTo(2,-treeHeight*.65,9,-treeHeight*.3,14,0);c.closePath();c.fill();c.stroke();
+  c.strokeStyle='#b98d63';c.lineWidth=9;c.lineCap='round';
+  c.beginPath();c.moveTo(0,-treeHeight+185);c.quadraticCurveTo(-24,-treeHeight+158,-47,-treeHeight+129);
+  c.moveTo(2,-treeHeight+211);c.quadraticCurveTo(37,-treeHeight+184,61,-treeHeight+150);c.stroke();
+  c.translate(0,-treeHeight+75);
+  c.fillStyle='#84b276';c.strokeStyle='#5c875b';c.lineWidth=1.2;
+  c.beginPath();c.moveTo(-60,95);
+  c.bezierCurveTo(-106,97,-123,50,-100,22);
+  c.bezierCurveTo(-129,-11,-100,-57,-68,-52);
+  c.bezierCurveTo(-68,-94,-21,-110,3,-85);
+  c.bezierCurveTo(34,-109,76,-83,73,-52);
+  c.bezierCurveTo(115,-56,137,-15,113,16);
+  c.bezierCurveTo(141,49,116,90,81,88);
+  c.bezierCurveTo(58,120,19,115,5,98);
+  c.bezierCurveTo(-16,117,-46,115,-60,95);c.closePath();c.fill();c.stroke();
+  // Broad sunlit patches share the crown's curves, with no noisy leaf texture.
+  c.fillStyle='#a4c882';c.beginPath();c.moveTo(-95,-10);
+  c.bezierCurveTo(-105,-34,-82,-55,-61,-46);c.bezierCurveTo(-63,-81,-27,-96,-4,-72);
+  c.bezierCurveTo(28,-94,63,-71,62,-45);c.bezierCurveTo(90,-48,107,-26,99,-9);
+  c.bezierCurveTo(64,-27,58,14,25,7);c.bezierCurveTo(-10,-6,-27,30,-54,11);
+  c.bezierCurveTo(-70,1,-83,5,-95,-10);c.fill();
+  c.strokeStyle='#6b9a65';c.lineWidth=1.2;c.beginPath();
+  c.moveTo(-77,56);c.quadraticCurveTo(-55,75,-34,58);
+  c.moveTo(41,61);c.quadraticCurveTo(66,77,87,57);c.stroke();
   pop();
 }
 function drawRail(length) {
@@ -682,11 +759,63 @@ function shardPath(points) {
 }
 function drawObstacle(obs) {
   push();translate(obs.x,obs.y);rotate(obs.rotation);
-  shardPath(obs.points);drawingContext.fillStyle=({leaf:'#b6a35f',kite:obs.tint?'#eaa395':'#9dbcb4',plane:paper,balloon:'#eaa395',satellite:'#a9cfe3',asteroid:'#b6aba0'})[obs.kind];
+  if(obs.kind==='seed') {
+    // The fine parachute is airy decoration; only the little seed is solid.
+    const c=drawingContext;c.strokeStyle='#6f8b65';c.lineWidth=.8;
+    c.beginPath();c.moveTo(0,-3);c.quadraticCurveTo(3,-13,0,-19);c.stroke();
+    for(let i=0;i<9;i++){
+      const a=Math.PI+i*Math.PI/8,x=Math.cos(a)*19,y=-21+Math.sin(a)*15;
+      c.beginPath();c.moveTo(0,-19);c.quadraticCurveTo(x*.5,y+4,x,y);c.stroke();
+      c.strokeStyle=paper;c.lineWidth=1.4;c.beginPath();
+      c.moveTo(x-3,y-3);c.lineTo(x,y);c.lineTo(x+3,y-3);c.stroke();
+      c.strokeStyle='#6f8b65';c.lineWidth=.8;
+    }
+    fill('#b98d63');stroke('#776346');strokeWeight(.8);ellipse(0,0,6,14);
+    pop();return;
+  }
+  if(obs.kind==='bird') {
+    // A stable body is the hitbox. The softly flapping wing is decorative.
+    scale(obs.direction,1);const flap=Math.sin(obs.age*.13+obs.phase);
+    stroke('#536f78');strokeWeight(1);fill('#8eafb6');
+    triangle(-13,0,-25,-5,-22,5);ellipse(0,0,34,18);
+    noStroke();fill('#e5e5c8');ellipse(6,4,17,6);
+    fill('#d6a16a');triangle(15,-3,24,0,15,2);
+    stroke('#536f78');fill('#a9c5c4');
+    beginShape();vertex(-7,0);bezierVertex(-13,-8*flap-4,-10,-22*flap,-4,-23*flap);bezierVertex(3,-17*flap,7,-5*flap,5,1);endShape(CLOSE);
+    fill(ink);noStroke();ellipse(11,-3,2.5,2.5);
+    pop();return;
+  }
+  if(obs.kind==='storm') {
+    const active=lightningActive(obs);
+    if(obs.age<108){
+      const c=drawingContext;c.strokeStyle=active?'#fff2aa':'#d9c990';c.lineWidth=active?5:1;
+      c.setLineDash(active?[]:[4,7]);c.beginPath();c.moveTo(0,15);c.lineTo(0,height-obs.y);c.stroke();c.setLineDash([]);
+      if(!active){noStroke();fill('#fff2aa');textAlign(CENTER,CENTER);textSize(13);text('!',0,28);}
+    }
+    drawCloud(0,0,.85,'#8796a7');pop();return;
+  }
+  if(obs.kind==='comet') {
+    noStroke();fill('#e9c98b');beginShape();vertex(-9,-9);vertex(-66,0);vertex(-9,9);endShape(CLOSE);
+    fill(paper);triangle(-10,-4,-45,0,-10,4);
+  }
+  shardPath(obs.points);drawingContext.fillStyle=({storm:'#8796a7',crystal:'#acd8dc',seed:paper,bird:'#7c9ca3',comet:'#edc754',leaf:obs.tint?'#91b765':'#bdc879',kite:obs.tint?'#eaa395':'#9dbcb4',plane:paper,balloon:'#eaa395',satellite:'#a9cfe3',asteroid:'#b6aba0'})[obs.kind];
   drawingContext.fill();drawingContext.strokeStyle=ink;drawingContext.lineWidth=1.25;drawingContext.stroke();
   stroke(ink);strokeWeight(.8);noFill();
   if(obs.kind==='leaf'){
-    line(-19,0,18,0);line(-8,0,-3,-6);line(1,0,7,6);line(9,0,13,-4);
+    stroke('#597a47');strokeWeight(.9);
+    // Follow the midpoint between the two sampled edges, tip to tip.
+    const veinY=x=>{const t=(x+22)/44;return -4*t-Math.sin(Math.PI*t);};
+    beginShape();vertex(-28,1);
+    for(let i=0;i<=16;i++){const x=-22+44*i/16;vertex(x,veinY(x));}
+    endShape();
+    beginShape();vertex(-8,veinY(-8));quadraticVertex(-5,-6,-3,-10);endShape();
+    beginShape();vertex(1,veinY(1));quadraticVertex(5,1,10,4);endShape();
+  }else if(obs.kind==='comet'){
+    fill('#d9ae5e');noStroke();ellipse(4,-3,5,4);ellipse(-5,5,4,3);
+  }else if(obs.kind==='crystal'){
+    stroke('#568eac');line(0,-23,0,23);line(-14,-5,0,2);line(13,-5,0,2);
+  }else if(obs.kind==='storm'){
+    stroke('#5a687c');line(-17,3,-7,3);line(8,2,19,2);
   }else if(obs.kind==='kite'){
     line(0,-25,0,23);line(-18,-3,18,-3);
     // The thin tail is decoration; the solid kite is the hazard.
@@ -705,29 +834,41 @@ function drawObstacle(obs) {
   }
   pop();
 }
-function drawDroplet(p) {
-  const colors={widen:'#a4cfa6',slow:'#a3c9da',shield:'#edc754'};
-  push();translate(p.x,p.y);stroke(ink);strokeWeight(1);fill(colors[p.type]);
-  beginShape();vertex(0,-12);bezierVertex(-2,-7,-10,0,-8,6);bezierVertex(-5,14,8,12,8,4);bezierVertex(8,-1,3,-7,0,-12);endShape(CLOSE);
-  noStroke();fill(ink);textAlign(CENTER,CENTER);textSize(10);text({widen:'↔',slow:'◷',shield:'◇'}[p.type],0,4);pop();
+function drawPickup(p) {
+  const colors={widen:'#91d6a0',slow:'#8ed2ed',shield:'#f3d46c',boost:'#ffb478'};
+  const pulse=(Math.sin(animationTick*.065)+1)/2;
+  push();translate(p.x,p.y);
+  // A quiet halo and a consistent badge distinguish pickups from hazards.
+  noStroke();fill(255,249,231,25+pulse*12);ellipse(0,0,p.size+5+pulse*2);
+  stroke(paper);strokeWeight(2);fill(colors[p.type]);ellipse(0,0,p.size);
+  noFill();stroke('#416653');strokeWeight(.8);ellipse(0,0,p.size-5);
+  stroke(ink);strokeWeight(2);noFill();
+  if(p.type==='widen') {
+    line(-9,0,9,0);line(-9,0,-5,-4);line(-9,0,-5,4);line(9,0,5,-4);line(9,0,5,4);
+  } else if(p.type==='slow') {
+    ellipse(0,0,16);line(0,0,0,-5);line(0,0,4,2);
+  } else if(p.type==='shield') {
+    beginShape();vertex(0,-9);vertex(8,-6);vertex(7,2);quadraticVertex(5,7,0,10);quadraticVertex(-5,7,-7,2);vertex(-8,-6);endShape(CLOSE);
+  } else {
+    noStroke();fill(ink);beginShape();vertex(2,-10);vertex(-7,2);vertex(-1,2);vertex(-3,10);vertex(7,-2);vertex(1,-2);endShape(CLOSE);
+  }
+  pop();
 }
 function drawMenu() {
   push();textAlign(CENTER,CENTER);noStroke();textFont('Trebuchet MS, sans-serif');fill(ink);
-  push();translate(200,53);rotate(-.025);textStyle(BOLD);textSize(32);text('balance ball',0,0);pop();
-  textStyle(NORMAL);textSize(10);text('a little further up.',200,83);
-  push();translate(200,height*.43);rotate(sin(animationTick*.018)*.04);drawRail(192);drawBuddy(0,-32,22,animationTick*.008);pop();
-  fill(ink);textSize(12);if(matchMedia(PHONE_CONTROLS_QUERY).matches){text('Drag to move. Allow motion to tilt your phone.',200,height*.60);}else{text('A / D  move',154,height*.60);text('← / →  tilt',257,height*.60);}
-  textSize(10);text('From the meadow to space. How far can you go?',200,height*.67);
-  // The start target keeps the original size, without a decorative panel.
-  textStyle(BOLD);textSize(17);text('play  →',200,height*.82);
-  stroke(ink);strokeWeight(1.1);line(165,height*.82+14,235,height*.82+12);
-  noStroke();textStyle(NORMAL);textSize(9);text('click here or press enter',200,height*.82+35);pop();
+  push();translate(width/2,53);rotate(-.025);textStyle(BOLD);textSize(32);text('A Little Higher',0,0);pop();
+  textStyle(NORMAL);
+  push();translate(width/2,height*.43);rotate(sin(animationTick*.018)*.04);drawRail(192);drawBuddy(0,-32,22,animationTick*.008);pop();
+  fill(ink);textSize(12);if(matchMedia(PHONE_CONTROLS_QUERY).matches){text('Drag to move. Allow motion to tilt your phone.',width/2,height*.60);}else{text('A / D  move',width/2-46,height*.60);text('← / →  tilt',width/2+57,height*.60);}
+  textSize(10);text('From the meadow to space. How far can you go?',width/2,height*.67);
+  // The matching DOM Play button handles focus and touch permission gestures.
+  noStroke();textStyle(NORMAL);textSize(9);text('click here or press enter',width/2,height*.82+35);pop();
 }
 function drawHeight() {
   push();noStroke();fill(altitude>=500?paper:ink);textFont('Trebuchet MS, sans-serif');
   textAlign(LEFT,TOP);textSize(9);text('height ↑',20,13);textSize(23);textStyle(BOLD);text(Math.floor(altitude)+'m',20,25);textStyle(NORMAL);
-  textAlign(CENTER,TOP);textSize(9);text(zones[zoneIndex].name,200,16);
-  textAlign(RIGHT,TOP);text('best '+bestAltitude+'m',380,13);
+  textAlign(CENTER,TOP);textSize(9);text(zones[zoneIndex].name,width/2,16);
+  textAlign(RIGHT,TOP);text('best '+bestAltitude+'m',width-20,13);
   pop();
 }
 function stepParticles() {
@@ -737,7 +878,7 @@ function drawParticles() {
   push();noStroke();for(const p of particles){fill(...p.col,map(p.age,0,p.life,210,0));push();translate(p.x,p.y);rotate(p.age*.08);triangle(-p.size/2,p.size/2,p.size/2,p.size/2,0,-p.size/2);pop();}pop();
 }
 function drawFinishedScene() {
-  obstacles.forEach(drawObstacle);powerUps.forEach(drawDroplet);drawParticles();
+  obstacles.forEach(drawObstacle);powerUps.forEach(drawPickup);drawParticles();
   push();translate(width/2+barPosX,beamY());push();rotate(barAngle);drawRail(baseBarLength*currentWidenFactor);pop();drawBuddy(ballX,ballY,15,ballRotation);pop();drawHeight();
-  push();noStroke();fill(paper);rect(200,height*.44,240,103,2);fill(ink);textAlign(CENTER,CENTER);textFont('Trebuchet MS, sans-serif');textStyle(BOLD);textSize(26);text('oops.',200,height*.44-22);textStyle(NORMAL);textSize(11);text(Math.floor(altitude)+'m climbed',200,height*.44+6);textSize(12);text('tap to retry · R to restart',200,height*.44+32);pop();
+  push();noStroke();fill(paper);rect(width/2,height*.44,240,103,2);fill(ink);textAlign(CENTER,CENTER);textFont('Trebuchet MS, sans-serif');textStyle(BOLD);textSize(26);text('oops.',width/2,height*.44-22);textStyle(NORMAL);textSize(11);text(Math.floor(altitude)+'m climbed',width/2,height*.44+6);textSize(12);text('tap to retry · R to restart',width/2,height*.44+32);pop();
 }

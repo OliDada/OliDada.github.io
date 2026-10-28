@@ -262,3 +262,6 @@ body:has(.player-area.fullscreen) { overflow: hidden; }
   .card, .card:hover { transform: none; transition: box-shadow .2s ease; }
   .btn, .brand img, .mini-link img { transition: none; }
 }
+
+/* Keep the selected game header visible while the playfield takes the remaining height. */
+.player-header, .player-controls { flex-shrink: 0; }
