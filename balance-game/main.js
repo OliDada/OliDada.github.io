@@ -86,11 +86,17 @@ let feedbackTimer = 0;
 const heldKeys = new Set();
 const heldPointers = new Map();
 const PHONE_CONTROLS_QUERY = '(hover: none) and (pointer: coarse) and (max-width: 700px), (hover: none) and (pointer: coarse) and (max-height: 500px)';
+function isPhone() {
+  // Embedded viewports can be wider than the physical phone screen.
+  const screen = window.screen;
+  return matchMedia(PHONE_CONTROLS_QUERY).matches ||
+    ((window.navigator?.maxTouchPoints || 0) > 0 && screen && Math.min(screen.width, screen.height) <= 700);
+}
 const gameplayTouches = new Set();
 let dragPointer = null;
 let dragStartX = 0, dragStartBeam = 0, dragTarget = null;
 let phoneTiltEnabled = false, phoneTiltReady = false;
-let tiltNeutral = null, tiltSample = null, tiltTarget = 0, tiltSampleTime = 0;
+let tiltNeutral = null, tiltSample = null, tiltTarget = 0;
 let motionRequestPending = false;
 let automaticMotionAttempted = false;
 let motionStatus = '';
@@ -111,7 +117,6 @@ function receiveTilt(event) {
   if (tiltNeutral === null) tiltNeutral = tiltSample;
   const degrees = tiltSample - tiltNeutral;
   tiltTarget = Math.max(-.42, Math.min(.42, (Math.abs(degrees) < 1 ? 0 : degrees) * .018));
-  tiltSampleTime = Date.now();
   if (!phoneTiltReady) { phoneTiltReady = true; showMotionStatus(''); syncControls(); }
 }
 function recenterTilt() { tiltNeutral = tiltSample; tiltTarget = 0; }
@@ -152,7 +157,7 @@ async function enablePhoneTilt() {
 }
 async function startFromGesture() {
   if (motionRequestPending) return;
-  const shouldRequest = matchMedia(PHONE_CONTROLS_QUERY).matches && !automaticMotionAttempted && !phoneTiltEnabled;
+  const shouldRequest = isPhone() && !automaticMotionAttempted && !phoneTiltEnabled;
   // Keep permission invocation in the same synchronous user-gesture call stack.
   const permission = shouldRequest ? requestPhoneTilt() : null;
   startGame();
@@ -199,14 +204,29 @@ function setPaused(value) {
   paused = value; accumulator = 0; skipElapsed = true; clearInput(); syncControls();
   if (paused) saveBest();
 }
+function bindTap(button, action) {
+  // Handle the native touch release directly; suppress its synthetic click so
+  // Pause/Resume and motion toggles cannot fire twice for one tap.
+  let lastTouch = -Infinity;
+  button.addEventListener('touchend', event => {
+    event.preventDefault(); lastTouch = Date.now();
+    if (!button.disabled) action();
+  }, { passive: false });
+  button.addEventListener('click', event => {
+    if (Date.now() - lastTouch < 700) return;
+    if (!button.disabled) action();
+  });
+}
 function installControls(canvas) {
   window.addEventListener('deviceorientation', receiveTilt);
-  window.screen?.orientation?.addEventListener('change', () => { tiltNeutral = null; tiltTarget = 0; clearInput(); setPaused(true); });
-  document.getElementById('motion').addEventListener('click', enablePhoneTilt);
-  document.getElementById('recenter').addEventListener('click', recenterTilt);
+  document.body?.classList.toggle('phone-controls', isPhone());
+  window.screen?.orientation?.addEventListener?.('change', () => { tiltNeutral = null; tiltTarget = 0; clearInput(); setPaused(true); });
+  bindTap(document.getElementById('motion'), enablePhoneTilt);
+  bindTap(document.getElementById('recenter'), recenterTilt);
   canvas.addEventListener('pointerdown', event => {
-    if (event.pointerType === 'mouse' || dragPointer !== null || gameState !== 'playing' || paused || gameOver) return;
-    event.preventDefault(); canvas.setPointerCapture(event.pointerId);
+    if (event.pointerType === 'touch' || event.pointerType === 'mouse' || dragPointer !== null || gameState !== 'playing' || paused || gameOver) return;
+    event.preventDefault();
+    try { canvas.setPointerCapture(event.pointerId); } catch {}
     gameplayTouches.add(event.pointerId);
     dragPointer = event.pointerId; dragStartX = event.clientX; dragStartBeam = barPosX; dragTarget = barPosX;
   });
@@ -218,13 +238,26 @@ function installControls(canvas) {
   });
   const endDrag = event => { if(event.pointerId === dragPointer) { dragPointer = null; dragTarget = null; } };
   canvas.addEventListener('pointercancel', event => { gameplayTouches.delete(event.pointerId); endDrag(event); }); canvas.addEventListener('lostpointercapture', endDrag);
-  document.getElementById('action').addEventListener('click', () => paused ? setPaused(false) : startFromGesture());
-  document.getElementById('pause').addEventListener('click', () => setPaused(!paused));
+  bindTap(document.getElementById('action'), () => paused ? setPaused(false) : startFromGesture());
+  bindTap(document.getElementById('pause'), () => setPaused(!paused));
   document.querySelectorAll('[data-control]').forEach(button => {
     button.addEventListener('pointerdown', event => {
+      if (event.pointerType === 'touch') return;
       event.preventDefault(); if (button.disabled) return;
-      button.setPointerCapture(event.pointerId); heldPointers.set(event.pointerId, button.dataset.control); button.classList.add('held');
+      try { button.setPointerCapture(event.pointerId); } catch {} heldPointers.set(event.pointerId, button.dataset.control); button.classList.add('held');
     });
+    button.addEventListener('touchstart', event => {
+      event.preventDefault(); if (button.disabled) return;
+      for (const touch of event.changedTouches) heldPointers.set('touch-' + touch.identifier, button.dataset.control);
+      button.classList.add('held');
+    }, { passive: false });
+    const releaseTouch = event => {
+      event.preventDefault();
+      for (const touch of event.changedTouches) heldPointers.delete('touch-' + touch.identifier);
+      button.classList.toggle('held', [...heldPointers.values()].includes(button.dataset.control));
+    };
+    button.addEventListener('touchend', releaseTouch, { passive: false });
+    button.addEventListener('touchcancel', releaseTouch, { passive: false });
     const release = event => { heldPointers.delete(event.pointerId); button.classList.toggle('held', [...heldPointers.values()].includes(button.dataset.control)); };
     button.addEventListener('pointerup', release); button.addEventListener('pointercancel', release); button.addEventListener('lostpointercapture', release);
   });
@@ -241,14 +274,48 @@ function installControls(canvas) {
   window.addEventListener('blur', () => { clearInput(); setPaused(true); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
   window.addEventListener('pagehide', saveBest);
+  // Touch Events work in Safari without depending on pointer capture. Keep the
+  // gesture on touchend so iOS can show its native motion permission dialog.
+  canvas.addEventListener('touchstart', event => {
+    event.preventDefault();
+    if (dragPointer !== null || gameState !== 'playing' || paused || gameOver) return;
+    const touch = event.changedTouches[0];
+    if (!touch) return;
+    dragPointer = 'touch-' + touch.identifier;
+    gameplayTouches.add(dragPointer);
+    dragStartX = touch.clientX; dragStartBeam = barPosX; dragTarget = barPosX;
+  }, { passive: false });
+  canvas.addEventListener('touchmove', event => {
+    event.preventDefault();
+    for (const touch of event.changedTouches) {
+      if ('touch-' + touch.identifier !== dragPointer) continue;
+      const delta = (touch.clientX - dragStartX) * width / canvas.getBoundingClientRect().width;
+      dragTarget = constrain(dragStartBeam + delta, -width/2 + baseBarLength*currentWidenFactor/2, width/2 - baseBarLength*currentWidenFactor/2);
+    }
+  }, { passive: false });
+  const finishTouch = event => {
+    event.preventDefault();
+    for (const touch of event.changedTouches) {
+      const id = 'touch-' + touch.identifier;
+      const wasPlaying = gameplayTouches.delete(id);
+      endDrag({pointerId: id});
+      if (!wasPlaying && event.type !== 'touchcancel') activateCanvas(touch);
+    }
+  };
+  canvas.addEventListener('touchend', finishTouch, { passive: false });
+  canvas.addEventListener('touchcancel', finishTouch, { passive: false });
   canvas.addEventListener('pointerup', event => {
+    if (event.pointerType === 'touch') return;
     if (gameplayTouches.delete(event.pointerId)) { endDrag(event); return; }
+    activateCanvas(event);
+  });
+  function activateCanvas(event) {
     if (paused) { setPaused(false); return; }
     if (gameOver) { startFromGesture(); return; }
     const rect = canvas.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width * width, y = (event.clientY - rect.top) / rect.height * height;
     if (gameState === 'menu' && abs(x - 200) < 90 && abs(y - height * .82) < 30) startFromGesture();
-  });
+  }
   syncControls();
 }
 
@@ -383,8 +450,8 @@ function updateGame() {
   barPosX = constrain(barPosX + barVelX, -maxX, maxX);
   if (abs(barPosX) >= maxX) barVelX = 0;
   if (phoneTiltEnabled && phoneTiltReady) {
-    if (Date.now() - tiltSampleTime > 2000) { phoneTiltEnabled = false; phoneTiltReady = false; announce('Motion signal lost. Use tilt buttons.'); syncControls(); }
-    else barAngle += (tiltTarget - barAngle) * .12;
+    // A stationary device need not emit new orientation events.
+    barAngle += (tiltTarget - barAngle) * .12;
   }
   if (!phoneTiltEnabled || !phoneTiltReady) barAngle = constrain(barAngle + (Number(isHeld('ArrowRight')) - Number(isHeld('ArrowLeft'))) * .014, -.42, .42);
 

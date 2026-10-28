@@ -95,9 +95,9 @@ test('orientation mapping handles landscape and rejects missing sensor values',(
   assert.ok(Math.abs(run('screenRoll(20,0,270)')+20)<1e-8);
   run('phoneTiltEnabled=true;receiveTilt({beta:null,gamma:null})');assert.equal(run('phoneTiltReady'),false);
 });
-test('a stale tilt signal returns to button controls',()=>{
-  const run=game();run('startGame();phoneTiltEnabled=true;phoneTiltReady=true;tiltSampleTime=0;updateGame()');
-  assert.equal(run('phoneTiltEnabled'),false);assert.match(run('feedback'),/signal lost/);
+test('holding a phone still does not disable tilt',()=>{
+  const run=game();run('startGame();phoneTiltEnabled=true;phoneTiltReady=true;updateGame()');
+  assert.equal(run('phoneTiltEnabled'),true);assert.equal(run('phoneTiltReady'),true);
 });
 test('motion options are hidden during play and available only when paused',()=>{
   const run=game();run('startGame();phoneTiltEnabled=true;phoneTiltReady=true;syncControls()');
@@ -130,4 +130,73 @@ test('insecure connections show why iPhone tilt cannot be requested',async()=>{
 test('a rejected motion request produces visible feedback and a playable fallback',async()=>{
   const run=game();run("window.isSecureContext=true;window.DeviceOrientationEvent={requestPermission(){return Promise.reject(Error('blocked'))}}");
   await run('startFromGesture()');assert.match(run('motionStatus'),/blocked/);assert.equal(run('motionRequestPending'),false);assert.equal(run('paused'),false);
+});
+
+function wiredGame() {
+  const run=game();
+  run(`
+    function target() {
+      const handlers = {};
+      return {handlers, classList:{add(){},remove(){},toggle(){}},dataset:{},
+        addEventListener(type,fn){(handlers[type] ||= []).push(fn)},
+        emit(type,event={}){event.type=type;event.preventDefault=()=>{};for(const fn of handlers[type]||[])fn(event)},
+        getBoundingClientRect(){return {left:0,top:0,width:200,height:200}},
+        setPointerCapture(){throw Error('capture unavailable')}
+      };
+    }
+    Object.assign(window,target()); Object.assign(document,target());
+    for (const id of ['motion','recenter','action','pause']) Object.assign(document.getElementById(id),target());
+    globalThis.leftButton=target();leftButton.dataset.control='ArrowLeft';
+    document.querySelectorAll=()=>[leftButton];
+    globalThis.canvas=target();installControls(canvas);
+  `);
+  return run;
+}
+test('native touch events move the beam with simultaneous tilt and release cleanly',()=>{
+  const run=wiredGame();
+  run(`startGame();canvas.emit('touchstart',{changedTouches:[{identifier:1,clientX:50}]});
+    leftButton.emit('touchstart',{changedTouches:[{identifier:2}]});
+    canvas.emit('touchmove',{changedTouches:[{identifier:1,clientX:90}]});updateGame()`);
+  assert.ok(run('barPosX')>0);assert.ok(run('barAngle')<0);
+  run(`canvas.emit('touchend',{changedTouches:[{identifier:1,clientX:90}]});
+    leftButton.emit('touchend',{changedTouches:[{identifier:2}]})`);
+  assert.equal(run('dragTarget'),null);assert.equal(run('heldPointers.size'),0);
+  assert.equal(run('paused'),false);
+});
+test('canvas touch Play requests permission inside touchend even in a wide iframe',async()=>{
+  const run=wiredGame();
+  run(`matchMedia=()=>({matches:false});window.navigator={maxTouchPoints:5};
+    window.screen.width=390;window.screen.height=844;window.isSecureContext=true;
+    window.DeviceOrientationEvent={requestPermission(){globalThis.requestedDuring=gameState;return Promise.resolve('granted')}};
+    canvas.emit('touchstart',{changedTouches:[{identifier:1,clientX:100,clientY:164}]});
+    canvas.emit('pointerup',{pointerType:'touch',pointerId:1,clientX:100,clientY:164});`);
+  assert.equal(run('gameState'),'menu');
+  run(`canvas.emit('touchend',{changedTouches:[{identifier:1,clientX:100,clientY:164}]})`);
+  assert.equal(run('requestedDuring'),'menu');
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(run('phoneTiltEnabled'),true);assert.equal(run('paused'),false);
+});
+test('touch cancellation and pause release drag and held buttons without restarting',()=>{
+  const run=wiredGame();run(`startGame();canvas.emit('touchstart',{changedTouches:[{identifier:1,clientX:50}]});
+    leftButton.emit('touchstart',{changedTouches:[{identifier:2}]});setPaused(true);
+    canvas.emit('touchend',{changedTouches:[{identifier:1,clientX:90}]});
+    leftButton.emit('touchcancel',{changedTouches:[{identifier:2}]})`);
+  assert.equal(run('paused'),true);assert.equal(run('dragTarget'),null);assert.equal(run('heldPointers.size'),0);
+});
+test('pointer capture failure does not prevent fallback button input',()=>{
+  const run=wiredGame();run(`startGame();leftButton.emit('pointerdown',{pointerType:'pen',pointerId:2});updateGame()`);
+  assert.ok(run('barAngle')<0);
+  run(`leftButton.emit('pointerup',{pointerId:2})`);assert.equal(run('heldPointers.size'),0);
+});
+
+test('native Play button requests motion and ignores the same tap synthetic click',async()=>{
+  const run=wiredGame();run(`window.isSecureContext=true;globalThis.requests=0;
+    window.DeviceOrientationEvent={requestPermission(){requests++;return Promise.resolve('granted')}};
+    document.getElementById('action').emit('touchend')`);
+  assert.equal(run('requests'),1);
+  await new Promise(resolve=>setImmediate(resolve));
+  run(`altitude=25;document.getElementById('action').emit('click')`);
+  assert.equal(run('altitude'),25);assert.equal(run('phoneTiltEnabled'),true);
+  run(`document.getElementById('pause').emit('touchend');document.getElementById('pause').emit('click')`);
+  assert.equal(run('paused'),true);
 });

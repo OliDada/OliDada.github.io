@@ -8,7 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
     <script src="physics.js" defer></script>
     <!-- Link your game script -->
-    <script src="main.js" defer></script>
+    <script src="main.js?v=20261028-touch" defer></script>
     <style>
       body {
         margin: 0;
@@ -26,6 +26,7 @@
       button:focus-visible { outline:3px solid #d6a16a; outline-offset:3px; }
       button.held { background:#edc754; }
       .touch-controls { display:none; justify-content:space-between; gap:14px; margin-top:12px; }
+      .phone-controls .touch-controls:not([hidden]) { display:flex; }
       .touch-controls > div { flex:1; text-align:center; }
       .touch-controls span { display:block; margin-bottom:5px; }
       .touch-controls button { width:45%; min-height:48px; padding:8px; font-size:22px; }
