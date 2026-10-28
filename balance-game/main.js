@@ -92,6 +92,14 @@ let dragStartX = 0, dragStartBeam = 0, dragTarget = null;
 let phoneTiltEnabled = false, phoneTiltReady = false;
 let tiltNeutral = null, tiltSample = null, tiltTarget = 0, tiltSampleTime = 0;
 let motionRequestPending = false;
+let automaticMotionAttempted = false;
+let motionStatus = '';
+let motionAttempt = 0;
+function showMotionStatus(message) {
+  motionStatus = message;
+  document.getElementById('motion-status').textContent = message;
+  document.getElementById('motion-status').hidden = !message;
+}
 function screenRoll(beta, gamma, angle) {
   const radians = angle * Math.PI / 180;
   return gamma * Math.cos(radians) + beta * Math.sin(radians);
@@ -104,28 +112,56 @@ function receiveTilt(event) {
   const degrees = tiltSample - tiltNeutral;
   tiltTarget = Math.max(-.42, Math.min(.42, (Math.abs(degrees) < 1 ? 0 : degrees) * .018));
   tiltSampleTime = Date.now();
-  if (!phoneTiltReady) { phoneTiltReady = true; syncControls(); }
+  if (!phoneTiltReady) { phoneTiltReady = true; showMotionStatus(''); syncControls(); }
 }
 function recenterTilt() { tiltNeutral = tiltSample; tiltTarget = 0; }
+async function requestPhoneTilt() {
+  if (motionRequestPending || phoneTiltEnabled) return;
+  automaticMotionAttempted = true;
+  if (!window.isSecureContext) {
+    showMotionStatus('Phone tilt needs HTTPS. Open the secure website, or use the tilt buttons.'); return;
+  }
+  const api = window.DeviceOrientationEvent;
+  if (!api) { showMotionStatus('Phone tilt is unavailable in this browser. Use the tilt buttons.'); return; }
+  motionRequestPending = true;
+  const attempt = ++motionAttempt;
+  try {
+    // Invoke immediately within the user's tap, before changing the UI or awaiting anything.
+    const permissionResult = typeof api.requestPermission === 'function' ? api.requestPermission() : Promise.resolve('granted');
+    showMotionStatus('Allow motion access to steer by tilting your phone.');
+    const permission = await permissionResult;
+    if (permission !== 'granted') { showMotionStatus('Motion access was declined. You can still drag and use the tilt buttons.'); return; }
+    phoneTiltEnabled = true; phoneTiltReady = false; tiltNeutral = null; tiltSample = null; tiltTarget = 0;
+    showMotionStatus('Motion allowed. Hold the phone comfortably and gently tilt it to calibrate.');
+    setTimeout(() => {
+      if (attempt === motionAttempt && phoneTiltEnabled && !phoneTiltReady) {
+        phoneTiltEnabled = false;
+        showMotionStatus('No motion signal. Try opening the game in a new tab, or use the tilt buttons.'); syncControls();
+      }
+    }, 8000);
+  } catch {
+    showMotionStatus('Motion access was blocked. Try the game in a new tab, or use the tilt buttons.');
+  } finally { motionRequestPending = false; syncControls(); }
+}
 async function enablePhoneTilt() {
   if (motionRequestPending) return;
-  if (phoneTiltEnabled) { phoneTiltEnabled = false; phoneTiltReady = false; syncControls(); return; }
-  if (!window.isSecureContext || !window.DeviceOrientationEvent) {
-    announce('Phone tilt unavailable here. Use tilt buttons.'); return;
-  }
-  motionRequestPending = true;
+  if (phoneTiltEnabled) { motionAttempt++; phoneTiltEnabled = false; phoneTiltReady = false; showMotionStatus(''); syncControls(); return; }
+  const permission = requestPhoneTilt();
   setPaused(true);
-  try {
-    const api = window.DeviceOrientationEvent;
-    const permission = typeof api.requestPermission === 'function' ? await api.requestPermission() : 'granted';
-    if (permission !== 'granted') { announce('Motion access declined. Tilt buttons still work.'); return; }
-    phoneTiltEnabled = true; phoneTiltReady = false; tiltNeutral = null; tiltSample = null; tiltTarget = 0;
-    announce('Hold comfortably, then resume. Drag to move.');
-    setTimeout(() => {
-      if (phoneTiltEnabled && !phoneTiltReady) { phoneTiltEnabled = false; announce('No motion signal. Use tilt buttons.'); syncControls(); }
-    }, 5000);
-  } catch { announce('Motion access unavailable. Use tilt buttons.'); }
-  finally { motionRequestPending = false; syncControls(); }
+  await permission;
+}
+async function startFromGesture() {
+  if (motionRequestPending) return;
+  const shouldRequest = matchMedia(PHONE_CONTROLS_QUERY).matches && !automaticMotionAttempted && !phoneTiltEnabled;
+  // Keep permission invocation in the same synchronous user-gesture call stack.
+  const permission = shouldRequest ? requestPhoneTilt() : null;
+  startGame();
+  if (permission) {
+    setPaused(true);
+    await permission;
+    // A permission prompt may obscure or blur the page; resume explicitly once it closes.
+    if (!document.hidden && !gameOver) setPaused(false);
+  }
 }
 function saveBest() {
   bestAltitude = Math.max(bestAltitude, Math.floor(altitude));
@@ -146,6 +182,8 @@ function syncControls() {
   document.getElementById('touch-controls').hidden = gameState !== 'playing' || gameOver || (!paused && motionActive);
   document.getElementById('tilt-fallback').hidden = paused || motionActive;
   document.getElementById('touch-hint').textContent = paused ? 'Phone controls' : 'Drag on the game to move';
+  document.getElementById('motion').disabled = motionRequestPending;
+  document.getElementById('action').disabled = motionRequestPending;
   document.getElementById('motion').textContent = phoneTiltEnabled ? 'Use tilt buttons' : 'Enable phone tilt';
   document.getElementById('recenter').hidden = !paused || !phoneTiltEnabled;
   const action = document.getElementById('action');
@@ -180,7 +218,7 @@ function installControls(canvas) {
   });
   const endDrag = event => { if(event.pointerId === dragPointer) { dragPointer = null; dragTarget = null; } };
   canvas.addEventListener('pointercancel', event => { gameplayTouches.delete(event.pointerId); endDrag(event); }); canvas.addEventListener('lostpointercapture', endDrag);
-  document.getElementById('action').addEventListener('click', () => paused ? setPaused(false) : startGame());
+  document.getElementById('action').addEventListener('click', () => paused ? setPaused(false) : startFromGesture());
   document.getElementById('pause').addEventListener('click', () => setPaused(!paused));
   document.querySelectorAll('[data-control]').forEach(button => {
     button.addEventListener('pointerdown', event => {
@@ -195,7 +233,7 @@ function installControls(canvas) {
     if (!['KeyA','KeyD','ArrowLeft','ArrowRight','KeyP','Escape','Enter','Space','KeyR'].includes(event.code)) return;
     event.preventDefault(); if (event.repeat) return;
     if (['KeyP','Escape'].includes(event.code)) { setPaused(!paused); return; }
-    if (['Enter','Space','KeyR'].includes(event.code) && (gameState === 'menu' || gameOver)) { startGame(); return; }
+    if (['Enter','Space','KeyR'].includes(event.code) && (gameState === 'menu' || gameOver)) { startFromGesture(); return; }
     if (event.code === 'Enter' && paused) { setPaused(false); return; }
     if (!paused) heldKeys.add(event.code);
   });
@@ -206,10 +244,10 @@ function installControls(canvas) {
   canvas.addEventListener('pointerup', event => {
     if (gameplayTouches.delete(event.pointerId)) { endDrag(event); return; }
     if (paused) { setPaused(false); return; }
-    if (gameOver) { startGame(); return; }
+    if (gameOver) { startFromGesture(); return; }
     const rect = canvas.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width * width, y = (event.clientY - rect.top) / rect.height * height;
-    if (gameState === 'menu' && abs(x - 200) < 90 && abs(y - height * .82) < 30) startGame();
+    if (gameState === 'menu' && abs(x - 200) < 90 && abs(y - height * .82) < 30) startFromGesture();
   });
   syncControls();
 }
@@ -611,7 +649,7 @@ function drawMenu() {
   push();translate(200,53);rotate(-.025);textStyle(BOLD);textSize(32);text('balance ball',0,0);pop();
   textStyle(NORMAL);textSize(10);text('a little further up.',200,83);
   push();translate(200,height*.43);rotate(sin(animationTick*.018)*.04);drawRail(192);drawBuddy(0,-32,22,animationTick*.008);pop();
-  fill(ink);textSize(12);if(matchMedia(PHONE_CONTROLS_QUERY).matches){text('Drag to move. Enable phone tilt to balance.',200,height*.60);}else{text('A / D  move',154,height*.60);text('← / →  tilt',257,height*.60);}
+  fill(ink);textSize(12);if(matchMedia(PHONE_CONTROLS_QUERY).matches){text('Drag to move. Allow motion to tilt your phone.',200,height*.60);}else{text('A / D  move',154,height*.60);text('← / →  tilt',257,height*.60);}
   textSize(10);text('From the meadow to space. How far can you go?',200,height*.67);
   // The start target keeps the original size, without a decorative panel.
   textStyle(BOLD);textSize(17);text('play  →',200,height*.82);

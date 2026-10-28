@@ -7,7 +7,7 @@ const {stepBalanceBall,circleHitsShard}=require('../physics.js');
 function game(storage=new Map()) {
   const nodes=new Map();
   const node=id=>{if(!nodes.has(id))nodes.set(id,{textContent:'',hidden:false,disabled:false,classList:{remove(){}}});return nodes.get(id);};
-  const context=vm.createContext({window:{screen:{orientation:{angle:0}}},document:{getElementById:node,querySelectorAll:()=>[]},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},Math,width:400,height:400,random:(a,b)=>Array.isArray(a)?a[0]:b===undefined?(a===undefined?.5:a/2):(a+b)/2,constrain:(n,a,b)=>Math.max(a,Math.min(b,n)),lerp:(a,b,t)=>a+(b-a)*t,abs:Math.abs,loop(){},stepBalanceBall,circleHitsShard,TWO_PI:Math.PI*2});
+  const context=vm.createContext({setTimeout:()=>0,matchMedia:()=>({matches:true}),window:{screen:{orientation:{angle:0}}},document:{getElementById:node,querySelectorAll:()=>[]},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},Math,width:400,height:400,random:(a,b)=>Array.isArray(a)?a[0]:b===undefined?(a===undefined?.5:a/2):(a+b)/2,constrain:(n,a,b)=>Math.max(a,Math.min(b,n)),lerp:(a,b,t)=>a+(b-a)*t,abs:Math.abs,loop(){},stepBalanceBall,circleHitsShard,TWO_PI:Math.PI*2});
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../main.js'),'utf8'),context);
   return source=>vm.runInContext(source,context);
 }
@@ -111,4 +111,23 @@ test('motion options are hidden during play and available only when paused',()=>
   run('phoneTiltEnabled=false;phoneTiltReady=false;syncControls()');
   assert.equal(run("document.getElementById('touch-controls').hidden"),false);
   assert.equal(run("document.getElementById('tilt-fallback').hidden"),false);
+});
+test('first phone Play requests permission synchronously then resumes after acceptance',async()=>{
+  const run=game();run("window.isSecureContext=true; window.DeviceOrientationEvent={requestPermission(){globalThis.requestedDuring=gameState; return Promise.resolve('granted')}}");
+  const pending=run('startFromGesture()');assert.equal(run('requestedDuring'),'menu');assert.equal(run('paused'),true);
+  await pending;assert.equal(run('phoneTiltEnabled'),true);assert.equal(run('paused'),false);
+});
+test('denial gives visible feedback, keeps fallback controls and does not reprompt on retries',async()=>{
+  const run=game();run("globalThis.requests=0;window.isSecureContext=true;window.DeviceOrientationEvent={requestPermission(){requests++;return Promise.resolve('denied')}}");
+  await run('startFromGesture()');assert.equal(run('phoneTiltEnabled'),false);assert.equal(run('paused'),false);
+  assert.match(run("document.getElementById('motion-status').textContent"),/declined/);
+  await run('startFromGesture()');assert.equal(run('requests'),1);
+});
+test('insecure connections show why iPhone tilt cannot be requested',async()=>{
+  const run=game();run('window.isSecureContext=false');await run('startFromGesture()');
+  assert.match(run('motionStatus'),/HTTPS/);assert.equal(run('paused'),false);
+});
+test('a rejected motion request produces visible feedback and a playable fallback',async()=>{
+  const run=game();run("window.isSecureContext=true;window.DeviceOrientationEvent={requestPermission(){return Promise.reject(Error('blocked'))}}");
+  await run('startFromGesture()');assert.match(run('motionStatus'),/blocked/);assert.equal(run('motionRequestPending'),false);assert.equal(run('paused'),false);
 });
