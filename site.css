@@ -302,3 +302,10 @@ body:has(.player-area.fullscreen) { overflow: hidden; }
   .player-actions .btn.small.pip-btn .lbl { display: none; }
   .player-actions .btn.small.pip-btn { padding: 6px 9px; }
 }
+/* the Controls button keeps its label so people know what it does */
+.player-actions .btn.small.controls-btn { padding: 6px 12px; gap: 6px; }
+.player-actions .btn.small.controls-btn .lbl { display: inline; }
+.player-actions .btn.small.controls-btn[aria-expanded="true"] { background: var(--cream); color: var(--ink); }
+.player-actions .controls-btn.nudge { animation: controls-nudge 1.6s ease 2; }
+@keyframes controls-nudge { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 225, 77, 0) } 50% { box-shadow: 0 0 0 4px rgba(255, 225, 77, .55) } }
+@media (max-width: 720px), (max-height: 520px) { .player-actions .btn.small.controls-btn .lbl { display: none; } }

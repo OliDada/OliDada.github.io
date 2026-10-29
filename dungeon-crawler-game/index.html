@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dungeon Crawler</title>
+  <link rel="icon" href="/images/dolphin2.png">
+  <!-- everything the game loads (scripts, maps/, images/) lives in src/ -->
+  <base href="/dungeon-crawler-game/src/">
+  <style>
+    html, body { margin: 0; height: 100%; background: #1f2a24; overflow: hidden; }
+    #game-container { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+    #game-container canvas { display: block; image-rendering: pixelated; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <script src="game/player.js" defer></script>
+  <script src="game/items.js" defer></script>
+  <script src="game/enemy.js" defer></script>
+  <script src="game/map.js" defer></script>
+  <script src="sketch.js" defer></script>
+  <script>
+    // Scale the 832×640 canvas to fit the window, keeping its shape (mouse aiming still lines up)
+    function fitCanvas() {
+      const c = document.querySelector('#game-container canvas');
+      if (!c) return;
+      const w = c.width / (window.devicePixelRatio || 1) || 832, h = c.height / (window.devicePixelRatio || 1) || 640;
+      const s = Math.min(innerWidth / w, innerHeight / h);
+      c.style.width = Math.floor(w * s) + 'px';
+      c.style.height = Math.floor(h * s) + 'px';
+    }
+    addEventListener('resize', fitCanvas);
+    let tries = 0; const t = setInterval(() => { fitCanvas(); if (++tries > 40) clearInterval(t); }, 250);
+  </script>
+</head>
+<body>
+  <div id="game-container"></div>
+</body>
+</html>

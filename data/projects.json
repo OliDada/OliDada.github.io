@@ -182,5 +182,16 @@
     "thumbnail": "data/thumbnails/falling-sand-thumbnail.png",
     "tags": ["simulation", "physics", "p5"],
     "featured": false
+  },
+  {
+    "title": "Dungeon Crawler",
+    "path": "/dungeon-crawler-game/index.html",
+    "source": "/dungeon-crawler-game/src/sketch.js",
+    "aspect": "13:10",
+    "controls": [["WASD / arrows", "move"], ["Mouse click", "shoot (once you have the gun)"]],
+    "thumbnail": "data/thumbnails/dungeon-crawler-thumbnail.png",
+    "description": "Explore the dungeon, grab the gold and the keys, and watch out for snakes.",
+    "tags": ["game", "dungeon", "crawler"],
+    "featured": false
   }
 ]

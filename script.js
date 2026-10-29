@@ -426,6 +426,11 @@ function showPlayerControls(controls) {
     try { open = localStorage.getItem('player-controls') === 'shown'; } catch (e) {}
     list.hidden = !open;
     btn.setAttribute('aria-expanded', String(open));
+    // the first few times, the Controls button glows briefly so people notice it
+    try {
+        const seen = +(localStorage.getItem('controls-nudged') || 0);
+        if (!open && seen < 3) { btn.classList.remove('nudge'); void btn.offsetWidth; btn.classList.add('nudge'); localStorage.setItem('controls-nudged', String(seen + 1)); }
+    } catch (e) {}
     try { if (typeof fitPlayer === 'function') fitPlayer(); } catch (e) {}
     if (!btn.__wired) {
         btn.__wired = true;
