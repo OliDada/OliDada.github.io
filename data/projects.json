@@ -33,6 +33,32 @@
     "featured": true
   },
   {
+    "title": "Neon Rush",
+    "path": "/worm-hole/index.html",
+    "source": "/worm-hole/index.js",
+    "thumbnail": "data/thumbnails/neon-rush-thumbnail.webp",
+    "tags": ["game", "neon"],
+    "featured": true
+  },
+  {
+    "title": "Stillwater",
+    "path": "/stillwater/index.html",
+    "source": "/stillwater/README.md",
+    "aspect": "fill",
+    "thumbnail": "data/thumbnails/stillwater-thumbnail.png",
+    "controls": [
+      ["Space / Up", "jump"],
+      ["Down / S", "duck (hold)"],
+      ["Left / Right", "dodge; turn at corners and forks"],
+      ["Mouse drag", "look around"],
+      ["P / Esc", "pause"],
+      ["R", "new route"],
+      ["Touch", "swipe left / right to move, up to jump, down to duck"]
+    ],
+    "tags": ["game", "3d", "pixel"],
+    "featured": true
+  },
+  {
     "title": "Solar System",
     "path": "/solar-system/index.html",
     "source": "/solar-system/index.js",
@@ -42,18 +68,11 @@
     "featured": true
   },
   {
-    "title": "Neon Rush",
-    "path": "/worm-hole/index.html",
-    "source": "/worm-hole/index.js",
-    "thumbnail": "data/thumbnails/neon-rush-thumbnail.webp",
-    "tags": ["game", "neon"],
-    "featured": true
-  },
-  {
     "title": "Gravity Dash",
     "path": "/gravity_dash.html",
     "embed": "/embeds/gravity_dash.html",
     "source": "/gravity_dash.js",
+    "controls": [["A / D or arrows", "steer"], ["Space", "hop"], ["P / Esc", "pause"], ["Touch", "drag to steer; tap HOP"]],
     "aspect": "fill",
     "thumbnail": "data/thumbnails/gravity-dash-thumbnail.png",
     "tags": ["game", "physics"],
