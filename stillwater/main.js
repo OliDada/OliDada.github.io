@@ -691,6 +691,13 @@ function freshRun() {
     over = false;
 }
 function begin() {
+    // while Pip is rewriting the title screen, the game can't be started
+    if (window.__pipLocked) return;
+    if (window.__pipFinale && !window.__pipFinaleStarted) {
+        window.__pipFinaleStarted = true;
+        setTimeout(() => { paused = true; import("./finale.js").then((m) => m.startFinale()); }, 6500);
+    }
+
     if (over) freshRun();
     lookYaw = lookPitch = 0;
     updateHud();

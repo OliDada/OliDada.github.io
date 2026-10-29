@@ -13,7 +13,7 @@ function updateUISurfaceForBackground(bgValue) {
         foreground = '#000000';
         root.style.setProperty('--surface-foreground', foreground);
         // apply to all-jokes elements if present
-        document.querySelectorAll('.all-jokes, .all-jokes .joke-item, #jokeDisplay').forEach(el => el.style.color = foreground);
+        // (the jokes panel has its own cream background, so its text colour is left alone)
         return;
     }
 
@@ -45,7 +45,7 @@ function updateUISurfaceForBackground(bgValue) {
                 // dark background -> use light (white) foreground for contrast
                 foreground = '#ffffff';
                 root.style.setProperty('--surface-foreground', foreground);
-                document.querySelectorAll('.all-jokes, .all-jokes .joke-item, #jokeDisplay').forEach(el => el.style.color = foreground);
+                // (the jokes panel has its own cream background, so its text colour stays as it is)
             } else {
                 // light bg -> darker surface: darken slightly
                 const sr = Math.max(0, Math.round(r * 0.12));
@@ -57,7 +57,7 @@ function updateUISurfaceForBackground(bgValue) {
                 // light background -> use dark (black) foreground for contrast
                 foreground = '#000000';
                 root.style.setProperty('--surface-foreground', foreground);
-                document.querySelectorAll('.all-jokes, .all-jokes .joke-item, #jokeDisplay').forEach(el => el.style.color = foreground);
+                // (the jokes panel has its own cream background, so its text colour stays as it is)
             }
             return;
         }
@@ -66,14 +66,14 @@ function updateUISurfaceForBackground(bgValue) {
         root.style.setProperty('--surface-bg-trans', 'rgba(255,255,255,0.92)');
         foreground = '#000000';
         root.style.setProperty('--surface-foreground', foreground);
-        document.querySelectorAll('.all-jokes, .all-jokes .joke-item, #jokeDisplay').forEach(el => el.style.color = foreground);
+        // (the jokes panel has its own cream background, so its text colour is left alone)
     } catch (e) {
         // If anything fails, keep defaults
         root.style.setProperty('--surface-bg', '#ffffff');
         root.style.setProperty('--surface-bg-trans', 'rgba(255,255,255,0.92)');
         foreground = '#000000';
         root.style.setProperty('--surface-foreground', foreground);
-        document.querySelectorAll('.all-jokes, .all-jokes .joke-item, #jokeDisplay').forEach(el => el.style.color = foreground);
+        // (the jokes panel has its own cream background, so its text colour is left alone)
     }
 }
 

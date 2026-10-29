@@ -64,8 +64,12 @@ export function createUI() {
             const blink = Math.floor(t * 2.5) % 2 === 0;
             if (state.screen === "title") {
                 band(Math.round(H * 0.3), 34);
-                text("STILLWATER", W / 2, Math.round(H * 0.3) + 6, { scale: 3, align: "center" });
-                if (blink) text(state.touch ? "TAP TO BEGIN" : "PRESS SPACE", W / 2, Math.round(H * 0.3) + 25, { align: "center", color: SAGE });
+                // Pip (the site's chatbot) can take over this screen during his story: window.__pipTitle = { title, sub, caret }
+                const pip = window.__pipTitle;
+                const title = pip && pip.title != null ? pip.title : "STILLWATER";
+                const sub = pip && pip.sub != null ? pip.sub : (state.touch ? "TAP TO BEGIN" : "PRESS SPACE");
+                text(title + (pip && pip.caret === "title" && blink ? "-" : ""), W / 2, Math.round(H * 0.3) + 6, { scale: title.length > 12 ? 2 : 3, align: "center" });
+                if (blink || (pip && pip.caret === "sub")) text(sub + (pip && pip.caret === "sub" && blink ? "-" : ""), W / 2, Math.round(H * 0.3) + 25, { align: "center", color: pip && pip.sub != null ? PAPER : SAGE });
                 if (state.touch) {
                     band(H - 21, 19);
                     text("SWIPE ^ JUMP  V DUCK", W / 2, H - 17, { align: "center", color: SAGE });

@@ -112,6 +112,7 @@
                     <button type="button" class="sw" data-bg="original" aria-label="Original orange" style="background:url('/images/1.jpg') center/cover"></button>
                     ${SWATCHES.map(h => `<button type="button" class="sw" data-bg="${h}" aria-label="${h}" style="background:${h}"></button>`).join('')}
                     <label class="row" style="gap:8px;font-weight:700;font-size:14px"><input type="color" class="sw-input" data-bgpick value="#ffa500"> Any colour</label>
+                    <label class="row hex-row" style="gap:8px;font-weight:700;font-size:14px">Code <input type="text" class="hex-input" data-bghex maxlength="7" placeholder="#000000" spellcheck="false" autocomplete="off" aria-label="Colour code, like #000000"></label>
                 </div>
                 <div class="row"><button type="button" class="btn btn-pink" data-surprise>Surprise me!</button></div>
             </div>
@@ -185,6 +186,15 @@
         });
         const pick = $('[data-bgpick]', p);
         pick.addEventListener('input', () => setBg(pick.value));
+        // typing a colour code: #000000, 000000 or #000 all work
+        const hex = $('[data-bghex]', p);
+        const applyHex = () => {
+            let v = hex.value.trim().replace(/^#?/, '#').toLowerCase();
+            if (/^#[0-9a-f]{3}$/.test(v)) v = '#' + v.slice(1).split('').map(c => c + c).join('');
+            if (/^#[0-9a-f]{6}$/.test(v)) { hex.classList.remove('bad'); setBg(v); } else if (hex.value.length >= 4) hex.classList.add('bad');
+        };
+        hex.addEventListener('input', applyHex);
+        hex.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); applyHex(); } });
         syncPanel();
     }
 
@@ -196,6 +206,8 @@
         p.querySelectorAll('[data-bg]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.bg === 'original' ? isOriginal : b.dataset.bg === bg)));
         const pick = $('[data-bgpick]', p);
         if (pick && hexToRgb(bg)) pick.value = bg.length === 4 ? '#' + bg.slice(1).split('').map(c => c + c).join('') : bg;
+        const hx = $('[data-bghex]', p);
+        if (hx && document.activeElement !== hx) hx.value = hexToRgb(bg) ? (bg.length === 4 ? '#' + bg.slice(1).split('').map(c => c + c).join('') : bg) : '';
         const font = store.get('site-font', 'bubbly');
         p.querySelectorAll('[data-shape]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.shape === floaties.shape)));
         p.querySelectorAll('[data-amount]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.amount === floaties.amount)));

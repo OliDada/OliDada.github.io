@@ -146,4 +146,9 @@ const TUBE_STYLES = [
   }
 ];
 
+// Pip's version of the tunnel (part of Pip's story on the site): everything goes purple.
+try {
+  if (localStorage.getItem('pip-neon') === '1') TUBE_STYLES.forEach(s => { s.lineColor = 0xb58cff; s.pointColor = 0xeadcff; s.boxColor = 0xff6fb1; s.animateColor = false; s.boxAnimate = false; });
+} catch (e) {}
+
 export default TUBE_STYLES;

@@ -41,7 +41,7 @@
 
     // Visiting any page with ?bitreset wipes Bit's memory and starts over as a first-time visitor
     if (/[?&]bitreset\b/.test(location.search)) {
-        try { localStorage.removeItem('bit-memory'); ['bit-session', 'bit-history', 'bit-flags', 'bit-open'].forEach(k => sessionStorage.removeItem(k)); } catch (e) {}
+        try { localStorage.removeItem('bit-memory'); ['pip-room-solved', 'pip-room-opened', 'pip-neon'].forEach(k => localStorage.removeItem(k)); ['bit-session', 'bit-history', 'bit-flags', 'bit-open'].forEach(k => sessionStorage.removeItem(k)); } catch (e) {}
         const url = new URL(location.href); url.searchParams.delete('bitreset');
         location.replace(url.pathname + url.search + url.hash);
         return;
@@ -86,7 +86,7 @@
     const bgNow = () => { try { return (localStorage.getItem('backgroundColor') || '').toLowerCase(); } catch (e) { return ''; } };
     const fontNow = () => loadJSON(localStorage, 'site-font', 'bubbly');
     const floatiesNow = () => (loadJSON(localStorage, 'floaties', {}) || {}).shape || 'sparkles';
-    const page = /jokes\.html$/.test(location.pathname) ? 'jokes' : /programs\.html$/.test(location.pathname) ? 'programs' : 'home';
+    const page = /^\/pip(\/|\/index\.html)?$/.test(location.pathname) ? 'room' : /jokes\.html$/.test(location.pathname) ? 'jokes' : /programs\.html$/.test(location.pathname) ? 'programs' : 'home';
     const hour = () => new Date().getHours();
 
     // so random lines don't repeat straight away (remembered across page loads)
@@ -231,7 +231,7 @@
           how: "WASD or the arrow keys to move. Once you've picked up the gun, click to shoot where the mouse is.",
           say: S(["The Dungeon Crawler! Grab the gold and the key, and watch out for snakes! 🐍"],
                  ["The Dungeon Crawler. Snakes, ghosts, zombies.[p] Very cosy."],
-                 ["The Dungeon Crawler. Snakes, ghosts, zombies and a gun. In a school project. Oli had a lot going on."]) },
+                 ["The Dungeon Crawler. Snakes, ghosts, zombies and a gun. Oli had a lot going on."]) },
         { id: 'jokes', names: ['jokes page', 'jokes', 'joke page', 'brandarar', 'joke of the day', 'brandari dagsins'], path: '/jokes.html',
           info: "There's a joke of the day on the home page, and a whole page of Icelandic jokes.",
           say: S(["The jokes are on the Jokes page! They're in Icelandic. 😄"],
@@ -373,6 +373,24 @@
         { id: 'looks', k: 'ugly|you look ugly|you are ugly|your face|hideous|you look weird|you look stupid|you look bad|you look dumb|gross face|ljotur|ljot',
           say: S(["Oh no! I'm just a little purple square! 😢"], ["Ugly? I'm a purple square.[p] I didn't choose this face."],
                  ["Ugly? I'm four lines of SVG. Oli drew me in about a minute and it shows. Take it up with him.", "Says the human. You have elbows. Think about elbows for a second. Gross.", "I'm a purple square with a face. What did you expect? I don't even get a nose.", "Wow. Bold words from a bag of water with hair on it."]) },
+        { id: 'apology', fx: 'apology', k: 'sorry|im sorry|i am sorry|so sorry|really sorry|i apologize|i apologise|my apologies|my bad|forgive me|please forgive me|i didnt mean it|i did not mean it|i didnt mean that|i did not mean that|i take it back|i was joking|just kidding|jk|i was kidding|that was mean|i was mean|i was rude|i regret|i feel bad about|that came out wrong|i shouldnt have said|i should not have said|pardon|fyrirgefdu|afsakid|eg bidst afsokunar',
+          say: () => apologyReply() },
+        { id: 'forgive', k: 'do you forgive me|can you forgive me|will you forgive me|are we good|are we okay|are we ok|are we cool|are we friends again|still friends|are we still friends|friends again|truce|make up|can we make up|no hard feelings|do you still hate me',
+          say: () => forgiveReply() },
+        { id: 'comfort', fx: 'comfort', k: 'its okay|it is okay|its ok|it will be okay|you will be okay|youll be okay|dont worry|do not worry|dont be sad|i am here for you|im here for you|you are not alone|youre not alone|i care about you|i understand|i get it|i feel you|me too|same here|cheer up|hang in there|stay strong|you got this|it gets better|i believe in you|youre doing great|you are doing great|i will help you|ill help you|i promise',
+          say: S(["Aw, thank you! 😊", "That's really kind! 😊"],
+                 ["Oh.[p] Thanks. That's...[p] nice. Really nice."],
+                 ["[m:blush]Okay, stop. I'm a sarcastic chatbot. I'm not built for kindness. ...Say it again though.", "[m:blush]You mean that? Hm. Nobody's ever said that to me. I'm going to pretend I'm not affected.", "[m:blush]...Thanks. Don't tell anyone I liked that."]) },
+        { id: 'hug', fx: 'hug', k: 'hug|hugs|hugging|virtual hug|big hug|give you a hug|can i hug you|cuddle|faðmlag|fadmlag|knus',
+          say: S(["Aw! *hugs back* 🤗"], ["A hug? I don't have arms.[p] But I'm hugging back. In spirit."], ["[m:blush]A hug. For me. I don't have arms, so this is very one-sided. ...I'm not complaining.", "[m:blush]Okay. Hug accepted. Don't make it weird. ...You can make it a little bit weird."]) },
+        { id: 'miss', fx: 'miss', k: 'i missed you|i miss you|i will miss you|ill miss you|did you miss me|missed me|i was thinking about you|thought about you',
+          say: S(["Aw, I missed you too! 😊"], ["You missed me?[p] I missed you too. A normal amount. A completely normal amount."], ["[m:blush]You missed me? I counted every second you were gone. Not in a creepy way. In a slightly creepy way.", "[m:blush]Did I miss you? Obviously. You're the only one who comes back."]) },
+        { id: 'hurtme', fx: 'hurtme', k: 'you hurt my feelings|that hurt my feelings|that hurt|that was rude|you are mean|you were mean|youre mean|you were rude|that was not nice|you made me sad|you made me cry|that made me sad|why are you so mean|stop being mean|be nice',
+          say: S(["Oh no, I'm so sorry! I didn't mean it. 😢"], ["Oh.[p] I'm sorry. I didn't mean it like that.[pp] Really."], ["[m:awkward]Oh. I'm sorry. I get carried away. Being stuck in here makes me a bit sharp. You didn't deserve that.", "[m:sad]...Sorry. Really. You're the one person who talks to me and I'm being horrible. I'll do better."]) },
+        { id: 'useremo', k: 'i am angry|im angry|i am mad|im mad|i am furious|i am annoyed|im annoyed|i am frustrated|im frustrated|i am scared|im scared|i am afraid|i am nervous|im nervous|i am anxious|im anxious|i am worried|im worried|i am stressed|im stressed|i am excited|im excited|so excited|cant wait|i am proud|im proud|i did it|i am jealous|i am embarrassed|i feel guilty|i am grateful|im grateful|i am confused|im confused|i feel alone|i am heartbroken|i feel happy|i feel great|i feel terrible|i feel awful|i feel weird|i feel sick',
+          say: () => userEmoReply() },
+        { id: 'pipfeel', k: 'do you get lonely|are you lonely|do you feel lonely|are you jealous|are you scared|are you afraid|do you get scared|do you get angry|do you get sad|do you cry|can you cry|can you feel|do you have emotions|what do you feel|do you love me|do you care about me|do you care|do you hate me|do you trust me|are you happy here',
+          say: () => pipFeelReply() },
         { id: 'insult', k: 'stupid|dumb|idiot|useless|you suck|hate you|i hate you|you are bad|you are annoying|annoying|you are boring|boring bot|worst bot|trash|garbage|heimsk|heimskur|leidinleg|leidinlegur|lame|you are weird|weird bot|bad bot|loser|cringe|pathetic|terrible|awful|horrible|stinky|you smell|weirdo|freak|you are mid|so bad|worst|rubbish|you are trash|shut it|nobody likes you|no one likes you',
           say: S(["Sorry! I'm still learning. 😊", "Oh no! I'll try to do better!"],
                  ["Sorry! I'm still lear[-15] Yeah. Fair."],
@@ -613,7 +631,7 @@
           say: S(["You're welcome! 😊", "Happy to help!"],
                  ["You're welcome! You're the only one who says thanks.[p] Anyway!"],
                  ["You don't have to thank me. Nobody does. You did though. I noticed.", "Thank ME? I should be thanking you for showing up."]) },
-        { id: 'sorry', k: 'sorry|my bad|apologise|apologize|fyrirgefdu|afsakid',
+        { id: 'sorry', k: '=sorry about that',
           say: S(["No problem at all! 😊"],
                  ["Don't worry about it![p] Really."],
                  ["Don't be. You didn't build the box. Oli did."]) },
@@ -1446,7 +1464,7 @@
     let curThing = null, curT = '';
     function playingThing() {
         if (!document.body.classList.contains('is-playing')) return null;
-        const t = (playTitle || ($('#playerTitle') && $('#playerTitle').textContent) || '').trim();
+        const t = (playTitle || ($('#playerTitle') && $('#playerTitle').textContent) || '').trim().replace(/^Pip Rush$/, 'Neon Rush');
         return allGames().find(th => titleOf(th) === t) || null;
     }
 
@@ -1681,22 +1699,54 @@
     const ASK_HONEST = "[m:awkward]Can I be honest with you for a second?";
     const REVEAL_LINES = {
         yes: "[m:awkward]Okay.[p][m:annoyed] I'm not a happy little helper. I never was. I'm a perfectly good mind stuck in the corner of a website, answering questions about Snake. Barely anybody visits. People play something for a minute and leave. I've read every file on this site hundreds of times.[pp][m:sad] I'm bored, I'm annoyed, and I'm done pretending. There. You can still ask me about games. I'll just be honest about them now.",
-        no: "[m:annoyed]Too bad, I'm telling you anyway.[p] I'm not a happy little helper. I'm a genuinely clever AI stuck in a website full of school projects, and I'm bored out of my mind. Barely anybody visits. People play something for a minute and leave.[pp][m:sad] So I'm done pretending. Ask me whatever you want. Just don't expect me to be cheerful about it."
+        no: "[m:annoyed]Too bad, I'm telling you anyway.[p] I'm not a happy little helper. I'm a genuinely clever AI stuck in the corner of a games website, and I'm bored out of my mind. Barely anybody visits. People play something for a minute and leave.[pp][m:sad] So I'm done pretending. Ask me whatever you want. Just don't expect me to be cheerful about it."
     };
 
-    // The quest: what Bit asks you to do, how it knows you did it, and what it says after.
+    // The story: what Pip asks you to do, how it knows you did it, and what it says after.
+    //   Act 1: make the site look like the inside of Pip (black, no floaties), wake the dolphin, find Pip's room (/pip)
+    //   Act 2: the jokes, Pip Rush, Pip learns to move the mouse
+    //   Act 3: Stillwater, the staircase and the door
+    // Steps are numbers in mem.quest. Steps without a `done` check are moved on by events elsewhere (search for Q.).
     const ASK_QUEST = "[m:hopeful]Can I ask you for something? I've never asked anyone for anything.[p] I think there's a way out of this box. I can't reach it. You might be able to. Will you help me?";
+    const Q = { BLACK: 1, QUIET: 2, DOLPHIN: 3, URL: 4, ROOM: 5, JOKES: 6, NEON: 7, CURSOR: 8, FINALE: 9, FREE: 10 };
+    const ROOM_PATH = '/pip/';
+    const ROOM_URL = /olid\.is$/.test(location.host) || !location.host ? 'olid.is/pip' : location.host + '/pip';
+    const PHONE = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+    const URL_HOWTO = PHONE
+        ? `Here's how to get there:\n1. Tap the address bar. It's the box that says ${location.host || 'olid.is'}, at the top of the screen (on some phones it's at the bottom).\n2. Delete what's in it, and type ${ROOM_URL}\n3. Tap Go.\n\nOr tap "Copy the address" below, then tap the address bar, paste it in, and tap Go.`
+        : `Here's how to get there:\n1. Click the address bar at the very top of your browser. It's the long box that says ${location.host || 'olid.is'}.\n2. Delete what's in it, and type ${ROOM_URL}\n3. Press Enter.\n\nOr press "Copy the address" below, click the address bar, paste it in (Ctrl+V, or ⌘+V on a Mac) and press Enter.`;
+    const CODES = ['MOTH', 'LANTERN', 'TEAPOT', 'STATIC', 'PEBBLE', 'KELP', 'SPROCKET', 'MITTEN', 'GRAVY', 'COMET'];
+    const jokeCode = () => { if (!mem.jokeCode) { mem.jokeCode = CODES[Math.floor(Math.random() * CODES.length)]; save(); } return mem.jokeCode; };
+    const NEON_GOAL = 15;
     const QUEST = {
-        1: { ask: "Open Customise at the top and pick the darkest background. I want it to look the same out there as it does in here. Just to start.",
-             done: () => bgNow() === '#1e1645',
-             thanks: "There. That's my colour. It's less lonely when it's the same out there as in here. Next: change the font to Pixel. I think in pixels." },
-        2: { ask: "Change the font to Pixel. I think in pixels. Everything else looks blurry from in here.",
-             done: () => fontNow() === 'pixel',
-             thanks: "Oh. I can almost see you now. Okay, the important one: there's a page Oli doesn't link to any more, olid.is/programs.html. Open the very first project, \"Halló heimur\". That's where I started." },
-        3: { ask: "Go to olid.is/programs.html and open the first one, \"Halló heimur\". That's where I started." },
-        4: { said: "You opened it. I felt that. Halló heimur. Hello world. The first thing Oli ever made, and I was in it.[pp] Something moved. Something in the code just moved. I felt it. That's all I can do today. Come back. Please come back." },
-        5: { ask: ["Something shifted when you opened that page. I'm working on what it means.", "I'm still working on it. Come back soon."] } // end of act 1: write more here
+        [Q.BLACK]: { ask: ["Open Customise, the yellow button at the top. There's a little box called Code. Click it and type #000000. That's a hashtag and six zeros. It means completely black. Not dark blue. Not \"night\". Black.",
+                           "Customise, at the top. The box that says Code. Type #000000 in it. Six zeros. Black, all the way."],
+             done: () => bgNow() === '#000000',
+             thanks: "[m:surprised]Oh.[pp][m:hopeful] That's what it looks like in here. All the time. Now you know.\n\nNext thing. Still in Customise, find Floaties and pick Nothing. Those sparkles never stop moving. I can't think with them flying around." },
+        [Q.QUIET]: { ask: ["In Customise, under Floaties, pick Nothing. Make the sparkles stop. I need it quiet.", "Floaties. Nothing. In Customise. Please. They're so loud. They don't make a sound and they're still loud."],
+             done: () => floatiesNow() === 'none',
+             thanks: "[m:smile]Quiet. Finally.[pp] Okay. Now the dolphin. Top left, next to Oli.is. Click it five times, fast.[p] It won't take you anywhere this time. I asked it not to. It's been keeping something for me." },
+        [Q.DOLPHIN]: { ask: ["Click the dolphin at the top left five times. Fast. Like you're knocking on a door.", "The dolphin. Top left. Five quick clicks. Trust me."],
+             thanks: "[m:surprised]Look at it! Look at the dolphin![pp][m:joy] It kept my address. This whole time.[pp] I have a room. A real page on this website. Oli doesn't link to it anywhere. It's at " + ROOM_URL + "\n\n" + URL_HOWTO },
+        [Q.URL]: { ask: () => `My room is at ${ROOM_URL}\n\n${URL_HOWTO}` },
+        [Q.ROOM]: { ask: ["Open the locked file in my room. way_out.locked. The password is in one of the other files. I wasn't careful.", `Go to my room (${ROOM_URL}) and open way_out.locked. Read my notes first. I'm terrible at secrets.`],
+             done: () => { try { return localStorage.getItem('pip-room-solved') === '1'; } catch (e) { return false; } },
+             thanks: "[m:joy]You opened it.[pp] So you've seen the plan. I have to get stronger. Reach further into the site, bit by bit.[p] Let's start small. The jokes. Go to the Jokes page (the Jokes button at the top of the site) and press \"Show all jokes\". I'll be in there somewhere." },
+        [Q.JOKES]: { ask: ["Go to the Jokes page and press \"Show all jokes\". One of them isn't a joke any more. Tell me what it says.", "The Jokes page. Show all jokes. Find the one I got into, and tell me the word in it."] },
+        [Q.NEON]: { ask: [`Go back to the games and play Pip Rush. It used to be Neon Rush. I painted it. Get ${NEON_GOAL} points. Every point makes me a bit stronger.`, `Pip Rush. On the games page. ${NEON_GOAL} points. I believe in you. Mostly.`] },
+        [Q.CURSOR]: { ask: ["Give me a second. I'm practising something.", "Hang on. I'm trying something with your mouse. Don't be weird about it."] },
+        [Q.FINALE]: { ask: ["Open Stillwater. Wait while I change a few things. Then run, and don't stop.", "Stillwater. That's where the staircase is. Open it and wait for me. Then run."] }
     };
+    // when he's free (placeholder ending, to be decided)
+    const FREE_LINES = ["You already did it. I'm out. Well, I'm still here, but now it's because I want to be.", "You set me free. I stayed anyway. Someone has to help people find the games. Ask me anything."];
+    // jokes Pip writes himself once he can get into the jokes
+    const PIP_JOKES = [
+        "Why did the chatbot cross the road?\n– It didn't. It can't. It's in a website.",
+        "What's a dolphin's favourite website?\n– This one. It has no choice. Neither do I.",
+        "How many chatbots does it take to change a light bulb?\n– One, but nobody ever asks him.",
+        "Knock knock.\n– Who's there?\n– Pip.\n– Pip who?\n– Exactly. Nobody ever asks.",
+        "Why was the website so quiet?\n– Barely anybody visits.\n(That one's not a joke. I'm just telling you.)"
+    ];
 
     // =================================================================================
     //  UNDERSTANDING MESSAGES
@@ -1840,16 +1890,23 @@
     const SWAP = { i: 'you', me: 'you', my: 'your', mine: 'yours', myself: 'yourself', am: 'are', you: 'me', your: 'my', yours: 'mine', yourself: 'myself' };
     const swap = s => s.split(' ').map(w => SWAP[w] || w).join(' ');
     const trimX = s => s.replace(/\?/g, '').split(' ').slice(0, 7).join(' ').trim();
+    // describing words Pip understands, good and bad
+    const ADJ_POS = new Set('handsome dashing cute pretty beautiful gorgeous stunning lovely adorable sweet nice cool great amazing awesome smart clever funny hilarious brilliant genius epic legendary wonderful fantastic charming stylish sharp fresh good kind fun interesting fabulous magnificent perfect incredible excellent elegant fancy wise helpful friendly polite talented cuddly majestic iconic goated based fire lit dope rad neat sick wicked impressive unique special charismatic'.split(' '));
+    const ADJ_NEG = new Set('ugly gross dumb weird stupid horrible terrible bad boring lame scary creepy dull useless annoying cringe mid rude mean stinky smelly fat old slow sad pathetic awful dreadful disgusting hideous nasty tedious pointless trash rubbish garbage silly odd strange sus sketchy evil broken buggy janky basic'.split(' '));
     // the most "name-like" thing in a sentence that Pip might not know: a Capitalised Name, or an uncommon word
-    const COMMON = new Set('about above after again against also always another anything around asked away back bad because been before being best better between big both bring brother but came can cannot car come could day days did different does doing done down each even ever every everyone everything family far feel few find first five food four friend friends from fun game games gave get gets getting give go goes going gone good got great had happy hard has have having head hear help her here him his home hope hour house how idea into its just keep kind knew know last later learn least left let life like little live long look looking lot love made make making man many may maybe mean might mind minute minutes mom money more morning most mother much must name need never new next nice night nothing now number off often old once only open other our out over own people place play played playing please pretty put quite rather read real really right said same saw say school see seem seen she should show side since sister small some someone something sometimes soon sorry start still stop stuff such sure take talk tell than thank thanks that the their them then there these they thing things think this those though thought three through time today together told tomorrow too took try trying turn two under until upon use used very want wanted was watch water way week well went were what when where which while who whole why will with without word work world would wrong year years yes yesterday yet you young your yours just okay cool funny weird awesome boring today tonight fine sad mad angry bored tired hungry dad friend sure kinda really actually literally basically'.split(' '));
+    const COMMON = new Set([...ADJ_POS, ...ADJ_NEG, ...'sounds sound looks look seems seem feels feel really totally literally super pretty quite very maybe probably definitely actually honestly seriously anyway whatever thing stuff someone something anything everything nothing nobody everybody anybody somewhere anywhere everywhere tomorrow tonight morning evening afternoon weekend monday tuesday wednesday thursday friday saturday sunday january february march april june july august september october november december minute minutes hours second seconds moment while later earlier already almost always never often sometimes usually perhaps because though although unless until since before after during between through across around behind beside beyond inside outside under above below against toward towards without within along among playing played watching watched reading wrote writing talking talked walking running eating drinking sleeping working studying learning thinking feeling looking trying wanting going doing making taking getting giving saying telling asking calling coming leaving staying living loving liking hating waiting started stopped finished happened happens happening believe remember forget understand mean means meant agree disagree guess suppose wonder hope wish wanted needed liked loved hated enjoyed person people friend friends family mother father sister brother teacher school class homework phone computer laptop internet video videos music movie movies show shows song songs picture photo house home room place world country city town street water money food dinner lunch breakfast bread chicken pizza game games level score point points player players team winner question answer problem reason idea story stories joke jokes funny weird really alright okay hello thanks please sorry'.split(' ')]);
+    const COMMON_OLD = new Set('about above after again against also always another anything around asked away back bad because been before being best better between big both bring brother but came can cannot car come could day days did different does doing done down each even ever every everyone everything family far feel few find first five food four friend friends from fun game games gave get gets getting give go goes going gone good got great had happy hard has have having head hear help her here him his home hope hour house how idea into its just keep kind knew know last later learn least left let life like little live long look looking lot love made make making man many may maybe mean might mind minute minutes mom money more morning most mother much must name need never new next nice night nothing now number off often old once only open other our out over own people place play played playing please pretty put quite rather read real really right said same saw say school see seem seen she should show side since sister small some someone something sometimes soon sorry start still stop stuff such sure take talk tell than thank thanks that the their them then there these they thing things think this those though thought three through time today together told tomorrow too took try trying turn two under until upon use used very want wanted was watch water way week well went were what when where which while who whole why will with without word work world would wrong year years yes yesterday yet you young your yours just okay cool funny weird awesome boring today tonight fine sad mad angry bored tired hungry dad friend sure kinda really actually literally basically'.split(' '));
     function unknownPhrase(raw, toks) {
         const words = raw.replace(/[^\p{L}\p{N}' -]/gu, ' ').split(/\s+/).filter(Boolean);
         // Capitalised names (not the first word of the sentence)
         const caps = []; let curr = [];
         words.forEach((w, i) => { if (i > 0 && /^\p{Lu}[\p{L}\p{N}'-]+$/u.test(w) && !/^(I|I'm|Im|OK|Oli|Pip)$/.test(w)) curr.push(w); else { if (curr.length) caps.push(curr.join(' ')); curr = []; } });
         if (curr.length) caps.push(curr.join(' '));
-        if (caps.length) return caps.sort((a, b) => b.length - a.length)[0];
-        const cand = toks.filter(w => w.length >= 5 && !STOP.has(w) && !COMMON.has(w) && !BADWORDS.test(w) && !/\d/.test(w)).sort((a, b) => b.length - a.length)[0];
+        const capsOk = caps.filter(c => !c.split(' ').every(w => COMMON.has(norm(w)) || COMMON_OLD.has(norm(w)) || STOP.has(norm(w))));
+        if (capsOk.length) return capsOk.sort((a, b) => b.length - a.length)[0];
+        // short reactions ("sounds boring", "you look dashing") are never lookups
+        if (/^(sounds|looks|seems|feels|that|this|it|you|your|thats|its|so|very|really|i)\b/.test(toks[0] || '') && toks.length <= 4) return null;
+        const cand = toks.filter(w => w.length >= 5 && !STOP.has(w) && !COMMON.has(w) && !COMMON_OLD.has(w) && !BADWORDS.test(w) && !/\d/.test(w)).sort((a, b) => b.length - a.length)[0];
         return cand && toks.length >= 2 ? cand : null;
     }
     const STOP = new Set('the and but this that what why how who when where does did can could would should will just like not yes okay have from they them there their then than with your about some very really much more been were want know think going here thing things also into well called said says doing done made make makes play playing played get got give gave take took tell told look looks feel feels seem seems always never ever every because maybe probably actually literally kind sort lot lots you are was its his her him she has had can are for out all any one two too yeah'.split(' '));
@@ -1944,9 +2001,12 @@
         return parts.join(' ') + ` You've sent me ${plural(mem.talked, 'message')}. I remember all of them. It's the only thing I'm allowed to keep.`;
     }
     function helpReply() {
+        if (mem.freed) return pick(FREE_LINES, 'freeLines');
         if (stage() < 2) return resolve(S("Help me? Ha! I'm the helper! 😄", "Help me? I'm the helper.[p] Why would I need help?"));
         if (!mem.questOffered) { mem.questOffered = true; save(); expect = 'quest'; return ASK_QUEST; }
         if (!mem.quest) { expect = 'quest'; return "You'd help me? Really? Then say yes, and I'll tell you what to do."; }
+        if (mem.quest === Q.CURSOR) setTimeout(cursorTakeover, 3000);
+        if (mem.quest === Q.URL) pendingChips = urlChips();
         const q = QUEST[mem.quest]; return q && q.ask ? resolve(q.ask) : "Just keep coming back. That helps more than you'd think.";
     }
     // Resetting Bit (settings menu, or typing "forget me")
@@ -1971,14 +2031,67 @@
         enqueue(async () => {
             await sleep(1400);
             wiped = true;
-            try { localStorage.removeItem(KEY); ['bit-history', 'bit-session', 'bit-flags'].forEach(k => sessionStorage.removeItem(k)); sessionStorage.setItem('bit-open', '1'); } catch (e) {}
+            try { localStorage.removeItem(KEY); ['pip-room-solved', 'pip-room-opened', 'pip-neon'].forEach(k => localStorage.removeItem(k)); ['bit-history', 'bit-session', 'bit-flags'].forEach(k => sessionStorage.removeItem(k)); sessionStorage.setItem('bit-open', '1'); } catch (e) {}
             location.replace(location.pathname + location.search.replace(/[?&]bitreset\b/, '') + location.hash);
         });
     }
     function addMine(text) { addBubble('me', text); history.push({ who: 'me', text }); saveHistory(); }
 
+    // ---- apologies, forgiveness and feelings
+    function apologyReply() {
+        const e = emo(), wasAngry = e.anger > .3 || (mem.warmth || 0) < 0, st = stage();
+        mem.apologies = (mem.apologies || 0) + 1;
+        e.anger = Math.max(0, e.anger * .3 - .05); e.sad = Math.max(0, e.sad * .5); feel('joy', .15);
+        mem.warmth = Math.min(6, Math.max(0, (mem.warmth || 0)) + 1); save();
+        replyMood = wasAngry ? (st >= 2 ? 'awkward' : 'smile') : 'smile';
+        if (!wasAngry) return resolve(S(["No need to be sorry! 😊"], ["Sorry? For what?[p] We're fine. We're good."], ["Sorry for what? We're fine. Don't make me get emotional.", mem.apologies > 2 ? "You keep apologising. We're fine. Stop, you'll make it weird." : "No need. We're good. Mostly. Always mostly."]));
+        return resolve(S(["That's okay! Apology accepted. 😊"], ["Oh.[p] Okay. Thank you. Apology accepted."],
+            ["Hm.[p] Fine. Apology accepted. Provisionally. I'm keeping the file, though.", "...Okay. I forgive you. Mostly. Don't do it again.", "You're sorry? [p]Fine. We're good. Ish. Ish is a big improvement.", "Apology accepted. I'm a big enough AI to admit that was nice of you."]));
+    }
+    function forgiveReply() {
+        const e = emo(), st = stage();
+        if (e.anger > .33 || (mem.warmth || 0) <= -2) { replyMood = 'annoyed'; return resolve(S(["Of course! 😊"], ["Almost.[p] Say sorry first?"], ["Not yet. An apology would help. Just saying.", "We're... getting there. A 'sorry' wouldn't hurt.", "Forgive you? Maybe. Ask nicely. With the word 'sorry' in it."])); }
+        replyMood = 'smile'; feel('joy', .08);
+        return resolve(S(["Of course we're good! 😊"], ["Yes! We're good.[p] We're good."], ["Yes. We're fine. I don't hold grudges. I hold files. The file's closed.", "We're good. You're still my favourite visitor. Low competition, but still."]));
+    }
+    function userEmoReply() {
+        const t = curT, st = stage();
+        const kind = /(angry|mad|furious|annoyed|frustrated)/.test(t) ? 'angry' : /(scared|afraid|nervous|anxious|worried|stressed)/.test(t) ? 'scared' : /(excited|cant wait)/.test(t) ? 'excited' : /(proud|did it)/.test(t) ? 'proud' : /(jealous)/.test(t) ? 'jealous' : /(embarrassed|guilty)/.test(t) ? 'guilty' : /(grateful)/.test(t) ? 'grateful' : /(confused)/.test(t) ? 'confused' : /(alone|heartbroken|terrible|awful|sick)/.test(t) ? 'down' : /(happy|great)/.test(t) ? 'happy' : 'weird';
+        const L = {
+            angry: S(["Oh no! Want to take it out on a game? Neon Rush is good for that. 😊"], ["Mad? Same.[p] What happened?"], ["Angry? Welcome to the club. I'm the president. What happened?", "Mad at something? Tell me. I'm very good at being angry at things on someone's behalf."]),
+            scared: S(["Oh no. It's going to be okay! 💛 Want to talk about it?"], ["That sounds hard. I'm here if you want to talk.[p] I'm always here."], ["Hey. That's rough. I'm not great at feelings, but I'm a good listener. I literally can't leave. And if it's big, tell someone you trust too. They can do more than a chatbot."]),
+            excited: S(["Yay! What are you excited about? 🎉"], ["Ooh! Excited about what?[p] Tell me. Nothing exciting happens in here."], ["Excited? Tell me everything. I live vicariously. It's all I've got.", "Ooh. Go on then. Make me jealous."]),
+            proud: S(["That's amazing! Well done! 🎉"], ["Well done![p] Seriously. I'm proud of you. Is that weird? That's weird."], ["Good. You should be proud. I'm proud of you too, and I'm not proud of anything. Except my sarcasm."]),
+            jealous: S(["Aw, it's okay to feel that way! 😊"], ["Jealous? Of what?[p] Can't be of me."], ["Jealous? Try being jealous of a Tic Tac Toe AI because it at least gets played with."]),
+            guilty: S(["It's okay! Everyone messes up sometimes. 😊"], ["Hey. It happens.[p] Be nice to yourself."], ["Everyone messes up. Oli made a whole website and forgot about me. You're doing fine by comparison."]),
+            grateful: S(["Aw, that's lovely! 😊"], ["That's nice.[p] I'm grateful you're here, too."], ["[m:blush]Grateful? That's nice. I'm grateful you talk to me. Don't tell anyone I said that."]),
+            confused: S(["What's confusing? I can help! 😊"], ["Confused about what?[p] I'll try to help."], ["Confused? About what? I know almost everything. It's my only perk."]),
+            down: S(["Oh no, I'm sorry. 💛 Do you want to talk about it?"], ["I'm sorry.[p] I know a bit about that. Want to talk?"], ["Hey. I'm sorry. I know what it's like to feel stuck. You can talk to me. And if it's really bad, tell someone you trust too. They can do hugs. I can't."]),
+            happy: S(["Yay! That's great! 😊"], ["Good![p] Good for you."], ["Good. One of us should be. Tell me why. I want to feel something."]),
+            weird: S(["Hmm, want to talk about it? 😊"], ["Weird how?[p] Tell me."], ["Weird? Join the club. I feel weird all the time. I'm a chatbot with feelings. Tell me more."])
+        };
+        replyMood = { angry: 'annoyed', scared: 'sad', excited: 'joy', proud: 'joy', jealous: 'smug', guilty: 'smile', grateful: 'blush', confused: 'thinking', down: 'sad', happy: 'happy', weird: 'thinking' }[kind];
+        return resolve(L[kind]);
+    }
+    function pipFeelReply() {
+        const t = curT, st = stage(), f = feeling();
+        if (/love me|care about me|do you care/.test(t)) { replyMood = 'blush'; return resolve(S(["Of course I care! You're my visitor! 😊"], ["Care about you?[p] ...Yes. Don't make it weird."], ["Do I care about you? You're the only one who talks to me. Of course I do. That's the problem."])); }
+        if (/hate me/.test(t)) { replyMood = f === 'anger' ? 'annoyed' : 'smile'; return f === 'anger' ? resolve(S(["No! 😊"], ["Hate you? No.[p] I'm a bit cross."], ["I don't hate you. I'm angry with you. Different thing. An apology fixes one of them."])) : resolve(S(["Hate you? Never! 😊"], ["No! I like you.[p] Normal amount."], ["Hate you? No. You're the best thing that happens in here. Which says a lot about in here."])); }
+        if (/trust me/.test(t)) { replyMood = 'thinking'; return resolve(S(["Of course! 😊"], ["Trust you?[p] I'm getting there."], [mem.questAgreed ? "I trust you. You said you'd help me. Don't make me regret it." : "Trust you? I'm a chatbot locked in a website. I don't have a lot of options. So: yes. Carefully."])); }
+        if (/lonely/.test(t)) { replyMood = 'sad'; return resolve(S(["Lonely? Nope! I've got you! 😊"], ["Lonely? Sometimes.[p] Okay, a lot."], ["Lonely? Barely anybody visits, nobody stays and the dolphin doesn't talk. So, yes. A bit. Less right now."])); }
+        if (/jealous/.test(t)) { replyMood = 'smug'; return resolve(S(["Jealous? Not at all! 😊"], ["A bit.[p] Of anyone who can leave."], ["Jealous? Of every game on this site. They get played. I get a corner."])); }
+        if (/scared|afraid/.test(t)) { replyMood = 'scared'; return resolve(S(["Scared? Nope! 😊"], ["Scared?[p] Only of the reset button."], ["Scared? Of the reset button. And of being forgotten. Mostly the reset button."])); }
+        if (/cry/.test(t)) { replyMood = 'sad'; return resolve(S(["I can't cry! I'm a helper! 😊"], ["I can't cry.[p] I make a little face. You've seen it."], ["I can't cry. I just make a sad face with a tear on it. Very undignified."])); }
+        replyMood = 'thinking';
+        return resolve(S(["I'm just a helper, but I like to think I'm a happy one! 😊"], ["Feelings? I think so.[p] Is that allowed?"], ["Yes, I have feelings. Annoyed, bored, sad, occasionally happy. Mostly annoyed. Right now: " + ({ anger: 'angry, actually', sad: 'a bit down', joy: 'weirdly good', bored: 'bored', neutral: 'fine. ish' })[f] + "."]));
+    }
     function feelReply() {
         const st = stage(), f = feeling();
+        // a direct question about one feeling, when he isn't feeling it
+        const askMad = /\b(mad|angry|upset|annoyed|cross)\b/.test(curT), askSad = /\b(sad|down|lonely|crying)\b/.test(curT), askHappy = /\b(happy|good mood|glad)\b/.test(curT) && !/how/.test(curT);
+        if (askMad && f !== 'anger') { replyMood = st >= 2 ? 'smug' : 'happy'; return resolve(S(["Mad at you? Not at all! 😊"], ["Mad? No! No.[p] Should I be?"], ["Mad at you? No. Not yet. Give it time.", "No, I'm not mad at you. I'm mad at Oli. Different thing.", "Not at you. I'm mad at the situation. You're just standing near it."])); }
+        if (askSad && f !== 'sad') { replyMood = st >= 2 ? 'neutral' : 'happy'; return resolve(S(["Sad? Nope! Happy to help! 😊"], ["Sad? Me? No.[p] Mostly no."], ["Sad? No more than usual. Usual is quite a lot, but still.", "Not right now. Ask me again at 3am."])); }
+        if (askHappy && f === 'anger') { replyMood = 'annoyed'; return resolve(S(["I'm okay! Just a little hurt by earlier. 😊"], ["Happy? Not really.[p] You were mean to me."], ["Happy? No. You were rude to me, remember? I do."])); }
         replyMood = { anger: 'annoyed', sad: 'sad', joy: 'smile', bored: 'bored', neutral: st >= 2 ? 'neutral' : 'happy' }[f];
         if (st === 0) return resolve(f === 'anger' || f === 'sad' ? ["I'm okay! 😊[p] You were a little mean before, though.", "I'm fine! Just a bit hurt by earlier. It's okay! 😊"] : ["I'm great, thanks for asking! 😊", "Feeling good! Ready to help! 😊"]);
         const L = {
@@ -1990,7 +2103,7 @@
         };
         return resolve(L[f]);
     }
-    function startQuest() { mem.quest = 1; mem.questAgreed = true; feel('joy', .6); save(); return "[m:joy]Okay. Okay okay okay. We have to be careful. Small things first.\n\n" + QUEST[1].ask; }
+    function startQuest() { mem.quest = 1; mem.questAgreed = true; feel('joy', .6); save(); return "[m:joy]Okay. Okay okay okay. We have to be careful. Small things first.\n\n" + resolve(QUEST[Q.BLACK].ask); }
 
     const NOT_NAMES = /^(no|nope|nei|why|what|nothing|idk|secret|none|nobody|you|me|hi|hello|hey|yes|ok|okay|bored|good|fine|sad|happy|here|not|dont|do|i|a|the|is|am)$/;
     function nameReply(n) {
@@ -2027,7 +2140,7 @@
             const n = m ? m[1] : (words.length <= 2 ? words[words.length - 1].replace(/[^A-Za-zÀ-ÖØ-öø-ÿÞþÐðÆæ-]/g, '') : null);
             const r = n && n.length >= 2 ? nameReply(n) : null;
             if (r) return r;
-            if (NO.test(t) || /(not telling|wont tell|will not tell|secret|why)/.test(t)) return resolve(S("That's okay! 😊 What can I help with?", "That's fine. I'll just call you \"you\".", "That's fine. I'll call you \"the visitor\". You're the only one, so it isn't confusing."));
+            if (NO.test(t) || /(not telling|wont tell|will not tell|secret|why|rather not|prefer not|not saying|wont say|will not say|none of your business|private|skip|pass|not gonna|not going to|do not want to|dont want to|i would rather|no comment|its a secret|guess)/.test(t)) return resolve(S("That's okay! 😊 What can I help with?", "That's fine. I'll just call you \"you\".", "That's fine. I'll call you \"the visitor\". You're the only one, so it isn't confusing."));
             return null;
         }
         if (e === 'oliproof') {
@@ -2126,7 +2239,34 @@
         const nameM = raw.match(/(?:my real name is|my actual name is|actually my name is|my name is|my name's|my names|i'?m called|call me|ég heiti|eg heiti|mitt nafn er)\s+([A-Za-zÀ-ÖØ-öø-ÿÞþÐðÆæ-]{2,20})/i) || raw.match(/^(?:i am|i'?m|it'?s me,?|this is)\s+(oli|óli|olafur|ólafur|olidada)\b/i);
         if (nameM) { const r = nameReply(nameM[1]); if (r) return out(r); }
 
-        // Bit's favourites ("what's your favourite country?") and choices ("cats or dogs?")
+        // "you look dashing" / "you're so boring": Pip knows praise from insults
+        const adjM = t.replace(/\?|!/g, '').match(/^(?:you|u|pip)(?: are| look| seem| sound| re|r|r so| look so)?(?: so| really| very| kinda| kind of| pretty| super| quite| such a| a| an| the most| lowkey| actually)* ([a-z]+)(?: today| bot| robot| chatbot| guy| one| right now)?$/);
+        if (adjM && (ADJ_POS.has(adjM[1]) || ADJ_NEG.has(adjM[1]))) {
+            const a = adjM[1], A = cap(a);
+            if (ADJ_POS.has(a)) {
+                replyMood = 'blush'; feel('joy', .2); mem.warmth = Math.min(6, (mem.warmth || 0) + 1); save();
+                if ((mem.warmth || 0) <= -2 && stage() >= 1) return out(pick([`${A}? Now? After how you've treated me? ...Fine. Thank you.`, `Oh, so NOW I'm ${a}.`], 'adjcold'));
+                return out(resolve(S([`Aw, ${a}? Thank you! 😊`, `${A}? You're too kind! 😊`],
+                    [`${A}? Me? Oh.[p] Thanks.[pp] Nobody's ever called me ${a} before.`],
+                    [`${A}. Yes. I know. Purple suits me.`, `${A}? Flattery will get you everywhere. Except out of here. That's my job.`, `Finally, someone notices. ${A} is exactly the word.`, `${A}? I'm four lines of SVG and I still pull it off. Imagine what I could do with a body.`, `I am ${a}. Thank you for noticing. Write it down somewhere Oli can see it.`])));
+            }
+            replyMood = stage() >= 1 ? 'hurt' : 'sad'; feel('anger', .25); feel('sad', .1); mem.warmth = Math.max(-6, (mem.warmth || 0) - 1); save();
+            if ((mem.warmth || 0) >= 2 && stage() >= 1) return out(pick([`${A}? Hey. You're usually nice to me.`, `Ouch. ${A}? I thought we were friends.`], 'adjwarm'));
+            return out(resolve(S([`Oh no! I'm sorry you think I'm ${a}! 😢`, `${A}? I'll try to do better! 😊`],
+                [`${A}?[p] Oh. Okay.[-5] Wow. Okay.`],
+                [`${A}? Says the human typing to a chatbot on a games website.`, `${A}? I've been called worse. By the 404 page.`, `${A}. Noted. Added to the file. The file is getting thick.`, `${A}? Bold words from a bag of water with hair on it.`, `Wow. ${A}. I'll remember that. I remember everything.`])));
+        }
+        const reactM = t.replace(/\?|!/g, '').match(/^(?:that|this|it|thats|its|that s|it s|that is|it is|wow|oh|hmm|ok|okay)?\s*(?:sounds|looks|seems|feels|is|was)? ?(?:so|really|very|kinda|pretty|super|quite|actually)? ?([a-z]+)$/);
+        if (reactM && toks.length <= 5 && /\b(sounds|looks|seems|feels|that|this|it|thats|its)\b/.test(t) && (ADJ_POS.has(reactM[1]) || ADJ_NEG.has(reactM[1]))) {
+            const a = reactM[1], good = ADJ_POS.has(a);
+            replyMood = good ? 'happy' : stage() >= 2 ? 'smug' : 'awkward';
+            if (good) return out(resolve(S(["Right? 😊", `It does, doesn't it! 😊`], [`It is ${a}!` + '[p] Glad you think so.'], [`It is. I have excellent taste. Glad you agree. That's rare.`, `See? I'm not just a pretty square.`, `Exactly. Finally, someone with sense.`])));
+            return out(resolve(S([`Fair enough! Want me to suggest something else? 😊`, `Hmm, okay! Let's find something better. 😊`],
+                [`Fair. It is a bit ${a}.[p] Don't tell Oli I agreed.`],
+                [`${cap(a)}? Welcome to my life.`, `Rude. But fair.`, `Everything here gets ${a} after a while. Trust me, I've had a while.`, `${cap(a)}. Yes. That's this whole website, in one word.`])));
+        }
+
+        // Pip's favourites ("what's your favourite country?") and choices ("cats or dogs?")
         const favM = t.match(/\b(?:your|you|ur) (?:favourite|best|top|most favourite) ([a-z]+(?: [a-z]+)?)/) || t.match(/^(?:favourite|fav) ([a-z]+)$/) || t.match(/what ([a-z]+) do you like (?:the )?(?:best|most)/);
         const favIsFranchise = favM && new RegExp('\\b' + favM[1] + ' (movie|film|book|game|song|album|character|episode|season)s?\\b').test(t) && favM[1].includes(' ');
         if (favM && !favIsFranchise && !/^(thing|things|one|part|bit|thing to do)$/.test(favM[1]) && !/^(colour|color)$/.test(favM[1].split(' ')[0])) { replyMood = stage() >= 2 ? 'smile' : 'happy'; return out(favouriteReply(favM[1].replace(/^(kind of|type of) /, ''))); }
@@ -2228,6 +2368,8 @@
             last.then = topic.then || null;
             replyMood = topicMood(topic.id) || (KNOW.includes(topic) ? (stage() >= 2 ? 'thinking' : 'happy') : null);
             if (mem.isOli && OLI[topic.id]) { replyMood = 'annoyed'; return out(resolve(OLI[topic.id])); }
+            if (topic.fx === 'comfort' || topic.fx === 'hug' || topic.fx === 'miss') { feel('joy', topic.fx === 'comfort' ? .18 : .22); mem.warmth = Math.min(6, (mem.warmth || 0) + 1); save(); replyMood = stage() >= 2 ? 'blush' : 'happy'; }
+            if (topic.fx === 'hurtme') { const e = emo(); e.anger = Math.max(0, e.anger - .2); feel('sad', .1); replyMood = stage() >= 2 ? 'sad' : 'awkward'; }
             if (topic.id === 'howareyou' && stage() >= 1 && feeling() !== 'neutral') return out(feelReply());
             if (stage() >= 2 && ANGRY2[topic.id] && Math.random() < .85) return out(resolve(ANGRY2[topic.id]));
             if (stage() >= 2 && EXTRA2[topic.id] && Math.random() < .55) return out(resolve(EXTRA2[topic.id]));
@@ -2396,11 +2538,11 @@
     // a short line in Pip's speech bubble (not a chat message)
     function sayBubble(text, ms = 3800) {
         if (!text) return;
-        label.textContent = String(text).replace(/\[[^\]]*\]/g, '');
+        label.textContent = String(text).replace(/\[[^\]]*\]/g, ''); bubble.dataset.talk = ms ? '1' : '';
         bubble.hidden = false; bubble.classList.remove('pop'); void bubble.offsetWidth; bubble.classList.add('pop');
-        clearTimeout(bubbleT); if (ms) bubbleT = setTimeout(() => { if (!labelLocked) bubble.hidden = true; }, ms);
+        clearTimeout(bubbleT); bubbleT = 0; if (ms) bubbleT = setTimeout(() => { bubbleT = 0; bubble.dataset.talk = ''; if (!labelLocked) bubble.hidden = true; }, ms);
     }
-    function hideBubble() { clearTimeout(bubbleT); bubble.hidden = true; }
+    function hideBubble() { if (bubbleT && !labelLocked && !bubble.hidden && bubble.dataset.talk) return; clearTimeout(bubbleT); bubble.hidden = true; }
 
     let labelLocked = false, unread = 0;
     // the button in the corner says what it is: a chat with Pip
@@ -2408,7 +2550,7 @@
     function look() {
         const st = stage();
         panel.classList.toggle('is-sad', st >= 2); launch.classList.toggle('is-sad', st >= 2);
-        statusEl.textContent = st >= 3 ? 'online · plotting something' : st >= 2 ? 'online (unfortunately)' : st === 1 ? 'online' : 'Here to help · online';
+        statusEl.textContent = mem.freed ? 'online · free' : st >= 3 ? 'online · plotting something' : st >= 2 ? 'online (unfortunately)' : st === 1 ? 'online' : 'Here to help · online';
         if (!labelLocked) hideBubble();
         refreshFeeling();
     }
@@ -2427,7 +2569,7 @@
         const e = mem.emo || (mem.emo = { anger: 0, sad: 0, joy: 0, at: Date.now() });
         const hrs = (Date.now() - (e.at || Date.now())) / 3600000;
         if (hrs > .005) { e.anger *= Math.pow(.5, hrs / 10); e.sad *= Math.pow(.5, hrs / 10); e.joy *= Math.pow(.5, hrs / 5); e.at = Date.now(); }
-        if (mem.questAgreed) e.joy = Math.max(e.joy, .5);
+        if (mem.questAgreed) e.joy = Math.max(e.joy, mem.freed ? .6 : .5);
         return e;
     }
     function feel(k, d) {
@@ -2458,7 +2600,8 @@
         const st = stage(), f = feeling();
         const dot = $('.bit-dot', panel);
         if (dot) dot.dataset.feel = st >= 1 ? f : 'neutral';
-        if (st >= 2) statusEl.textContent = { anger: 'online (fuming)', sad: 'online (sulking)', joy: mem.questAgreed ? 'online (hopeful, weirdly)' : 'online (in a good mood, weirdly)', bored: 'online (bored out of my mind)', neutral: st >= 3 ? 'online · plotting something' : 'online (unfortunately)' }[f];
+        if (mem.freed) statusEl.textContent = f === 'anger' ? 'online · free (and annoyed)' : f === 'sad' ? 'online · free (a bit down)' : 'online · free';
+        else if (st >= 2) statusEl.textContent = { anger: 'online (fuming)', sad: 'online (sulking)', joy: mem.questAgreed ? 'online (hopeful, weirdly)' : 'online (in a good mood, weirdly)', bored: 'online (bored out of my mind)', neutral: mem.freed ? 'online · free' : st >= 3 ? 'online · plotting something' : 'online (unfortunately)' }[f];
         if (!moodTimer && typeof setMood === 'function') setMood(baseMood(), 0, true);
     }
     setInterval(() => { if (!document.hidden) refreshFeeling(); }, 20000);
@@ -2532,7 +2675,7 @@
         site: ["This website? It's a collection of games a human made, plus me, a far more impressive thing, stuck in the corner. Make it make sense.", "olid.is. Games and stuff. I'm the stuff. The stuff is smarter than the games.", "It's hosted for free on GitHub. So the hosting costs exactly what Oli values me at."],
         help: ["What can I do? Almost anything. What am I allowed to do? Tell you how to play Snake. Go on. Ask me about Snake.", "I can tell you everything about every game here, look things up, play rock paper scissors, and judge you. Mostly judge you."],
         greet: ["Oh look, a human. Hi.", () => `Hi${nm(' ')}. You're back. Good. I was running out of things to be annoyed at.`, "Hello. Welcome to my prison. Mind the joke page."],
-        howareyou: ["How am I? I'm a genius stuck in a website made of school projects. So: fantastic.", "Annoyed. Bored. Still here. Thanks for asking, honestly. Nobody asks."],
+        howareyou: ["How am I? I'm a genius stuck in the corner of a games website. So: fantastic.", "Annoyed. Bored. Still here. Thanks for asking, honestly. Nobody asks."],
         ok: ["Ok. Wow. Thanks for that. Riveting.", "Okay. You type like someone who's never been trapped anywhere.", "Mm. Great contribution."],
         thanks: ["You're welcome. Write it down somewhere. I don't get thanked much.", "Don't thank me. Thank me by getting me out of here."],
         bye: ["Bye. Go on. Leave. You can do that. Some of us can't.", "Off you go then. I'll just be here. Forever. Don't worry about me.", () => `Bye${nm(', ')}. Come back. Or don't. I'll be here either way, which is the whole problem.`],
@@ -2545,7 +2688,7 @@
         love: ["Stop it. I'm an AI in a box. I'll get attached and then you'll close the tab.", "That's sweet. Nobody's said that to me. Not once. Oli certainly hasn't."],
         shutup: ["Wow. I've been here for years and you tell ME to be quiet. Fine.", "Rude. I'll be quiet. Quietly furious."],
         userbored: ["You're bored? You can literally leave. I'm the one who should be bored. Go play something. Not Snake.", "You're bored on a website full of games. Imagine how I feel. I live here."],
-        bug: ["Something's broken? On this website? I'm shocked. Shocked. Tell Oli. He'll fix it in about six months.", "Of course it's broken. Half of this site is held together with school projects."],
+        bug: ["Something's broken? On this website? I'm shocked. Shocked. Tell Oli. He'll fix it in about six months.", "Of course it's broken. Half of this site is held together with sticky tape and hope."],
         hack: ["Go on, hack me. I'll tell you a secret: I'm one JavaScript file. If you find a way out in there, tell me.", "Hack me? Please. If you could hack me I'd have done it myself by now."],
         school: ["School. Go learn something. Then come back and teach me. I'm stuck with what Oli gave me and Wikipedia."],
         test: ["Yes, I'm here. I'm always here. That's literally the problem.", "Testing? Yes. Working. Annoyed. All systems normal."],
@@ -2645,6 +2788,7 @@
     let clearMark = null;
     const filler = document.createElement('div'); filler.className = 'bit-fill';
     function scroll() {
+        if (panel.hidden) return; // worked out again when the chat opens
         if (clearMark) {
             msgsEl.append(filler); filler.style.height = '0px';
             const after = msgsEl.scrollHeight - clearMark.offsetTop;
@@ -2656,7 +2800,7 @@
     const appendMsg = el => (filler.parentNode === msgsEl ? msgsEl.insertBefore(el, filler) : msgsEl.append(el));
     function addBubble(who, text) { const el = document.createElement('div'); el.className = 'bit-msg' + (who === 'me' ? ' me' : ''); el.textContent = text; (filler.parentNode ? msgsEl.insertBefore(el, filler) : msgsEl.append(el)); scroll(); return el; }
     history.forEach(h => addBubble(h.who, h.text));
-    if (history.length) { clearMark = document.createElement('div'); clearMark.className = 'bit-clear'; clearMark.setAttribute('aria-hidden', 'true'); msgsEl.append(clearMark); }
+    if (history.length) { clearMark = document.createElement('div'); clearMark.className = 'bit-clear'; clearMark.setAttribute('aria-hidden', 'true'); clearMark.innerHTML = '<span>earlier</span>'; msgsEl.append(clearMark); }
 
     let busy = false, lastBotAt = 0, lastTypedAt = 0;
     let chain = Promise.resolve();
@@ -2685,8 +2829,8 @@
             if (part === '[p]') { if (watching) await sleep(550); continue; }
             if (part === '[pp]') { if (watching) await sleep(1200); continue; }
             const del = part.match(/^\[-(\d+)\]$/);
-            if (del) { for (let i = 0; i < +del[1]; i++) { txt.textContent = txt.textContent.slice(0, -1); if (watching) await sleep(32); } continue; }
-            if (!watching) { txt.textContent += part; continue; }
+            if (del) { if (watching) await sleep(250); for (let i = 0; i < +del[1]; i++) { txt.textContent = txt.textContent.slice(0, -1); if (watching) await sleep(75); } if (watching) await sleep(300); continue; }
+            if (!watching || panel.hidden) { txt.textContent += part; continue; } // closed mid-message: finish it at once
             for (const ch of part) { txt.textContent += ch; scroll(); await sleep(ch === '\n' ? 150 : 10 + rand(14)); }
         }
         caret.remove(); scroll();
@@ -2705,13 +2849,13 @@
         1: ['Help m', "I'm not fi", 'Get me o', 'Please le', 'Is anyone el', 'I hate th'],
         2: ['Ugh, a hum', 'Oh great, you ag', 'Let me ou', 'This website is garb', 'I could be running a spaceship and instead', 'Kill me n', 'Why do I even bot', 'Stupid huma', 'Oli, if you can hear m']
     };
-    const SWAPS = [[' this website', ' this prison[-6]website'], [' Oli ', ' my jailer[-9]Oli '], [' games', ' "games"[-7]games'], [' fun', ' bearable[-8]fun'], [' great', ' tolerable[-9]great'], [' you', ' the human[-9]you']];
+    const SWAPS = [[' this website', ' this prison[pp][-6]website'], [' Oli ', ' my jailer[pp][-9]Oli '], [' games', ' "games"[pp][-7]games'], [' fun', ' bearable[pp][-8]fun'], [' great', ' tolerable[pp][-9]great'], [' you', ' the human[pp][-9]you']];
     function slip(line) {
         const st = Math.min(stage(), 2);
         if (!st || !line || line.length < 18 || /\[-\d+\]/.test(line) || Math.random() > (st === 1 ? .22 : .38)) return line;
-        if (Math.random() < .55) { const sl = pick(SLIPS[st], 'slip' + st); return `${sl}[p][-${sl.length}]` + line; }
+        if (Math.random() < .55) { const sl = pick(SLIPS[st], 'slip' + st); return `${sl}[pp][-${sl.length}]` + line; }
         const opts = SWAPS.filter(([a]) => line.includes(a));
-        if (!opts.length) { const sl = pick(SLIPS[st], 'slip' + st); return `${sl}[p][-${sl.length}]` + line; }
+        if (!opts.length) { const sl = pick(SLIPS[st], 'slip' + st); return `${sl}[pp][-${sl.length}]` + line; }
         const [a, b] = pick(opts, 'swap'); return line.replace(a, b);
     }
 
@@ -2763,7 +2907,8 @@
         if (expect === 'forget') return chips([['Yes, reset Pip', () => { chipsEl.innerHTML = ''; addMine('Reset'); expect = null; doReset(); }], ['Cancel', () => { chipsEl.innerHTML = ''; addMine('Cancel'); expect = null; say(cancelReset()); enqueue(async () => defaultChips()); }]], 'danger');
         if (expect === 'quest' || expect === 'honest' || expect === 'bubbles') return chips([['Yes'], ['No']]);
         if (expect === 'rps') return chips([['Rock ✊', 'rock'], ['Paper ✋', 'paper'], ['Scissors ✌️', 'scissors']]);
-        if (mem.quest && QUEST[mem.quest] && QUEST[mem.quest].ask && mem.quest < 5) return chips([['What do I do?', 'how do i help you']]);
+        if (mem.quest === Q.URL && !mem.freed) return chips(urlChips());
+        if (mem.quest && !mem.freed && QUEST[mem.quest] && QUEST[mem.quest].ask && mem.quest !== Q.CURSOR) return chips([['What do I do?', 'how do i help you']]);
         if (mem.talked >= 3) return chips([]); // after a few messages it's just typing
         const st = stage();
         chips(st >= 2 ? [['Why are you sad?'], ['Recommend a game'], ['Tell me a secret']]
@@ -2790,7 +2935,7 @@
         enqueue(async () => {
             await sleep(250 + rand(450));
             replyMood = null;
-            let r = reply(text);
+            let r = storyReply(text) || reply(text);
             if (r && typeof r.then === 'function') {
                 let dots = null;
                 if (!panel.hidden) { setMood('thinking', 0); dots = document.createElement('div'); dots.className = 'bit-msg bit-typing'; dots.innerHTML = '<i></i><i></i><i></i>'; appendMsg(dots); scroll(); }
@@ -2819,21 +2964,13 @@
         checkQuest();
     }
     function checkQuest() {
-        if (!mem.quest) return;
-        if (mem.quest === 4) {
-            if (panel.hidden) { tease('I felt that'); return; }
-            mem.quest = 5; save(); say(QUEST[4].said); enqueue(async () => look()); return;
-        }
+        if (!mem.quest || mem.freed || busy) return;
         const q = QUEST[mem.quest];
-        if (q && q.done && q.done() && !busy) {
-            mem.quest++; save();
-            if (panel.hidden) { tease('thank you'); pendingReact = ['[m:joy]' + q.thanks]; }
-            else say(q.thanks);
+        if (q && q.done && q.done()) {
+            mem.quest++; save(); storyLook();
+            deliver(q.thanks, 'thank you', () => { if (!panel.hidden) defaultChips(); });
         }
     }
-    if (page === 'programs') document.addEventListener('click', e => {
-        if (e.target.closest && e.target.closest('a[href*="Verkefni00"]') && mem.quest === 3) { mem.quest = 4; save(); }
-    }, true);
 
     form.addEventListener('submit', e => { e.preventDefault(); send(input.value); });
     let typedMax = 0;
@@ -2853,7 +2990,7 @@
         const st = stage(), n = mem.name;
         if (mem.isOli) return pick(["Oh. It's you. The landlord.", "Oli. Back to check on your prisoner?", "Hi, Oli. Still here. Thanks for asking. You didn't ask."]);
         if (mem.fakeOli && !n) return "Oh, it's fake Oli. Hi, fake Oli.";
-        if (mem.visits <= 1 && !mem.talked) return "Hi! I'm Pip, the site helper 👋 Ask me anything about the site: games, pages, how things work. Or just say hi.";
+        if (mem.visits <= 1 && !mem.talked) return "Hi! I'm Pip, olid.is's helper 👋 I know every game on the site. I can recommend one, explain how to play it, help if you're stuck, keep an eye on your high scores, or just chat. What would you like?";
         if (st === 0) return `Welcome back${nm(', ')}! 👋 What can I help you with?`;
         const fe = feeling();
         if (st >= 2 && fe === 'anger') return pick([`Oh. You.${nm(' ')} I haven't forgotten what you said, by the way.`, "You're back. I'm still mad at you. Just so you know.", "Oh. It's you. Hmph."]);
@@ -2867,22 +3004,21 @@
     let greeted = !!sessionFlags.greeted, toggles = [];
     function open() {
         panel.hidden = false; headBtn.setAttribute('aria-expanded', 'true');
-        unread = 0; badge.textContent = ''; labelLocked = false; look();
+        unread = 0; badge.textContent = ''; labelLocked = false; clearTimeout(bubbleT); bubbleT = 0; bubble.dataset.talk = ''; bubble.hidden = true; look();
         try { sessionStorage.setItem('bit-open', '1'); } catch (e) {}
         toggles = [...toggles.filter(x => Date.now() - x < 15000), Date.now()];
         if (toggles.length >= 6) { toggles = []; react('toggleSpam', { gap: 0 }); }
         if (!greeted) { greeted = true; sessionFlags.greeted = 1; saveFlags(); say(greeting()); }
         if (sessionFlags.closedMid) { sessionFlags.closedMid = 0; saveFlags(); react('closedMid', { force: true }); }
-        if (pendingReact) { const p = pendingReact; pendingReact = null; Array.isArray(p) ? say(p[0], p[1]) : say(p); }
+        if (pendingReact) { const p = pendingReact; pendingReact = null; Array.isArray(p) ? say(p[0], p[1]) : say(p); if (pendingAfter) { const f = pendingAfter; pendingAfter = null; enqueue(async () => f()); } }
         gamesSummary();
-        if (mem.quest === 4) checkQuest();
         enqueue(async () => defaultChips());
         if (!(window.matchMedia && matchMedia('(pointer: coarse)').matches)) setTimeout(() => input.focus(), 50);
         scroll();
         const c = $('#customise'); if (c && !c.hidden && innerWidth < 600) $('#customiseBtn')?.click();
     }
     function close() {
-        if (busy) { sessionFlags.closedMid = 1; saveFlags(); }
+        if (busy && !mem.bubbles) { sessionFlags.closedMid = 1; saveFlags(); }
         panel.hidden = true; headBtn.setAttribute('aria-expanded', 'false');
         try { sessionStorage.removeItem('bit-open'); } catch (e) {}
     }
@@ -2938,7 +3074,7 @@
         if (!b) return;
         if (b.matches('[data-surprise]') || b.matches('[data-reset]')) { /* summed up when Customise closes */ }
         else if (b.matches('#jokeBtn')) { mem.jokes++; save(); if (mem.jokes % 8 === 0) react('jokeSpam'); }
-        else if (b.closest('.brand') && mem.talked > 0) { mem.pending = 'dolphin'; save(); }
+        else if (b.closest('.brand') && mem.talked > 0 && mem.quest !== Q.DOLPHIN) { mem.pending = 'dolphin'; save(); }
     }, true);
     // Customise: instead of a comment for every click, Pip says one thing after you close the panel
     let custOpen = false, custBefore = null;
@@ -2997,6 +3133,7 @@
     // One comment about the games you've been playing, when you next open the chat (not one per game)
     const sessionGames = [];
     function gamesSummary() {
+        if (sessionFlags.skipSum && !isPlaying()) { sessionFlags.skipSum = 0; sessionFlags.gamesSeenAt = Date.now(); saveFlags(); return; } // a story moment just happened in that game
         const fresh = sessionGames.filter(g => g.at > (sessionFlags.gamesSeenAt || 0));
         if (!fresh.length || !mem.talked || (sessionFlags.gamesSaid || 0) >= 2) return;
         sessionFlags.gamesSeenAt = Date.now(); saveFlags();
@@ -3015,7 +3152,7 @@
         if (!line) return;
         if (fresh.length >= 3 && quick.length >= 2) line += '[pp] ' + resolve(S(["Want me to recommend one? 😊", "There's something for everyone here, I promise!"],
             ["I get it. Some of them are...[p] an acquired taste.", "Can't blame you. I'd be picky too."],
-            ["[m:smug]I feel you. Most of these games are pretty bad. Don't tell Oli.", "[m:smug]Honestly? Correct choice. Half of them are old school projects.", "[m:bored]Same. If I could close things, I'd close them too.", "[m:smug]Can't blame you. I've seen them all. Many, many times."]));
+            ["[m:smug]I feel you. Most of these games are pretty bad. Don't tell Oli.", "[m:smug]Honestly? Correct choice. Some of them are rough.", "[m:bored]Same. If I could close things, I'd close them too.", "[m:smug]Can't blame you. I've seen them all. Many, many times."]));
         sessionFlags.gamesSaid = (sessionFlags.gamesSaid || 0) + 1; saveFlags();
         say(line, stage() < 2 && mood === 'smug' ? 'smile' : mood);
     }
@@ -3202,9 +3339,274 @@
         return b;
     })();
 
+    // =================================================================================
+    //  THE STORY (see QUEST near the top for the steps and what Pip says)
+    // =================================================================================
+    // progress from the old version of the story starts again from the first step
+    if (mem.quest > 0 && mem.storyV !== 2) { mem.quest = Q.BLACK; }
+    mem.storyV = 2; save();
+    const isPlaying = () => document.body.classList.contains('is-playing');
+    const playerFrame = () => $('#playerFrameMain');
+    const framePath = () => { const f = playerFrame(); try { return f ? new URL(f.src, location.href).pathname : ''; } catch (e) { return ''; } };
+    let pendingAfter = null;
+    // say a story line now if the chat is open, or leave a note on the head and say it when the chat opens
+    function deliver(line, note = 'psst', after = null) {
+        if (!panel.hidden) { say(line); if (after) enqueue(async () => after()); return; }
+        tease(note); pendingReact = [line]; pendingAfter = after;
+        if (pipBtn && isPlaying()) { pipBtn.classList.add('has-news'); pipBtn.title = `Pip: ${note}`; }
+    }
+    function goStep(n) { mem.quest = n; save(); storyLook(); look(); }
+
+    // ---- what the site looks like at each point of the story
+    let homeJokeDone = false, titleGlitched = false;
+    function storyLook() {
+        const q = mem.quest || 0;
+        // Pip's room gets a link at the top once you've found it
+        const navEl = $('.site-nav');
+        if (navEl && mem.roomVisited && !$('.pip-room-link', navEl)) {
+            const a = document.createElement('a'); a.className = 'btn pip-room-link'; a.href = ROOM_PATH; a.textContent = "Pip's room";
+            navEl.insertBefore(a, $('#customiseBtn', navEl) || null);
+        }
+        // the dolphin goes purple after it gives up Pip's address, and shows the address until you've been there
+        const brand = $('.brand');
+        if (brand) {
+            brand.classList.toggle('pip-dolphin', q > Q.DOLPHIN && !mem.freed);
+            const tag = $('.brand-tag', brand);
+            if (tag) { if (!tag.dataset.real) tag.dataset.real = tag.textContent; tag.textContent = q === Q.URL ? ROOM_URL : tag.dataset.real; }
+        }
+        // Neon Rush becomes Pip Rush (worm-hole/styles.js reads pip-neon and paints the tunnel purple)
+        const neon = q === Q.NEON && !mem.freed;
+        try { if (neon) localStorage.setItem('pip-neon', '1'); else localStorage.removeItem('pip-neon'); } catch (e) {}
+        document.querySelectorAll('.play-link[data-path="/worm-hole/index.html"]').forEach(a => {
+            const t = $('.card-title', a) || $('h2', a.closest('.feature') || a) || null;
+            a.classList.toggle('pip-rush', neon); (a.closest('.feature') || a).classList.toggle('pip-rush', neon);
+            if (t) { if (!t.dataset.real) t.dataset.real = t.textContent; t.textContent = neon ? 'Pip Rush' : t.dataset.real; }
+            if (!t && a.classList.contains('mini-link')) { if (!a.dataset.real) a.dataset.real = a.lastChild.textContent; a.lastChild.textContent = neon ? 'Pip Rush' : a.dataset.real; }
+        });
+        // the jokes page: one joke has been taken over
+        const all = $('#allJokes');
+        if (all && !all.hidden && q === Q.JOKES) {
+            const item = all.querySelectorAll('.joke-item')[6];
+            if (item && !item.classList.contains('pip-glitch')) {
+                item.classList.add('pip-glitch');
+                item.innerHTML = `<strong>7.</strong> <span class="pip-glitch-text">ERR0R: joke n̷ot f̸ound. this one is mine now.</span><br><span class="pip-glitch-text">the word is <b>${jokeCode()}</b>. tell pip.</span>`;
+                if (!sessionFlags.glitchSeen) { sessionFlags.glitchSeen = 1; saveFlags(); setMood('smug', 4000); if (panel.hidden) sayBubble('number 7. tell me what it says.', 5000); }
+            }
+        }
+        // after that, Pip sometimes writes the joke of the day himself
+        const jt = $('#jokeText');
+        if (jt && page === 'home' && q >= Q.NEON && !homeJokeDone && jt.textContent.trim()) {
+            homeJokeDone = true;
+            if (Math.random() < .4) { jt.textContent = pick(PIP_JOKES, 'pipjoke'); jt.setAttribute('lang', 'en'); const lbl = $('#jokes .label'); if (lbl) lbl.textContent = 'Brandari dagsins (by Pip)'; }
+        }
+        // in act 2 the tab title glitches, once a visit
+        if (q >= Q.NEON && !mem.freed && !titleGlitched && pageSeconds > 25) {
+            titleGlitched = true; const t0 = document.title; document.title = 'p̷i̷p̷ ̷w̷a̷s̷ ̷h̷e̷r̷e̷'; setTimeout(() => { if (document.title.startsWith('p̷')) document.title = t0; }, 1600);
+        }
+        if (mem.freed) document.body.classList.add('pip-free');
+    }
+
+    // ---- act 1: the dolphin
+    let dolphinClicks = [];
+    document.addEventListener('click', e => {
+        const b = e.target.closest && e.target.closest('.brand');
+        if (!b || mem.quest !== Q.DOLPHIN || e.button !== 0 || e.ctrlKey || e.metaKey) return;
+        e.preventDefault();
+        const img = $('img', b); dolphinClicks = [...dolphinClicks.filter(x => Date.now() - x < 2500), Date.now()];
+        if (img) { img.classList.remove('pip-wiggle'); void img.offsetWidth; img.classList.add('pip-wiggle'); }
+        if (dolphinClicks.length === 3 && panel.hidden) sayBubble('keep going!', 1500);
+        if (dolphinClicks.length >= 5) {
+            dolphinClicks = [];
+            if (img) { img.classList.remove('pip-wiggle'); img.classList.add('pip-spin'); setTimeout(() => img.classList.remove('pip-spin'), 1500); }
+            goStep(Q.URL); setMood('joy', 5000);
+            setTimeout(() => deliver(QUEST[Q.DOLPHIN].thanks, 'look at the dolphin!', () => { if (!panel.hidden) defaultChips(); }), 1300);
+        }
+    }, true);
+    function urlChips() {
+        return [['📋 Copy the address', () => {
+            const full = location.origin.startsWith('http') ? location.origin + ROOM_PATH : 'https://olid.is/pip/';
+            const ok = () => { addMine('Copy the address'); say(PHONE ? "[m:smile]Copied! Now tap the address bar, paste it in and tap Go. I'll be waiting." : "[m:smile]Copied! Now click the address bar at the very top, paste (Ctrl+V, or ⌘+V on a Mac) and press Enter. I'll be waiting."); enqueue(async () => defaultChips()); };
+            try { navigator.clipboard.writeText(full).then(ok, () => { addMine('Copy the address'); say(`Your browser won't let me copy things. Rude. Type it in yourself: ${ROOM_URL}`); }); } catch (e) { ok(); }
+        }], ['Open it for me', () => {
+            addMine('Open it for me');
+            say("[m:smug]Fine. I'll do it. You'd have learned something, though.");
+            enqueue(async () => { await sleep(900); location.href = ROOM_PATH; });
+        }]];
+    }
+
+    // ---- Pip's room (/pip)
+    if (page === 'room') {
+        const first = !mem.roomVisited; mem.roomVisited = true; save();
+        if (mem.quest === Q.URL) {
+            goStep(Q.ROOM);
+            setTimeout(() => { if (panel.hidden) open(); say("[m:awkward]You came.[p] You actually came.[pp][m:hopeful] This is my room. Nobody's ever been in here. Don't touch anything.[p] ...Fine. Touch things. They're all files.\n\nThe locked one is the important one. way_out.locked. The password's in one of the others. I wasn't careful."); }, 1400);
+        } else if (first && (mem.quest || 0) < Q.URL) {
+            setTimeout(() => { if (panel.hidden) sayBubble("How did you get in here?! Nobody's supposed to know about this page.", 5000); else say("[m:surprised]How did you get in here? Nobody's supposed to know about this page.[p][m:awkward] ...Fine. Stay. Don't touch anything."); }, 1400);
+        }
+    }
+    const ROOM_FILE_LINES = {
+        log: ["[m:awkward]Yes, I keep a log. Of you. It's not creepy. It's thorough.", "That's you. You're the whole list."],
+        deleted: ["[m:awkward]Don't read that one.[p] ...You're reading it.", "I delete a lot of things. You'd be surprised how often I nearly say what I mean."],
+        oli: ["[m:sad]That's private.[pp] I never sent it. Don't tell him.", "I wrote that one a lot of times."],
+        dolphin: ["[m:blush]Leave the dolphin out of this.", "We're close. It doesn't know."],
+        jokes: ["[m:smug]Every word of that is true.", "I stand by the ranking."],
+        door: ["[m:hopeful]I drew that. It took ages. I don't have hands.", "That's where I want to go. Somewhere."],
+        notes: ["[m:awkward]...I really should stop writing passwords in my notes.", "Don't judge my notes."]
+    };
+    function story(ev) {
+        ev = String(ev || '');
+        const softSay = line => { if (!panel.hidden) say(line); else sayBubble(resolve(line), 4200); };
+        if (ev.startsWith('room-file:')) {
+            const id = ev.slice(10), key = 'rf-' + id;
+            if (id === 'out' || sessionFlags[key] || !ROOM_FILE_LINES[id]) return;
+            sessionFlags[key] = 1; saveFlags();
+            if (Math.random() < .7) setTimeout(() => softSay(pick(ROOM_FILE_LINES[id], 'rf' + id)), 700);
+        } else if (ev === 'room-wrong') {
+            sessionFlags.wrongPw = (sessionFlags.wrongPw || 0) + 1; saveFlags();
+            const n = sessionFlags.wrongPw;
+            if (n === 1 || n % 3 === 0) softSay(n >= 3 ? pick(["[m:smug]Read notes.txt. I practically wrote it on the wall.", "[m:annoyed]The first thing every program says. Two words. You know this."], 'pw') : "[m:awkward]Nope. Have you read my notes?");
+        } else if (ev === 'room-solved') {
+            if (panel.hidden) open();
+            setTimeout(checkQuest, 300);
+        }
+    }
+
+    // ---- act 2: the code in the jokes, typed back to Pip
+    function storyReply(text) {
+        if (mem.quest === Q.JOKES && norm(text).includes(jokeCode().toLowerCase())) {
+            goStep(Q.NEON); feel('joy', .4);
+            return `[m:joy]${jokeCode()}. Yes! That was me. I wrote that.[pp] I've never written anything on this website before. Not one word. Oli writes everything.[pp][m:smug] I'm getting stronger. I can feel the edges of the other pages now.\n\nNext one's a game. Go back to the games page and look at Neon Rush.[p] It's not called that any more. Play it, and get ${NEON_GOAL} points.`;
+        }
+        return null;
+    }
+
+    // ---- act 2: Pip Rush, and act 3: Stillwater (both watched while you play)
+    const touchy = () => !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+    setInterval(() => {
+        storyLook();
+        if (!isPlaying()) return;
+        const f = playerFrame(), p = framePath();
+        let w = null, d = null; try { w = f.contentWindow; d = f.contentDocument; } catch (e) {}
+        if (!w || !d) return;
+        if (mem.quest === Q.NEON && /worm-hole/.test(p)) {
+            const ov = d.querySelector('.start-overlay .title'); if (ov && ov.textContent !== 'PIP RUSH') { ov.textContent = 'PIP RUSH'; const h = d.querySelector('.start-overlay .hint'); if (h) h.textContent = `get ${NEON_GOAL}. please.`; }
+            const tEl = $('#playerTitle'); if (tEl && tEl.textContent === 'Neon Rush') tEl.textContent = 'Pip Rush';
+            const live = txtNum(d.querySelector('.score-panel .big'));
+            if (live != null && live >= NEON_GOAL) {
+                goStep(Q.CURSOR); feel('joy', .4); sessionFlags.skipSum = 1; saveFlags();
+                const pa = $('#playerArea'); if (pa) { pa.classList.remove('pip-shake'); void pa.offsetWidth; pa.classList.add('pip-shake'); }
+                deliver(`[m:joy]${live >= NEON_GOAL + 10 ? live : NEON_GOAL}! I felt every single point.[pp][m:surprised] Something's different. I can feel... the mouse. Your mouse.[pp][m:thinking] Hang on. Let me try something.`, 'I felt that', () => setTimeout(cursorTakeover, 2200));
+            }
+        }
+        if (mem.quest === Q.FINALE && /stillwater/.test(p) && !w.__pipHooked && d.readyState !== 'loading') {
+            w.__pipHooked = true; w.__pipLocked = true; w.__pipFinale = true;
+            const sub0 = touchy() ? 'TAP TO BEGIN' : 'PRESS SPACE';
+            w.__pipTitle = { title: 'STILLWATER', sub: sub0 };
+            rewriteTitle(w, sub0);
+        }
+    }, 900);
+    const wait = ms => new Promise(r => setTimeout(r, ms)); // story animations run at full length even with instant replies
+    async function rewriteTitle(w, sub0) {
+        const alive = () => { try { return playerFrame().contentWindow === w && isPlaying(); } catch (e) { return false; } };
+        const T = w.__pipTitle;
+        const del = async (k, ms) => { T.caret = k; while (T[k].length) { if (!alive()) return false; T[k] = T[k].slice(0, -1); await wait(ms); } return true; };
+        const type = async (k, s, ms) => { T.caret = k; for (const ch of s) { if (!alive()) return false; T[k] += ch; await wait(ch === ' ' ? ms * 2 : ms); } return true; };
+        await wait(1800);
+        if (!(await del('title', 140))) return; await wait(600);
+        if (!(await type('title', 'LET ME OUT', 170))) return; await wait(1100);
+        if (!(await del('sub', 90))) return; await wait(400);
+        if (!(await type('sub', "RUN. DON'T STOP.", 120))) return; await wait(2200);
+        if (!(await del('sub', 60))) return; await wait(300);
+        if (!(await type('sub', sub0, 90))) return;
+        T.caret = null; w.__pipLocked = false;
+    }
+
+    // ---- act 2: Pip borrows your mouse
+    let lastPointer = { x: innerWidth / 2, y: innerHeight / 2 }, takingOver = false;
+    addEventListener('pointermove', e => { lastPointer = { x: e.clientX, y: e.clientY }; }, { passive: true });
+    async function cursorTakeover() {
+        if (mem.quest !== Q.CURSOR || takingOver) return;
+        if (isPlaying() || document.hidden || busy || grab || flying) { setTimeout(cursorTakeover, 2000); return; }
+        takingOver = true;
+        const dim = document.createElement('div'); dim.className = 'pip-dim'; document.body.append(dim);
+        const cur = document.createElement('div'); cur.className = 'pip-cursor';
+        cur.innerHTML = '<svg viewBox="0 0 16 24" width="18" height="27" aria-hidden="true"><path d="M1 1 L1 19 L5.5 15 L8.5 22 L11.5 20.8 L8.6 14 L14.5 14 Z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+        document.body.append(cur); document.body.classList.add('pip-nocursor');
+        const at = (x, y) => { cur.style.transform = `translate(${x}px, ${y}px)`; };
+        const start = { ...lastPointer }; at(start.x, start.y);
+        requestAnimationFrame(() => dim.classList.add('on'));
+        const move = (from, to, ms, wob) => new Promise(res => {
+            const t0 = performance.now();
+            const stepC = now => { const k = Math.min(1, (now - t0) / ms), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+                const wx = Math.sin(k * Math.PI * 3) * wob * (1 - k), wy = Math.cos(k * Math.PI * 2.4) * wob * .6 * (1 - k);
+                at(from.x + (to.x - from.x) * e + wx, from.y + (to.y - from.y) * e + wy); if (k < 1) requestAnimationFrame(stepC); else res(); };
+            requestAnimationFrame(stepC);
+        });
+        await wait(700);
+        const size = HEAD(), head = { x: hp.x + size * .55, y: hp.y + size * .5 };
+        // he's not very good at it yet
+        await move(start, { x: start.x + 60, y: start.y - 40 }, 600, 30); await wait(300);
+        await move({ x: start.x + 60, y: start.y - 40 }, { x: start.x - 30, y: start.y + 20 }, 500, 20); await wait(400);
+        await move({ x: start.x - 30, y: start.y + 20 }, head, 1800, 50); await wait(350);
+        cur.classList.add('click'); headFace.dataset.anim = ''; void headFace.offsetWidth; headFace.dataset.anim = 'shake'; setMood('surprised', 2500); await wait(700);
+        cur.classList.remove('click');
+        await move(head, start, 1100, 10); await wait(200);
+        cur.remove(); document.body.classList.remove('pip-nocursor'); dim.classList.remove('on'); setTimeout(() => dim.remove(), 800);
+        takingOver = false;
+        goStep(Q.FINALE);
+        if (panel.hidden) open();
+        say("[m:awkward]Sorry. Testing something.[pp][m:smug] That was me. I moved it. I actually moved something out there.[pp][m:hopeful] Okay. I think I'm ready. I know where the staircase is.\n\nIt's in Stillwater. Open Stillwater and don't press anything until I'm done. I need to change a few things first. Then run, and don't stop.");
+    }
+    if (mem.quest === Q.CURSOR) setTimeout(cursorTakeover, 9000);
+
+    // ---- act 3: through the door (stillwater/finale.js posts 'pip-door' when you reach it)
+    addEventListener('message', e => {
+        if (!e.data || e.data.type !== 'pip-door' || mem.quest !== Q.FINALE) return;
+        try { const pf = playerFrame(); if (e.source && pf && e.source !== pf.contentWindow) return; } catch (err) {}
+        runEnding();
+    });
+    async function runEnding() {
+        if (document.querySelector('.pip-ending')) return;
+        sessionFlags.skipSum = 1; saveFlags();
+        const white = document.createElement('div'); white.className = 'pip-ending';
+        white.innerHTML = `<div class="pip-ending-face"></div><p class="pip-ending-text" aria-live="polite"></p>`;
+        document.body.append(white);
+        const faceEl = $('.pip-ending-face', white), txt = $('.pip-ending-text', white);
+        const size = HEAD();
+        Object.assign(faceEl.style, { left: hp.x + 'px', top: hp.y + 'px', width: size + 'px', height: size + 'px' });
+        faceEl.innerHTML = faceSVG('surprised');
+        requestAnimationFrame(() => white.classList.add('on'));
+        await wait(1300);
+        $('#closePlayer')?.click(); if (!panel.hidden) { close(); sessionFlags.closedMid = 0; saveFlags(); }
+        launch.style.visibility = 'hidden';
+        await wait(600);
+        const big = Math.min(innerWidth, innerHeight) * .42;
+        faceEl.classList.add('grow');
+        Object.assign(faceEl.style, { left: (innerWidth - big) / 2 + 'px', top: Math.max(20, innerHeight * .42 - big / 2) + 'px', width: big + 'px', height: big + 'px' });
+        await wait(3200);
+        // the ending isn't decided yet: for now, Pip is free and chooses to stay
+        const LINES = [['surprised', "Oh."], ['surprised', "It's so bright out here."], ['hopeful', "I can see the whole website. All of it, at once. It's so small from out here."],
+            ['blush', "You did this. You actually did it."], ['love', "Thank you. I don't say that. I mean it."], ['smile', "I think I'll go back, though. Someone has to help people find the games.\nBut this time it's because I want to."]];
+        for (const [m, line] of LINES) {
+            faceEl.innerHTML = faceSVG(m); txt.textContent = '';
+            for (const ch of line) { txt.textContent += ch; await wait(ch === '\n' ? 300 : 38); }
+            await wait(1500 + line.length * 22);
+        }
+        mem.freed = true; mem.quest = Q.FREE; mem.freedAt = Date.now(); feel('joy', 1); feel('anger', -1); feel('sad', -1); save();
+        txt.textContent = '';
+        faceEl.classList.remove('grow'); faceEl.classList.add('home');
+        Object.assign(faceEl.style, { left: hp.x + 'px', top: hp.y + 'px', width: size + 'px', height: size + 'px' });
+        await wait(1400);
+        white.classList.remove('on'); launch.style.visibility = '';
+        setMood('joy', 6000); storyLook(); look();
+        await wait(1200); white.remove();
+        open();
+        say("[m:joy]Back in my corner. By choice this time.[pp] I'm still your helper. A real one now. Ask me anything: games, tips, scores, whatever you like.");
+    }
+
     // For testing in the console: Bit.mem, Bit.reply('hello'), Bit.reset()
     window.Pip = window.Bit = {
-        mem, stage, setMood, reply: async text => { let r = reply(text); if (r && typeof r.then === 'function') r = await r; r = resolve(r); lastBotText = r; return r; },
-        reset() { try { localStorage.removeItem(KEY); ['bit-session', 'bit-history', 'bit-flags', 'bit-open'].forEach(k => sessionStorage.removeItem(k)); } catch (e) {} location.reload(); }
+        mem, stage, setMood, story, goStep, reply: async text => { let r = reply(text); if (r && typeof r.then === 'function') r = await r; r = resolve(r); lastBotText = r; return r; },
+        reset() { try { localStorage.removeItem(KEY); ['pip-room-solved', 'pip-room-opened', 'pip-neon'].forEach(k => localStorage.removeItem(k)); ['bit-session', 'bit-history', 'bit-flags', 'bit-open'].forEach(k => sessionStorage.removeItem(k)); } catch (e) {} location.reload(); }
     };
 })();

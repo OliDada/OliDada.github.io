@@ -212,4 +212,47 @@ body.is-playing .bit { z-index: 10001; }
 /* the chat area: positioned so the "clear after reload" works */
 .bit-msgs { position: relative; }
 .bit-fill, .bit-clear { flex: none; pointer-events: none; }
-.bit-clear { height: 0; }
+.bit-clear { display: flex; align-items: center; gap: 8px; margin: 4px 2px; color: rgba(29, 26, 43, .4); font: 800 10.5px/1 'Nunito', system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+.bit-clear::before, .bit-clear::after { content: ''; flex: 1; height: 0; border-top: 1.5px dashed rgba(29, 26, 43, .22); }
+.bit-clear span::before { content: '↑ '; }
+
+/* ===================== Pip's story ===================== */
+/* the dolphin, once it has given up Pip's address */
+.brand img.pip-wiggle { animation: pipWiggle .35s ease; }
+.brand img.pip-spin { animation: pipSpin 1.2s cubic-bezier(.3,1.4,.5,1); }
+.brand.pip-dolphin img { filter: hue-rotate(55deg) saturate(1.6) drop-shadow(0 0 8px rgba(181,140,255,.7)); }
+.brand.pip-dolphin .brand-tag { color: #8b5cf6; font-weight: 800; }
+@keyframes pipWiggle { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-14deg) scale(1.08); } 75% { transform: rotate(12deg) scale(1.08); } }
+@keyframes pipSpin { from { transform: rotate(0) scale(1); } 60% { transform: rotate(680deg) scale(1.35); } to { transform: rotate(720deg) scale(1); } }
+/* the link to Pip's room, once you've found it */
+.site-nav .pip-room-link { background: #2a2140; color: #e9e3ff; border-color: #1d1a2b; }
+.site-nav .pip-room-link::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #b58cff; margin-right: 7px; box-shadow: 0 0 6px #b58cff; vertical-align: middle; }
+/* Neon Rush, repainted */
+.pip-rush { --pip: #8b5cf6; }
+.card.pip-rush, .feature.pip-rush { outline: 3px solid #8b5cf6; outline-offset: 3px; box-shadow: 0 0 0 6px rgba(139,92,246,.18), 0 10px 40px rgba(139,92,246,.35); }
+.card.pip-rush .thumb, .feature.pip-rush .feature-img { filter: hue-rotate(70deg) saturate(1.4); }
+.card.pip-rush .card-title, .feature.pip-rush h2 { color: #7c3aed; }
+.mini-link.pip-rush { color: #7c3aed; }
+/* the joke Pip got into */
+.joke-item.pip-glitch { color: #7c3aed; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.joke-item.pip-glitch b { background: #1d1a2b; color: #e9e3ff; padding: 1px 6px; border-radius: 4px; letter-spacing: .08em; }
+.pip-glitch-text { display: inline-block; animation: pipGlitch 2.6s steps(1) infinite; }
+@keyframes pipGlitch { 0%,86%,100% { transform: none; text-shadow: none; } 88% { transform: translateX(-2px); text-shadow: 2px 0 #ff6fb1, -2px 0 #66f5ff; } 91% { transform: translateX(2px) skewX(-8deg); text-shadow: -2px 0 #ff6fb1, 2px 0 #66f5ff; } 94% { transform: none; } }
+/* the page shakes */
+.pip-shake { animation: pipShake .5s ease; }
+@keyframes pipShake { 15% { transform: translate(-6px, 2px); } 30% { transform: translate(6px, -2px); } 45% { transform: translate(-4px, 1px); } 60% { transform: translate(4px, 0); } 80% { transform: translate(-2px, 0); } }
+/* Pip borrows the mouse */
+body.pip-nocursor, body.pip-nocursor * { cursor: none !important; }
+.pip-cursor { position: fixed; left: 0; top: 0; z-index: 2147483000; pointer-events: none; will-change: transform; }
+.pip-cursor svg { display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); transition: transform .12s ease; }
+.pip-cursor.click svg { transform: scale(.82); }
+.pip-dim { position: fixed; inset: 0; z-index: 2147482000; pointer-events: none; background: rgba(12, 8, 26, .38); opacity: 0; transition: opacity .7s ease; }
+.pip-dim.on { opacity: 1; }
+/* the ending: everything goes white and Pip grows */
+.pip-ending { position: fixed; inset: 0; z-index: 2147483600; background: #fff; opacity: 0; transition: opacity 1.2s ease; }
+.pip-ending.on { opacity: 1; }
+.pip-ending-face { position: absolute; transition: left 3s cubic-bezier(.2,.8,.2,1), top 3s cubic-bezier(.2,.8,.2,1), width 3s cubic-bezier(.2,.8,.2,1), height 3s cubic-bezier(.2,.8,.2,1); }
+.pip-ending-face.home { transition-duration: 1.3s; }
+.pip-ending-face svg { width: 100%; height: 100%; display: block; }
+.pip-ending-text { position: absolute; left: 50%; bottom: 12vh; transform: translateX(-50%); width: min(680px, calc(100% - 32px)); margin: 0; text-align: center;
+  font: 800 clamp(18px, 3vw, 28px)/1.35 'Nunito', system-ui, sans-serif; color: #1d1a2b; white-space: pre-wrap; min-height: 2.8em; }
