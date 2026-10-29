@@ -59,12 +59,32 @@
     "featured": true
   },
   {
+    "title": "A Little Higher",
+    "path": "/balance-game/index.html",
+    "source": "/balance-game/main.js",
+    "aspect": "fill",
+    "thumbnail": "data/thumbnails/balance-ball-thumbnail.svg",
+    "controls": [["A / D", "move"], ["Left / Right", "tilt"], ["P / Esc", "pause"], ["R", "retry"], ["Phone", "drag to move; enable phone tilt or use tilt buttons"]],
+    "tags": ["game", "physics"],
+    "featured": true
+  },
+  {
     "title": "Solar System",
     "path": "/solar-system/index.html",
     "source": "/solar-system/index.js",
     "thumbnail": "data/thumbnails/solar-system-thumbnail.webp",
     "subtitle": "Press 'H' to toggle instructions.",
     "tags": ["3d", "threejs"],
+    "featured": true
+  },
+  {
+    "title": "Farm Frenzy",
+    "path": "/farm-frenzy/index.html",
+    "source": "/farm-frenzy/main.js",
+    "aspect": "9:6",
+    "playSize": { "width": 1920, "height": 720 },
+    "thumbnail": "data/thumbnails/farm-frenzy-thumbnail.png",
+    "tags": ["game", "arcade"],
     "featured": true
   },
   {
@@ -76,6 +96,15 @@
     "aspect": "fill",
     "thumbnail": "data/thumbnails/gravity-dash-thumbnail.png",
     "tags": ["game", "physics"],
+    "featured": true
+  },
+  {
+    "title": "Physics Simulation",
+    "path": "/physics_simulation.html",
+    "source": "/physics_simulation.js",
+    "embed": "/embeds/physics_simulation.html",
+    "thumbnail": "data/thumbnails/physics-simulation-thumbnail.png",
+    "tags": ["simulation", "physics"],
     "featured": true
   },
   {
@@ -101,15 +130,6 @@
     "featured": false
   },
   {
-    "title": "Physics Simulation",
-    "path": "/physics_simulation.html",
-    "source": "/physics_simulation.js",
-    "embed": "/embeds/physics_simulation.html",
-    "thumbnail": "data/thumbnails/physics-simulation-thumbnail.png",
-    "tags": ["simulation", "physics"],
-    "featured": true
-  },
-  {
     "title": "Minesweeper",
     "path": "/minesweeper/index.html",
     "source": "/minesweeper/minesweeper.js",
@@ -118,26 +138,6 @@
     "thumbnail": "data/thumbnails/minesweeper-thumbnail.png",
     "tags": ["game", "puzzle"],
     "featured": false
-  },
-  {
-    "title": "A Little Higher",
-    "path": "/balance-game/index.html",
-    "source": "/balance-game/main.js",
-    "aspect": "fill",
-    "thumbnail": "data/thumbnails/balance-ball-thumbnail.svg",
-    "controls": [["A / D", "move"], ["Left / Right", "tilt"], ["P / Esc", "pause"], ["R", "retry"], ["Phone", "drag to move; enable phone tilt or use tilt buttons"]],
-    "tags": ["game", "physics"],
-    "featured": true
-  },
-  {
-    "title": "Farm Frenzy",
-    "path": "/farm-frenzy/index.html",
-    "source": "/farm-frenzy/main.js",
-    "aspect": "9:6",
-    "playSize": { "width": 1920, "height": 720 },
-    "thumbnail": "data/thumbnails/farm-frenzy-thumbnail.png",
-    "tags": ["game", "arcade"],
-    "featured": true
   },
   {
     "title": "Tic Tac Toe",
