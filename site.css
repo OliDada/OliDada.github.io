@@ -265,3 +265,40 @@ body:has(.player-area.fullscreen) { overflow: hidden; }
 
 /* Keep the selected game header visible while the playfield takes the remaining height. */
 .player-header, .player-controls { flex-shrink: 0; }
+
+/* ---------- Player header: one clean row, icon buttons, controls as a drop-down card ---------- */
+.player-area { position: relative; }
+.player-header { gap: 14px; padding: 0 2px 0 6px; min-height: 40px; }
+.player-info { flex-wrap: nowrap; align-items: baseline; gap: 12px; overflow: hidden; }
+.player-title { font-size: 1.2rem; white-space: nowrap; letter-spacing: -.01em; }
+.player-subtitle { font-weight: 500; font-size: .85rem; color: rgba(255, 250, 240, .55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.player-desc { display: none; }
+.player-actions { gap: 4px; align-items: center; }
+.player-actions .btn.small {
+  background: rgba(255, 250, 240, .08); color: var(--cream); border: 0; box-shadow: none; border-radius: 10px;
+  min-height: 34px; min-width: 34px; padding: 6px 9px; font-size: 13px; font-weight: 700; transition: background .15s ease;
+}
+.player-actions .btn.small:hover, .player-actions .btn.small:focus-visible { background: rgba(255, 250, 240, .18); transform: none; box-shadow: none; }
+.player-actions .btn.small:active { transform: scale(.96); box-shadow: none; }
+.player-actions .btn.small .lbl { display: none; }
+.player-actions .ico { font-size: 1.05rem; line-height: 1; }
+.player-actions #toggleControls[aria-expanded="true"] { background: rgba(255, 250, 240, .22); }
+.player-actions #closePlayer:hover { background: #ff5a4f; color: #fff; }
+.player-actions .btn.small.pip-btn { background: var(--yellow); color: var(--ink); padding: 6px 12px; margin-right: 4px; }
+.player-actions .btn.small.pip-btn .lbl { display: inline; }
+.player-actions .btn.small.pip-btn:hover { background: #ffec85; }
+.player-actions .pip-btn .pip-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff3b3b; display: none; }
+.player-actions .pip-btn.has-news .pip-dot { display: inline-block; }
+.player-controls {
+  position: absolute; top: 58px; right: 12px; z-index: 6; width: max-content; max-width: min(380px, calc(100% - 24px));
+  background: #2b2840; border: 1px solid rgba(255, 250, 240, .14); border-radius: 12px; padding: 12px 14px;
+  display: grid; grid-template-columns: auto 1fr; gap: 7px 12px; align-items: center;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .45); font-size: .85rem; color: rgba(255, 250, 240, .85);
+}
+.player-controls li { display: contents; }
+.player-controls kbd { justify-self: start; background: rgba(255, 250, 240, .12); color: var(--cream); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .3); padding: 2px 8px; border-radius: 6px; font-size: .75rem; }
+.player-area.fullscreen .player-controls { top: 50px; }
+@media (max-width: 720px), (max-height: 520px) {
+  .player-actions .btn.small.pip-btn .lbl { display: none; }
+  .player-actions .btn.small.pip-btn { padding: 6px 9px; }
+}

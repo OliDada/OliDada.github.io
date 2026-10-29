@@ -275,10 +275,10 @@ async function playFromAnchor(anchor) {
                 try {
                     if ((match && (match.title || '').toLowerCase().includes('game of life')) || String(path).toLowerCase().includes('game_of_life')) {
                         // prefer the internal gol.html which loads the game's script
-                        embedPath = '/Game of Life/gol.html';
+                        embedPath = '/simulations/Game_of_Life/gol.html';
                     }
                     if (match && match.source && String(match.source).toLowerCase().includes('game_of_life.js')) {
-                        embedPath = '/Game of Life/gol.html';
+                        embedPath = '/simulations/Game_of_Life/gol.html';
                     }
                 } catch (e) {}
                 // also handle patterns like /some/path/index.html where the file might be a raw HTML viewer
@@ -421,8 +421,9 @@ function showPlayerControls(controls) {
     if (!has) { list.hidden = true; list.innerHTML = ''; return; }
     const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     list.innerHTML = controls.map(([key, what]) => `<li><kbd>${esc(key)}</kbd>${esc(what)}</li>`).join('');
-    let open = true;
-    try { open = localStorage.getItem('player-controls') !== 'hidden'; } catch (e) {}
+    // closed by default; it opens as a small card from the Controls button
+    let open = false;
+    try { open = localStorage.getItem('player-controls') === 'shown'; } catch (e) {}
     list.hidden = !open;
     btn.setAttribute('aria-expanded', String(open));
     try { if (typeof fitPlayer === 'function') fitPlayer(); } catch (e) {}

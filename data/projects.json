@@ -81,8 +81,7 @@
     "title": "Farm Frenzy",
     "path": "/farm-frenzy/index.html",
     "source": "/farm-frenzy/main.js",
-    "aspect": "9:6",
-    "playSize": { "width": 1920, "height": 720 },
+    "aspect": "16:9",
     "thumbnail": "data/thumbnails/farm-frenzy-thumbnail.png",
     "tags": ["game", "arcade"],
     "featured": true
@@ -92,17 +91,18 @@
     "path": "/gravity_dash.html",
     "embed": "/embeds/gravity_dash.html",
     "source": "/gravity_dash.js",
-    "controls": [["A / D or arrows", "steer"], ["Space", "hop"], ["P / Esc", "pause"], ["Touch", "drag to steer; tap HOP"]],
-    "aspect": "fill",
+    "controls": [["A / D or arrows", "steer"], ["Space", "jump"], ["R", "restart after a crash"]],
+    "aspect": "4:3",
     "thumbnail": "data/thumbnails/gravity-dash-thumbnail.png",
     "tags": ["game", "physics"],
     "featured": true
   },
   {
     "title": "Physics Simulation",
-    "path": "/physics_simulation.html",
+    "path": "/embeds/physics_simulation.html",
     "source": "/physics_simulation.js",
     "embed": "/embeds/physics_simulation.html",
+    "aspect": "3:2",
     "thumbnail": "data/thumbnails/physics-simulation-thumbnail.png",
     "tags": ["simulation", "physics"],
     "featured": true
@@ -119,9 +119,9 @@
   },
   {
     "title": "Game of Life",
-    "path": "/simulations/Game of Life/gol.html",
+    "path": "/simulations/Game_of_Life/gol.html",
     "source": "/simulations/Game_of_Life/game_of_life.js",
-    "embed": "/embeds/gol.html",
+    "embed": "/simulations/Game_of_Life/gol.html",
     "aspect": "8:4",
     "playSize": { "width": 800, "height": 400 },
     "description": "Use the mouse to create new cells. Press space to reset.",

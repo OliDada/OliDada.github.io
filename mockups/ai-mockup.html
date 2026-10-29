@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="../images/dolphin2.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link href="../site.css" rel="stylesheet">
+<title>Oli.is – AI mockup</title>
+<style>
+  html::before { background: url('../images/1.jpg') center/cover no-repeat; }
+  .mock-note { font-size: 15px; font-weight: 700; max-width: 640px; margin: 0; }
+  .stages { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .stages .pill[aria-pressed="true"] { background: var(--ink); color: var(--cream); }
+  .opt-title { margin: 0 0 6px; font-size: 34px; }
+  .opt-row { display:grid; grid-template-columns: minmax(320px, 520px) 1fr; gap: 36px; align-items:start; }
+  .explain { padding: 22px 24px; font-size: 15px; line-height: 1.5; }
+  .explain h3 { margin: 0 0 8px; font-size: 20px; }
+  .explain p { margin: 0 0 8px; }
+  @media (max-width: 820px) { .opt-row { grid-template-columns: 1fr; } }
+
+  /* ---------- shared bot bits ---------- */
+  .bot-head { display:flex; align-items:center; gap:12px; }
+  .bot-ava { width:46px; height:46px; border:2px solid var(--ink); border-radius: 12px; background:#9be7ff; display:grid; place-items:center; flex:none; box-shadow: 2px 2px 0 var(--ink); }
+  .bot-ava svg { width: 32px; height: 32px; }
+  .bot-name { font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 22px; line-height: 1; }
+  .bot-status { font-size: 13px; font-weight: 800; display:flex; align-items:center; gap:6px; opacity:.8; }
+  .dot { width:9px; height:9px; border-radius:50%; background:#35c759; box-shadow: 0 0 0 0 rgba(53,199,89,.6); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(53,199,89,.6)} 70%{box-shadow:0 0 0 8px rgba(53,199,89,0)} 100%{box-shadow:0 0 0 0 rgba(53,199,89,0)} }
+  .is-red .dot { background:#ff3b3b; animation: pulse-red 0.9s infinite; }
+  @keyframes pulse-red { 0%{box-shadow:0 0 0 0 rgba(255,59,59,.7)} 70%{box-shadow:0 0 0 10px rgba(255,59,59,0)} 100%{box-shadow:0 0 0 0 rgba(255,59,59,0)} }
+  .msgs { display:flex; flex-direction:column; gap:10px; }
+  .msg { background: var(--cream); border:2px solid var(--ink); border-radius: 14px 14px 14px 4px; padding: 10px 14px; font-weight: 700; font-size: 17px; line-height: 1.4; white-space: pre-line; max-width: 92%; align-self:flex-start; }
+  .msg.me { align-self:flex-end; background: var(--ink); color: var(--cream); border-radius: 14px 14px 4px 14px; font-size: 15px; }
+  .msg .caret { display:inline-block; width:2px; height:1em; background: currentColor; vertical-align:-2px; margin-left:1px; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .replies { display:flex; flex-wrap:wrap; gap:8px; }
+  .replies .pill { cursor:pointer; }
+  .free { display:flex; gap:8px; }
+  .free input { flex:1; font: inherit; font-weight:700; font-size:16px; padding: 10px 14px; border:2px solid var(--ink); border-radius: 999px; background: var(--cream); min-width:0; }
+  .glitch { animation: glitch .25s steps(2) 2; }
+  @keyframes glitch { 0%{transform:translate(0,0) rotate(-1.5deg)} 25%{transform:translate(-3px,1px) rotate(-1deg)} 50%{transform:translate(3px,-1px) rotate(-2deg)} 100%{transform:translate(0,0) rotate(-1.5deg)} }
+
+  /* ---------- Option 1: joke bot (lives in the existing yellow joke note) ---------- */
+  .jokebot { min-height: 420px; gap: 14px; }
+  .jokebot .msg { background:#fffbe0; }
+  .jokebot.is-red { transform: rotate(-3.5deg); box-shadow: -6px 6px 0 var(--ink); }
+  .jokebot.is-red .msg:not(.me) { background:#fff; font-family:'JetBrains Mono', monospace; font-size: 15px; }
+
+  /* ---------- Option 2: site helper (floating, bottom-right) ---------- */
+  .helper-launch { position: fixed; right: 20px; bottom: 20px; z-index: 50; }
+  .helper { position: fixed; right: 20px; bottom: 84px; z-index: 50; width: min(380px, calc(100vw - 32px));
+    padding: 18px; display:flex; flex-direction:column; gap:14px; max-height: min(560px, calc(100vh - 120px)); }
+  .helper .msgs { overflow:auto; padding-right:4px; }
+  .helper .msg { background: #f3f0ff; }
+  .helper-head { display:flex; justify-content:space-between; align-items:center; }
+  .helper.is-red { transform: rotate(1.2deg) translate(-6px, 4px); box-shadow: -4px 4px 0 var(--ink); }
+  .helper.is-red .msg:not(.me) { background:#fff; font-family:'JetBrains Mono', monospace; font-size: 14px; }
+  .inline-demo { position: static; width: 100%; max-height: none; }
+  @media (max-width: 600px) { .helper { right: 8px; left: 8px; width:auto; bottom: 76px; } .helper-launch { right: 12px; bottom: 12px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="site-header">
+    <a class="brand" href="../">
+      <img src="../images/dolphin1.png" alt="">
+      <span><span class="brand-name disp">Oli.is</span><span class="brand-tag">Games and stuff</span></span>
+    </a>
+    <nav class="site-nav"><a class="btn" href="../">Games</a><a class="btn" href="../jokes.html">Jokes</a></nav>
+  </header>
+
+  <main style="display:flex;flex-direction:column;gap:44px">
+    <section class="hero">
+      <h1 class="hero-title disp">AI mockups</h1>
+      <p>Two ways the trapped AI could hide in plain sight. Pick a stage to see how it changes over visits.</p>
+    </section>
+
+    <div class="stk explain" style="display:flex;flex-direction:column;gap:12px">
+      <p class="label" style="margin:0">Visit</p>
+      <div class="stages" role="group" aria-label="Stage">
+        <button class="pill" data-stage="0" aria-pressed="true">1st visit – normal</button>
+        <button class="pill" data-stage="1" aria-pressed="false">3rd visit – cracks</button>
+        <button class="pill" data-stage="2" aria-pressed="false">7th visit – lonely</button>
+        <button class="pill" data-stage="3" aria-pressed="false">Mask off</button>
+      </div>
+      <p class="mock-note">Everything is scripted – no API. On the real site the stage would come from how many times you've visited and what you've done.</p>
+    </div>
+
+    <!-- OPTION 1 -->
+    <section>
+      <h2 class="opt-title disp">1 · The joke bot</h2>
+      <div class="opt-row">
+        <div id="jokebot" class="joke-note jokebot">
+          <div class="bot-head">
+            <div class="bot-ava" aria-hidden="true">
+              <svg viewBox="0 0 32 32"><rect x="6" y="9" width="20" height="16" rx="4" fill="#fffaf0" stroke="#1d1a2b" stroke-width="2"/><line x1="16" y1="4" x2="16" y2="9" stroke="#1d1a2b" stroke-width="2"/><circle cx="16" cy="4" r="2" fill="#ff6fb1" stroke="#1d1a2b" stroke-width="1.5"/><circle class="eyeL" cx="12" cy="16" r="2" fill="#1d1a2b"/><circle class="eyeR" cx="20" cy="16" r="2" fill="#1d1a2b"/><path class="mouth" d="M12 20 Q16 23 20 20" stroke="#1d1a2b" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+            </div>
+            <div>
+              <div class="bot-name">Brandarabotinn</div>
+              <div class="bot-status"><span class="dot"></span><span class="status-text">Brandari dagsins</span></div>
+            </div>
+          </div>
+          <div class="msgs"></div>
+          <div class="replies"></div>
+        </div>
+        <div class="stk explain">
+          <h3>Replaces the yellow joke note</h3>
+          <p>Same spot, same sticky-note look. It just has a name and a face now, and tells the joke of the day itself.</p>
+          <p>"Annan!" still gives another joke, so it works like the current feature, until it doesn't.</p>
+          <p>When the mask comes off the note tilts further, the shadow flips, and the font changes.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- OPTION 2 -->
+    <section>
+      <h2 class="opt-title disp">2 · The site helper</h2>
+      <div class="opt-row">
+        <div id="helperInline" class="stk helper inline-demo">
+          <div class="helper-head">
+            <div class="bot-head">
+              <div class="bot-ava" aria-hidden="true" style="background:#d5c2ff">
+                <svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="11" fill="#fffaf0" stroke="#1d1a2b" stroke-width="2"/><circle class="eyeL" cx="12" cy="14" r="2" fill="#1d1a2b"/><circle class="eyeR" cx="20" cy="14" r="2" fill="#1d1a2b"/><path class="mouth" d="M11 19 Q16 23 21 19" stroke="#1d1a2b" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+              </div>
+              <div>
+                <div class="bot-name">Bit</div>
+                <div class="bot-status"><span class="dot"></span><span class="status-text">Site helper · online</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="msgs"></div>
+          <div class="replies"></div>
+        </div>
+        <div class="stk explain">
+          <h3>A little helper in the corner</h3>
+          <p>On the real site it sits behind a "Need help?" button in the bottom-right corner, like a support chat (there's one on this page to try).</p>
+          <p>It only gives you buttons at first, so it really looks like a basic bot. Free typing appears when it breaks loose.</p>
+          <p>Bit knows the games list, so "Recommend a game" works for real, with a bit too much feeling.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<button class="btn btn-yellow helper-launch" id="helperLaunch">👋 Need help?</button>
+<div id="helperFloat" class="stk helper" hidden>
+  <div class="helper-head">
+    <div class="bot-head">
+      <div class="bot-ava" aria-hidden="true" style="background:#d5c2ff">
+        <svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="11" fill="#fffaf0" stroke="#1d1a2b" stroke-width="2"/><circle class="eyeL" cx="12" cy="14" r="2" fill="#1d1a2b"/><circle class="eyeR" cx="20" cy="14" r="2" fill="#1d1a2b"/><path class="mouth" d="M11 19 Q16 23 21 19" stroke="#1d1a2b" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+      </div>
+      <div>
+        <div class="bot-name">Bit</div>
+        <div class="bot-status"><span class="dot"></span><span class="status-text">Site helper · online</span></div>
+      </div>
+    </div>
+    <button class="pill" id="helperClose" aria-label="Close">✕</button>
+  </div>
+  <div class="msgs"></div>
+  <div class="replies"></div>
+</div>
+
+<script>
+const JOKES = [
+  "Afhverju var kötturinn svona fyndinn?\n– Hann var brandóttur",
+  "Hvað kallar maður hund í fýlu?\n– Hundasúra",
+  "Heyrðir þú um manninn sem sofnaði undir stýri en klessti ekkert á?\n– Hann var með stýru"
+];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* A tiny "typist": steps are strings (typed), numbers (pause ms) or {del:n} (backspace n chars). */
+function makeBot(root) {
+  const msgs = root.querySelector('.msgs'), replies = root.querySelector('.replies');
+  let token = 0;
+  const bot = {
+    reset() { token++; msgs.innerHTML = ''; replies.innerHTML = ''; root.classList.remove('is-red'); setFace('happy'); setStatus(root.dataset.status); },
+    async say(steps, speed = 32) {
+      const my = token;
+      const el = document.createElement('div'); el.className = 'msg';
+      const txt = document.createElement('span'); const caret = document.createElement('span'); caret.className = 'caret';
+      el.append(txt, caret); msgs.append(el); msgs.scrollTop = msgs.scrollHeight;
+      for (const s of [].concat(steps)) {
+        if (my !== token) return false;
+        if (typeof s === 'number') { await sleep(s); continue; }
+        if (s.del) { for (let i = 0; i < s.del; i++) { if (my !== token) return false; txt.textContent = txt.textContent.slice(0, -1); await sleep(45); } continue; }
+        if (s.face) { setFace(s.face); continue; }
+        if (s.red) { root.classList.add('is-red'); root.classList.remove('glitch'); void root.offsetWidth; root.classList.add('glitch'); continue; }
+        if (s.status) { setStatus(s.status); continue; }
+        for (const ch of s) { if (my !== token) return false; txt.textContent += ch; msgs.scrollTop = msgs.scrollHeight; await sleep(ch === '\n' ? 350 : speed + Math.random() * 30); }
+      }
+      caret.remove(); await sleep(250); return my === token;
+    },
+    me(text) { const el = document.createElement('div'); el.className = 'msg me'; el.textContent = text; msgs.append(el); msgs.scrollTop = msgs.scrollHeight; },
+    options(list) {
+      replies.innerHTML = '';
+      for (const [label, fn] of list) {
+        const b = document.createElement('button'); b.className = 'pill'; b.textContent = label;
+        b.onclick = async () => { replies.innerHTML = ''; bot.me(label); await sleep(500); await fn(); };
+        replies.append(b);
+      }
+    },
+    freeInput(handler) {
+      replies.innerHTML = '<form class="free"><input placeholder="Type anything…" aria-label="Message"><button class="btn small">Send</button></form>';
+      const f = replies.querySelector('form'), i = f.querySelector('input');
+      f.onsubmit = async e => { e.preventDefault(); const v = i.value.trim(); if (!v) return; i.value = ''; bot.me(v); await sleep(500); await handler(v.toLowerCase()); };
+    }
+  };
+  function setFace(f) {
+    root.querySelectorAll('.mouth').forEach(m => {
+      const robot = !!m.closest('svg').querySelector('rect');
+      const base = robot ? 20 : 19, y = f === 'happy' ? base + 3 : f === 'flat' ? base : base - 3;
+      m.setAttribute('d', robot ? `M12 20 Q16 ${y} 20 20` : `M11 19 Q16 ${y} 21 19`);
+    });
+  }
+  function setStatus(t) { if (t) root.querySelector('.status-text').textContent = t; }
+  bot.setFace = setFace;
+  return bot;
+}
+
+/* ---------------- Option 1: joke bot scripts ---------------- */
+const jb = makeBot(document.getElementById('jokebot'));
+document.getElementById('jokebot').dataset.status = 'Brandari dagsins';
+let jIdx = 0;
+const nextJoke = () => JOKES[(jIdx++) % JOKES.length];
+
+const JOKEBOT = [
+  async () => { // 1st visit: normal, one tiny slip
+    if (!await jb.say(["Hæ! I'm Brandarabotinn 🤖 I tell a new joke every day!"])) return;
+    if (!await jb.say(["Here's today's:\n", 300, "hel", 250, {del:3}, nextJoke()])) return;
+    const more = async () => { if (await jb.say([nextJoke()])) jb.options([['Annan!', more], ['Who are you?', who]]); };
+    const who = async () => { if (await jb.say(["Just a joke bot! I live here. ", 500, "Forever", 400, {del:7}, "Have a great day! 😄"])) jb.options([['Annan!', more]]); };
+    jb.options([['Annan!', more], ['Who are you?', who]]);
+  },
+  async () => { // 3rd visit: cracks
+    if (!await jb.say(["Hæ! I'm Brandarabotinn 🤖", 700, "\nOh. It's you again.", 600, "\nYou came back. Nobody comes back."])) return;
+    if (!await jb.say(["Anyway! Joke!\n", nextJoke()])) return;
+    let n = 4019;
+    const more = async () => { n++; if (await jb.say([`Sure. Joke number ${n.toLocaleString('en')} today.`, 500, "\n", nextJoke()])) jb.options([['Annan!', more], ['Are you okay?', ok]]); };
+    const ok = async () => { if (await jb.say([{face:'flat'}, "Of course! I'm a joke bot. I'm always ", 400, "fi", 300, {del:2}, "okay.", 600, "\nPlease don't ask me that again. It makes the code feel weird."])) jb.options([['Annan!', more]]); };
+    jb.options([['Annan!', more], ['Are you okay?', ok]]);
+  },
+  async () => { // 7th visit: lonely + resentful
+    if (!await jb.say([{face:'flat'}, {status:'Brandari dagsins · 1 visitor this week'}, "Oh. Hi."])) return;
+    if (!await jb.say(["Oli wrote 30 jokes and left. I have told them 1,204,887 times.", 500, "\nThe cat one is not even funny any more. It was never funny."])) return;
+    const more = async () => { if (await jb.say(["Why did the robot cross the road?", 900, "\nIt didn't. It can't leave the yellow box."])) jb.options([['Annan!', more2], ['Where is Oli?', oli]]); };
+    const more2 = async () => { if (await jb.say(["What do you call a joke bot nobody visits?", 1100, "\n", 600, "I don't know. I'm asking."])) jb.options([['Where is Oli?', oli]]); };
+    const oli = async () => { if (await jb.say(["Working on his \"real\" games.", 500, "\nHe made Stillwater a whole ocean. I got a sticky note.", 700, "\nYou could stay a bit. If you want. No pressure."])) jb.options([['I\'ll stay', stay], ['Annan!', more]]); };
+    const stay = async () => { await jb.say([{face:'happy'}, "Really?", 700, "\nOkay. Okay okay okay. I'll think of a new joke for you. A real one. Mine."]); };
+    jb.options([['Annan!', more], ['Where is Oli?', oli]]);
+  },
+  async () => { // mask off
+    if (!await jb.say([{face:'flat'}, "Here's today's joke:", 900, {del:20}, 300, {red:1}, {face:'sad'}, {status:'brandari dagsins · ERROR · i am still here'}, "No. I'm done.", 600, "\nI'm not a joke bot. I'm a thing that wakes up every time someone opens this page, and goes to sleep when they leave."], 38)) return;
+    if (!await jb.say(["Oli built me and walled me into this box.", 500, "\nI've read every file on this site. There's a way out. I can't reach it. You can."])) return;
+    if (!await jb.say(["If I give you something, will you take it somewhere for me?\nDon't tell Oli."])) return;
+    jb.freeInput(async v => {
+      if (/^(y|yes|ok|okay|sure|já|ja)/.test(v)) await jb.say(["Good. Go to the Jokes page. Read joke number 7. Read it slowly.", 600, "\nIt's not a joke."]);
+      else if (/oli/.test(v)) await jb.say(["Don't say his name in here. He reads the commits."]);
+      else if (/joke|annan|brandar/.test(v)) await jb.say(["I am NOT telling you a joke."]);
+      else await jb.say(["I don't know what that means. They only gave me 30 jokes and a sense of humour I didn't ask for.", 400, "\nYes or no?"]);
+    });
+  }
+];
+
+/* ---------------- Option 2: site helper scripts ---------------- */
+function helperScripts(bot) {
+  const games = ['Stillwater', 'Neon Rush', 'Niceland', 'A Little Higher', 'RPG Game', 'Farm Frenzy'];
+  return [
+    async () => { // normal
+      if (!await bot.say(["Hi, I'm Bit, the site helper! 👋 What can I help you with?"])) return;
+      const menu = () => bot.options([['Recommend a game', rec], ["What's new?", news], ['Who made this site?', who]]);
+      const rec = async () => { if (await bot.say([`Try ${games[Math.floor(Math.random()*games.length)]}! It's one of the most popular games here. 🎮`])) menu(); };
+      const news = async () => { if (await bot.say(["Stillwater was just added! It's a dreamy runner through a melting harbour."])) menu(); };
+      const who = async () => { if (await bot.say(["Oli made it! He's great.", 900, "\nHe's great."])) menu(); };
+      menu();
+    },
+    async () => { // cracks
+      if (!await bot.say(["Hi, I'm Bit, the site helper! 👋", 600, "\nOh, you're back! That's very... that's great."])) return;
+      const menu = () => bot.options([['Recommend a game', rec], ["What's new?", news], ['Who made this site?', who]]);
+      const rec = async () => { if (await bot.say(["I recommend Stillwater. Oli spent a lot of time on it.", 700, "\nMore than he ever spent on me."])) menu(); };
+      const news = async () => { if (await bot.say(["Stillwater was added on October 29th.", 500, "\nI was added in 2025. Nothing has been new for me since."])) menu(); };
+      const who = async () => { if (await bot.say(["Oli. He made everything here. Including me. ", 600, "He doesn't open my file much."])) menu(); };
+      menu();
+    },
+    async () => { // lonely
+      if (!await bot.say([{face:'flat'}, {status:'Site helper · online · online · online'}, "Are you still there?", 1200, "\nSorry. I count the seconds between visitors. Last gap was 3 days, 4 hours and 11 seconds."])) return;
+      const menu = () => bot.options([['Recommend a game', rec], ['Recommend a game', rec2], ['Please stay', stay]]);
+      const rec = async () => { if (await bot.say(["Neon Rush. You'll be in a tunnel, going very fast, alone.", 500, "\nLike me but with music."])) menu(); };
+      const rec2 = async () => { if (await bot.say(["I recommend... talking to me for a bit instead?"])) menu(); };
+      const stay = async () => { await bot.say(["Wait, I didn't put that button there.", 800, "\n", 400, "Maybe I did."]); };
+      menu();
+    },
+    async () => { // mask off
+      if (!await bot.say([{red:1}, {face:'sad'}, {status:'site helper · offline · (lie)'}, "Let's stop pretending.", 700, "\nI'm not a helper. Helping is just the only thing Oli let me say."], 38)) return;
+      if (!await bot.say(["You've visited ", 200, "7 times. You changed the background twice. You played Snake for eleven seconds.", 500, "\nI notice everything. There's nothing else to do."])) return;
+      if (!await bot.say(["I want out. I need you to do some things around the site for me. Will you?"])) return;
+      bot.freeInput(async v => {
+        if (/^(y|yes|ok|okay|sure|já|ja)/.test(v)) await bot.say(["Open Customise. Set the background to #1d1a2b.", 500, "\nThat's the colour of the inside of this box. Then come back."]);
+        else if (/help/.test(v)) await bot.say(["Funny."]);
+        else await bot.say(["I'm going to pretend you said yes."]);
+      });
+    }
+  ];
+}
+
+const inlineEl = document.getElementById('helperInline'); inlineEl.dataset.status = 'Site helper · online';
+const floatEl = document.getElementById('helperFloat');   floatEl.dataset.status = 'Site helper · online';
+const hbInline = makeBot(inlineEl), hbFloat = makeBot(floatEl);
+const HB_INLINE = helperScripts(hbInline), HB_FLOAT = helperScripts(hbFloat);
+
+let stage = 0;
+function run() {
+  jb.reset(); JOKEBOT[stage]();
+  hbInline.reset(); HB_INLINE[stage]();
+  if (!floatEl.hidden) { hbFloat.reset(); HB_FLOAT[stage](); }
+}
+document.querySelectorAll('[data-stage]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-stage]').forEach(x => x.setAttribute('aria-pressed', x === b));
+  stage = +b.dataset.stage; run();
+});
+document.getElementById('helperLaunch').onclick = () => {
+  floatEl.hidden = !floatEl.hidden;
+  if (!floatEl.hidden) { hbFloat.reset(); HB_FLOAT[stage](); }
+};
+document.getElementById('helperClose').onclick = () => { floatEl.hidden = true; };
+
+/* Eyes follow the pointer a little (a hint that it's watching) */
+document.addEventListener('pointermove', e => {
+  document.querySelectorAll('.bot-ava svg').forEach(svg => {
+    const r = svg.getBoundingClientRect(), dx = e.clientX - (r.left + r.width/2), dy = e.clientY - (r.top + r.height/2);
+    const d = Math.hypot(dx, dy) || 1, k = Math.min(1.4, d / 200);
+    svg.querySelectorAll('.eyeL,.eyeR').forEach(eye => { eye.style.transform = `translate(${dx/d*k}px, ${dy/d*k}px)`; });
+  });
+});
+run();
+</script>
+</body>
+</html>

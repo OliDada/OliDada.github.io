@@ -15,8 +15,8 @@
         // find the first canvas on the page
         const c = document.querySelector('canvas');
         if (!c) return;
-        const w = c.width || c.clientWidth || c.offsetWidth;
-        const h = c.height || c.clientHeight || c.offsetHeight;
+        const w = c.clientWidth || c.offsetWidth || c.width;
+        const h = c.clientHeight || c.offsetHeight || c.height;
         window.parent.postMessage({ type: 'game-aspect', width: w, height: h }, '*');
       } catch (e) { /* ignore */ }
     }
