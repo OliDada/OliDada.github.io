@@ -6,8 +6,13 @@
     'use strict';
 
     const FLOATIE_DEFAULTS = { shape: 'sparkles', amount: 'some', speed: 1, color: 'auto', follow: true };
+    // once Pip is free, a few of his heads are the standard floaties
+    try { if (JSON.parse(localStorage.getItem('bit-memory') || '{}').freed) Object.assign(FLOATIE_DEFAULTS, { shape: 'pips', amount: 'few' }); } catch (e) {}
     const SWATCHES = ['#ffa500', '#38b6ff', '#ff5436', '#7ed957', '#ffc8dd', '#b58cff', '#1e1645'];
-    const SHAPES = [['sparkles', 'Sparkles'], ['bubbles', 'Bubbles'], ['cubes', 'Cubes'], ['dolphins', 'Dolphins'], ['snow', 'Snow'], ['none', 'Nothing']];
+    const ALL_SHAPES = [['sparkles', 'Sparkles'], ['bubbles', 'Bubbles'], ['cubes', 'Cubes'], ['dolphins', 'Dolphins'], ['snow', 'Snow'], ['pips', 'Pips'], ['none', 'Nothing']];
+    // Pip's own things (his heads as floaties, his colour as the site's original look) only exist once he's free
+    const pipFree = () => (typeof window.pipIsFree === 'function' ? window.pipIsFree() : false);
+    const shapes = () => ALL_SHAPES.filter(([k]) => k !== 'pips' || pipFree());
     const AMOUNTS = [['few', 'A few'], ['some', 'Some'], ['loads', 'Loads']];
     const SPEEDS = [[0.35, 'Chill'], [1, 'Normal'], [2.6, 'Zoomy']];
     const FONTS = [['bubbly', 'Bubbly'], ['pixel', 'Pixel'], ['chunky', 'Chunky'], ['comic', 'Comic'], ['clean', 'Clean']];
@@ -109,7 +114,9 @@
             <div>
                 <p class="label">Background</p>
                 <div class="row">
-                    <button type="button" class="sw" data-bg="original" aria-label="Original orange" style="background:url('/images/1.jpg') center/cover"></button>
+                    ${pipFree()
+                        ? `<button type="button" class="sw sw-pip" data-bg="original" aria-label="Pip's colour (the original)" title="Pip's colour" style="background:${window.PIP_BACKGROUND || '#14111f'}"></button>`
+                        : `<button type="button" class="sw" data-bg="original" aria-label="Original orange" style="background:url('/images/1.jpg') center/cover"></button>`}
                     ${SWATCHES.map(h => `<button type="button" class="sw" data-bg="${h}" aria-label="${h}" style="background:${h}"></button>`).join('')}
                     <label class="row" style="gap:8px;font-weight:700;font-size:14px"><input type="color" class="sw-input" data-bgpick value="#ffa500"> Any colour</label>
                     <label class="row hex-row" style="gap:8px;font-weight:700;font-size:14px">Code <input type="text" class="hex-input" data-bghex maxlength="7" placeholder="#000000" spellcheck="false" autocomplete="off" aria-label="Colour code, like #000000"></label>
@@ -121,7 +128,7 @@
                 <div class="group">
                     <div>
                         <p class="sub">What</p>
-                        <div class="row">${pills('shape', SHAPES, floaties.shape)}</div>
+                        <div class="row">${pills('shape', shapes(), floaties.shape)}</div>
                     </div>
                     <div data-when-floaties>
                         <p class="sub">How many</p>
@@ -165,8 +172,8 @@
             }
             if (b.hasAttribute('data-surprise')) {
                 setBg(randomColor());
-                const shapes = SHAPES.filter(s => s[0] !== 'none');
-                setFloaties({ shape: shapes[Math.floor(Math.random() * shapes.length)][0], color: 'auto' });
+                const pickable = shapes().filter(s => s[0] !== 'none');
+                setFloaties({ shape: pickable[Math.floor(Math.random() * pickable.length)][0], color: 'auto' });
                 setFont(FONTS[Math.floor(Math.random() * FONTS.length)][0]);
                 poke();
                 return;
@@ -202,7 +209,8 @@
         const p = $('#customise');
         if (!p) return;
         const bg = currentBg().toLowerCase();
-        const isOriginal = !hexToRgb(bg);
+        let saved = ''; try { saved = localStorage.getItem('backgroundColor') || ''; } catch (e) {}
+        const isOriginal = !saved || !hexToRgb(bg);
         p.querySelectorAll('[data-bg]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.bg === 'original' ? isOriginal : b.dataset.bg === bg)));
         const pick = $('[data-bgpick]', p);
         if (pick && hexToRgb(bg)) pick.value = bg.length === 4 ? '#' + bg.slice(1).split('').map(c => c + c).join('') : bg;
@@ -342,6 +350,19 @@
     }
 
     // ---------- Start ----------
+    // Called by bit.js the moment Pip is set free: the site switches to his look, his heads float
+    // in the background, and Customise gets his colour (as the new original) and the Pips floaties.
+    window.pipTakesOver = function () {
+        if (window.revertToOriginalBackground) window.revertToOriginalBackground();
+        applyInk();
+        const old = $('#customise'), wasOpen = old && !old.hidden;
+        if (old) old.remove();
+        buildPanel();
+        if (wasOpen) togglePanel(true);
+        Object.assign(FLOATIE_DEFAULTS, { shape: 'pips', amount: 'few' });
+        setFloaties({ shape: 'pips', amount: 'few', color: 'auto' });
+    };
+
     function start() {
         applyInk();
         const font = store.get('site-font', 'bubbly');

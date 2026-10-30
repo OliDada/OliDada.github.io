@@ -256,3 +256,85 @@ body.pip-nocursor, body.pip-nocursor * { cursor: none !important; }
 .pip-ending-face svg { width: 100%; height: 100%; display: block; }
 .pip-ending-text { position: absolute; left: 50%; bottom: 12vh; transform: translateX(-50%); width: min(680px, calc(100% - 32px)); margin: 0; text-align: center;
   font: 800 clamp(18px, 3vw, 28px)/1.35 'Nunito', system-ui, sans-serif; color: #1d1a2b; white-space: pre-wrap; min-height: 2.8em; }
+/* Customise, once Pip is free: his colour is the original */
+.sw.sw-pip { box-shadow: inset 0 0 0 3px #b58cff, 0 0 10px rgba(181,140,255,.55); }
+/* the purple "Games and stuff" stays readable on dark backgrounds (site.js sets a light --page-ink there) */
+html[style*="--page-ink: #fff8e7"] .brand.pip-dolphin .brand-tag { color: #d4bcff; }
+
+/* ===================== the switches in Pip's room (/pip) ===================== */
+html.pip-p-flip .brand img { transform: scaleX(-1); }
+html.pip-p-comic .disp, html.pip-p-comic h1, html.pip-p-comic h2 { font-family: 'Comic Neue', 'Comic Sans MS', 'Chalkboard SE', cursive !important; }
+html.pip-p-tilt body:not(.is-playing) > .wrap { rotate: 1deg; transform-origin: 50% 0; }
+html.pip-p-cursor, html.pip-p-cursor * { cursor: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2228%22%20height%3D%2228%22%20viewBox%3D%220%200%2032%2032%22%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%2211%22%20fill%3D%22%23fffaf0%22%20stroke%3D%22%231d1a2b%22%20stroke-width%3D%222%22/%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2214%22%20r%3D%222%22%20fill%3D%22%231d1a2b%22/%3E%3Ccircle%20cx%3D%2220%22%20cy%3D%2214%22%20r%3D%222%22%20fill%3D%22%231d1a2b%22/%3E%3Cpath%20d%3D%22M11%2019%20Q16%2024%2021%2019%22%20stroke%3D%22%231d1a2b%22%20stroke-width%3D%222%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E") 14 14, auto !important; }
+html.pip-p-shy .card { transition: transform .35s ease, box-shadow .25s ease, translate .25s ease-out; }
+
+/* ===================== Pip's chat on his desktop (/pip): always open, can't be closed ===================== */
+html.pip-docked .bit { right: 20px; bottom: 20px; height: min(470px, calc(100vh - 90px)); width: min(360px, calc(100vw - 32px)); z-index: 950; }
+html.pip-docked .bit [data-close] { display: none; }
+.bit-peek { display: none; }
+/* on phones it's a bar along the bottom that you tap to open */
+@media (max-width: 700px) {
+  html.pip-docked .bit {
+    left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); width: auto; height: min(70vh, 560px);
+    padding: 10px 12px; transition: height .25s ease;
+  }
+  html.pip-docked .bit-head { cursor: pointer; }
+  html.pip-docked .bit-ava { width: 40px; height: 40px; }
+  html.pip-docked .bit-ava svg { width: 30px; height: 30px; }
+  html.pip-docked .bit.sheet-closed { height: 64px; overflow: hidden; }
+  html.pip-docked .bit.sheet-closed .bit-msgs, html.pip-docked .bit.sheet-closed .bit-chips, html.pip-docked .bit.sheet-closed .bit-form { display: none; }
+  html.pip-docked .bit.sheet-closed .bit-status, html.pip-docked .bit.sheet-closed .bit-name { display: none; }
+  html.pip-docked .bit.sheet-closed .bit-peek { display: block; font-size: 13px; font-weight: 800; line-height: 1.25; max-height: 2.5em; overflow: hidden; }
+  html.pip-docked .bit.sheet-closed.has-new .bit-ava { box-shadow: 0 0 0 3px #ff6fb1; }
+}
+
+/* Pip's typed lines over the page (story moments in the games) */
+.pip-caption { position: fixed; left: 50%; bottom: 7%; transform: translate(-50%, 8px); z-index: 100002; pointer-events: none; max-width: min(92vw, 640px); background: #fffaf0; color: #1d1a2b; border: 3px solid #1d1a2b; border-radius: 16px; box-shadow: 4px 4px 0 #1d1a2b; padding: 10px 16px; font: 800 clamp(15px, 2.6vw, 20px)/1.3 'Nunito', system-ui, sans-serif; letter-spacing: .4px; text-align: center; opacity: 0; transition: opacity .3s, transform .3s; }
+.pip-caption.on { opacity: 1; transform: translate(-50%, 0); }
+/* Snake: the snake is out on the website, eating it */
+.pip-snake-layer { position: fixed; inset: 0; z-index: 100000; touch-action: none; }
+.pip-eaten { transition: transform .22s ease-in, opacity .22s ease-in !important; transform: scale(.05) rotate(10deg) !important; opacity: 0 !important; }
+.pip-regrow { transition: transform .5s cubic-bezier(.3, 1.6, .5, 1), opacity .4s ease !important; }
+.brand img.pip-hint { animation: pip-hint-wiggle .5s ease-in-out 4; }
+@keyframes pip-hint-wiggle { 25% { transform: rotate(-12deg) scale(1.08); } 75% { transform: rotate(12deg) scale(1.08); } }
+@media (prefers-reduced-motion: reduce) { .pip-eaten, .pip-regrow { transition: none !important; } .brand img.pip-hint { animation: none; outline: 3px solid #ffe14d; border-radius: 8px; } }
+html.pip-snake-out, html.pip-snake-out body { overflow: hidden !important; }
+/* /backstage: Pip steps aside while the robot check is looking at him */
+html.pip-shy .bit { transform: translateX(calc(100% - 64px)); transition: transform .9s cubic-bezier(.3,.8,.3,1); }
+html.pip-docked .bit { transition: transform .9s cubic-bezier(.3,.8,.3,1), height .25s ease, box-shadow .5s ease; }
+@media (max-width: 700px) { html.pip-shy .bit { transform: translateX(calc(100% - 56px)); } }
+@media (prefers-reduced-motion: reduce) { html.pip-shy .bit { transition: none; } }
+.bit-menu-val { margin-left: auto; margin-right: 6px; opacity: .65; font-weight: 800; }
+
+/* ---- while a game is open: dark, to match the player (bit.js inGameLayout) */
+html.pip-ingame .bit { background: #25213a; color: #fffaf0; border: 2px solid #3d3758; box-shadow: 0 10px 30px rgba(0,0,0,.35); transform: none; width: min(330px, calc(100vw - 24px)); height: min(440px, calc(100vh - 140px)); padding: 12px; gap: 10px; }
+html.pip-ingame .bit-ava { border: 0; box-shadow: none; width: 38px; height: 38px; border-radius: 10px; }
+html.pip-ingame .bit-ava svg { width: 27px; height: 27px; }
+html.pip-ingame .bit-name { font-size: 18px; }
+html.pip-ingame .bit-status { font-size: 12px; opacity: .65; }
+html.pip-ingame .bit-close { background: #322d4b; color: #fffaf0; border: 1px solid #4a4468; width: 32px; height: 32px; }
+html.pip-ingame .bit-msg, html.pip-ingame .bit.is-sad .bit-msg:not(.me) { background: #322d4b; border: 1px solid #4a4468; color: #fffaf0; font-size: 14.5px; padding: 8px 11px; }
+html.pip-ingame .bit-msg.me { background: #d5c2ff; color: #1d1a2b; border-color: #d5c2ff; }
+html.pip-ingame .bit-typing i { background: #fffaf0; }
+html.pip-ingame .bit-chip { background: transparent; color: #fffaf0; border: 1px solid #4a4468; font-size: 12.5px; padding: 5px 10px; }
+html.pip-ingame .bit-chip:hover { background: #3d3758; }
+html.pip-ingame .bit-form input { background: #1b1830; color: #fffaf0; border: 1px solid #4a4468; font-size: 15px; padding: 8px 12px; }
+html.pip-ingame .bit-form input::placeholder { color: rgba(255,250,240,.45); }
+html.pip-ingame .bit-form button { border: 0; font-size: 14px; }
+html.pip-ingame .bit-menu { color: #1d1a2b; }
+/* beside the game: same height as the game, no floating */
+html.pip-side .player-stage { margin-right: 352px; }
+html.pip-side .bit { position: fixed; border-radius: 10px; box-shadow: none; }
+
+/* while Pip's address is shown in the header, it's text to select, not a link */
+html.pip-url-step .brand, html.pip-url-step .brand * { cursor: text; user-select: text; -webkit-user-select: text; }
+html.pip-url-step .brand img { pointer-events: none; }
+
+/* Pip's address in his own messages is a link */
+.pip-roomlink { color: inherit; font-weight: 900; text-decoration: underline; text-underline-offset: 2px; }
+html.pip-url-step .brand-tag { cursor: pointer !important; text-decoration: underline; text-underline-offset: 3px; }
+/* his room: on computers the chat is a full-height column with room to talk */
+@media (min-width: 701px) { html.pip-docked body:has(#desk) .bit { top: 64px; bottom: 20px; height: auto; width: min(440px, calc(100vw - 300px)); } }
+
+/* his room: a bigger face in the chat */
+@media (min-width: 701px) { html.pip-docked body:has(#desk) .bit-ava { width: 76px; height: 76px; border-radius: 18px; } html.pip-docked body:has(#desk) .bit-ava svg { width: 58px; height: 58px; } html.pip-docked body:has(#desk) .bit-name { font-size: 26px; } }

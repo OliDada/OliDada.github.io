@@ -7,6 +7,7 @@ import {
     step,
     gapFor,
     areaFor, isFork, hazardsFor,
+    finaleRoute,
 } from "./motion.mjs";
 import { createStorm } from "./storm.js";
 import { createOcean } from "./ocean.js";
@@ -95,6 +96,9 @@ const params = new URLSearchParams(location.search);
 if (params.has("seed")) newRoute(Number(params.get("seed")));
 const ocean = createOcean(scene);
 const crumble = createCrumble(scene, { value: 300 });
+// Everything in the scene so far (lights, the sea) stays in Pip's finale; the harbour,
+// its houses, boats, rocks and the rain that come after are hidden for it.
+const keepInFinale = new Set(scene.children);
 
 function warehouse(x, z, w = 12, d = 15, h = 9) {
     box(x, h / 2 - 1, z, w, h, d, materials.wood);
@@ -681,7 +685,36 @@ function gameOver() {
     lastFinal = final; lastRecord = record;
 }
 let over = false;
+// Pip's finale: when the site's chatbot sets window.__pipFinale (see bit.js on olid.is), the
+// harbour disappears and the run becomes one long, empty road that ends in a staircase and a door.
+let finaleOn = false, finaleDone = 0;
+const PIP_LINES = [[0.03, "..."], [0.16, "IT'S SO QUIET OUT HERE"], [0.34, "KEEP GOING"], [0.52, "DON'T LOOK BACK"], [0.72, "ALMOST THERE"], [0.86, "UP THE STAIRS"], [0.97, "THANK YOU"]];
+function enterFinale() {
+    finaleOn = true;
+    for (const o of scene.children) if (!keepInFinale.has(o) && o !== ball && o !== shadow && !o.isLight && !(o.material && o.material.side === THREE.BackSide)) o.visible = false;
+    beacon.intensity = 0;
+    finaleRoute();
+    run = createRun();
+    lives = 3; fallTime = 0; dreamEvent = null; nextEventAt = Infinity; over = false;
+    if (params.has("pipat")) run.progress = Number(params.get("pipat")); // for testing: start this far along the road
+    cameraInitialized = false;
+}
+function pipLine() {
+    const s = route[0], f = Math.min(1, run.progress / s.door);
+    if (run.segment !== 0) return "";
+    for (let i = PIP_LINES.length - 1; i >= 0; i--) if (f >= PIP_LINES[i][0]) return (f - PIP_LINES[i][0]) * s.door < 22 ? PIP_LINES[i][1] : "";
+    return "";
+}
+function throughTheDoor() {
+    finaleDone = clock;
+    const white = document.createElement("div");
+    Object.assign(white.style, { position: "fixed", inset: "0", background: "#fff", opacity: "0", transition: "opacity 1.6s ease-in", zIndex: "99999", pointerEvents: "none" });
+    document.body.appendChild(white);
+    requestAnimationFrame(() => requestAnimationFrame(() => (white.style.opacity = "1")));
+    setTimeout(() => { try { window.parent.postMessage({ type: "pip-door" }, "*"); } catch (e) {} }, 2000);
+}
 function freshRun() {
+    if (finaleOn) { enterFinale(); return; }
     newRoute();
     run = createRun();
     lives = 3;
@@ -693,11 +726,7 @@ function freshRun() {
 function begin() {
     // while Pip is rewriting the title screen, the game can't be started
     if (window.__pipLocked) return;
-    if (window.__pipFinale && !window.__pipFinaleStarted) {
-        window.__pipFinaleStarted = true;
-        setTimeout(() => { paused = true; import("./finale.js").then((m) => m.startFinale()); }, 6500);
-    }
-
+    if (window.__pipFinale && !finaleOn) enterFinale();
     if (over) freshRun();
     lookYaw = lookPitch = 0;
     updateHud();
@@ -811,6 +840,12 @@ function update(dt) {
     }
     if (params.has("still")) return; // inspection: keep the camera parked
     if (respawnHold > 0) { respawnHold -= dt; jumpInput = false; }
+    if (finaleOn && run.segment === 0) {
+        const s = route[0];
+        // Through the door: keep walking a few steps into the light, then the site takes over.
+        if (finaleDone) { run.progress = Math.min(s.length - 0.8, run.progress + dt * 2.5); run.laneTarget = run.lane *= 0.9; return; }
+        if (run.progress >= s.door - 0.3) { throughTheDoor(); return; }
+    }
     step(run, dt, { jump: jumpInput, turn: turnInput, duck: duckInput });
     jumpInput = false;
     turnInput = 0;
@@ -874,6 +909,7 @@ let previous = performance.now(), flash = 0, bannerUntil = 0;
 function banner(text) { bannerText = text; bannerUntil = clock + 1.6; }
 let bannerText = "";
 function frame(now) {
+    if (window.__pipFinale && !finaleOn) enterFinale();
     const dt = Math.min(maxStep, (now - previous) / 1000);
     previous = now;
     if (!paused) clock += dt;
@@ -1036,6 +1072,7 @@ function frame(now) {
         const hazard = hazardsFor(run.segment).find((h) => ahead(h.at) > 0 && ahead(h.at) < 7);
         let hint = "", urgent = false;
         if (run.state === "fell") hint = "";
+        else if (finaleOn) hint = pipLine();
         else if (clock < bannerUntil) hint = bannerText.replace("×", "x").replace(" MULTIPLIER", "");
         else if (hazard) { hint = { beam: "DUCK", cargo: "DODGE", log: "JUMP", wall: "DODGE", swing: "DUCK" }[hazard.type]; urgent = ahead(hazard.at) < 4; }
         else if (hole && ahead(hole.start) > 0 && ahead(hole.start) < 7) { hint = "JUMP"; urgent = ahead(hole.start) < 4; }
@@ -1045,7 +1082,7 @@ function frame(now) {
             screen: active ? "play" : over ? "over" : "title", clock, touch: touchDevice,
             score: over ? lastFinal : Math.floor(run.score), mult: multiplier(run), lives, paused,
             best: Math.floor(best), record: lastRecord, distance: Math.floor(run.distance),
-            area: misremember(names[areaFor(run.segment)], run.segment), hint, urgent,
+            area: finaleOn ? "THE WAY OUT" : misremember(names[areaFor(run.segment)], run.segment), hint, urgent, finale: finaleOn,
         });
     }
     if (paused) message.textContent = "Paused · P or  ▶  to continue.";

@@ -58,9 +58,11 @@ function score() {
 function draw() {
   background(51);
 
-  snake.death();
-  snake.update();
-  snake.show();
+  if (!gameOver) {
+    snake.death();
+    if (!gameOver) snake.update();
+  }
+  if (!gameOver) snake.show();
 
   if (snake.eat(food)) {
     pickLocation();
@@ -79,9 +81,54 @@ function draw() {
     rect(0, 0, width, height);
     flashTimer--;
   }
+
+  if (gameOver) drawGameOver();
+}
+
+// Game over screen: your score, and how to go again
+function drawGameOver() {
+  noStroke();
+  fill(0, 0, 0, 150);
+  rect(0, 0, width, height);
+  textFont('Press Start 2P');
+  textAlign(CENTER, CENTER);
+  fill(255);
+  textSize(30);
+  text("Game over", width / 2, height / 2 - 50);
+  fill(220);
+  textSize(16);
+  text("Score: " + lastScore, width / 2, height / 2 + 4);
+  if (hiscore) { fill(150); textSize(12); text("Best: " + hiscore, width / 2, height / 2 + 32); }
+  const touch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+  fill(255, 225, 120);
+  textSize(12);
+  text(touch ? "Tap to play again" : "Press Space to play again", width / 2, height / 2 + 84);
+}
+
+function retry() {
+  if (!gameOver) return;
+  gameOver = false;
+  snake.x = 0;
+  snake.y = 0;
+  snake.total = 0;
+  snake.tail = [];
+  snake.dir(1, 0);
+  pickLocation();
+}
+
+function mousePressed() {
+  retry();
+}
+
+function touchStarted() {
+  retry();
 }
 
 function keyPressed() {
+  if (gameOver) {
+    if (key === ' ' || keyCode === ENTER || keyCode === 32) retry();
+    return false;
+  }
   if (keyCode === UP_ARROW) {
     snake.dir(0, -1);
   } else if (keyCode === DOWN_ARROW) {

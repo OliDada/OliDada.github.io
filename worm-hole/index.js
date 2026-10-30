@@ -10,6 +10,7 @@ import { LineGeometry } from 'jsm/lines/LineGeometry.js';
 import StyleManager from './styleManager.js';
 import TUBE_STYLES from './styles.js';
 import { createTouchControls } from './touchControls.js';
+import { createHiddenTunnel, setupFork } from './hidden.js';
 // We need a renderer, a scene, and a camera
 
 const width = window.innerWidth;
@@ -69,6 +70,9 @@ function onWindowResize() {
 const TUBE_TUBULAR_SEGMENTS = 256; // along-path subdivisions (was 222)
 const TUBE_RADIAL_SEGMENTS = 16;    // cross-section subdivisions (was 16)
 let tubeGeometry = new THREE.TubeGeometry(spline, TUBE_TUBULAR_SEGMENTS, 0.65, TUBE_RADIAL_SEGMENTS, true);
+// Pip's story: where the secret tunnel splits off, the wall of this one is open (see hidden.js)
+const fork = setupFork(spline);
+if (fork) fork.cutMain(tubeGeometry);
 // compute polygon cross-section inradius (apothem) so we can clamp movement to the
 // true inner wall of the tube (prevents escaping through polygon corners)
 let _radialSegments = tubeGeometry.parameters.radialSegments || TUBE_RADIAL_SEGMENTS;
@@ -79,6 +83,20 @@ let tubeMesh = new THREE.Mesh(tubeGeometry, tubeMaterial);
 // render the tube after the edge lines so it can occlude them when appropriate (gives "inside" feel)
 tubeMesh.renderOrder = 1;
 scene.add(tubeMesh);
+// Seen from outside (from Pip's secret tunnel), the tunnel is solid black with its lines on it.
+// A slightly smaller black shell, facing outwards: invisible from inside, hides the far wall from outside.
+const shellMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.FrontSide });
+let tubeShell = null;
+function makeShell(radialSegments) {
+    if (!fork || /noshell/.test(location.search)) return;
+    if (tubeShell) { scene.remove(tubeShell); tubeShell.geometry.dispose(); }
+    const g = new THREE.TubeGeometry(spline, TUBE_TUBULAR_SEGMENTS, 0.62, radialSegments, true);
+    fork.skipJoin(g, radialSegments, TUBE_TUBULAR_SEGMENTS);
+    tubeShell = new THREE.Mesh(g, shellMaterial);
+    tubeShell.frustumCulled = false;
+    scene.add(tubeShell);
+}
+makeShell(TUBE_RADIAL_SEGMENTS);
 
 // create edges geometry from the tube mesh and build a fat/antialiased Line2 from it
 const edges = new THREE.EdgesGeometry(tubeGeometry, 0.2);
@@ -223,6 +241,7 @@ function rebuildTube(radialSegments) {
 
     // recreate tube geometry
     tubeGeometry = new THREE.TubeGeometry(spline, TUBE_TUBULAR_SEGMENTS, 0.65, radialSegments, true);
+    if (fork) fork.cutMain(tubeGeometry);
     _radialSegments = tubeGeometry.parameters.radialSegments || radialSegments;
     tubeInradius = Math.cos(Math.PI / _radialSegments) * _tubeRadius;
     // recreate tube mesh
@@ -230,6 +249,7 @@ function rebuildTube(radialSegments) {
     newTube.renderOrder = 1;
     tubeMesh = newTube;
     scene.add(tubeMesh);
+    makeShell(radialSegments);
 
     // edges
     const newEdges = new THREE.EdgesGeometry(tubeGeometry, 0.2);
@@ -621,6 +641,14 @@ let pathProgress = 0; // normalized 0..1
 // game state
 let gameOver = false;
 
+// Pip's story: a hidden test tunnel through a hole in the wall (only once Pip has got into the games; see hidden.js)
+const hidden = createHiddenTunnel({
+    fork, scene, camera, spline, bloomPass,
+    speedNow: () => spline.getLength() * 1000 / currentLoopDuration,
+    onExit: (p) => { pathProgress = p; prevP = p; lateralOffset.set(0, 0); lateralVelocity.set(0, 0); _lastTime = null; }
+});
+if (hidden.startAt != null) pathProgress = hidden.startAt;
+
 function endGame() {
     if (gameOver) return;
     gameOver = true;
@@ -689,7 +717,7 @@ function spawnBox() {
     let attempts = 0;
     while (attempts < 12) {
         const d = Math.abs(((p - pathProgress) + 1.5) % 1.0 - 0.5) * 2.0; // normalized wrapped distance 0..1
-        if (d >= MIN_PATH_AWAY) break;
+        if (d >= MIN_PATH_AWAY && !hidden.avoid(p)) break;
         p = Math.random();
         attempts++;
     }
@@ -756,7 +784,7 @@ if (styleManager && typeof styleManager.setBoxes === 'function') {
             if (d < best) best = d;
         }
         // use polygon inradius (apothem) so inside-test matches the true inner wall
-        return best <= tubeInradius * 0.99; // slightly inside
+        return best <= tubeInradius * 0.99 + 0.1; // slightly inside (with some slack: the samples are ~0.4 apart)
     }
 
 // camera fly-through
@@ -767,6 +795,12 @@ function updateCamera(t) {
     _lastTime = timeMs;
     // expose for animate() to consume
     lastDeltaSec = deltaSec;
+    // inside Pip's hidden tunnel the test tunnel drives the camera; nothing to score or hit
+    if (hidden.active) {
+        const w = new THREE.Vector2((keyState.a ? 1 : 0) - (keyState.d ? 1 : 0) + touchControls.input.x, (keyState.w ? 1 : 0) - (keyState.s ? 1 : 0) + touchControls.input.y);
+        hidden.drive(deltaSec, w);
+        return;
+    }
 
     // compute effective looptime that speeds up as score increases
     // cap the score used in the exponential so speed tops out after SPEED_SCORE_CAP points
@@ -834,6 +868,7 @@ function updateCamera(t) {
     }
 
     const cameraPos = pos.clone().add(offsetWorld);
+    if (hidden.check(p, offsetWorld, maxCameraR)) { prevP = p; return; }
 
     // score: check whether we passed any boxes this frame based on path parameter (handle wrap)
     // when prevP <= p (normal progress): a box is passed if prevP < box.p <= p
@@ -869,7 +904,7 @@ function updateCamera(t) {
     let resolvedPos = cameraPos.clone();
     let collided = false;
     const minDist = CAMERA_RADIUS + boxSphereR;
-    for (let i = 0; i < boxes.length; i++) {
+    for (let i = 0; i < boxes.length && !hidden.ghost(); i++) {
         const b = boxes[i];
         const toCam = resolvedPos.clone().sub(b.position);
         const dist = toCam.length();
@@ -973,7 +1008,7 @@ function animate(p = 1) {
     const opa = TUBE_OPACITY_MIN + (TUBE_OPACITY_MAX - TUBE_OPACITY_MIN) * (0.5 + 0.5 * Math.sin((tms * TUBE_OPACITY_SPEED) + TUBE_OPACITY_PHASE));
     tubeMaterial.opacity = opa;
     // show vertex points only when camera is inside the tube
-    const inside = isCameraInsideTube();
+    const inside = isCameraInsideTube() || hidden.active; // (keep the lines on when looking at it from Pip's tunnel)
     edgeVertices.visible = inside;
     edgeVertices.material.depthTest = true;
     // also only show the continuous center line when inside

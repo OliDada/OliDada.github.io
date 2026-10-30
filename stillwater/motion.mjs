@@ -160,6 +160,7 @@ function nextAfter(prev, n, forkAllowed = true) {
 // How far a fork's untaken branch is planned ahead, so scenery can keep clear of it.
 const BRANCH_PLAN = 10;
 export function ensureRoute(index) {
+    if (route[0]?.finale) { finaleTail(index); return; }
     while (route.length < index + 7) {
         const n = route.length, prev = route[n - 1];
         if (prev.fork) {
@@ -194,6 +195,35 @@ export function newRoute(value = Math.floor(Math.random() * 1e9)) {
 }
 newRoute();
 
+// Pip's finale (the site's chatbot takes over the game, see bit.js on olid.is):
+// one long, empty, dead-level road over the mirror shallows. Nothing on it, nothing
+// beside it. At the far end a timber staircase climbs to a landing with a door.
+// The staircase is the dream's timber one (16 open treads, 0.42 by 0.3), scaled up by half.
+export const FINALE = { road: 250, steps: 16, scale: 1.5, landing: 8 };
+export function finaleRoute() {
+    seed = 4242;
+    route.length = 0;
+    const f = FINALE, tread = 0.42 * f.scale, riser = 0.3 * f.scale, top = f.road + f.steps * tread, length = top + f.landing;
+    route.push({
+        x: 0, z: 12, dx: 0, dz: -1, length, turn: 0, y: 0, rise: 0,
+        narrow: false, width: DECK, area: "shallows", fork: false,
+        ramp: null, gap: null, hazards: [], cover: null,
+        finale: true, stairs: { start: f.road, steps: f.steps, tread, riser, top, scale: f.scale },
+        door: top + 1.35 * f.scale,
+    });
+    finaleTail(0);
+    routeRevision++;
+}
+// Beyond the door there is nothing at all (empty stretches nothing gets built on).
+function finaleTail(index) {
+    while (route.length < index + 7) {
+        const prev = route[route.length - 1];
+        route.push({ x: prev.x + prev.dx * prev.length, z: prev.z + prev.dz * prev.length, dx: 0, dz: -1, length: 40, turn: 0,
+            y: groundOf(prev, prev.length), rise: 0, narrow: false, width: DECK, area: "shallows", fork: false,
+            ramp: null, gap: null, hazards: [], cover: null, finale: true, empty: true });
+    }
+}
+
 export const gap = { get segment() { return route.findIndex(s => s.gap); }, get start() { return firstGap().start; }, get end() { return firstGap().end; } };
 function firstGap() { return route.find(s => s.gap)?.gap; }
 // How deep into the dream a stretch lies: 0 at the opening quay, 1 after ~45 stretches.
@@ -208,11 +238,13 @@ export function groundAt(index, p) { return groundOf(route[index], p); }
 export function slopeAt(index, p) { return slopeOf(route[index], p); }
 export function groundOf(s, p) {
     if (!s) return 0;
+    if (s.stairs && p >= s.stairs.start) return s.y + Math.min(s.stairs.steps, Math.floor((p - s.stairs.start) / s.stairs.tread) + 1) * s.stairs.riser;
     if (!s.ramp) return s.y;
     const t = Math.min(1, Math.max(0, (p - s.ramp.start) / RAMP));
     return s.y + s.rise * t * t * (3 - 2 * t);
 }
 export function slopeOf(s, p) {
+    if (s?.stairs) return p >= s.stairs.start && p < s.stairs.top ? s.stairs.riser / s.stairs.tread : 0;
     if (!s?.ramp) return 0;
     const t = Math.min(1, Math.max(0, (p - s.ramp.start) / RAMP));
     return (s.rise * 6 * t * (1 - t)) / RAMP;

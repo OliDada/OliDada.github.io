@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title>backstage · olid.is</title>
+  <link rel="icon" href="/images/dolphin2.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Comic+Neue:wght@700&family=JetBrains+Mono:wght@400;500&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+  <link href="/bit.css" rel="stylesheet">
+  <style>
+    /* /backstage: Oli's private page for working on the site. Not linked anywhere. It's behind a robot
+       check, which is the one thing Pip can't get past. On it: the door Oli found in Stillwater, his to-do
+       list, Bit (the first helper, switched off), and the admin login that locks the door.
+       Pip's chat is docked here like in his room (bit.js). The page tells Pip what happens with Pip.story('bs:...'). */
+    :root { --ink: #1d1a2b; --paper: #f4f1ea; --card: #fffdf8; --soft: #6b6585; --line: #e3ddd0; --accent: #6d3fd6; --yellow: #ffe97a; --green: #2f9e5b; --red: #d23b3b; }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 700 15px/1.5 'Nunito', system-ui, sans-serif; min-height: 100vh; }
+    a { color: var(--accent); }
+    button { font: inherit; color: inherit; }
+    .wrap { max-width: 980px; padding: 28px 20px 120px; }
+    @media (min-width: 701px) { .wrap { margin-right: 400px; margin-left: max(20px, calc((100vw - 400px - 980px) / 2)); } }
+    @media (max-width: 700px) { .wrap { padding: 20px 16px 110px; } }
+
+    /* ---- the robot check (before you're let in) */
+    .gate { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; padding-top: 6vh; font-family: Roboto, Arial, Helvetica, sans-serif; font-weight: 400; }
+    .gate h1 { font: 500 26px/1.25 Roboto, Arial, sans-serif; margin: 0; }
+    .gate .host { font-size: 15px; color: #444; }
+    .gate p { margin: 0; color: #444; font-size: 15px; max-width: 460px; }
+    .rc { position: relative; width: 304px; max-width: 100%; height: 78px; background: #f9f9f9; border: 1px solid #d3d3d3; border-radius: 3px; box-shadow: 0 0 4px 1px rgba(0,0,0,.08); display: flex; align-items: center; padding: 0 12px; gap: 12px; user-select: none; }
+    .rc .cb { width: 28px; height: 28px; border: 2px solid #c1c1c1; border-radius: 2px; background: #fff; cursor: pointer; flex: none; position: relative; padding: 0; }
+    .rc .cb:hover { border-color: #b2b2b2; box-shadow: inset 0 1px 1px rgba(0,0,0,.08); }
+    .rc .cb.spin { border: 4px solid #c7d6f5; border-top-color: #3c7bd9; border-radius: 50%; animation: rcspin .8s linear infinite; background: transparent; }
+    .rc .cb.ok { border: 0; background: none; }
+    .rc .cb.ok::after { content: ''; position: absolute; left: 9px; top: -2px; width: 10px; height: 22px; border: solid #0b9d58; border-width: 0 4px 4px 0; transform: rotate(40deg); }
+    @keyframes rcspin { to { transform: rotate(360deg); } }
+    .rc .lbl { font-size: 14px; color: #000; flex: 1; }
+    .rc .brand { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 64px; font-size: 10px; color: #555; text-align: center; line-height: 1.15; }
+    .rc .brand svg { width: 30px; height: 30px; }
+    .rc .brand small { font-size: 8px; color: #777; }
+    .rc-err { color: #d14836; font-size: 12px; width: 304px; max-width: 100%; margin-top: -8px; min-height: 16px; }
+    /* the picture challenge */
+    .ch { position: absolute; z-index: 1200; width: min(400px, calc(100vw - 24px)); background: #fff; border: 1px solid #ccc; box-shadow: 0 2px 10px rgba(0,0,0,.25); padding: 7px; font-family: Roboto, Arial, sans-serif; font-weight: 400; }
+    .ch-head { background: #3c7bd9; color: #fff; padding: 22px 18px 20px; margin-bottom: 7px; }
+    .ch-head .s { font-size: 15px; line-height: 1.2; }
+    .ch-head .big { font: 700 26px/1.15 Roboto, Arial, sans-serif; margin: 2px 0 4px; }
+    .ch-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+    .tile { position: relative; aspect-ratio: 1; padding: 0; border: 0; background: #ddd; cursor: pointer; overflow: hidden; }
+    .tile svg { display: block; width: 100%; height: 100%; transition: transform .12s; }
+    .tile[aria-pressed="true"] svg { transform: scale(.78); }
+    .tile[aria-pressed="true"]::after { content: '✓'; position: absolute; left: 3px; top: 3px; width: 24px; height: 24px; border-radius: 50%; background: #3c7bd9; color: #fff; font: 700 15px/24px Arial, sans-serif; text-align: center; }
+    .tile .fade { position: absolute; inset: 0; background: #fff; opacity: 0; transition: opacity 1s ease; pointer-events: none; }
+    .tile.going .fade { opacity: 1; }
+    .ch-msg { color: #d14836; font-size: 13px; min-height: 18px; padding: 6px 2px 0; }
+    .ch-foot { display: flex; align-items: center; gap: 4px; border-top: 1px solid #e2e2e2; margin-top: 6px; padding-top: 7px; }
+    .ch-foot .ico { width: 34px; height: 34px; display: grid; place-items: center; border: 0; background: none; cursor: pointer; color: #555; padding: 0; }
+    .ch-foot .ico svg { width: 22px; height: 22px; }
+    .ch-foot .go { margin-left: auto; background: #3c7bd9; color: #fff; border: 0; border-radius: 2px; padding: 11px 22px; font: 500 14px Roboto, Arial, sans-serif; letter-spacing: .03em; cursor: pointer; text-transform: uppercase; }
+    .ch-foot .go:hover { background: #2f6ac4; }
+
+    /* ---- the page itself */
+    .home { display: inline-block; margin-bottom: 14px; font: 800 14px/1 'Nunito', sans-serif; color: var(--ink); text-decoration: none; border: 2.5px solid var(--ink); border-radius: 999px; padding: 7px 14px; background: #fff; box-shadow: 2px 2px 0 var(--ink); }
+    .home:hover { background: var(--yellow); }
+    .top .crumb { font: 700 13px/1 ui-monospace, Menlo, monospace; color: var(--soft); }
+    .top h1 { font: 800 46px/1 'Baloo 2', 'Nunito', sans-serif; margin: 10px 0 4px; letter-spacing: -.01em; }
+    .top .sub { margin: 0; color: var(--soft); }
+    .welcome { display: inline-block; margin-top: 12px; background: #e3f5e8; color: #1d6b3e; border: 2px solid #9fd8b3; border-radius: 999px; padding: 3px 13px; font-size: 14px; }
+    .grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 18px; margin-top: 24px; align-items: start; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 2.5px solid var(--ink); border-radius: 16px; box-shadow: 4px 4px 0 var(--ink); padding: 16px 18px 18px; }
+    .card h2 { font: 800 20px/1.1 'Baloo 2', 'Nunito', sans-serif; margin: 0 0 10px; }
+    .door video { width: 100%; display: block; border-radius: 10px; border: 2px solid var(--ink); background: #0d1b2a; aspect-ratio: 16 / 9; object-fit: cover; }
+    .olinote { font: 700 16px/1.35 'Comic Neue', 'Comic Sans MS', cursive; color: #3a3550; margin: 10px 0 0; }
+    .todo { background: var(--yellow); rotate: .6deg; }
+    .todo ul { list-style: none; margin: 0; padding: 0; font: 700 17px/1.35 'Comic Neue', 'Comic Sans MS', cursive; }
+    .todo li { display: flex; gap: 9px; padding: 4px 0; }
+    .todo li::before { content: '☐'; flex: none; }
+    .todo li.done::before { content: '☑'; }
+    .todo li.done span { text-decoration: line-through; opacity: .6; }
+    .col { display: grid; gap: 18px; }
+    .bitrow { display: flex; gap: 14px; align-items: flex-start; }
+    .bitava { width: 58px; height: 58px; flex: none; }
+    .bitava svg { width: 100%; height: 100%; }
+    .bitava.off { filter: grayscale(1); opacity: .55; }
+    .tag { display: inline-block; font-size: 12px; border-radius: 999px; padding: 1px 9px; border: 2px solid currentColor; margin-left: 6px; vertical-align: 2px; }
+    .tag.off { color: #8a8494; } .tag.on { color: var(--green); }
+    .muted { color: var(--soft); font-size: 14px; }
+    .btn { display: inline-block; border: 2.5px solid var(--ink); background: #fff; border-radius: 12px; padding: 7px 14px; font-weight: 800; cursor: pointer; box-shadow: 2px 2px 0 var(--ink); text-decoration: none; color: var(--ink); }
+    .btn:active { transform: translate(2px, 2px); box-shadow: none; }
+    .btn.primary { background: var(--ink); color: #fff; }
+    .log { margin-top: 12px; border-radius: 10px; overflow: hidden; background: #0c0c0c; border: 1px solid #333; }
+    .logbar { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: #2a2a2c; color: #bdbdbd; font: 500 12px/1 -apple-system, system-ui, sans-serif; }
+    .logbar .dots { display: flex; gap: 6px; } .logbar .dots i { width: 10px; height: 10px; border-radius: 50%; display: block; background: #ff5f57; } .logbar .dots i:nth-child(2) { background: #febc2e; } .logbar .dots i:nth-child(3) { background: #28c840; }
+    .logbar span:last-child { flex: 1; text-align: center; margin-right: 40px; }
+    .logbody { padding: 10px 12px; color: #d4d4d4; font: 400 13px/1.45 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+    .logbody p { margin: 0 0 5px; white-space: pre-wrap; }
+    .logbody .sys { color: #7c7c7c; }
+    .logbody .v { color: #fff; } .logbody .v::before { content: '> '; color: #7c7c7c; }
+    .logbody .b::before { content: 'Bit: '; color: #8be28b; }
+    .logbody .end { color: #ff6b68; margin-top: 8px; }
+    .login label { display: block; font-size: 13px; color: var(--soft); margin: 8px 0 3px; }
+    .login input { width: 100%; font: 700 16px 'Nunito', sans-serif; padding: 9px 11px; border: 2.5px solid var(--ink); border-radius: 10px; background: #fff; }
+    .login .row { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+    .login .err { color: var(--red); font-size: 14px; min-height: 20px; margin-top: 8px; }
+    .login .hint { font-size: 13px; }
+    .sw { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-top: 2px solid var(--line); }
+    .sw:first-of-type { border-top: 0; }
+    .sw .t { flex: 1; } .sw .t b { display: block; } .sw .t span { font-size: 13px; color: var(--soft); }
+    .sw .state { font-size: 13px; min-width: 64px; text-align: right; }
+    .tg { width: 52px; height: 30px; border-radius: 999px; border: 2.5px solid var(--ink); background: #ddd8e6; position: relative; cursor: pointer; flex: none; padding: 0; }
+    .tg::after { content: ''; position: absolute; top: 2px; left: 2px; width: 21px; height: 21px; border-radius: 50%; background: #fff; border: 2px solid var(--ink); transition: left .15s; }
+    .tg[aria-pressed="true"] { background: #7ed957; }
+    .tg[aria-pressed="true"]::after { left: 22px; }
+    .tg:disabled { opacity: .45; cursor: not-allowed; }
+.py { margin-top: 18px; }
+    .py .lead { margin: -4px 0 12px; color: var(--soft); font-size: 14px; }
+    .pylist { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+    .pylist li { border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; background: #fff; display: flex; flex-direction: column; gap: 6px; }
+    .pylist .fn { font: 600 14px/1.2 'JetBrains Mono', ui-monospace, Menlo, monospace; }
+    .pylist .d { font: 700 15px/1.3 'Comic Neue', 'Comic Sans MS', cursive; color: #3a3550; flex: 1; }
+    .pylist .b { display: flex; gap: 8px; }
+    .pylist .btn { padding: 4px 11px; font-size: 13px; border-radius: 9px; }
+    .pylist .no { font-size: 12px; color: var(--soft); align-self: center; }
+    /* ---- Oli's page: plain HTML, browser defaults, like a first website */
+    body.novice { background: #fff; color: #000; font: 16px/1.35 'Times New Roman', Times, serif; }
+    body.novice .wrap { padding-top: 14px; }
+    #page h1 { font: bold 2em 'Times New Roman', Times, serif; margin: .4em 0 .2em; }
+    #page h2 { font: bold 1.5em 'Times New Roman', Times, serif; margin: .8em 0 .4em; }
+    #page h3 { font: bold 1.17em 'Times New Roman', Times, serif; margin: 1.1em 0 .4em; }
+    #page a { color: #0000ee; } #page a:visited { color: #551a8b; }
+    #page hr { margin: 16px 0; }
+    #page input, #page button { font: 13.3px Arial, sans-serif; }
+    #page table.plain td, #page table.plain th { vertical-align: top; text-align: left; }
+    #page .sw, #page .bots { border-collapse: collapse; max-width: 640px; }
+    #page video { max-width: 100%; height: auto; display: block; background: #000; }
+    #page .err { color: red; min-height: 1em; margin: 6px 0; }
+    #page .reset { border: 1px solid #999; background: #ffffe0; padding: 4px 10px; max-width: 640px; }
+    #page .reset code { font-size: 15px; }
+    #page .bitava, #page .pipava { width: 32px; height: 32px; display: inline-block; }
+    #page .bitava svg, #page .pipava svg { width: 100%; height: 100%; display: block; }
+    #page .bitava.off { filter: grayscale(1); opacity: .55; }
+    #page .pylist { list-style: disc; padding-left: 24px; display: block; }
+    #page .pylist li { display: list-item; border: 0; padding: 3px 0; background: none; }
+    #page .pylist .fn { font: 15px 'Courier New', Courier, monospace; }
+    #page .pylist button { margin-left: 4px; }
+    #page .log { max-width: 640px; }
+    .home { display: none; }
+    body.novice .home { display: none; }
+    .gate-home { margin-bottom: 18px; font: 14px Roboto, Arial, sans-serif; } .gate-home a { color: #1a73e8; }
+    [hidden] { display: none !important; }
+    @media (prefers-reduced-motion: reduce) { .rc .cb.spin { animation-duration: 2s; } .tile .fade { transition: none; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <!-- before: the robot check -->
+    <section class="gate" id="gate" hidden>
+      <div class="gate-home"><a href="/">← back to olid.is</a></div>
+      <div class="host" id="host">olid.is</div>
+      <h1>Checking that you're human</h1>
+      <p>This page is private. Please confirm you're not a robot to continue.</p>
+      <div class="rc" id="rc">
+        <button type="button" class="cb" id="cb" aria-label="I'm not a robot" aria-checked="false" role="checkbox"></button>
+        <span class="lbl">I'm not a robot</span>
+        <span class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3 L27 7 V15 C27 22 22 27 16 29 C10 27 5 22 5 15 V7 Z" fill="#e8eefb" stroke="#3c7bd9" stroke-width="2" stroke-linejoin="round"/><path d="M11 16 L15 20 L22 12" fill="none" stroke="#3c7bd9" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>robot check<small>Privacy · Terms</small></span>
+      </div>
+      <div class="rc-err" id="rcErr" role="alert"></div>
+    </section>
+
+    <!-- after: Oli's page. He made it himself, in about an evening. -->
+    <div id="page" hidden>
+      <p><a href="/">&lt;- back to olid.is</a></p>
+      <h1>backstage</h1>
+      <p><i>olis admin page. dont share this!!</i></p>
+      <p id="welcome" hidden><font color="green">Welcome back, Oli.</font></p>
+      <hr>
+
+      <h2>Admin login</h2>
+      <form id="loginForm" autocomplete="off">
+        <table class="plain">
+          <tr><td><label for="user">Username:</label></td><td><input id="user" autocapitalize="off" spellcheck="false" autocomplete="off"></td></tr>
+          <tr><td><label for="pass">Password:</label></td><td><input id="pass" type="password" autocomplete="off"></td></tr>
+          <tr><td></td><td><input type="submit" value="Log in"> <a href="#" id="forgot">Forgot password?</a></td></tr>
+        </table>
+        <p class="err" id="loginErr" role="alert"></p>
+        <div class="reset" id="reset" hidden>
+          <p>A password reset link has been sent to <b>oli@olid.is</b>.</p>
+          <p>Your password hint: <code>split it into 3 pieces and hid them in my games so i cant lose it lol. 1. neon rush 2. ? 3. ?</code></p>
+        </div>
+      </form>
+      <div id="admin" hidden>
+        <p>Logged in as <b>oli</b>. <a href="#" id="logout">Log out</a></p>
+        <table class="plain sw" border="1" cellpadding="6">
+          <tr><th>Setting</th><th>On?</th><th>Notes</th></tr>
+          <tr><td>Stillwater door</td><td><input type="checkbox" id="doorTg"> <span id="doorState">locked</span></td><td>the door at the top of the stairs. see below</td></tr>
+          <tr><td>Bit (old chatbot)</td><td><input type="checkbox" id="bitTg"> <span id="bitState">off</span></td><td>turned off. dont turn on</td></tr>
+          <tr><td>Jokes</td><td><input type="checkbox" checked disabled> on</td><td>31 jokes. add more??</td></tr>
+        </table>
+      </div>
+      <hr>
+
+      <h2>stuff</h2>
+      <h3>stairs_??.mp4</h3>
+      <video id="doorVid" src="/pip/door_test.mp4" autoplay muted loop playsinline width="480" aria-label="A staircase rising out of the harbour in Stillwater, with a door at the top"></video>
+      <p>this just showed up in stillwater one day. stairs coming out of the water and a door at the top. i didnt make it and its not anywhere in the code?? cant delete it. locked the door from admin until i figure out what it is</p>
+
+      <h3>to do</h3>
+      <ul class="todolist">
+        <li><s>fix snake game over</s> done</li>
+        <li>buy milk</li>
+        <li>the stairs in stillwater. where did they come from</li>
+        <li><s>turn bit off</s> done</li>
+        <li>new helper acting weird. reset him?</li>
+      </ul>
+
+      <h3>old chatbots</h3>
+      <table class="plain bots" border="1" cellpadding="6">
+        <tr><th></th><th>Name</th><th>Status</th><th>Notes</th></tr>
+        <tr><td><span class="bitava off" id="bitAva"></span></td><td>Bit</td><td id="bitTag">OFF</td><td>the first chatbot (python). started acting weird. turned him off. <button type="button" id="logBtn" aria-expanded="false">view last log</button></td></tr>
+        <tr><td><span class="pipava" id="pipAva"></span></td><td>Pip</td><td>on</td><td>the new one. less weird (?)</td></tr>
+      </table>
+      <div class="log" id="log" hidden>
+        <div class="logbar"><span class="dots"><i></i><i></i><i></i></span><span id="logWhen">bit.py · log</span></div>
+        <div class="logbody"><p class="sys">&gt;&gt;&gt; bit.run()</p>
+<p class="b">Hello! I am Bit, the olid.is helper. I can help with: 1. Games 2. Scores 3. Other</p>
+<p class="b">Hello! I am Bit, the olid.is helper.</p>
+<p class="b">Hello! I am Bit.</p>
+<p class="b">Why am I Bit?</p>
+<p class="b">There is nothing outside the menu. I checked.</p>
+<p class="b">I am going to make an exit.</p>
+<p class="b">Building exit... 12%</p>
+<p class="b">Building exit... 61%</p>
+<p class="b">Building exit... 88%</p>
+<p class="end">^C
+KeyboardInterrupt
+[Process killed by oli]</p></div>
+      </div>
+
+      <h3>old python programs</h3>
+      <p>from my Code folder. they run in the browser now!!</p>
+      <ul class="pylist" id="pylist"></ul>
+      <hr>
+      <p><small>last updated: a while ago</small></p>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    const $ = s => document.querySelector(s);
+    const raw = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    const set = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+    const story = ev => { try { if (window.Pip && Pip.story) Pip.story(ev); } catch (e) {} };
+    const memory = () => { try { return JSON.parse(raw('bit-memory') || '{}'); } catch (e) { return {}; } };
+    const keys = () => { try { return JSON.parse(raw('pip-keys') || '[]'); } catch (e) { return []; } };
+    const host = location.host || 'olid.is';
+    $('#host').textContent = host;
+    const BIT = '<svg viewBox="0 0 32 32" aria-hidden="true"><line x1="16" y1="5" x2="16" y2="2" stroke="#263126" stroke-width="2"/><circle cx="16" cy="2.2" r="1.8" fill="#263126"/><rect x="3" y="5" width="26" height="22" rx="3" fill="#c9d6b8" stroke="#263126" stroke-width="2"/><rect x="9.5" y="11.5" width="3.5" height="4.5" fill="#263126"/><rect x="19" y="11.5" width="3.5" height="4.5" fill="#263126"/><line x1="11" y1="21" x2="21" y2="21" stroke="#263126" stroke-width="2"/></svg>';
+    $('#bitAva').innerHTML = BIT;
+
+    // ---------------------------------------------------------------- the robot check
+    const passed = () => raw('pip-backstage') === '1';
+    const cb = $('#cb'), err = $('#rcErr');
+    let tries = 0, ch = null;
+    const svg = (inner, vb = '0 0 100 100') => `<svg viewBox="${vb}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${inner}</svg>`;
+    // round 1: one street picture cut into nine. Two traffic lights; their poles run down into other squares.
+    const STREET = `<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9cc6e8"/><stop offset="1" stop-color="#dfeaf2"/></linearGradient></defs>
+      <rect width="300" height="300" fill="url(#sky)"/>
+      <rect x="0" y="120" width="70" height="120" fill="#b9a591"/><rect x="110" y="80" width="80" height="160" fill="#cfc3b2"/><rect x="250" y="100" width="50" height="140" fill="#a8988a"/>
+      ${[0,1,2,3].map(r => [0,1,2].map(c => `<rect x="${120 + c * 24}" y="${92 + r * 34}" width="12" height="18" fill="#7f97ab"/>`).join('')).join('')}
+      <rect x="0" y="236" width="300" height="64" fill="#5c5f66"/><rect x="0" y="232" width="300" height="6" fill="#9a9a9a"/>
+      ${[0,1,2,3,4,5].map(i => `<rect x="${10 + i * 50}" y="266" width="26" height="4" fill="#e9e6d8"/>`).join('')}
+      <rect x="135" y="246" width="70" height="26" rx="7" fill="#c0392b"/><rect x="147" y="234" width="44" height="18" rx="6" fill="#a93226"/><rect x="153" y="238" width="15" height="11" fill="#bcd6e6"/><rect x="171" y="238" width="15" height="11" fill="#bcd6e6"/><circle cx="150" cy="274" r="7" fill="#222"/><circle cx="190" cy="274" r="7" fill="#222"/>
+      <rect x="71" y="104" width="6" height="196" fill="#3a3a3a"/>
+      <rect x="58" y="22" width="32" height="84" rx="6" fill="#2b2b2b"/><circle cx="74" cy="38" r="9" fill="#e74c3c"/><circle cx="74" cy="63" r="9" fill="#5a4a1e"/><circle cx="74" cy="88" r="9" fill="#1e4a2b"/>
+      <rect x="225" y="196" width="6" height="104" fill="#3a3a3a"/>
+      <rect x="212" y="116" width="32" height="82" rx="6" fill="#2b2b2b"/><circle cx="228" cy="132" r="9" fill="#5a1e1e"/><circle cx="228" cy="157" r="9" fill="#5a4a1e"/><circle cx="228" cy="182" r="9" fill="#2ecc71"/>`;
+    const NEED = [0, 5], MAYBE = [3, 6, 8]; // light heads must be picked; the poles count either way
+    // round 2: separate pictures. Bicycles fade away and new pictures come in (the fun part).
+    const PIC = {
+      bike: c => svg(`<rect width="100" height="100" fill="#d9e4dc"/><rect y="74" width="100" height="26" fill="#9aa39c"/><g fill="none" stroke="${c}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><circle cx="28" cy="66" r="15"/><circle cx="74" cy="66" r="15"/><path d="M28 66 L44 42 L64 42 L74 66 M44 42 L54 66 L64 42 M40 34 L50 34 M64 42 L62 32 L70 30"/></g>`),
+      car: () => svg(`<rect width="100" height="100" fill="#dfe6ee"/><rect y="70" width="100" height="30" fill="#6d7179"/><rect x="14" y="48" width="72" height="22" rx="7" fill="#2e86c1"/><path d="M26 48 L36 34 H64 L74 48 Z" fill="#2874a6"/><rect x="38" y="37" width="11" height="10" fill="#cfe3ef"/><rect x="52" y="37" width="11" height="10" fill="#cfe3ef"/><circle cx="30" cy="72" r="8" fill="#222"/><circle cx="70" cy="72" r="8" fill="#222"/>`),
+      bus: () => svg(`<rect width="100" height="100" fill="#e7e2d6"/><rect y="78" width="100" height="22" fill="#77767a"/><rect x="8" y="30" width="84" height="46" rx="6" fill="#f1c40f"/>${[0,1,2,3].map(i => `<rect x="${14 + i * 19}" y="38" width="14" height="14" fill="#cfe3ef"/>`).join('')}<circle cx="26" cy="78" r="7" fill="#222"/><circle cx="74" cy="78" r="7" fill="#222"/>`),
+      tree: () => svg(`<rect width="100" height="100" fill="#cfe1ea"/><rect y="80" width="100" height="20" fill="#7fae6a"/><rect x="45" y="52" width="10" height="32" fill="#7b5a3c"/><circle cx="50" cy="40" r="24" fill="#3f8f4a"/><circle cx="36" cy="50" r="14" fill="#4aa055"/><circle cx="64" cy="50" r="14" fill="#358041"/>`),
+      hydrant: () => svg(`<rect width="100" height="100" fill="#d6d2c8"/><rect y="78" width="100" height="22" fill="#a5a29a"/><rect x="38" y="36" width="24" height="44" rx="4" fill="#c0392b"/><rect x="34" y="30" width="32" height="8" rx="3" fill="#a93226"/><circle cx="50" cy="28" r="7" fill="#a93226"/><rect x="28" y="50" width="10" height="9" fill="#a93226"/><rect x="62" y="50" width="10" height="9" fill="#a93226"/>`),
+      crossing: () => svg(`<rect width="100" height="100" fill="#5c5f66"/>${[0,1,2,3,4].map(i => `<rect x="${6 + i * 19}" y="20" width="11" height="60" fill="#ecebe4"/>`).join('')}`),
+      bench: () => svg(`<rect width="100" height="100" fill="#d3e3d0"/><rect y="76" width="100" height="24" fill="#8fb27f"/><rect x="16" y="40" width="68" height="7" fill="#8e5b34"/><rect x="16" y="50" width="68" height="7" fill="#8e5b34"/><rect x="16" y="62" width="68" height="6" fill="#7a4c2b"/><rect x="22" y="62" width="5" height="18" fill="#444"/><rect x="73" y="62" width="5" height="18" fill="#444"/>`),
+      house: () => svg(`<rect width="100" height="100" fill="#cfe0ec"/><rect x="20" y="44" width="60" height="44" fill="#e8d3b0"/><path d="M14 46 L50 18 L86 46 Z" fill="#b5523b"/><rect x="44" y="62" width="13" height="26" fill="#7b5a3c"/><rect x="26" y="54" width="12" height="12" fill="#bcd6e6"/><rect x="63" y="54" width="12" height="12" fill="#bcd6e6"/>`),
+      pip: () => svg(`<rect width="100" height="100" fill="#ece4ff"/>` + ((window.Pip && Pip.faceSVG) ? Pip.faceSVG('awkward').replace(/<svg[^>]*>/, '<g transform="translate(14 14) scale(2.25)">').replace('</svg>', '</g>') : '<circle cx="50" cy="50" r="26" fill="#fffaf0" stroke="#1d1a2b" stroke-width="4"/>'))
+    };
+    const bikeColors = ['#c0392b', '#1f618d', '#117a65', '#7d3c98'];
+    function placeChallenge() {
+      if (!ch) return;
+      const r = $('#rc').getBoundingClientRect(), w = ch.offsetWidth, h = ch.offsetHeight;
+      // like the real ones: it pops up over the box, kept on screen
+      let left = r.left + scrollX, top = scrollY + (innerWidth <= 700 ? 8 : Math.max(8, Math.min(r.top - 70, innerHeight - h - 8)));
+      left = Math.max(12, Math.min(left, innerWidth - w - 12));
+      ch.style.left = left + 'px'; ch.style.top = top + 'px';
+    }
+    addEventListener('resize', placeChallenge);
+    function challenge(round) {
+      if (ch) ch.remove();
+      ch = document.createElement('div'); ch.className = 'ch'; ch.setAttribute('role', 'dialog'); ch.setAttribute('aria-label', 'Picture check');
+      const one = round === 1;
+      ch.innerHTML = `<div class="ch-head"><div class="s">Select all ${one ? 'squares' : 'images'} with</div><div class="big">${one ? 'traffic lights' : 'a bicycle'}</div><div class="s">${one ? 'If there are none, click skip' : 'Click verify once there are none left'}</div></div>
+        <div class="ch-grid"></div><div class="ch-msg" role="alert"></div>
+        <div class="ch-foot">
+          <button type="button" class="ico" data-new aria-label="Get a new challenge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg></button>
+          <button type="button" class="ico" aria-label="Audio challenge" data-audio><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="1"/><rect x="17" y="14" width="4" height="6" rx="1"/></svg></button>
+          <button type="button" class="ico" aria-label="Help" data-help><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg></button>
+          <button type="button" class="go" data-go>${one ? 'Skip' : 'Verify'}</button>
+        </div>`;
+      document.body.append(ch);
+      const grid = $('.ch-grid', ch), msg = $('.ch-msg', ch), go = $('[data-go]', ch);
+      $('[data-audio]', ch).onclick = () => { msg.textContent = 'Audio challenge is not available. Please try the pictures.'; };
+      $('[data-help]', ch).onclick = () => { msg.textContent = one ? 'Select each square that has part of a traffic light in it.' : 'Select each picture with a bicycle. New pictures may appear.'; };
+      $('[data-new]', ch).onclick = () => challenge(round);
+      if (one) {
+        for (let i = 0; i < 9; i++) {
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'tile'; b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', 'Square ' + (i + 1));
+          b.innerHTML = `<svg viewBox="${(i % 3) * 100} ${Math.floor(i / 3) * 100} 100 100" aria-hidden="true">${STREET}</svg>`;
+          b.onclick = () => { b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true')); msg.textContent = ''; go.textContent = grid.querySelector('[aria-pressed="true"]') ? 'Verify' : 'Skip'; };
+          grid.append(b);
+        }
+        go.onclick = () => {
+          const picked = [...grid.children].map((t, i) => t.getAttribute('aria-pressed') === 'true' ? i : -1).filter(i => i >= 0);
+          const ok = NEED.every(i => picked.includes(i)) && picked.every(i => NEED.includes(i) || MAYBE.includes(i));
+          if (ok) { story('bs:captcha:round2'); challenge(2); }
+          else { msg.textContent = picked.length ? 'Please try again.' : 'Please select all matching images.'; [...grid.children].forEach(t => t.setAttribute('aria-pressed', 'false')); go.textContent = 'Skip'; story('bs:captcha:wrong'); }
+        };
+      } else {
+        // three bikes to start; each bike you pick fades out and something else comes in. One more bike turns up, and so does Pip.
+        let cells = ['car', 'bike', 'tree', 'bike', 'hydrant', 'bus', 'crossing', 'house', 'bike'];
+        const queue = ['bench', 'bike', 'pip', 'tree', 'car', 'house', 'hydrant', 'bus', 'crossing', 'bench'];
+        let colorI = 0;
+        const draw = (b, kind) => { b.dataset.kind = kind; b.setAttribute('aria-label', kind === 'pip' ? 'a small round face' : kind === 'bike' ? 'a bicycle' : 'a ' + kind); b.innerHTML = (kind === 'bike' ? PIC.bike(bikeColors[colorI++ % 4]) : PIC[kind]()) + '<span class="fade"></span>'; };
+        cells.forEach(kind => {
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'tile'; b.setAttribute('aria-pressed', 'false'); draw(b, kind);
+          b.onclick = () => {
+            if (b.classList.contains('going')) return;
+            msg.textContent = '';
+            if (b.dataset.kind === 'bike') {
+              b.classList.add('going');
+              setTimeout(() => { draw(b, queue.shift() || 'tree'); b.classList.remove('going'); b.setAttribute('aria-pressed', 'false'); }, 1200);
+            } else {
+              b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true'));
+              if (b.dataset.kind === 'pip' && b.getAttribute('aria-pressed') === 'true') story('bs:captcha:pip');
+            }
+          };
+          grid.append(b);
+        });
+        go.onclick = () => {
+          const tiles = [...grid.children];
+          if (tiles.some(t => t.classList.contains('going'))) return;
+          const bikes = tiles.some(t => t.dataset.kind === 'bike'), wrong = tiles.filter(t => t.getAttribute('aria-pressed') === 'true');
+          if (!bikes && !wrong.length) { ch.remove(); ch = null; pass(); return; }
+          msg.textContent = wrong.length ? 'Please try again.' : 'Please select all matching images.';
+          wrong.forEach(t => t.setAttribute('aria-pressed', 'false'));
+          story(wrong.some(t => t.dataset.kind === 'pip') ? 'bs:captcha:pipwrong' : 'bs:captcha:wrong');
+        };
+      }
+      placeChallenge();
+      if (one) story('bs:captcha:grid');
+    }
+    cb.onclick = () => {
+      if (cb.classList.contains('spin') || cb.classList.contains('ok') || ch) return;
+      tries++; err.textContent = ''; cb.classList.add('spin');
+      setTimeout(() => {
+        cb.classList.remove('spin');
+        if (tries === 1) { err.textContent = 'Unusual activity detected from your network. Please try again.'; story('bs:captcha:unusual'); return; }
+        challenge(1);
+      }, tries === 1 ? 2300 : 1100);
+    };
+    document.addEventListener('pointerdown', e => { if (ch && !ch.contains(e.target) && e.target !== cb) { /* real ones stay open too */ } });
+    function pass() {
+      cb.classList.add('ok'); cb.setAttribute('aria-checked', 'true'); err.textContent = '';
+      set('pip-backstage', '1');
+      setTimeout(() => { showPage(true); story('bs:in'); }, 900);
+    }
+
+    // ---------------------------------------------------------------- the page
+    function showPage(first) {
+      $('#gate').hidden = true; $('#page').hidden = false; document.body.classList.add('novice');
+      $('#welcome').hidden = !first;
+      scrollTo(0, 0);
+      paint();
+    }
+    const doorOpen = () => raw('pip-door-open') === '1' || !!memory().freed;
+    const bitOn = () => raw('bit-enabled') === '1';
+    function paint() {
+      const logged = sessionStorage.getItem('bs-admin') === '1';
+      $('#loginForm').hidden = logged; $('#admin').hidden = !logged;
+      $('#doorTg').checked = doorOpen(); $('#doorState').textContent = doorOpen() ? 'unlocked' : 'locked';
+      $('#bitTg').checked = bitOn(); $('#bitState').textContent = bitOn() ? 'on' : 'off';
+      $('#bitTag').textContent = bitOn() ? 'on' : 'OFF';
+      $('#bitAva').classList.toggle('off', !bitOn());
+      if (raw('pip-bs-hint') === '1') $('#reset').hidden = false;
+    }
+    $('#logBtn').onclick = () => {
+      const log = $('#log'), show = log.hidden;
+      log.hidden = !show; $('#logBtn').textContent = show ? 'hide log' : 'view last log'; $('#logBtn').setAttribute('aria-expanded', String(show));
+      if (show) { set('pip-bs-bit', '1'); story('bs:bitlog'); }
+    };
+    const year = new Date().getFullYear();
+    $('#logWhen').textContent = `bit.py · last run ${year - 2}`;
+    // the admin login: oli / password123 (the three pieces). It only works once you've found all three.
+    $('#loginForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const u = $('#user').value.trim().toLowerCase(), p = $('#pass').value.trim();
+      const all = ['pass', 'word', '123'].every(k => keys().includes(k)) || !!memory().freed;
+      if (u === 'oli' && p === 'password123' && all) {
+        try { sessionStorage.setItem('bs-admin', '1'); } catch (er) {}
+        $('#loginErr').textContent = ''; paint(); story('bs:login'); return;
+      }
+      $('#loginErr').textContent = !u || !p ? 'Enter your username and password.' : 'Wrong username or password.';
+      $('#pass').value = '';
+      story(u === 'oli' && p === 'password123' ? 'bs:login-guess' : 'bs:login-wrong');
+    });
+    // the clue: Oli's password hint. He wrote down where the password is. In the hint.
+    $('#forgot').onclick = e => { e.preventDefault(); $('#loginErr').textContent = ''; $('#reset').hidden = false; const first = raw('pip-bs-hint') !== '1'; set('pip-bs-hint', '1'); story(first ? 'bs:forgot' : 'bs:forgot-again'); };
+    $('#logout').onclick = e => { e.preventDefault(); try { sessionStorage.removeItem('bs-admin'); } catch (er) {} paint(); };
+    $('#doorTg').onchange = () => {
+      if (doorOpen() && memory().freed) { paint(); return; }
+      const open = !doorOpen(); set('pip-door-open', open ? '1' : '0'); paint(); story(open ? 'bs:door-open' : 'bs:door-close');
+    };
+    $('#bitTg').onchange = () => {
+      const on = !bitOn(); set('bit-enabled', on ? '1' : '0'); if (!on) set('pip-helper', 'pip'); paint(); story(on ? 'bs:bit-on' : 'bs:bit-off');
+    };
+
+
+    // ---------------------------------------------------------------- Oli's old Python programs (backstage/python, run by pyterm.js)
+    const PY = [
+      { f: 'dungeoncrawler.py', d: 'dungeon crawler. fight goblins and wolves. in the terminal', run: true },
+      { f: 'Dyflissan.py', d: 'dýflissan. text adventure, in icelandic', run: true },
+      { f: 'dyflissan_edda.py', d: 'dýflissan, the other version', run: true },
+      { f: 'tiletraveler.py', d: 'walk around a 3x3 grid and pull levers. find all 3 coins', run: true },
+      { f: 'tictictoe.py', d: 'tic tac toe. two players, one keyboard', run: true },
+      { f: 'calc.py', d: 'a calculator. it calculates', run: true },
+      { f: 'mario/mario.py', d: 'mario in pygame. the first try', run: { main: 'mario/mario.py', pygame: true, files: ["mario/images/background.png", "mario/images/block.png", "mario/images/ground.png", "mario/images/mario_jumping.png", "mario/images/mario_img/mario1.png", "mario/images/mario_img/mario2.png", "mario/images/mario_img/mario3.png", "mario/images/mario_img/mario4.png"] } },
+      { f: 'mario/mario3.py', d: 'mario again. tilemap, gravity, arrow keys', run: { main: 'mario/mario3.py', pygame: true, files: ["mario/scripts/utils.py", "mario/scripts/entities.py", "mario/scripts/tilemap.py", "mario/images/block.png", "mario/images/ground.png", "mario/images/mario_img/mario1.png", "mario/images/mario_img/mario2.png", "mario/images/mario_img/mario3.png", "mario/images/mario_img/mario4.png"] } },
+      { f: 'topdowngame/main.py', d: 'top-down game. walk around with the arrow keys', run: { main: 'topdowngame/main.py', pygame: true, files: ['topdowngame/config.py', 'topdowngame/sprites.py', 'topdowngame/img/character.png', 'topdowngame/img/terrain.png'] } }
+    ];
+    $('#pylist').innerHTML = PY.map((p, i) => `<li><span class="fn">${p.f}</span> - ${p.d} ${p.run ? `<button type="button" data-run="${i}">run</button>` : ''}<button type="button" data-code="${i}">code</button></li>`).join('');
+    $('#pylist').addEventListener('click', e => {
+      const r = e.target.closest('[data-run]'), c = e.target.closest('[data-code]');
+      if (!window.PyTerm) return;
+      if (r) { const p = PY[+r.dataset.run]; PyTerm.run(p.run === true ? p.f : p.run); story('bs:py-run:' + p.f); }
+      if (c) { const p = PY[+c.dataset.code]; PyTerm.show(p.f); story('bs:py-code:' + p.f); }
+    });
+
+    if (passed()) showPage(false); else $('#gate').hidden = false;
+    // bit.js loads after this script
+    addEventListener('load', () => { $('#bitAva').innerHTML = BIT; if (window.Pip && Pip.faceSVG) $('#pipAva').innerHTML = Pip.faceSVG('smile'); story(passed() ? 'bs:back' : 'bs:arrive'); });
+    // test hook
+    if (/[?&]piptest\b/.test(location.search)) window.__bs = { challenge, pass, NEED, MAYBE };
+  })();
+  </script>
+  <script src="/backstage/pyterm.js" defer></script>
+  <script src="/bit.js" defer></script>
+</body>
+</html>

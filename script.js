@@ -1,5 +1,10 @@
 // Use relative path so pages in subfolders can resolve the background image
 const originalBackground = "images/1.jpg";
+// Once Pip (the chatbot, bit.js) has been set free, he runs the place: the site's own look is his.
+const PIP_BACKGROUND = "#3b1d7a";
+function pipIsFree() { try { return !!JSON.parse(localStorage.getItem("bit-memory") || "{}").freed; } catch (e) { return false; } }
+window.pipIsFree = pipIsFree;
+window.PIP_BACKGROUND = PIP_BACKGROUND;
 
 // Helper: set UI surface CSS variables based on the active background value.
 function updateUISurfaceForBackground(bgValue) {
@@ -95,7 +100,7 @@ function revertToOriginalBackground() {
     // Reset to the original background image
     // restore the original image on both html and body
     // use full shorthand so the image covers and doesn't repeat
-    const img = `url('${originalBackground}') center center / cover no-repeat`;
+    const img = pipIsFree() ? PIP_BACKGROUND : `url('${originalBackground}') center center / cover no-repeat`;
     // set the CSS backing layer to the image shorthand and clear inline backgrounds
     document.documentElement.style.setProperty('--page-bg', img);
     // When background is an image use translucent white surfaces
@@ -122,7 +127,7 @@ function applySavedBackground() {
 
     // If there's a saved image and it references the site image, normalize and set the backing layer
     if (savedImage && savedImage.includes("images/1.jpg")) {
-        const img = `url('${originalBackground}') center center / cover no-repeat`;
+        const img = pipIsFree() ? PIP_BACKGROUND : `url('${originalBackground}') center center / cover no-repeat`;
         document.documentElement.style.setProperty('--page-bg', img);
         updateUISurfaceForBackground(img);
         return;
@@ -135,8 +140,8 @@ function applySavedBackground() {
         return;
     }
 
-    // Fallback: set the default image on the backing layer
-    const img = `url('${originalBackground}') center center / cover no-repeat`;
+    // Fallback: set the default image on the backing layer (or Pip's colour, once he's free)
+    const img = pipIsFree() ? PIP_BACKGROUND : `url('${originalBackground}') center center / cover no-repeat`;
     document.documentElement.style.setProperty('--page-bg', img);
     updateUISurfaceForBackground(img);
 }
@@ -250,6 +255,8 @@ async function playFromAnchor(anchor) {
     const openNewTab = document.getElementById('openNewTab');
     if (player && frame) {
         document.body.classList.add('is-playing');
+        // Snake plays in a smaller window at the top of the page, with the site around it
+        document.body.classList.toggle('snake-small', /\/snake\//i.test(String(path)));
         // stop the 3D background while a game runs, so the two don't fight over the graphics card
         try { if (window.__threeScene && window.__threeScene.pause) window.__threeScene.pause(); } catch (e) {}
         player.style.display = '';
@@ -257,7 +264,7 @@ async function playFromAnchor(anchor) {
         setPlayerFit(fitForProject(match, path));
         requestAnimationFrame(() => {
             fitPlayer();
-            player.scrollIntoView({ behavior: 'instant', block: 'start' });
+            scrollToPlayer(player);
         });
 
         // set iframe src to embed path
@@ -299,7 +306,7 @@ async function playFromAnchor(anchor) {
                 requestAnimationFrame(() => {
                     focusIframeAndCanvas(frame);
                     fitPlayer();
-                    player.scrollIntoView({ behavior: 'instant', block: 'start' });
+                    scrollToPlayer(player);
                 });
                 frame.removeEventListener('load', __focusOnLoad);
             };
@@ -445,7 +452,7 @@ function showPlayerControls(controls) {
             try { if (frame && typeof focusIframeAndCanvas === 'function') focusIframeAndCanvas(frame); } catch (e) {}
             requestAnimationFrame(() => {
                 fitPlayer();
-                document.getElementById('playerArea')?.scrollIntoView({ behavior: 'instant', block: 'start' });
+                const pa = document.getElementById('playerArea'); if (pa) scrollToPlayer(pa);
             });
         });
     }
@@ -749,7 +756,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (player) { player.style.display = 'none'; player.setAttribute('aria-hidden', 'true'); player.classList.remove('fullscreen'); }
         if (frame) frame.src = 'about:blank';
         showPlayerControls(null);
-        document.body.classList.remove('is-playing');
+        document.body.classList.remove('is-playing', 'snake-small');
         try {
             const bg = document.getElementById('three-canvas');
             if (bg && bg.style.visibility !== 'hidden' && window.__threeScene && window.__threeScene.resume) window.__threeScene.resume();
@@ -897,6 +904,12 @@ function fitForProject(match, path) {
     if (key.includes('flappy')) return { mode: 'native', w: 384, h: 512, probe: false };
     const r = parseAspect(match && match.aspect);
     return { mode: 'ratio', ratio: r || 16 / 9, probe: !r };
+}
+
+// bring the player into view; a small game (Snake) sits under the header, so just go to the top
+function scrollToPlayer(player) {
+    if (document.body.classList.contains('snake-small')) window.scrollTo({ top: 0, behavior: 'instant' });
+    else player.scrollIntoView({ behavior: 'instant', block: 'start' });
 }
 
 function setPlayerFit(fit) {

@@ -84,6 +84,8 @@ export function createDistricts(scene, materials) {
             swamp = s.area === "swamp",
             group = new THREE.Group();
         scene.add(group);
+        // Past the door in Pip's finale: nothing at all.
+        if (s.empty) { chunks.set(s, { group, trees: [], foliage: [], debris: [], slots: [], crumbleSlots: [], seaRocks: [], chunkLamps: [], spinners: [], reflection: null, index, collapseAt: null }); return; }
         const batches = new Map(), debris = [];
         function block(x, y, z, w, h, d, mat = materials.wood, rot = 0, geom = cube) {
             const key = geom.uuid + mat.uuid;
@@ -126,6 +128,7 @@ export function createDistricts(scene, materials) {
         if (!s.narrow) {
             for (let p = firstBoard; p < s.length; p += 0.55) {
                 if (hole && p + 0.55 > hole.start && p < hole.end) continue;
+                if (s.stairs && p + 0.55 > s.stairs.start) continue; // the staircase and landing have their own boards
                 const a = at(p, 0), y = ground(p), [w, d] = along(0.51, 3.6);
                 block(a.x, y, a.z, w, 0.2, d, random(index * 977 + p * 10) > 0.45 ? materials.wood : materials.pale, tilt(p));
                 for (const side of [-1, 1]) {
@@ -186,6 +189,65 @@ export function createDistricts(scene, materials) {
             block(end.x, y - 0.02, end.z, 4.3, 0.2, 4.3);
             for (const [u, v] of [[-1.9, -1.9], [1.9, -1.9], [-1.9, 1.9], [1.9, 1.9]])
                 block(end.x + u, (y - 2.7) / 2, end.z + v, 0.24, y + 2.7, 0.24, materials.dark);
+        }
+        // Pip's finale: the staircase at the end of the long road, and the door at the top.
+        if (s.finale) { finaleStairs(); return; }
+        function finaleStairs() {
+            // The same timber staircase that turns up in the dream (see "Impossible things" below):
+            // open treads, thin stringers and rails, a small landing on tall legs, and a bare door
+            // frame with the door ajar. Only here it's the end of the road, a bit bigger, and lit.
+            const st = s.stairs, SC = st.scale, fx = s.dx, fz = s.dz, rx = -s.dz, rz = s.dx, yaw = Math.atan2(s.dx, s.dz);
+            const yTop = k => s.y + k * st.riser;
+            const atP = (p, side = 0, y = 0) => { const a = at(p, side); return [a.x, y, a.z]; };
+            for (let k = 1; k <= st.steps; k++) {
+                const [x, , z] = atP(st.start + (k - 0.5) * st.tread);
+                block(x, yTop(k) + 0.1 - 0.045 * SC, z, 1.2 * SC, 0.09 * SC, 0.4 * SC, k % 4 ? materials.wood : materials.pale, [0, yaw, 0]);
+            }
+            const run = st.steps * st.tread, rise = st.steps * st.riser, len = Math.hypot(run, rise) + 0.3 * SC;
+            const sdy = rise / Math.hypot(run, rise), sdh = run / Math.hypot(run, rise), base = water - 0.6;
+            for (const side of [-0.62 * SC, 0.62 * SC]) {
+                const [x0, , z0] = atP(st.start, side);
+                stick(x0, s.y + 0.1 - 0.12 * SC, z0, fx * sdh, sdy, fz * sdh, len, 0.12 * SC, materials.dark);
+                stick(x0, s.y + 0.1 + 0.95 * SC, z0, fx * sdh, sdy, fz * sdh, len, 0.06 * SC, materials.dark);
+                for (let k = 0; k <= st.steps; k += 4) {
+                    const [px, , pz] = atP(st.start + k * st.tread, side), py = yTop(k) + 0.1;
+                    block(px, py + 0.45 * SC, pz, 0.08 * SC, 0.95 * SC, 0.08 * SC, materials.dark, [0, yaw, 0]);
+                    if (k % 8 === 0 && k > 0) block(px, (py + base) / 2, pz, 0.14 * SC, py - base, 0.14 * SC, materials.dark);
+                }
+            }
+            // The landing, on tall legs, and the door frame at its far edge.
+            const ly = yTop(st.steps) + 0.1, lp = st.top + 0.75 * SC;
+            { const [x, , z] = atP(lp); block(x, ly - 0.07 * SC, z, 1.6 * SC, 0.14 * SC, 1.5 * SC, materials.wood, [0, yaw, 0]); }
+            for (const [u, v] of [[-0.7, -0.65], [0.7, -0.65], [-0.7, 0.65], [0.7, 0.65]]) {
+                const [x, , z] = atP(lp + v * SC, u * SC);
+                block(x, (ly + base) / 2, z, 0.14 * SC, ly - base, 0.14 * SC, materials.dark);
+            }
+            const dp = s.door, dy = ly, c = at(dp, 0);
+            for (const side of [-0.55, 0.55]) { const [x, , z] = atP(dp, side * SC); block(x, dy + 1.15 * SC, z, 0.12 * SC, 2.2 * SC, 0.12 * SC, materials.dark, [0, yaw, 0]); }
+            block(c.x, dy + 2.3 * SC, c.z, 1.3 * SC, 0.14 * SC, 0.14 * SC, materials.dark, [0, yaw, 0]);
+            // The door, ajar, the same way the dream's doors stand.
+            {
+                const hx = c.x + rx * 0.5 * SC, hz = c.z + rz * 0.5 * SC, open = 0.9;
+                block(hx - (rx * Math.cos(open) - fx * Math.sin(open)) * 0.48 * SC, dy + 1.1 * SC, hz - (rz * Math.cos(open) - fz * Math.sin(open)) * 0.48 * SC, 0.96 * SC, 2.05 * SC, 0.05 * SC, materials.wood, [0, yaw + open, 0]);
+            }
+            // Light in the doorway, so it can be found from far down the road.
+            block(c.x + fx * 0.04, dy + 1.1 * SC, c.z + fz * 0.04, 1.0 * SC, 2.15 * SC, 0.03, beacon, [0, yaw, 0]);
+            chunkLamps.push({ p: new THREE.Vector3(c.x, dy + 1.4, c.z), strength: 2 });
+            for (const { geom, mat, list: transforms } of batches.values()) {
+                const mesh = new THREE.InstancedMesh(geom, mat, transforms.length);
+                transforms.forEach((m, i) => mesh.setMatrixAt(i, m));
+                mesh.castShadow = mesh.receiveShadow = true;
+                group.add(mesh);
+            }
+            const light = new THREE.PointLight(0xffffff, 40, 22, 1.6);
+            light.position.set(c.x - s.dx * 1.5, dy + 1.8, c.z - s.dz * 1.5);
+            group.add(light);
+            group.traverse((o) => { o.frustumCulled = false; });
+            // The road is mirrored in the still water like the rest of the shallows.
+            const reflection = new THREE.Group();
+            for (const child of group.children) if (child.isInstancedMesh) { const copy = new THREE.InstancedMesh(child.geometry, child.material, child.count); copy.instanceMatrix = child.instanceMatrix; copy.frustumCulled = false; reflection.add(copy); }
+            reflection.scale.y = -1; reflection.position.y = water * 2; scene.add(reflection);
+            chunks.set(s, { group, trees: [], foliage: [], debris: [], slots: [], crumbleSlots: [], seaRocks: [], chunkLamps, spinners: [], reflection, index, collapseAt: null });
         }
         // Covered passages: straight through a house, or under a run of arches.
         if (s.cover?.type === "house") {

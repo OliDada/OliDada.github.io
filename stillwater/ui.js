@@ -91,9 +91,11 @@ export function createUI() {
                 return;
             }
             // In play: score top left, lives top right, and nothing else unless it matters.
-            text(state.score, 4, 4);
-            if (state.mult > 1) text(`x${state.mult}`, 4, 11, { color: SAGE });
-            for (let i = 0; i < 3; i++) diamond(W - 8 - i * 7, 4, i < state.lives);
+            if (!state.finale) { // in Pip's finale there's no score: just the road
+                text(state.score, 4, 4);
+                if (state.mult > 1) text(`x${state.mult}`, 4, 11, { color: SAGE });
+                for (let i = 0; i < 3; i++) diamond(W - 8 - i * 7, 4, i < state.lives);
+            }
             if (state.area !== area) { area = state.area; areaSince = t; }
             const shown = t - areaSince;
             // Area names: large paper-white letters on their own dark band, typed in,

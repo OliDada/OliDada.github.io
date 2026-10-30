@@ -4,7 +4,7 @@
 // stop(), pause(), resume(), setOptions(opts) and poke().
 //
 // Options (also read from localStorage 'floaties' at start-up; site.js writes them):
-//   shape:  'sparkles' | 'bubbles' | 'cubes' | 'dolphins' | 'snow'
+//   shape:  'sparkles' | 'bubbles' | 'cubes' | 'dolphins' | 'snow' | 'pips' (Pip's head, once he's free)
 //   amount: 'few' | 'some' | 'loads'
 //   speed:  0.25 .. 3 (multiplier)
 //   color:  'auto' or '#rrggbb'
@@ -13,6 +13,9 @@
 const THREE_CDN = 'https://unpkg.com/three@0.158.0/build/three.module.js';
 const AMOUNTS = { few: 260, some: 800, loads: 2200 };
 const DEFAULTS = { shape: 'sparkles', amount: 'some', speed: 1, color: 'auto', follow: true };
+// once Pip (the chatbot) is free, a few of his heads are what floats by default
+const pipFreeNow = () => { try { return !!JSON.parse(localStorage.getItem('bit-memory') || '{}').freed; } catch (e) { return false; } };
+if (pipFreeNow()) Object.assign(DEFAULTS, { shape: 'pips', amount: 'few' });
 
 let THREE = null;
 let rafId = null;
@@ -82,10 +85,128 @@ function makeTexture(kind) {
   return t;
 }
 
+// Pip's face, as drawn by bit.js (falls back to a simple drawing if the chatbot isn't on this page).
+// Each head is two sprites: the face (mouth, cheeks, little extras) and the eyes on top, so the
+// eyes can look at your mouse. Textures are drawn once per mood and shared by every head.
+const PIP_MOODS = ['happy', 'smile', 'joy', 'blush', 'love', 'surprised', 'smug', 'thinking', 'sleepy', 'hopeful', 'awkward'];
+const pipTextures = new Map();
+function svgTexture(key, svg, fallback) {
+  if (pipTextures.has(key)) return pipTextures.get(key);
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  pipTextures.set(key, tex);
+  const simple = () => { g.clearRect(0, 0, 128, 128); fallback(g); tex.needsUpdate = true; };
+  if (!svg) { simple(); return tex; }
+  const img = new Image();
+  // the whole 32x32 drawing, so the outline and the little extras (hearts, sparkles) are never cut off
+  img.onload = () => { g.clearRect(0, 0, 128, 128); g.drawImage(img, 0, 0, 128, 128); tex.needsUpdate = true; };
+  img.onerror = simple;
+  let sized = svg.replace('<svg', '<svg width="128" height="128"');
+  if (!sized.includes('xmlns=')) sized = sized.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(sized);
+  return tex;
+}
+const hasPip = () => window.Pip && typeof window.Pip.faceSVG === 'function' && typeof window.Pip.eyesSVG === 'function';
+const faceTexture = mood => svgTexture('face:' + mood, hasPip() ? window.Pip.faceSVG(mood, 'none') : null, g => {
+  g.fillStyle = '#fffaf0'; g.strokeStyle = '#1d1a2b'; g.lineWidth = 8;
+  g.beginPath(); g.arc(64, 64, 44, 0, Math.PI * 2); g.fill(); g.stroke();
+  g.lineWidth = 7; g.lineCap = 'round'; g.beginPath(); g.arc(64, 70, 18, 0.2 * Math.PI, 0.8 * Math.PI); g.stroke();
+});
+const eyesTexture = key => svgTexture('eyes:' + key, hasPip() ? window.Pip.eyesSVG(key) : null, g => {
+  g.fillStyle = g.strokeStyle = '#1d1a2b'; g.lineWidth = 6; g.lineCap = 'round';
+  for (const x of [48, 80]) {
+    if (key === 'shut') { g.beginPath(); g.moveTo(x - 7, 56); g.lineTo(x + 7, 56); g.stroke(); }
+    else { g.beginPath(); g.arc(x, 56, key === 'wide' ? 10 : 8, 0, Math.PI * 2); g.fill(); }
+  }
+});
+const eyesOf = mood => (hasPip() && window.Pip.moodEyes ? window.Pip.moodEyes(mood) : 'dots');
+const pipMaterials = new Map();
+function spriteMaterial(key, tex) {
+  if (!pipMaterials.has(key)) pipMaterials.set(key, new THREE.SpriteMaterial({ map: tex, transparent: true, alphaTest: 0.5, depthWrite: true }));
+  return pipMaterials.get(key);
+}
+const faceMat = mood => spriteMaterial('face:' + mood, faceTexture(mood));
+const eyesMat = key => spriteMaterial('eyes:' + key, eyesTexture(key));
+
+function buildPips(count) {
+  const g = new THREE.Group(), data = [], now = performance.now();
+  for (let i = 0; i < count; i++) {
+    const mood = PIP_MOODS[Math.floor(Math.random() * PIP_MOODS.length)];
+    const face = new THREE.Sprite(faceMat(mood)), eyes = new THREE.Sprite(eyesMat(eyesOf(mood)));
+    // kept closer together than the other floaties, so a few heads are always in view
+    face.position.set((Math.random() - 0.5) * 170, (Math.random() - 0.5) * 95, -55 + Math.random() * 85);
+    const size = 4.6 * (0.85 + Math.random() * 0.3);
+    face.scale.set(size, size, 1); eyes.scale.set(size, size, 1);
+    g.add(face, eyes);
+    data.push({ face, eyes, size, mood, blinkAt: now + 800 + Math.random() * 5000, blinkUntil: 0, moodAt: now + 4000 + Math.random() * 14000, look: new THREE.Vector2() });
+  }
+  return { kind: 'pips', obj: g, data };
+}
+let startledUntil = 0, goodbyeAt = 0;
+// Pip is being reset: every head goes sad, starts to cry, and sinks out of sight
+function pipsGoodbye() {
+  if (!objects || objects.kind !== 'pips') return;
+  goodbyeAt = performance.now();
+  objects.data.forEach((d, i) => {
+    d.gone = { delay: 500 + Math.random() * 1200, v: 0 };
+    d.face.material = faceMat(i % 3 ? 'sad' : 'cry'); d.eyes.material = eyesMat(eyesOf(i % 3 ? 'sad' : 'cry'));
+  });
+}
+function startlePips() {
+  if (!objects || objects.kind !== 'pips') return;
+  const now = performance.now();
+  startledUntil = now + 1400;
+  for (const d of objects.data) { d.startled = true; d.face.material = faceMat('surprised'); d.eyes.material = eyesMat('wide'); d.blinkUntil = 0; d.blinkAt = now + 1600 + Math.random() * 2000; }
+}
+let _v, _w, _toCam, _up; // made once three.js has loaded
+function updatePips() {
+  if (!_v) { _v = new THREE.Vector3(); _w = new THREE.Vector3(); _toCam = new THREE.Vector3(); _up = new THREE.Vector3(); }
+  const now = performance.now();
+  for (const d of objects.data) {
+    if (d.gone) {
+      // sad, then sinking: no more blinking or looking around
+      if (now - goodbyeAt > d.gone.delay) { d.gone.v += 0.012; d.face.position.y -= d.gone.v; }
+      d.face.getWorldPosition(_v); _toCam.copy(camera.position).sub(_v).normalize().multiplyScalar(0.06);
+      d.eyes.position.copy(group.worldToLocal(_v.add(_toCam)));
+      continue;
+    }
+    if (d.startled && now > startledUntil) { d.startled = false; d.face.material = faceMat(d.mood); d.eyes.material = eyesMat(eyesOf(d.mood)); }
+    if (!d.startled) {
+      if (d.blinkUntil && now > d.blinkUntil) { d.blinkUntil = 0; d.eyes.material = eyesMat(eyesOf(d.mood)); }
+      if (!d.blinkUntil && now > d.blinkAt) {
+        d.blinkUntil = now + 130; d.blinkAt = now + 2400 + Math.random() * 4800;
+        if (Math.random() < 0.12) d.blinkAt = now + 260; // sometimes a double blink
+        d.eyes.material = eyesMat('shut');
+      }
+      if (now > d.moodAt && !d.blinkUntil) {
+        d.mood = PIP_MOODS[Math.floor(Math.random() * PIP_MOODS.length)];
+        d.moodAt = now + 5000 + Math.random() * 15000;
+        d.face.material = faceMat(d.mood); d.eyes.material = eyesMat(eyesOf(d.mood));
+      }
+    }
+    // the eyes look towards the mouse: work out where the head is on screen
+    d.face.getWorldPosition(_v);
+    _w.copy(_v).project(camera);
+    const dx = mouse.x - _w.x, dy = -mouse.y - _w.y, len = Math.hypot(dx, dy) || 1, k = Math.min(1, len * 3);
+    d.look.x += ((dx / len) * k - d.look.x) * 0.15;
+    d.look.y += ((dy / len) * k - d.look.y) * 0.15;
+    // in the group's own space: a small step towards the camera (so the eyes sit on the face) and towards the mouse
+    _toCam.copy(camera.position).sub(_v).normalize().multiplyScalar(0.06);
+    const right = _w.set(1, 0, 0).applyQuaternion(camera.quaternion), up = _up.set(0, 1, 0).applyQuaternion(camera.quaternion);
+    const reach = d.size * 0.045;
+    _v.add(_toCam).addScaledVector(right, d.look.x * reach).addScaledVector(up, d.look.y * reach);
+    d.eyes.position.copy(group.worldToLocal(_v));
+  }
+}
+
 function disposeObjects() {
   if (!objects) return;
   const o = objects.obj;
   group.remove(o);
+  if (objects.kind === 'pips') { objects = null; return; } // the heads share cached textures, kept for next time
   try { o.geometry && o.geometry.dispose(); } catch (e) {}
   try { if (o.material) { o.material.map && o.material.map.dispose(); o.material.dispose(); } } catch (e) {}
   objects = null;
@@ -120,6 +241,7 @@ function build() {
     return;
   }
 
+  if (shape === 'pips') { objects = buildPips(Math.round(count / 13)); group.add(objects.obj); return; }
   if (shape === 'dolphins') count = Math.round(count / 4); // they're big, so fewer of them
   const geometry = new THREE.BufferGeometry();
   const positions = new Float32Array(count * 3);
@@ -163,7 +285,7 @@ function build() {
 function recolor() {
   if (!objects) return;
   const mat = objects.obj.material;
-  if (objects.kind === 'dolphins') return; // dolphins keep their own colours
+  if (objects.kind === 'dolphins' || objects.kind === 'pips') return; // dolphins and Pips keep their own colours
   mat.color = floatieColor();
   mat.needsUpdate = true;
 }
@@ -216,6 +338,7 @@ function animate() {
   group.rotation.y = t * 0.6;
   group.rotation.x = Math.sin(t * 0.4) * 0.2;
 
+  if (objects && objects.kind === 'pips') updatePips();
   if (objects && (objects.kind === 'bubbles' || objects.kind === 'snow')) {
     // bubbles rise and snow falls, both drift a little sideways
     const pos = objects.obj.geometry.attributes.position;
@@ -303,7 +426,8 @@ async function initThree() {
       if (opts.shape !== prev.shape || opts.amount !== prev.amount) build();
       else if (opts.color !== prev.color) recolor();
     },
-    poke() { whoosh = 1; },
+    poke() { whoosh = 1; if (!goodbyeAt) startlePips(); },
+    pipsGoodbye,
     pause() {
       if (rafId) cancelAnimationFrame(rafId);
       rafId = null;

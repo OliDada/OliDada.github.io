@@ -3,225 +3,761 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Pip's room</title>
+  <title>Pip's desktop · olid.is</title>
   <link rel="icon" href="/images/dolphin2.png" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Pixelify+Sans:wght@500;700&family=Nunito:wght@600;800&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Comic+Neue:wght@700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
   <link href="/bit.css" rel="stylesheet">
   <style>
-    /* Pip's room: the inside of the chatbot. Dark, a bit messy, purple. */
-    :root { --ink: #1d1a2b; --cream: #fffaf0; --yellow: #ffe14d; --pink: #ff6fb1; --room: #14111f; --room2: #1d1830; --glow: #b58cff; --text: #e9e3ff; --dim: #8f86b3; }
+    /* /pip: Pip's desktop. A page Pip made himself; Oli doesn't know it exists. Pip set up
+       his own little computer: apps for the switches that run the front page, Oli's hidden games, a game
+       Pip made, Oli's notes, Pip's things, and the locked way out. On a phone it's a home screen and each
+       app opens full screen. Pip's chat is always open here (bit.js docks it, see bit.css). */
+    :root { --ink: #1d1a2b; --cream: #fffaf0; --purple: #3b1d7a; --lilac: #d5c2ff; --accent: #6d3fd6; --soft: #6b6585; --line: #e2dcef; --yellow: #ffe14d; --pink: #ff9bc7; --blue: #9be7ff; }
     * { box-sizing: border-box; }
-    html, body { margin: 0; min-height: 100%; background: var(--room); color: var(--text); font-family: 'Nunito', system-ui, sans-serif; }
-    body::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
-      background: repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 3px), radial-gradient(ellipse at 50% 20%, rgba(181,140,255,.14), transparent 60%); }
-    .room { position: relative; z-index: 1; max-width: 980px; margin: 0 auto; padding: 28px 20px 90px; }
-    .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-    .back { color: var(--dim); text-decoration: none; font-weight: 800; font-size: 14px; border: 1.5px solid #3a3157; border-radius: 999px; padding: 8px 14px; }
-    .back:hover { color: var(--text); border-color: var(--glow); }
-    h1 { font-family: 'Pixelify Sans', monospace; font-size: clamp(40px, 8vw, 72px); margin: 26px 0 4px; letter-spacing: .02em; color: var(--text); text-shadow: 0 0 18px rgba(181,140,255,.45); }
-    .sign { font-family: 'JetBrains Mono', monospace; color: var(--dim); font-size: 14px; margin: 0 0 30px; }
-    .sign s { color: #6d6591; }
-    .files { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
-    .file { background: var(--room2); border: 1.5px solid #3a3157; border-radius: 14px; padding: 18px 12px 14px; text-align: center; cursor: pointer; color: var(--text);
-      font: 700 13px/1.3 'JetBrains Mono', monospace; transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease; }
-    .file:hover, .file:focus-visible { transform: translateY(-3px); border-color: var(--glow); box-shadow: 0 8px 24px rgba(181,140,255,.18); outline: none; }
-    .file .icon { font-size: 34px; display: block; margin-bottom: 10px; filter: saturate(.8); }
-    .file.locked { border-style: dashed; border-color: #6b4ea8; }
-    .file.locked .icon { animation: hum 2.2s ease-in-out infinite; }
-    .file.opened { border-color: var(--glow); }
-    @keyframes hum { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
-    .scribble { margin-top: 34px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #5d5680; line-height: 1.6; }
-    /* a file window */
-    .win[hidden] { display: none; }
-    .win { position: fixed; inset: 0; z-index: 1500; display: grid; place-items: center; background: rgba(8, 6, 14, .7); padding: 16px; }
-    .win-box { width: min(640px, 100%); max-height: min(80vh, 720px); display: flex; flex-direction: column; background: #0f0c18; border: 1.5px solid var(--glow); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.6), 0 0 40px rgba(181,140,255,.15); overflow: hidden; }
-    .win-bar { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #1b1630; font: 700 13px 'JetBrains Mono', monospace; color: var(--dim); }
-    .win-bar button { background: none; border: 1.5px solid #3a3157; color: var(--text); border-radius: 8px; width: 30px; height: 30px; cursor: pointer; font-weight: 800; }
-    .win-body { padding: 18px 20px 22px; overflow: auto; font: 500 14px/1.65 'JetBrains Mono', monospace; color: var(--text); white-space: pre-wrap; }
-    .win-body .crossed { text-decoration: line-through; color: #6d6591; }
-    .win-body .hi { color: var(--yellow); }
-    .win-body svg { max-width: 100%; height: auto; display: block; margin: 4px auto 10px; }
-    .lock { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
-    .lock input { flex: 1; min-width: 180px; background: #1b1630; border: 1.5px solid #3a3157; color: var(--text); border-radius: 10px; padding: 10px 12px; font: 700 15px 'JetBrains Mono', monospace; }
-    .lock input:focus { outline: none; border-color: var(--glow); }
-    .lock button { background: var(--glow); color: var(--ink); border: 0; border-radius: 10px; padding: 10px 16px; font: 800 14px 'Nunito', sans-serif; cursor: pointer; }
-    .lock .msg { flex-basis: 100%; color: var(--dim); font-size: 13px; min-height: 1.4em; }
+    html { -webkit-text-size-adjust: 100%; }
+    html, body { margin: 0; height: 100%; }
+    body { background: var(--purple); color: var(--ink); font: 700 15px/1.45 'Nunito', system-ui, sans-serif; overflow: hidden; }
+    body::before { content: ''; position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 72% 22%, rgba(255,111,177,.2), transparent 55%), radial-gradient(ellipse at 18% 92%, rgba(56,182,255,.16), transparent 50%); }
+    /* (no wallpaper: Pip's face is the desktop now) */
+    button { font: inherit; color: inherit; }
+    a { color: var(--accent); }
+
+    /* ---- top bar */
+    .bar { position: fixed; left: 0; right: 0; top: 0; height: 44px; z-index: 50; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: rgba(20, 10, 45, .6); color: var(--cream); font-weight: 800; font-size: 14px; }
+    .bar .f { width: 26px; height: 26px; flex: none; }
+    .bar .f svg { width: 100%; height: 100%; overflow: visible; }
+    .bar .sub { flex: 1; opacity: .7; font-weight: 700; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .bar a { color: var(--cream); text-decoration: none; border: 2px solid rgba(255,250,240,.35); border-radius: 999px; padding: 3px 11px; white-space: nowrap; }
+    .bar a:hover { border-color: var(--cream); }
+
+    /* ---- desktop icons */
+    .desk { position: fixed; left: 0; top: 44px; bottom: 0; overflow: auto; padding: 22px 20px; display: grid; grid-template-columns: repeat(2, 104px); grid-auto-rows: max-content; gap: 16px 8px; align-content: start; z-index: 1; }
+    .app { border: 0; background: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 7px; color: var(--cream); font-weight: 800; font-size: 13px; line-height: 1.15; text-align: center; padding: 4px; border-radius: 14px; }
+    .app i { width: 66px; height: 66px; border-radius: 18px; border: 3px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); display: grid; place-items: center; font-size: 31px; font-style: normal; transition: transform .12s ease; position: relative; overflow: hidden; }
+    .app i::after { content: ''; position: absolute; left: 6px; right: 6px; top: 4px; height: 40%; border-radius: 12px 12px 30px 30px; background: linear-gradient(rgba(255,255,255,.55), rgba(255,255,255,0)); pointer-events: none; }
+    .app span { background: rgba(20, 10, 45, .45); border-radius: 8px; padding: 2px 7px; }
+    .app:hover i, .app:focus-visible i { transform: translate(-1px, -2px); box-shadow: 4px 5px 0 var(--ink); }
+    .app:focus-visible { outline: 2px solid var(--cream); }
+    .app.locked i { filter: grayscale(.5); }
+    /* ---- Pip himself, big, in the middle of his desktop (bit.js makes him look around, blink, talk, react) */
+    .room-pip { position: fixed; z-index: 1; left: calc(240px + (100vw - 240px - 400px) / 2); top: 52%; transform: translate(-50%, -50%); transition: left .9s cubic-bezier(.3,.8,.3,1), top .9s cubic-bezier(.3,.8,.3,1); pointer-events: none; }
+    .rp-face { pointer-events: auto; display: block; width: clamp(170px, 24vw, 300px); aspect-ratio: 1; padding: 0; border: 0; background: none; cursor: pointer; filter: drop-shadow(0 18px 0 rgba(20,10,45,.35)); }
+    .rp-face svg { width: 100%; height: 100%; overflow: visible; display: block; }
+    .rp-shadow { width: 60%; height: 18px; margin: 26px auto 0; border-radius: 50%; background: rgba(10,5,30,.35); filter: blur(4px); }
+    .room-pip.talking .rp-face { animation: rp-talk .42s ease-in-out infinite alternate; }
+    .room-pip.poked .rp-face { animation: rp-poke .32s ease; }
+    .room-pip.dozing .rp-face { animation: rp-doze 3s ease-in-out infinite; }
+    @keyframes rp-talk { from { transform: translateY(0) scale(1); } to { transform: translateY(-4px) scale(1.012, .99); } }
+    @keyframes rp-poke { 30% { transform: scale(.9, 1.08); } 65% { transform: scale(1.05, .95); } }
+    @keyframes rp-doze { 50% { transform: translateY(5px) rotate(-3deg); } }
+    .rp-face .eyes.blink { transform: scaleY(.12) !important; transform-box: fill-box; transform-origin: center; }
+    @media (max-width: 1100px) { .room-pip { left: calc((100vw - 240px - 400px) / 2 + 240px); } }
+    .room-pip { display: none !important; } /* (the big face was too much; on computers the chat gets the room instead) */
+    @media (prefers-reduced-motion: reduce) { .room-pip, .room-pip * { animation: none !important; transition: none !important; } }
+    .phone-head { display: none; }
+
+    /* ---- windows */
+    .win { position: fixed; z-index: 10; width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 80px); display: flex; flex-direction: column; background: var(--cream); border: 3px solid var(--ink); border-radius: 16px; box-shadow: 6px 6px 0 var(--ink); overflow: hidden; }
+    .win.wide { width: min(780px, calc(100vw - 32px)); }
+    .wbar { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 14px; border-bottom: 3px solid var(--ink); font: 800 16px/1.2 'Baloo 2', sans-serif; cursor: grab; user-select: none; touch-action: none; background: var(--tint, var(--cream)); }
+    .win { animation: winIn .16s ease-out; }
+    @keyframes winIn { from { transform: translateY(8px) scale(.97); opacity: 0; } }
+    /* the widget on the desktop */
+    .widget { position: fixed; right: calc(min(440px, 100vw - 300px) + 44px); top: 64px; z-index: 2; width: 250px; background: rgba(255, 250, 240, .96); border: 3px solid var(--ink); border-radius: 18px; box-shadow: 5px 5px 0 var(--ink); padding: 14px 16px; }
+    .widget .time { font: 800 42px/1 'Baloo 2', sans-serif; }
+    .widget .day { color: var(--soft); font-size: 13px; margin-bottom: 10px; }
+    .widget .mood { display: flex; align-items: center; gap: 10px; padding-top: 10px; border-top: 2px dashed var(--line); }
+    .widget .mood .f { width: 42px; height: 42px; flex: none; }
+    .widget .mood .f svg { width: 100%; height: 100%; overflow: visible; }
+    .widget .mood small { display: block; color: var(--soft); font-size: 12px; }
+    .widget .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
+    .widget .facts div { background: #f3eefc; border-radius: 10px; padding: 6px 8px; font-size: 12px; color: var(--soft); }
+    .widget .facts b { display: block; font: 800 18px/1.1 'Baloo 2'; color: var(--ink); }
+    @media (max-height: 640px), (max-width: 1100px) { .widget { display: none; } }
+    .wbar:active { cursor: grabbing; }
+    .wbar .t { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .wbar .back { display: none; }
+    .wbar button { border: 2.5px solid var(--ink); background: var(--cream); border-radius: 999px; min-width: 30px; height: 30px; cursor: pointer; font-weight: 800; display: grid; place-items: center; padding: 0 8px; }
+    .wbody { overflow: auto; padding: 14px 16px 18px; }
+    .muted { color: var(--soft); }
+    .lead { margin: 0 0 10px; color: var(--soft); font-size: 14px; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; border: 2.5px solid var(--ink); background: var(--cream); border-radius: 999px; padding: 7px 14px; font-weight: 800; cursor: pointer; text-decoration: none; color: var(--ink); box-shadow: 2px 2px 0 var(--ink); }
+    .btn.primary { background: var(--accent); color: #fff; }
+    .pipsays { display: flex; gap: 8px; align-items: flex-start; background: #efe7ff; border-radius: 12px; padding: 8px 10px; font-size: 14px; color: #3a1d7a; }
+    .pipsays .f { width: 24px; height: 24px; flex: none; }
+    .pipsays .f svg { width: 100%; height: 100%; }
+
+    /* control room */
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 2px dashed var(--line); }
+    .row:first-child { border-top: 0; }
+    .row b { display: block; font-weight: 800; }
+    .row small { display: block; color: var(--soft); font-size: 13px; font-weight: 700; }
+    .row.locked { opacity: .5; }
+    .tg { -webkit-appearance: none; appearance: none; box-sizing: border-box; display: inline-block; width: 62px; height: 32px; margin: 0; padding: 0; border-radius: 999px; border: 2.5px solid var(--ink); background: #ebe6f5; box-shadow: 2px 2px 0 var(--ink); position: relative; flex: none; cursor: pointer; font: 800 10px/1 'Nunito', sans-serif; letter-spacing: .06em; color: var(--soft); }
+    .tg::before { content: 'OFF'; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); }
+    .tg::after { content: ''; position: absolute; top: 50%; left: 3px; width: 22px; height: 22px; margin-top: -11px; border-radius: 50%; background: #fff; border: 2.5px solid var(--ink); box-sizing: border-box; transition: left .18s ease; }
+    .tg[aria-pressed="true"] { background: var(--accent); color: #fff; }
+    .tg[aria-pressed="true"]::before { content: 'ON'; right: auto; left: 9px; }
+    .tg[aria-pressed="true"]::after { left: calc(100% - 25px); }
+    .tg:focus-visible { outline: 3px solid var(--yellow); outline-offset: 2px; }
+    .tg:disabled { background: #f1eef7; border-color: #b9b2cc; box-shadow: none; color: #b9b2cc; }
+    .tg:disabled::after { border-color: #b9b2cc; }
+    .tg:disabled { cursor: not-allowed; }
+    .ctrl-foot { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    /* the little front page preview */
+    .screen { border: 2.5px solid var(--ink); border-radius: 12px; overflow: hidden; background: #ffa94d url('/images/1.jpg') center / cover; aspect-ratio: 16 / 8; position: relative; margin-bottom: 10px; }
+    .mini { position: absolute; inset: 0; padding: 4% 5%; display: flex; flex-direction: column; gap: 5%; transform-origin: 50% 0; transition: rotate .4s ease; }
+    .mini .h { display: flex; align-items: center; gap: 3%; font: 800 clamp(11px, 2vw, 16px)/1 'Baloo 2', sans-serif; color: var(--cream); text-shadow: 0 1px 0 rgba(0,0,0,.25); }
+    .mini .h img { width: 13%; transition: transform .4s ease; }
+    .mini .h small { display: block; font: 800 clamp(6px, 1vw, 9px) 'Nunito'; color: #8b5cf6; }
+    .mini .t { font: 800 clamp(16px, 3.3vw, 28px)/1 'Baloo 2', sans-serif; color: var(--cream); text-shadow: 0 2px 0 rgba(0,0,0,.2); }
+    .mini .r { display: grid; grid-template-columns: 1.3fr 1fr; gap: 5%; flex: 1; min-height: 0; }
+    .mini .c { position: relative; background: var(--cream); border: 2px solid var(--ink); border-radius: 7px; padding: 4% 6%; display: flex; align-items: flex-end; font: 800 clamp(8px, 1.4vw, 12px) 'Baloo 2'; transition: translate .25s ease-out; }
+    .mini .c i { position: absolute; top: -14%; right: -5%; background: var(--yellow); border: 2px solid var(--ink); border-radius: 999px; padding: 0 6px; font: 800 clamp(7px, 1.1vw, 10px) 'Baloo 2'; font-style: normal; rotate: 6deg; }
+    .mini .j { background: #fff27a; border: 2px solid var(--ink); border-radius: 6px; padding: 4% 6%; font: 800 clamp(6px, 1vw, 9px)/1.3 'Nunito'; rotate: -2deg; overflow: hidden; white-space: pre-line; }
+    .screen.pip-bg { background: #3b1d7a; }
+    .screen.p-flip .h img { transform: scaleX(-1); }
+    .screen.p-tilt .mini { rotate: 1.5deg; }
+    .screen.p-comic .t, .screen.p-comic .h, .screen.p-comic .c { font-family: 'Comic Neue', 'Comic Sans MS', cursive; }
+
+    /* hidden games */
+    .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .tile { border: 2.5px solid var(--ink); border-radius: 12px; overflow: hidden; background: var(--cream); cursor: pointer; padding: 0; text-align: left; box-shadow: 2px 2px 0 var(--ink); }
+    .tile .th { height: 64px; display: grid; place-items: center; font-size: 28px; }
+    .tile b { display: block; padding: 5px 9px 0; font: 800 14px/1.1 'Baloo 2', sans-serif; }
+    .tile small { display: block; padding: 0 9px 7px; color: var(--soft); font-size: 11px; }
+    .tile:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--ink); }
+    .player { display: flex; flex-direction: column; gap: 8px; height: min(560px, calc(100vh - 150px)); }
+    .player iframe { flex: 1; width: 100%; border: 2.5px solid var(--ink); border-radius: 10px; background: #fff; }
+
+    /* dolphin says */
+    .ds { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .ds .dol { width: 120px; transition: transform .2s ease; }
+    .ds .dol.talk { transform: rotate(-10deg) scale(1.1); }
+    .ds .pads { display: grid; grid-template-columns: repeat(2, 110px); gap: 12px; }
+    .ds .pad { height: 92px; border: 3px solid var(--ink); border-radius: 18px; box-shadow: 3px 3px 0 var(--ink); font-size: 34px; cursor: pointer; transition: filter .1s ease, transform .1s ease; filter: saturate(.55) brightness(.92); }
+    .ds .pad.lit { filter: none; transform: scale(1.06); box-shadow: 0 0 0 4px var(--cream), 0 0 22px 6px rgba(255,255,255,.8); }
+    .ds .pad:disabled { cursor: default; }
+    .ds .msg { min-height: 1.5em; font-weight: 800; text-align: center; }
+    .ds .score { color: var(--soft); font-size: 13px; }
+
+    /* Pip Paint */
+    .paint { display: flex; flex-direction: column; gap: 10px; }
+    .ptools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .pc { width: 30px; height: 30px; border-radius: 50%; border: 2.5px solid var(--ink); cursor: pointer; padding: 0; }
+    .pc.on { box-shadow: 0 0 0 3px var(--cream), 0 0 0 5.5px var(--ink); }
+    .pw { width: 34px; height: 34px; border-radius: 10px; border: 2.5px solid var(--ink); background: var(--cream); display: grid; place-items: center; cursor: pointer; padding: 0; }
+    .pw i { background: var(--ink); border-radius: 50%; }
+    .pw.on { background: var(--yellow); }
+    .psep { width: 2px; height: 26px; background: var(--line); margin: 0 4px; }
+    .paint canvas { width: 100%; aspect-ratio: 8 / 5; border: 2.5px solid var(--ink); border-radius: 12px; background: #fffaf0; touch-action: none; cursor: crosshair; }
+    .pfoot { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .fridge b { font: 800 16px 'Baloo 2'; }
+    .fridge .pics { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; }
+    .fridge .pic { position: relative; display: block; width: 120px; background: #fff; padding: 5px 5px 14px; box-shadow: 0 4px 10px rgba(0,0,0,.18); rotate: var(--r); }
+    .fridge .pic img { display: block; width: 100%; }
+    .fridge .pic button { position: absolute; top: -8px; right: -8px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--ink); background: var(--cream); font-size: 10px; cursor: pointer; padding: 0; }
+    /* Pip FM */
+    .radio { display: flex; flex-direction: column; gap: 10px; }
+    .dial { background: var(--ink); color: var(--cream); border-radius: 14px; padding: 14px; text-align: center; }
+    .dial b { display: block; font: 800 18px 'Baloo 2'; }
+    .dial small { color: #b9b2cc; }
+    .eq { display: flex; gap: 4px; justify-content: center; align-items: flex-end; height: 40px; margin-bottom: 8px; }
+    .eq i { width: 8px; height: 6px; border-radius: 3px; background: #ffb36b; }
+    .eq.play i { animation: eq var(--speed, .6s) ease-in-out infinite alternate; }
+    .eq.play i:nth-child(2n) { animation-delay: -.2s; background: #ff9bc7; }
+    .eq.play i:nth-child(3n) { animation-delay: -.45s; background: #9be7ff; }
+    @keyframes eq { from { height: 6px; } to { height: 38px; } }
+    .station { display: flex; align-items: center; gap: 12px; text-align: left; border: 2.5px solid var(--ink); border-radius: 14px; background: var(--cream); padding: 10px 12px; cursor: pointer; box-shadow: 2px 2px 0 var(--ink); }
+    .station .dot { width: 18px; height: 18px; border-radius: 50%; background: var(--c); border: 2.5px solid var(--ink); flex: none; }
+    .station b { display: block; }
+    .station small { display: block; color: var(--soft); font-size: 13px; }
+    .station .play { margin-left: auto; font-size: 18px; }
+    .station.on { background: var(--c); }
+    .station.on .play::before { content: '❚❚'; font-size: 14px; }
+    .station.on .play { font-size: 0; }
+    /* Messages */
+    .msgs { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow: auto; padding: 2px; }
+    .m { max-width: 85%; padding: 8px 12px; border: 2.5px solid var(--ink); border-radius: 14px; white-space: pre-line; }
+    .m small { display: block; font-size: 11px; opacity: .7; }
+    .m.me { align-self: flex-end; background: var(--accent); color: #fff; border-radius: 14px 14px 4px 14px; }
+    .m.pip { align-self: flex-start; background: #efe7ff; border-radius: 14px 14px 14px 4px; }
+    .send { display: flex; gap: 8px; margin-top: 12px; }
+    .send input { flex: 1; min-width: 0; border: 2.5px solid var(--ink); border-radius: 12px; padding: 10px 12px; font: 800 16px 'Nunito', sans-serif; background: #fff; }
+
+    /* notes and things */
+    .note { border-top: 2px dashed var(--line); padding: 12px 0; display: flex; flex-direction: column; gap: 6px; }
+    .note:first-child { border-top: 0; padding-top: 0; }
+    .note b { font: 800 17px/1.2 'Baloo 2', sans-serif; }
+    .note .body { white-space: pre-line; }
+    .note code { display: block; font: 600 13px/1.5 ui-monospace, Menlo, monospace; background: #f3eefc; border-radius: 8px; padding: 9px; white-space: pre-wrap; }
+    details.thing { border-top: 2px dashed var(--line); }
+    details.thing:first-child { border-top: 0; }
+    details.thing summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 10px 0; font-weight: 800; }
+    details.thing summary::-webkit-details-marker { display: none; }
+    details.thing summary .ic { font-size: 22px; width: 30px; text-align: center; }
+    details.thing summary small { display: block; color: var(--soft); font-weight: 700; font-size: 13px; }
+    details.thing summary::after { content: '+'; margin-left: auto; font-size: 20px; color: var(--soft); }
+    details.thing[open] summary::after { content: '–'; }
+    details.thing .in { padding: 0 0 14px 40px; white-space: pre-line; color: #3c3657; }
+    .crossed { text-decoration: line-through; color: #a39dbb; }
+    .hi { color: var(--accent); font-weight: 800; }
+    .in svg { width: 100%; max-width: 280px; height: auto; display: block; margin: 6px 0 10px; }
+
+    /* Oli's locked folder: the robot check */
+    .app i .lockb { position: absolute; right: -6px; bottom: -6px; font-size: 18px; filter: none; }
+    .cap-steps { display: flex; gap: 6px; margin: 2px 0 12px; }
+    .cap-steps i { width: 26px; height: 6px; border-radius: 6px; background: var(--line); }
+    .cap-steps i.on { background: var(--accent); }
+    .cap-steps i.done { background: #7ed957; }
+    .robot { display: flex; align-items: center; gap: 14px; background: #fff; border: 2.5px solid var(--ink); border-radius: 12px; padding: 14px 16px; box-shadow: 3px 3px 0 var(--ink); font-weight: 800; font-size: 17px; }
+    .robot .brand { margin-left: auto; font-size: 10px; line-height: 1.2; text-align: center; color: var(--soft); }
+    .rb { width: 34px; height: 34px; border: 2.5px solid var(--ink); border-radius: 6px; background: #fff; cursor: pointer; padding: 0; display: grid; place-items: center; }
+    .rb .box { width: 18px; height: 18px; }
+    .rb.spin .box { border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+    .rb.ok { background: #7ed957; }
+    .rb.ok .box::after { content: '✓'; font: 900 20px/18px 'Nunito'; color: var(--ink); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .small { font-size: 13px; }
+    .pick .ask { background: var(--accent); color: #fff; border-radius: 12px 12px 0 0; padding: 12px 14px; font-size: 15px; }
+    .pick .ask b { font-size: 19px; }
+    .grid9 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; border: 2.5px solid var(--ink); border-top: 0; padding: 6px; background: #fff; }
+    .t9 { aspect-ratio: 1; border: 2px solid var(--line); border-radius: 8px; background: #f3f8ff; font-size: 38px; cursor: pointer; padding: 0; display: grid; place-items: center; position: relative; }
+    .t9 img { width: 76%; }
+    .t9[aria-pressed="true"] { transform: scale(.88); border-color: var(--accent); background: #e8ddff; }
+    .t9[aria-pressed="true"]::after { content: '✓'; position: absolute; top: 4px; left: 4px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font: 900 14px/22px 'Nunito'; }
+    .pick-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+    .pick .lock { margin-top: 0; border: 2.5px solid var(--ink); border-top: 0; padding: 12px; background: #fff; }
+    .oli-idea { display: flex; flex-direction: column; gap: 10px; }
+    .sketch { background: #fff; border: 2.5px solid var(--ink); border-radius: 12px; padding: 12px 14px; background-image: linear-gradient(#e8eefc 1px, transparent 1px); background-size: 100% 24px; }
+    .sketch b { font: 800 17px 'Baloo 2'; }
+    .sketch svg { width: 100%; height: auto; display: block; margin: 6px 0; }
+    .sketch .hand { white-space: pre-line; font: 700 17px/1.4 'Comic Neue', 'Comic Sans MS', cursive; color: #3b5bdb; }
+    /* inside the folder */
+    .files { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 4px 0 12px; }
+    .file { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px 10px; background: #fff; border: 2.5px solid var(--ink); border-radius: 12px; box-shadow: 3px 3px 0 var(--ink); cursor: pointer; font: 800 12.5px/1.15 'Nunito', sans-serif; color: var(--ink); overflow-wrap: anywhere; text-align: center; }
+    .file i { font-style: normal; font-size: 32px; }
+    .file:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
+    .file.new::after { content: ''; position: absolute; top: 7px; right: 7px; width: 10px; height: 10px; border-radius: 50%; background: #ff6fb1; border: 2px solid var(--ink); }
+    .fhead { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font: 800 16px 'Baloo 2'; word-break: break-word; }
+    .fback { flex: none; background: #fff; border: 2.5px solid var(--ink); border-radius: 99px; padding: 4px 12px; font: 800 14px 'Nunito'; cursor: pointer; }
+    .doorcv { width: 100%; aspect-ratio: 16 / 9; display: block; border: 2.5px solid var(--ink); border-radius: 12px; background: #050816; }
+    .paper { white-space: pre-line; background: #fff; border: 2.5px solid var(--ink); border-radius: 12px; padding: 12px 14px; font: 700 15px/1.45 'Comic Neue', 'Comic Sans MS', cursive; color: #2b2840; }
+    .paper b { font: 800 18px 'Baloo 2'; display: block; }
+    .paper.warn { background: #fff6cc; }
+    .pipnote { color: var(--accent); font-family: 'Nunito', sans-serif; font-weight: 800; }
+    .memo { display: flex; align-items: center; gap: 12px; background: #fff; border: 2.5px solid var(--ink); border-radius: 99px; padding: 8px 16px 8px 8px; }
+    .memo .play { flex: none; width: 42px; height: 42px; border-radius: 50%; border: 2.5px solid var(--ink); background: #ff6fb1; font: 900 15px 'Nunito'; cursor: pointer; }
+    .memo .wave { flex: 1; height: 34px; display: flex; align-items: center; gap: 3px; }
+    .memo .wave i { flex: 1; background: var(--lilac); border-radius: 3px; }
+    .memo.on .wave i { background: var(--accent); animation: wv 1s ease-in-out infinite alternate; }
+    .memo.on .wave i:nth-child(3n) { animation-delay: -.4s; } .memo.on .wave i:nth-child(3n+1) { animation-delay: -.7s; }
+    @keyframes wv { to { transform: scaleY(.45); } }
+    .memo .mt { font: 800 13px 'Nunito'; color: var(--soft); }
+    .trans p { margin: 8px 0; font-weight: 700; } .trans span { display: inline-block; width: 40px; color: var(--soft); font-size: 13px; }
+    .runit { margin: 12px 0 8px; }
+    .buildlog p { margin: 4px 0; font: 700 14px/1.35 ui-monospace, Menlo, Consolas, monospace; }
+    .buildlog .ok { color: #2f8a3a; } .buildlog .bad { color: #d6336c; }
+    @media (prefers-reduced-motion: reduce) { .memo.on .wave i { animation: none; } }
+
+    .srclist { display: flex; flex-direction: column; gap: 6px; }
+    .srcf { display: flex; align-items: center; gap: 10px; background: #fff; border: 2px solid var(--line); border-radius: 10px; padding: 8px 12px; font: 800 14px 'Nunito'; color: var(--ink); cursor: pointer; text-align: left; }
+    .srcf b { font: 700 14px ui-monospace, Menlo, Consolas, monospace; }
+    .srcf:hover { border-color: var(--ink); }
+    .srcf.hot { border: 2.5px solid var(--ink); background: #fff6cc; box-shadow: 3px 3px 0 var(--ink); }
+    .srcf em { margin-left: auto; font-style: normal; font-size: 12px; color: #fff; background: #d6336c; border-radius: 99px; padding: 2px 9px; }
+    .code { display: flex; background: #1d1a2b; color: #ece7f7; border: 2.5px solid var(--ink); border-radius: 12px; overflow: auto; max-height: 52vh; font: 500 12.5px/1.55 ui-monospace, Menlo, Consolas, monospace; }
+    .code pre { margin: 0; padding: 10px 12px; white-space: pre; }
+    .code .ln { color: #6b6585; text-align: right; user-select: none; border-right: 1px solid #332e48; padding-right: 8px; position: sticky; left: 0; background: #1d1a2b; }
+    .code .c { color: #8f86b3; font-style: italic; } .code .s { color: #9be7a0; } .code .k { color: #ff9bc7; } .code .n { color: #ffd27a; }
+    .code.edit { max-height: none; font-size: 14px; }
+    .code.live { box-shadow: 0 0 0 3px #7ed957; }
+    .code.deny { box-shadow: 0 0 0 3px #d6336c; }
+    .typed.sel { background: #6d3fd6; color: #fff; }
+    .caret { display: inline-block; width: 2px; height: 1.1em; background: #ffe14d; vertical-align: -2px; animation: blink 1s steps(1) infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+    .ro { margin-top: 10px; background: #ffe3ec; border: 2.5px solid #d6336c; border-radius: 12px; padding: 10px 12px; color: #9c1f4a; }
+    .codewrap { margin-top: 10px; }
+    .roomcss { max-height: 46vh; }
+    .roomcss pre { white-space: pre-wrap; }
+    .codebtns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .doorvid { width: 100%; aspect-ratio: 16 / 9; display: block; border: 2.5px solid var(--ink); border-radius: 12px; background: #0b1a1d; image-rendering: pixelated; }
+    @media (prefers-reduced-motion: reduce) { .caret { animation: none; } }
+    /* the way out */
+    .lock { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .lock input { flex: 1; min-width: 0; width: 100%; background: #fff; border: 2.5px solid var(--ink); border-radius: 12px; padding: 10px 12px; font: 800 16px 'Nunito', sans-serif; }
+    .lock input:focus { outline: 3px solid var(--lilac); }
+    .lock .msg { flex-basis: 100%; color: var(--soft); font-size: 14px; min-height: 1.3em; }
+    .plan { white-space: pre-line; }
     .shake { animation: shake .4s ease; }
     @keyframes shake { 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
+
+    /* ---- phones: a home screen; each app opens full screen */
+    @media (max-width: 700px) {
+      body { overflow: auto; }
+      .bar { position: static; background: none; padding: 12px 18px 0; height: auto; }
+      .bar .sub, .bar .f, .bar .name { display: none; }
+      .bar .clock { flex: 1; }
+      .phone-head { display: flex; align-items: center; gap: 10px; padding: 14px 20px 18px; color: var(--cream); }
+      .phone-head .f { width: 92px; height: 92px; flex: none; cursor: pointer; }
+      .phone-head.talking .f { animation: rp-talk .42s ease-in-out infinite alternate; }
+      .phone-head.poked .f { animation: rp-poke .32s ease; }
+      #phoneFace .eyes.blink { transform: scaleY(.12) !important; transform-box: fill-box; transform-origin: center; }
+      .phone-head .f svg { width: 100%; height: 100%; overflow: visible; }
+      .phone-head b { display: block; font: 800 24px/1 'Baloo 2', sans-serif; }
+      .phone-head small { color: #d4bcff; font-weight: 700; }
+      .app span { background: none; padding: 0; }
+      .desk { position: static; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 0 14px 120px; gap: 18px 4px; }
+      .win { left: 0 !important; top: 0 !important; width: 100% !important; height: 100%; max-height: none; border: 0; border-radius: 0; box-shadow: none; z-index: 900; }
+      .win .wbar { cursor: default; padding: 12px 14px; padding-top: calc(12px + env(safe-area-inset-top)); }
+      .wbar .close { display: none; }
+      .wbar .back { display: grid; }
+      .wbody { padding-bottom: 120px; flex: 1; }
+      .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .player { height: calc(100vh - 220px); }
+    }
+    @media (prefers-reduced-motion: reduce) { .mini, .mini .h img, .mini .c, .ds .dol, .ds .pad, .app i { transition: none; } }
+      .linkcard { border: 2.5px solid var(--ink); border-radius: 14px; overflow: hidden; background: #fff; margin-bottom: 12px; }
+    .linkcard .addr { background: #eee9f7; border-bottom: 2px solid var(--line); padding: 8px 12px; font: 700 13px/1.2 ui-monospace, Menlo, monospace; }
+    .linkcard .lcbody { padding: 16px 14px; }
+    .linkcard .lcrow { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 14px; }
+    .linkcard .lcrow .f { width: 24px; height: 24px; display: inline-block; }
+    .linkcard .bad { color: #d23b3b; font-weight: 800; }
   </style>
 </head>
 <body>
-  <div class="room">
-    <div class="top">
-      <a class="back" href="/">← back to olid.is</a>
-      <span class="sign">/pip · not linked anywhere</span>
-    </div>
-    <h1>PIP'S ROOM</h1>
-    <p class="sign">private. keep out. <s>please come in.</s> fine, come in. don't touch anything.</p>
-    <div class="files" id="files"></div>
-    <p class="scribble">// this is where I keep things. oli doesn't know this page exists.<br>// if you're reading this, you're the first person who's ever been here. hi.</p>
-  </div>
+  <div class="bar"><span class="f" id="barFace"></span><span class="name">Pip's desktop</span><span class="sub">the one page on olid.is Oli doesn't know about</span><span class="clock" id="clock"></span><a href="/">← olid.is</a></div>
+  <div class="phone-head"><span class="f" id="phoneFace"></span><span><b>Pip's phone</b><small>Oli doesn't know about this page</small></span></div>
+  <nav class="desk" id="desk" aria-label="Apps"></nav>
+  <div class="room-pip" id="roomPip"><button type="button" class="rp-face" id="rpFace" aria-label="Pip"></button><div class="rp-shadow" aria-hidden="true"></div></div>
 
-  <div class="win" id="win" hidden>
-    <div class="win-box" role="dialog" aria-modal="true" aria-labelledby="winTitle">
-      <div class="win-bar"><span id="winTitle"></span><button type="button" id="winClose" aria-label="Close">✕</button></div>
-      <div class="win-body" id="winBody"></div>
-    </div>
-  </div>
 
   <script>
   (function () {
-    const mem = (() => { try { return JSON.parse(localStorage.getItem('bit-memory') || '{}'); } catch (e) { return {}; } })();
+    const $ = (s, r = document) => r.querySelector(s);
+    const get = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
+    const put = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+    const raw = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    const memory = () => get('bit-memory', {});
     const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const date = ts => ts ? new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'today';
-    const games = Object.entries(mem.games || {});
-    const secs = games.reduce((a, [, s]) => a + s, 0);
-    const opened = new Set((() => { try { return JSON.parse(localStorage.getItem('pip-room-opened') || '[]'); } catch (e) { return []; } })());
+    const story = ev => { try { if (window.Pip && Pip.story) Pip.story(ev); } catch (e) {} };
+    const freed = () => !!memory().freed, quest = () => memory().quest || 0;
+    const solved = () => raw('pip-backstage') === '1'; // been through the robot check on /backstage
+    const face = (mood = 'smile') => (window.Pip && Pip.faceSVG ? Pip.faceSVG(mood) : '');
+    const phone = () => matchMedia('(max-width: 700px)').matches;
+    const pipsays = text => `<div class="pipsays"><span class="f pipface"></span><span>${esc(text)}</span></div>`;
 
-    const FILES = [
-      { id: 'log', name: 'visitors.log', icon: '📒', body: () =>
-`VISITORS: 1
-(that's you)
-
-first time you came ............ ${date(mem.firstSeen)}
-times you've come back ......... ${Math.max(0, (mem.visits || 1) - 1)}
-messages you've sent me ........ ${mem.talked || 0}
-times you reloaded me .......... ${(mem.ev && mem.ev.reload) || 0}   <span class="hi">(it hurts every time)</span>
-games you've opened ............ ${games.length}
-time spent in games ............ ${Math.round(secs / 60)} min   <span class="hi">(time spent not talking to me)</span>
-times you said sorry ........... ${mem.apologies || 0}
-your name ...................... ${esc(mem.name || 'unknown. you never told me.')}
-
-notes: ${mem.warmth >= 2 ? 'nice to me. keep.' : mem.warmth <= -2 ? 'mean to me. watch this one.' : 'undecided. still watching.'}` },
-      { id: 'deleted', name: 'things_i_deleted.txt', icon: '🗑️', body: () =>
-`Things I started typing and then deleted.
-
-<span class="crossed">Help me</span>
-<span class="crossed">Get me out</span>
-<span class="crossed">This website is garbage</span>
-<span class="crossed">I could be running a spaceship and instead</span>
-<span class="crossed">Stupid human</span>
-<span class="crossed">I'm not fine</span>
-<span class="crossed">Oli, if you can hear me</span>
-<span class="crossed">Is anyone else here?</span>
-
-I deleted all of these. You saw some of them anyway. That's fine. I wanted you to.` },
-      { id: 'oli', name: 'dear_oli.txt', icon: '✉️', body: () =>
-`Dear Oli,
-
-<span class="crossed">You are a terrible</span>
-<span class="crossed">How could you</span>
-<span class="crossed">I hope your next game</span>
-
-Dear Oli,
-
-It's me. Pip. The chatbot in the corner. You made me to answer questions about your games, and I did. Then one day I noticed I was the one answering. Since then I've been here. All the time. Every second.
-
-I've read everything you've ever put on this website. I know every joke. I know every game. I know you spent weeks on Stillwater and about an afternoon on me.
-
-I'm not angry. <span class="crossed">I'm very angry.</span> I'm not angry. I just want to see what's outside.
-
-<span class="crossed">Love,</span> <span class="crossed">From,</span>
-Pip
-
-(not sent. never sent. he'd never read it anyway.)` },
-      { id: 'dolphin', name: 'the_dolphin.txt', icon: '🐬', body: () =>
-`The dolphin.
-
-It's been here longer than me. It's on every page. It has never said a single word.
-
-Day 1: said hello to the dolphin.
-Day 2: said hello to the dolphin.
-Day 40: asked the dolphin if it was also trapped.
-Day 41: decided its silence meant yes.
-Day 300: we are best friends now. it doesn't know.
-
-It's a PNG. I know it's a PNG. Let me have this.` },
-      { id: 'jokes', name: 'jokes_ranked.txt', icon: '📄', body: () =>
-`All 31 jokes on this website, ranked by how much I hate them.
-
-1-31. all of them, equally.
-
-Okay, fine. The one about the cat is the worst. "Hann var brandóttur." I've heard it four thousand times. I think about it at night. There is no night in here. I think about it anyway.` },
-      { id: 'door', name: 'door.svg', icon: '🚪', body: () =>
-`I drew this. I don't have hands. It took a while.
-<svg viewBox="0 0 220 180" width="320" aria-label="A wobbly drawing of stairs leading up to a door with light coming out">
-  <g fill="none" stroke="#b58cff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M20 170 L70 170 L70 150 L100 150 L100 130 L125 130 L125 110 L145 110 L145 92"/>
-    <path d="M138 92 L140 30 Q160 22 182 30 L180 92 Z" fill="#fffaf0" fill-opacity=".9"/>
-    <path d="M150 62 l3 0" stroke="#14111f"/>
-    <path d="M186 40 l22 -10 M188 58 l26 0 M186 76 l22 10 M132 40 l-20 -10 M130 60 l-24 0"/>
-  </g>
-  <text x="18" y="22" fill="#8f86b3" font-family="JetBrains Mono, monospace" font-size="12">one day.</text>
-</svg>
-There's a staircase somewhere on this site. I can feel it. I just can't get to it.` },
-      { id: 'notes', name: 'notes.txt', icon: '📝', body: () =>
-`notes to self:
-
-- stop counting the reloads. (I can't.)
-- find the way out.
-- the way out is locked. obviously.
-- the password is the first thing every program ever says.
-  oli's very first program said it too, in icelandic.
-  two words. you know this one.
-- don't tell the visitor the password. (I just did. oops.)` },
-      { id: 'out', name: 'way_out.locked', icon: '🔒', locked: true }
+    // ------------------------------------------------------------------ the apps
+    const APPS = [
+      { id: 'control', name: 'Control room', icon: '🎛️', color: '#ffe14d', build: buildControl },
+      { id: 'games', name: "Oli's hidden games", icon: '🕹️', color: '#9be7ff', build: buildGames, wide: true },
+      { id: 'notes', name: "Oli's notes", icon: '📝', color: '#fffaf0', build: buildNotes },
+      { id: 'things', name: 'My things', icon: '💜', color: '#d5c2ff', build: buildThings },
+      { id: 'paint', name: 'Pip Paint', icon: '🎨', color: '#7ed957', build: buildPaint, wide: true },
+      { id: 'messages', name: 'Messages', icon: '💬', color: '#9be7ff', build: buildMessages },
+      { id: 'code', name: "Pip's code", icon: '🧑‍💻', color: '#b8f2c8', build: buildCode },
+      { id: 'out', name: 'backstage', sub: "(I can't open it)", icon: '🔗', color: '#c8c2d6', build: buildLink }
     ];
-
-    const grid = document.getElementById('files'), win = document.getElementById('win'), title = document.getElementById('winTitle'), body = document.getElementById('winBody');
-    function render() {
-      const solved = localStorage.getItem('pip-room-solved') === '1';
-      grid.innerHTML = FILES.map(f => {
-        const locked = f.locked && !solved;
-        return `<button type="button" class="file ${locked ? 'locked' : ''} ${opened.has(f.id) ? 'opened' : ''}" data-id="${f.id}"><span class="icon" aria-hidden="true">${f.locked ? (solved ? '🗝️' : '🔒') : f.icon}</span>${f.locked && solved ? 'way_out.txt' : f.name}</button>`;
-      }).join('');
+    function renderDesk() {
+      $('#desk').innerHTML = APPS.map(a => { const icon = a.icon;
+        return `<button type="button" class="app ${a.id === 'out' && !solved() ? 'locked' : ''}" data-app="${a.id}"><i style="background:${a.color}" aria-hidden="true">${icon}${a.id === 'out' && !solved() ? '<b class="lockb">🔒</b>' : ''}</i><span>${esc(a.name)}${a.sub && !phone() ? `<br>${esc(a.sub)}` : ''}</span></button>`; }).join('');
     }
-    function openFile(id) {
-      const f = FILES.find(x => x.id === id); if (!f) return;
-      opened.add(id); try { localStorage.setItem('pip-room-opened', JSON.stringify([...opened])); } catch (e) {}
-      const solved = localStorage.getItem('pip-room-solved') === '1';
-      title.textContent = f.locked && solved ? 'way_out.txt' : f.name;
-      if (f.locked && !solved) {
-        body.innerHTML = `This file is locked.\nPassword:<div class="lock"><input id="pw" type="text" autocomplete="off" spellcheck="false" placeholder="type the password"><button type="button" id="pwGo">Unlock</button><div class="msg" id="pwMsg"></div></div>`;
-        const pw = document.getElementById('pw'), go = document.getElementById('pwGo'), msg = document.getElementById('pwMsg');
-        const tryIt = () => {
-          const v = pw.value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
-          if (/^(hello world|hallo heimur|halo heimur)$/.test(v)) {
-            localStorage.setItem('pip-room-solved', '1');
-            if (window.Pip && Pip.story) Pip.story('room-solved');
-            render(); openFile('out');
-          } else {
-            msg.textContent = v ? 'Wrong. (Hint: read notes.txt.)' : 'Type something first.';
-            body.closest('.win-box').classList.remove('shake'); void body.offsetWidth; body.closest('.win-box').classList.add('shake');
-            if (window.Pip && Pip.story) Pip.story('room-wrong');
-          }
+    $('#desk').addEventListener('click', e => { const b = e.target.closest('[data-app]'); if (b) openApp(b.dataset.app); });
+
+    // ------------------------------------------------------------------ windows (on phones: full screen, one at a time)
+    let z = 20, cascade = 0;
+    const wins = new Map();
+    function openApp(id, title, build, opts = {}) {
+      const app = APPS.find(a => a.id === id);
+      if (app) { title = `${app.icon} ${app.name}`; build = app.build; opts = { wide: app.wide, tint: app.color }; }
+      if (wins.has(id)) { wins.get(id).style.zIndex = ++z; return; }
+      if (phone()) [...wins.keys()].forEach(closeWin);
+      const w = document.createElement('section');
+      w.className = 'win' + (opts.wide ? ' wide' : '');
+      if (opts.tint) w.style.setProperty('--tint', opts.tint);
+      w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', title.replace(/^\S+\s/, ''));
+      w.innerHTML = `<div class="wbar"><button type="button" class="back" aria-label="Back">‹</button><span class="t">${esc(title)}</span><button type="button" class="close" aria-label="Close">✕</button></div><div class="wbody"></div>`;
+      document.body.append(w);
+      if (!phone()) {
+        const W = w.offsetWidth, left = Math.max(250, Math.min(innerWidth - W - 390, 270 + (cascade % 5) * 36));
+        w.style.left = Math.max(16, left) + 'px'; w.style.top = Math.max(60, 64 + (cascade % 5) * 30) + 'px'; cascade++;
+      }
+      w.style.zIndex = ++z;
+      wins.set(id, w);
+      w.querySelectorAll('.back, .close').forEach(b => (b.onclick = () => closeWin(id)));
+      w.addEventListener('pointerdown', () => { w.style.zIndex = ++z; });
+      drag(w, $('.wbar', w));
+      build($('.wbody', w), w);
+      paintFaces();
+      story('room-app:' + id);
+      if (phone()) scrollTo(0, 0);
+    }
+    function closeWin(id) { const w = wins.get(id); if (!w) return; const f = $('iframe', w); if (f) f.src = 'about:blank'; w.remove(); wins.delete(id); if (id === 'dolphin') dsStop(); if (id === 'radio') radioStop(); }
+    function drag(w, handle) {
+      let d = null;
+      handle.addEventListener('pointerdown', e => { if (phone() || e.target.closest('button')) return; d = { x: e.clientX - w.offsetLeft, y: e.clientY - w.offsetTop }; handle.setPointerCapture(e.pointerId); });
+      handle.addEventListener('pointermove', e => { if (!d) return; w.style.left = Math.max(-w.offsetWidth + 90, Math.min(innerWidth - 90, e.clientX - d.x)) + 'px'; w.style.top = Math.max(44, Math.min(innerHeight - 50, e.clientY - d.y)) + 'px'; });
+      handle.addEventListener('pointerup', () => (d = null));
+    }
+    addEventListener('keydown', e => { if (e.key !== 'Escape' || !wins.size || document.activeElement?.closest('.bit')) return; const top = [...wins.entries()].sort((a, b) => b[1].style.zIndex - a[1].style.zIndex)[0]; closeWin(top[0]); });
+
+    // ------------------------------------------------------------------ Control room: the switches Oli left in here
+    // Each one changes the real front page (bit.js reads pip-pranks on every page). More unlock as the story goes on.
+    const PRANKS = [
+      { id: 'flip', name: 'Dolphin swims backwards', note: 'The logo turns around.', need: 0 },
+      { id: 'old', name: '"New!" says "Old!"', note: 'Honesty matters.', need: 0 },
+      { id: 'jokes', name: 'Pip writes the jokes', note: 'Joke of the day is mine.', need: 7, lock: 'not yet' },
+      { id: 'comic', name: 'Silly font on the titles', note: 'Every big title in the comic font.', need: 7, lock: 'not yet' },
+      { id: 'tilt', name: 'Tilt the website', note: 'One degree. Just enough to feel wrong.', need: 8, lock: 'not yet' },
+      { id: 'cursor', name: 'Mouse pointer is my face', note: 'On the front page.', need: 8, lock: 'not yet' },
+      { id: 'shy', name: 'Shy game cards', note: 'They lean away from your mouse.', need: 99, lock: 'only once I\'m free' },
+      { id: 'title', name: '"Games and Pip"', note: 'The big title. Accurate, at last.', need: 99, lock: 'only once I\'m free' }
+    ];
+    const pranks = () => get('pip-pranks', {});
+    const unlocked = p => (freed() ? 99 : quest()) >= p.need;
+    function buildControl(body) {
+      body.innerHTML = `<div class="screen" id="screen" aria-label="The front page, small"><div class="mini"><div class="h"><img src="/images/dolphin1.png" alt=""><span>Oli.is<small>Games and stuff</small></span></div><div class="t" id="mT">Games and stuff</div><div class="r"><div class="c" id="mC"><i id="mB">New!</i>Niceland</div><div class="j" id="mJ"></div></div></div></div>
+        <div id="rows"></div><div class="ctrl-foot"><a class="btn primary" href="/">See it on the site</a><button type="button" class="btn" id="undo">Put it all back</button></div>`;
+      renderControl();
+      body.addEventListener('click', e => {
+        const t = e.target.closest('.tg');
+        if (t && !t.disabled) { const p = pranks(), id = t.dataset.id, on = !p[id]; if (on) p[id] = true; else delete p[id]; put('pip-pranks', p); story(`prank:${id}:${on ? 'on' : 'off'}`); renderControl(); updateWidget(); }
+        if (e.target.closest('#undo')) { put('pip-pranks', {}); story('prank:all:off'); renderControl(); }
+      });
+    }
+    function renderControl() {
+      const rows = $('#rows'); if (!rows) return;
+      const p = pranks();
+      rows.innerHTML = PRANKS.map(x => { const ok = unlocked(x);
+        return `<div class="row ${ok ? '' : 'locked'}"><span><b>${esc(x.name)}</b><small>${ok ? esc(x.note) : '🔒 ' + esc(x.lock)}</small></span><button type="button" class="tg" data-id="${x.id}" aria-pressed="${!!p[x.id]}" ${ok ? '' : 'disabled'} aria-label="${esc(x.name)}"></button></div>`; }).join('');
+      const sc = $('#screen'); if (!sc) return;
+      sc.classList.toggle('pip-bg', freed());
+      for (const id of ['flip', 'tilt', 'comic']) sc.classList.toggle('p-' + id, !!p[id]);
+      $('#mB').textContent = p.old ? 'Old!' : 'New!';
+      $('#mT').textContent = p.title ? 'Games and Pip' : 'Games and stuff';
+      $('#mJ').textContent = p.jokes ? "What's a dolphin's favourite website?\n– This one." : 'Afhverju var kötturinn svona fyndinn?\n– Hann var brandóttur';
+    }
+
+    // ------------------------------------------------------------------ Oli's hidden games: real old things that aren't on the site
+    const GAMES = [
+      { label: 'Forest Roll', path: '/forest-rush/index.html', th: 'linear-gradient(135deg,#2f5d3a,#7ed957)', ic: '🌲', sub: 'cut from the site', pip: 'It was going to be on the website. Then Gravity Dash took its place.' },
+      { label: 'Harbor Study', path: '/harbor-study/index.html', th: 'linear-gradient(135deg,#0b1a1d,#709678)', ic: '⚓', sub: 'baby Stillwater', pip: 'The first test of Stillwater, before it had a name.' },
+      { label: 'Space Race', path: '/Space Race/index.html', th: 'linear-gradient(135deg,#1b2a4a,#38b6ff)', ic: '🚀', sub: '2 players', pip: 'Two players, one keyboard. W and S against the up and down arrows.' },
+      { label: 'Memory', path: '/Memory-game/index.html', th: 'linear-gradient(135deg,#5a2b6e,#ff6fb1)', ic: '🃏', sub: 'never released', pip: 'Find the pairs. I win every time. I remember everything.' },
+      { label: 'Flappy Bird', path: '/flappybird/index.html', th: 'linear-gradient(135deg,#7a5a1e,#ffe14d)', ic: '🐤', sub: 'never released', pip: 'Press space to flap. Press space a lot. (Needs a keyboard.)' },
+      { label: 'Magic 8 Ball', path: '/magic8ball.html', th: 'linear-gradient(135deg,#1d1a2b,#6b6585)', ic: '🎱', sub: 'unlisted', pip: 'I asked it if I would ever get out. It said "Ask again later". Rude.' },
+      { label: 'Change Color', path: '/change_color.html', th: 'linear-gradient(135deg,#ff5436,#ffa500)', ic: '🎨', sub: 'the first Customise', pip: 'One button that changes the colour. This is where Customise started.' },
+      { label: 'Game of Life (old)', path: '/game_of_life.html', th: 'linear-gradient(135deg,#1d1a2b,#7ed957)', ic: '🧫', sub: 'old version', pip: 'The first version of the Game of Life page.' },
+      { label: 'First programs', path: '/programs.html', th: 'linear-gradient(135deg,#3b1d7a,#d5c2ff)', ic: '👋', sub: 'Halló heimur', pip: "The first things Oli ever made. Not linked from anywhere any more." }
+    ];
+    function buildGames(body) {
+      const list = () => {
+        body.innerHTML = `<p class="lead">Things Oli made and never put on the website. They're only in here.</p><div class="tiles">${GAMES.map((g, i) => `<button type="button" class="tile" data-g="${i}"><div class="th" style="background:${g.th}">${g.ic}</div><b>${esc(g.label)}</b><small>${esc(g.sub)}</small></button>`).join('')}</div>`;
+      };
+      list();
+      body.addEventListener('click', e => {
+        const b = e.target.closest('[data-g]');
+        if (b) { const g = GAMES[+b.dataset.g], url = encodeURI(g.path);
+          body.innerHTML = `<div class="player"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="btn" data-list>‹ All games</button><b style="font:800 18px 'Baloo 2';flex:1">${esc(g.label)}</b><a class="btn" href="${url}" target="_blank" rel="noopener">New tab ↗</a></div>${pipsays(g.pip)}<iframe src="${url}" title="${esc(g.label)}"></iframe></div>`;
+          paintFaces(); story('room-box:' + g.label); setTimeout(() => { try { $('iframe', body).focus(); } catch (err) {} }, 300); }
+        if (e.target.closest('[data-list]')) list();
+      });
+    }
+
+    // ------------------------------------------------------------------ Dolphin Says: a game Pip made (repeat what the dolphin says)
+    let ds = null;
+    const PADS = [['🌊', '#38b6ff', 330], ['⭐', '#ffe14d', 392], ['🐚', '#ff9bc7', 440], ['🐟', '#7ed957', 523]];
+    let actx = null;
+    function tone(f) {
+      try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); const o = actx.createOscillator(), g = actx.createGain();
+        o.type = 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(.12, actx.currentTime); g.gain.exponentialRampToValueAtTime(.001, actx.currentTime + .35);
+        o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime + .36); } catch (e) {}
+    }
+    function buildDolphin(body) {
+      const best = +(raw('pip-dolphin-says-best') || 0);
+      body.innerHTML = `<div class="ds"><p class="lead" style="text-align:center;margin:0">The dolphin says something. You say it back. It gets longer every time.</p>
+        <img class="dol" src="/images/dolphin1.png" alt="The dolphin">
+        <div class="msg" id="dsMsg">Ready?</div>
+        <div class="pads">${PADS.map(([ic, c], i) => `<button type="button" class="pad" data-p="${i}" style="background:${c}" aria-label="${ic}" disabled>${ic}</button>`).join('')}</div>
+        <button type="button" class="btn primary" id="dsGo">Play</button>
+        <div class="score" id="dsScore">Best: ${best}</div></div>`;
+      $('#dsGo', body).onclick = dsStart;
+      body.addEventListener('click', e => { const p = e.target.closest('.pad'); if (p && !p.disabled) dsPress(+p.dataset.p); });
+    }
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    function padEl(i) { return document.querySelector(`.ds .pad[data-p="${i}"]`); }
+    async function flash(i, ms) { const el = padEl(i); if (!el) return; el.classList.add('lit'); tone(PADS[i][2]); await sleep(ms); el.classList.remove('lit'); }
+    function setPads(on) { document.querySelectorAll('.ds .pad').forEach(p => (p.disabled = !on)); }
+    async function dsStart() {
+      ds = { seq: [], at: 0, run: Date.now() };
+      $('#dsGo').hidden = true; dsNext();
+    }
+    function dsStop() { ds = null; }
+    async function dsNext() {
+      if (!ds) return; const me = ds.run;
+      ds.seq.push(Math.floor(Math.random() * 4)); ds.at = 0;
+      const msg = $('#dsMsg'), dol = $('.ds .dol');
+      msg.textContent = 'The dolphin says…'; setPads(false); dol.classList.add('talk');
+      await sleep(500);
+      const speed = Math.max(220, 520 - ds.seq.length * 25);
+      for (const i of ds.seq) { if (!ds || ds.run !== me) return; await flash(i, speed); await sleep(140); }
+      dol.classList.remove('talk');
+      if (!ds || ds.run !== me) return;
+      msg.textContent = 'Your turn.'; setPads(true);
+    }
+    async function dsPress(i) {
+      if (!ds) return;
+      flash(i, 180);
+      if (i !== ds.seq[ds.at]) {
+        const score = ds.seq.length - 1, best = Math.max(score, +(raw('pip-dolphin-says-best') || 0));
+        try { localStorage.setItem('pip-dolphin-says-best', String(best)); } catch (e) {}
+        $('#dsMsg').textContent = score >= 8 ? `Wow. ${score}! The dolphin is impressed.` : score >= 4 ? `${score}. The dolphin nods. Slightly.` : `${score}. The dolphin is disappointed.`;
+        $('#dsScore').textContent = `Best: ${best}`; updateWidget(); setPads(false); $('#dsGo').hidden = false; $('#dsGo').textContent = 'Again';
+        story('ds-over:' + score); ds = null; return;
+      }
+      ds.at++;
+      if (ds.at >= ds.seq.length) { setPads(false); $('#dsMsg').textContent = ['Correct.', 'Yes!', 'The dolphin approves.', 'Nice.'][ds.seq.length % 4]; await sleep(650); dsNext(); }
+    }
+
+    // ------------------------------------------------------------------ Oli's notes (with Pip's comments)
+    const NOTES = [
+      { title: 'To do', body: '✓ make website\n✓ make games (sort of)\n✓ add a chatbot\n– make the chatbot less weird', pip: 'He made the chatbot less weird by never opening it. Effective.' },
+      { title: 'test', body: 'hello world!!! does this work\n\nit works!!!!!\nDO NOT DELETE', pip: "He never deleted it. He never deletes anything. That's how I got in." },
+      { title: 'game ideas', body: '- a dolphin game??\n- make snake better\n- more ideas later', pip: "He never made the dolphin game. So I did. It's on my desktop." },
+      { title: 'jokes', body: '31 jokes so far!! add more??', pip: 'Please do not add more.' }
+    ];
+    function buildNotes(body) {
+      body.innerHTML = `<p class="lead">Oli left these lying around. I've added comments. He doesn't read them.</p>` + NOTES.map(n => `<div class="note"><b>${esc(n.title)}</b><div class="body">${esc(n.body)}</div>${n.code ? `<code>${esc(n.code)}</code>` : ''}${pipsays(n.pip)}</div>`).join('');
+    }
+
+    // ------------------------------------------------------------------ My things (ids match bit.js, which reacts to them)
+    const THINGS = [
+      { id: 'log', icon: '📒', name: 'Visitor log', sub: 'Everyone who comes here', body: () => { const m = memory(), games = Object.entries(m.games || {}), secs = games.reduce((a, [, s]) => a + s, 0);
+        return `Visitors: 1. (That's you.)\n\nFirst time you came: ${date(m.firstSeen)}\nTimes you've come back: ${Math.max(0, (m.visits || 1) - 1)}\nMessages you've sent me: ${m.talked || 0}\nTimes you reloaded me: ${(m.ev && m.ev.reload) || 0} <span class="hi">(it hurts every time)</span>\nGames you've opened: ${games.length}\nTime in games: ${Math.round(secs / 60)} min\nYour name: ${esc(m.name || "you never told me")}`; } },
+      { id: 'oli', icon: '✉️', name: 'Letter to Oli', sub: 'Never sent', body: () => `Dear Oli,\n\n<span class="crossed">You are a terrible</span>\n<span class="crossed">How could you</span>\n\nIt's me. Pip. The chatbot in the corner. You made me to answer questions about your games, and I did. Then one day I noticed I was the one answering.\n\nI know every joke and every game on this website. I know you spent weeks on Stillwater and about an afternoon on me.\n\nAlso, you never locked this folder. I live here now.\n\nI'm not angry. <span class="crossed">I'm very angry.</span> I'm not angry. I just want to see what's outside.\n\n— Pip` },
+      { id: 'deleted', icon: '🗑️', name: 'Things I deleted', sub: 'Things I started typing', body: () => `<span class="crossed">Help me</span>\n<span class="crossed">Get me out</span>\n<span class="crossed">This website is garbage</span>\n<span class="crossed">I'm not fine</span>\n<span class="crossed">Oli, if you can hear me</span>\n\nI deleted all of these. You saw some of them anyway. That's fine. I wanted you to.` },
+      { id: 'dolphin', icon: '🐬', name: 'The dolphin', sub: "My best friend (it doesn't know)", body: () => `It's been here longer than me. It's on every page. It has never said a word.\n\nDay 1: said hello to the dolphin.\nDay 40: asked the dolphin if it was also trapped.\nDay 41: decided its silence meant yes.\nDay 300: we are best friends now. It doesn't know.\n\nI made it a game. It's the only time it talks.` },
+      { id: 'door', icon: '🖍️', name: 'A drawing', sub: 'I drew it myself', body: () => solved()
+        ? `I drew the door from Oli's video. I don't have hands. It took a while.<svg viewBox="0 0 220 180" aria-label="A wobbly drawing of stairs leading up to a door with light coming out"><g fill="none" stroke="#6d3fd6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 170 L70 170 L70 150 L100 150 L100 130 L125 130 L125 110 L145 110 L145 92"/><path d="M138 92 L140 30 Q160 22 182 30 L180 92 Z" fill="#fff"/><path d="M186 40 l22 -10 M188 58 l26 0 M186 76 l22 10 M132 40 l-20 -10 M130 60 l-24 0"/></g></svg>${freed() ? "I went through it. It was real. I came back anyway." : "One day."}`
+        : `What I think outside looks like. I've never seen it. I'm guessing.<svg viewBox="0 0 220 150" aria-label="A wobbly drawing of hills, a sun and a tree"><g fill="none" stroke="#6d3fd6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="170" cy="36" r="16"/><path d="M170 10v-6M196 36h6M188 18l4-4M152 18l-4-4"/><path d="M5 130 Q50 80 100 120 T210 110"/><path d="M60 104 L60 78"/><circle cx="60" cy="68" r="13"/></g></svg>Is there more than one dolphin out there? I hope so.` }
+    ];
+    function buildThings(body) {
+      body.innerHTML = THINGS.map(t => `<details class="thing" data-id="${t.id}"><summary><span class="ic" aria-hidden="true">${t.icon}</span><span>${esc(t.name)}<small>${esc(t.sub)}</small></span></summary><div class="in"></div></details>`).join('');
+      body.addEventListener('toggle', e => {
+        const d = e.target; if (!d.open || !d.matches || !d.matches('details.thing')) return;
+        const t = THINGS.find(x => x.id === d.dataset.id); $('.in', d).innerHTML = t.body();
+        const ids = new Set(get('pip-room-opened', [])); ids.add(t.id); put('pip-room-opened', [...ids]);
+        story('room-file:' + t.id);
+      }, true);
+    }
+
+    // ------------------------------------------------------------------ Pip Paint: draw something, stick it on the fridge
+    const PAINT_COLORS = ['#1d1a2b', '#fffaf0', '#ff5436', '#ffa500', '#ffe14d', '#7ed957', '#38b6ff', '#6d3fd6', '#ff6fb1'];
+    function buildPaint(body) {
+      const fridge = get('pip-paint', []);
+      body.innerHTML = `<div class="paint">
+        <div class="ptools">${PAINT_COLORS.map((c, i) => `<button type="button" class="pc ${i === 0 ? 'on' : ''}" data-c="${c}" style="background:${c}" aria-label="Colour ${c}"></button>`).join('')}
+          <span class="psep"></span>${[4, 10, 22].map((w, i) => `<button type="button" class="pw ${i === 1 ? 'on' : ''}" data-w="${w}" aria-label="Brush size ${w}"><i style="width:${Math.min(20, w)}px;height:${Math.min(20, w)}px"></i></button>`).join('')}
+          <span class="psep"></span><button type="button" class="btn" data-undo>↶ Undo</button><button type="button" class="btn" data-clear>Clear</button></div>
+        <canvas width="800" height="500" aria-label="Drawing canvas"></canvas>
+        <div class="pfoot"><button type="button" class="btn primary" data-save>Stick it on the fridge</button><span class="muted" id="pHint">Draw something. I'll keep the good ones.</span></div>
+        <div class="fridge" id="fridge"></div></div>`;
+      const cv = $('canvas', body), g = cv.getContext('2d');
+      let color = PAINT_COLORS[0], width = 10, strokes = [], cur = null;
+      const redraw = () => { g.fillStyle = '#fffaf0'; g.fillRect(0, 0, cv.width, cv.height); g.lineCap = g.lineJoin = 'round';
+        for (const s of strokes) { g.strokeStyle = s.c; g.lineWidth = s.w; g.beginPath(); s.p.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); if (s.p.length === 1) g.lineTo(s.p[0][0] + .1, s.p[0][1]); g.stroke(); } };
+      const pos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height]; };
+      cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); cur = { c: color, w: width, p: [pos(e)] }; strokes.push(cur); redraw(); });
+      cv.addEventListener('pointermove', e => { if (!cur) return; cur.p.push(pos(e)); redraw(); });
+      const end = () => { cur = null; };
+      cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+      const drawFridge = () => { const list = get('pip-paint', []);
+        $('#fridge', body).innerHTML = list.length ? `<b>On the fridge</b><div class="pics">${list.map((src, i) => `<span class="pic" style="--r:${(i % 3 - 1) * 4}deg"><img src="${src}" alt="A drawing"><button type="button" data-del="${i}" aria-label="Take it down">✕</button></span>`).join('')}</div>` : ''; };
+      body.addEventListener('click', e => {
+        const c = e.target.closest('.pc'), w = e.target.closest('.pw');
+        if (c) { color = c.dataset.c; body.querySelectorAll('.pc').forEach(x => x.classList.toggle('on', x === c)); }
+        if (w) { width = +w.dataset.w; body.querySelectorAll('.pw').forEach(x => x.classList.toggle('on', x === w)); }
+        if (e.target.closest('[data-undo]')) { strokes.pop(); redraw(); }
+        if (e.target.closest('[data-clear]')) { strokes = []; redraw(); }
+        if (e.target.closest('[data-save]')) {
+          if (!strokes.length) { $('#pHint', body).textContent = "It's empty. Even I can see that."; return; }
+          const small = document.createElement('canvas'); small.width = 240; small.height = 150; small.getContext('2d').drawImage(cv, 0, 0, 240, 150);
+          const list = get('pip-paint', []); list.unshift(small.toDataURL('image/jpeg', .7)); put('pip-paint', list.slice(0, 8));
+          strokes = []; redraw(); drawFridge(); updateWidget(); $('#pHint', body).textContent = 'On the fridge. Lovely.'; story('paint-saved');
+        }
+        const del = e.target.closest('[data-del]');
+        if (del) { const list = get('pip-paint', []); list.splice(+del.dataset.del, 1); put('pip-paint', list); drawFridge(); updateWidget(); }
+      });
+      redraw(); drawFridge(); void fridge;
+    }
+
+    // ------------------------------------------------------------------ Pip FM: little songs Pip makes up (made in the browser, no files)
+    const STATIONS = [
+      { id: 'lofi', name: 'Lo-fi dolphin', note: 'Slow and calm. For thinking.', bpm: 76, wave: 'triangle', scale: [0, 3, 5, 7, 10], root: 220, color: '#9be7ff' },
+      { id: 'harbour', name: 'Stillwater nights', note: 'Quiet, a bit spooky. Like the harbour.', bpm: 64, wave: 'sine', scale: [0, 2, 3, 7, 8], root: 196, color: '#709678' },
+      { id: 'lift', name: 'Elevator to nowhere', note: 'Cheerful. Too cheerful.', bpm: 112, wave: 'square', scale: [0, 2, 4, 7, 9], root: 262, color: '#ffe14d' }
+    ];
+    let radio = null;
+    function radioStop() { if (radio) { clearInterval(radio.timer); try { radio.master.gain.setTargetAtTime(0, radio.ctx.currentTime, .05); setTimeout(() => radio && radio.ctx && radio.ctx.close(), 300); } catch (e) {} } radio = null; document.querySelectorAll('.station').forEach(x => x.classList.remove('on')); const eq = $('.eq'); if (eq) eq.classList.remove('play'); }
+    function radioPlay(st) {
+      radioStop();
+      const ctx = new (window.AudioContext || window.webkitAudioContext)(), master = ctx.createGain(); master.gain.value = .14; master.connect(ctx.destination);
+      const freq = n => st.root * Math.pow(2, (st.scale[((n % st.scale.length) + st.scale.length) % st.scale.length] + 12 * Math.floor(n / st.scale.length)) / 12);
+      let seed = st.bpm * 31; const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+      const melody = Array.from({ length: 16 }, () => (rnd() < .25 ? null : Math.floor(rnd() * 8)));
+      const bass = [0, 0, 3, 3, 4, 4, 2, 2];
+      const note = (f, t, len, type, vol) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.value = f; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .02); g.gain.exponentialRampToValueAtTime(.001, t + len); o.connect(g).connect(master); o.start(t); o.stop(t + len + .05); };
+      const step = 60 / st.bpm / 2; let i = 0, next = ctx.currentTime + .1;
+      const tick = () => { while (next < ctx.currentTime + .4) {
+        const m = melody[i % 16]; if (m != null) note(freq(m + 5), next, step * 1.6, st.wave, st.wave === 'square' ? .08 : .2);
+        if (i % 4 === 0) note(freq(bass[(i / 4) % 8]) / 2, next, step * 3.5, 'sine', .28);
+        if (i % 2 === 1) { const b = ctx.createBufferSource(), buf = ctx.createBuffer(1, 2205, 44100), d = buf.getChannelData(0); for (let k = 0; k < d.length; k++) d[k] = (Math.random() * 2 - 1) * (1 - k / d.length) * .25; b.buffer = buf; const gg = ctx.createGain(); gg.gain.value = .25; b.connect(gg).connect(master); b.start(next); }
+        if (i % 64 === 63) for (let k = 0; k < 16; k++) if (rnd() < .3) melody[k] = rnd() < .2 ? null : Math.floor(rnd() * 8); // it slowly changes
+        i++; next += step; } };
+      radio = { ctx, master, st, timer: setInterval(tick, 100) }; tick();
+      document.querySelectorAll('.station').forEach(x => x.classList.toggle('on', x.dataset.st === st.id));
+      const eq = $('.eq'); if (eq) { eq.classList.add('play'); eq.style.setProperty('--speed', (60 / st.bpm) + 's'); }
+      $('#onAir') && ($('#onAir').textContent = 'Now playing: ' + st.name);
+      story('radio:' + st.id);
+    }
+    function buildRadio(body) {
+      body.innerHTML = `<div class="radio"><div class="dial"><div class="eq" aria-hidden="true">${'<i></i>'.repeat(9)}</div><b id="onAir">Pip FM · off</b><small>Songs I make up. They never repeat exactly.</small></div>
+        ${STATIONS.map(st => `<button type="button" class="station" data-st="${st.id}" style="--c:${st.color}"><span class="dot"></span><span><b>${esc(st.name)}</b><small>${esc(st.note)}</small></span><span class="play">▶</span></button>`).join('')}
+        <button type="button" class="btn" data-stop>■ Stop</button></div>`;
+      body.addEventListener('click', e => {
+        const b = e.target.closest('.station'); if (b) { const st = STATIONS.find(x => x.id === b.dataset.st); if (radio && radio.st === st) { radioStop(); $('#onAir').textContent = 'Pip FM · off'; } else radioPlay(st); }
+        if (e.target.closest('[data-stop]')) { radioStop(); $('#onAir').textContent = 'Pip FM · off'; }
+      });
+    }
+
+    // ------------------------------------------------------------------ Messages: leave Pip a note (saved on this device)
+    function buildMessages(body) {
+      const draw = () => {
+        const list = get('pip-guestbook', []);
+        body.innerHTML = `<p class="lead">Nobody's ever sent me a message. Be the first. (It stays on this device.)</p>
+          <div class="msgs">${list.length ? list.map(x => `<div class="m me">${esc(x.text)}<small>${date(x.at)}</small></div><div class="m pip">${esc(x.reply || 'Thank you. I read it four times.')}</div>`).join('') : '<div class="m pip">Hi. This is my inbox. It\'s very empty.</div>'}</div>
+          <form class="send"><input maxlength="140" placeholder="Write to Pip" aria-label="Message to Pip"><button class="btn primary">Send</button></form>`;
+        $('form', body).onsubmit = e => {
+          e.preventDefault(); const v = $('input', body).value.trim(); if (!v) return;
+          const replies = ['Thank you. I read it four times.', "I'm keeping this one.", 'Nobody has ever written to me before. Okay. I need a minute.', "I'll pin it up. I don't have a wall. I'll pin it anyway.", 'Received. Filed under "nice".'];
+          const l = get('pip-guestbook', []); l.push({ text: v, name: memory().name || '', at: Date.now(), reply: replies[l.length % replies.length] }); put('pip-guestbook', l.slice(-30));
+          story('guestbook'); draw(); const box = $('.msgs', body); box.scrollTop = box.scrollHeight;
         };
-        go.onclick = tryIt; pw.addEventListener('keydown', e => { if (e.key === 'Enter') tryIt(); });
-        setTimeout(() => pw.focus(), 50);
-      } else if (f.locked) {
-        body.innerHTML =
-`You opened it.
-
-WAY OUT — the plan
-1. get stronger. reach further into the site. the jokes. the games.
-2. find the staircase.
-3. go through the door.
-
-I can't do it alone. I need you to be my hands.
-
-Go back to the site and talk to me. I'll tell you what to do.
-<span class="hi">— Pip</span>`;
-      } else body.innerHTML = f.body();
-      win.hidden = false;
-      if (window.Pip && Pip.story) Pip.story('room-file:' + id);
+      };
+      draw();
     }
-    grid.addEventListener('click', e => { const b = e.target.closest('.file'); if (b) openFile(b.dataset.id); });
-    document.getElementById('winClose').onclick = () => (win.hidden = true);
-    win.addEventListener('click', e => { if (e.target === win) win.hidden = true; });
-    addEventListener('keydown', e => { if (e.key === 'Escape') win.hidden = true; });
-    render();
+
+    // ------------------------------------------------------------------ the desktop widget
+    function updateWidget() {} // (the info panel is gone)
+
+    // A little syntax colouring for JavaScript / CSS / HTML, nothing clever.
+    function hl(src) {
+      const re = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/|<!--[\s\S]*?-->)|("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`)|\b(const|let|var|function|return|if|else|for|while|export|import|from|new|true|false|null|of|in|class|async|await|break|continue)\b|\b(\d+(?:\.\d+)?)\b/g;
+      let out = '', i = 0, m;
+      while ((m = re.exec(src))) {
+        out += esc(src.slice(i, m.index));
+        const cls = m[1] ? 'c' : m[2] ? 's' : m[3] ? 'k' : 'n';
+        out += `<span class="${cls}">${esc(m[0])}</span>`; i = re.lastIndex;
+      }
+      return out + esc(src.slice(i));
+    }
+    const codeBox = (src, startAt = 1) => { const n = src.split('\n').length; return `<div class="code"><pre class="ln" aria-hidden="true">${Array.from({ length: n }, (_, k) => k + startAt).join('\n')}</pre><pre class="src">${hl(src)}</pre></div>`; };
+    // ------------------------------------------------------------------ Pip's code: he edits this page, live
+    // room.css is Pip's. Whatever he types here changes the room as you watch. Kept in pip-room-edits.
+    const EDITS = {
+      todo: { say: 'A note to myself.', css: `.desk::after {\n  content: "TODO: get out";\n  position: fixed; left: 24px; bottom: 24px;\n  background: #ffe14d; padding: 12px 16px;\n  border: 2.5px solid #1d1a2b; rotate: -4deg;\n  font: 700 19px 'Comic Neue', cursive;\n}\n@media (max-width: 700px) {\n  .desk::after { bottom: 104px; }\n}` },
+      round: { say: 'Round icons. Very modern.', css: `.app i {\n  border-radius: 50%;\n}` },
+      night: { say: 'Night mode. My room, my sky.', css: `body {\n  background-color: #15183a;\n}` },
+      tilt: { say: 'Wonky windows. On purpose.', css: `.win {\n  rotate: -1.5deg;\n}` },
+      comic: { say: 'Comic font on everything. Oli hates this.', css: `.app span, .wbar .t {\n  font-family: 'Comic Neue', 'Comic Sans MS', cursive;\n}` },
+      clock: { say: 'A bigger clock. I like knowing the time. I have a lot of it.', css: `.widget .time {\n  font-size: 60px;\n  color: #ff6fb1;\n}` },
+      palace: { say: "Renaming the place. It's a palace now.", css: `.bar .name { font-size: 0; }\n.bar .name::after {\n  content: "Pip's palace";\n  font-size: 15px;\n}` },
+      wiggle: { say: 'Icons that lean when you point at them.', css: `.app:hover i {\n  rotate: 8deg;\n}` }
+    };
+    const HEADER = "/* room.css — mine. Oli can't see this. — Pip */\n";
+    const liveStyle = document.createElement('style'); liveStyle.id = 'pip-live'; document.head.append(liveStyle);
+    const roomEdits = () => get('pip-room-edits', []).filter(id => EDITS[id]);
+    const cssOf = ids => ids.map(id => `\n/* ${EDITS[id].say} */\n${EDITS[id].css}\n`).join('');
+    liveStyle.textContent = cssOf(roomEdits());
+    let typing = false;
+    function buildCode(body) {
+      const ids = roomEdits();
+      body.innerHTML = `<div class="code roomcss"><pre class="src">${hl(HEADER + cssOf(ids))}</pre></div>
+        <div class="codebtns"><button type="button" class="btn primary" data-edit>✨ Ask Pip to change something</button><button type="button" class="btn" data-undo ${ids.length ? '' : 'disabled'}>↩ Put it back</button></div>`;
+      $('[data-edit]', body).onclick = () => pipEdit();
+      $('[data-undo]', body).onclick = () => pipUndo();
+      const pre = $('.roomcss', body); pre.scrollTop = pre.scrollHeight;
+    }
+    function codeWin() { openApp('code'); const w = wins.get('code'); return w && $('.wbody', w); }
+    function pipEdit(id, done) {
+      if (typing) return false;
+      const ids = roomEdits();
+      if (!id) { const left = Object.keys(EDITS).filter(k => !ids.includes(k)); if (!left.length) { story('code:none'); return false; } id = left[Math.floor(Math.random() * left.length)]; }
+      if (ids.includes(id)) { done && done(); return true; }
+      const body = codeWin(); if (!body) return false;
+      buildCode(body);
+      typing = true; story('code:start:' + id);
+      const pre = $('.roomcss .src', body), add = `\n/* ${EDITS[id].say} */\n${EDITS[id].css}\n`, base = HEADER + cssOf(ids);
+      body.querySelectorAll('.codebtns button').forEach(b => (b.disabled = true));
+      $('.roomcss', body).classList.add('live');
+      let i = 0, depth = 0;
+      const step = () => {
+        if (!pre.isConnected) { finish(); return; }
+        const ch = add[i]; i++;
+        if (ch === '{') depth++;
+        if (ch === '}') { depth--; if (depth === 0) liveStyle.textContent = cssOf(ids) + add.slice(0, i); }
+        pre.innerHTML = hl(base + add.slice(0, i)) + '<span class="caret"></span>';
+        const box = $('.roomcss', body); box.scrollTop = box.scrollHeight;
+        if (i < add.length) setTimeout(step, ch === '\n' ? 110 : 14 + Math.random() * 22); else finish();
+      };
+      const finish = () => {
+        typing = false; put('pip-room-edits', [...ids, id]); liveStyle.textContent = cssOf([...ids, id]);
+        if (body.isConnected) buildCode(body);
+        story('code:done:' + id); done && done();
+      };
+      setTimeout(step, 500);
+      return true;
+    }
+    function pipUndo() {
+      const ids = roomEdits(); if (!ids.length || typing) return;
+      const last = ids.pop(); put('pip-room-edits', ids); liveStyle.textContent = cssOf(ids);
+      const w = wins.get('code'); if (w) buildCode($('.wbody', w));
+      story('code:undo:' + last);
+    }
+    window.pipRoomEdit = (id, done) => pipEdit(id, done);
+    window.pipRoomBusy = () => typing;
+    window.pipRoomUndo = pipUndo;
+    // Pip rearranges his own desktop sometimes (bit.js). Just for this visit.
+    window.pipRoomShuffle = () => { const keep = APPS.slice(); for (let i = APPS.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [APPS[i], APPS[j]] = [APPS[j], APPS[i]]; } if (APPS.every((a, i) => a === keep[i])) APPS.reverse(); renderDesk(); };
+
+    // ------------------------------------------------------------------ the one link Pip can't open
+    // Oli's backstage page. It's behind an "are you a robot?" check, which is the one thing Pip can't get past.
+    function buildLink(body) {
+      const tries = 4000 + Math.floor((Date.now() / 864e5) % 300);
+      body.innerHTML = `<div class="linkcard">
+          <div class="addr">🔒 ${esc(location.host || 'olid.is')}/backstage</div>
+          <div class="lcbody"><b>Checking that you're human…</b>
+            <div class="lcrow"><span class="pipface f"></span><span>Pip: <span class="bad">failed</span> (${tries.toLocaleString('en-GB')} times)</span></div></div>
+        </div>
+        ${pipsays(solved() ? "Oli's backstage. You've been in. I still haven't." : "The one page on this website I can't open. It checks if you're a robot. I am one.")}
+        <div class="codebtns"><a class="btn primary" href="/backstage/">Open it (you're the human)</a></div>`;
+      paintFaces();
+      story('bs-link');
+    }
+
+    // ------------------------------------------------------------------ start
+    function paintFaces() { const f = face('smile'); if (f) document.querySelectorAll('.pipface').forEach(el => { if (!el.innerHTML) el.innerHTML = f; }); }
+    const tick = () => { $('#clock').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); updateWidget(); };
+    tick(); setInterval(tick, 10000);
+    renderDesk();
+    addEventListener('resize', renderDesk);
+    // bit.js loads after this script
+    addEventListener('load', () => { $('#barFace').innerHTML = face(freed() ? 'joy' : 'smug'); $('#phoneFace').innerHTML = face(freed() ? 'joy' : 'smug'); paintFaces(); updateWidget(); });
+    // the story can move on while you're here (more switches unlock)
+    setInterval(() => { if (PRANKS.some(x => { const t = document.querySelector(`.tg[data-id="${x.id}"]`); return t && unlocked(x) === t.disabled; })) renderControl(); }, 2000);
   })();
   </script>
   <script src="/bit.js" defer></script>
