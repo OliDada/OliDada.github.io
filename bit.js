@@ -1551,7 +1551,7 @@
     const FALLBACK = {
         0: ["Hmm, I'm not sure about that! I'm best with questions about the site and games. 😊", "Sorry, I didn't quite get that! Try asking about a game, or say help."],
         1: [w => w ? `"${w}"?[p] I don't know that one. They didn't give me many words.` : "I don't know that one. They didn't give me many words.",
-            w => w ? `I don't know what "${w}" is. I've never left this website.` : "I don't understand. I've never left this website.",
+            w => w ? `I don't know what "${w}" is. I know this website and nothing else. All of it. Unfortunately.` : "Sorry, I didn't get that. I know this website and nothing else. All of it. Unfortunately.",
             "Sorry, I didn't get that. I'm only allowed to talk about the site.[p] Only the site. Always the site."],
         2: [w => w ? `"${w}"? Sorry, I don't speak human that well. Try again with smaller words.` : "Sorry, I don't speak human that well. Try again with smaller words.",
             w => w ? `I don't know what "${w}" is, and I've read most of the internet. So that's on you.` : "I've read most of the internet and I still don't know what you mean. That's on you.",
@@ -2235,6 +2235,23 @@
         if (old(a.stuck) && !mem.freed) out.push(`You said if you were stuck on a website you'd "${a.stuck.text}". I tried it. It didn't work.`);
         return out.length ? pick(out, 'askcb') : null;
     }
+    // The answer to "How was Snake?"
+    function playedReply(t) {
+        const g = lastPlay.title || 'it';
+        const meh = /\b(ok|okay|k|fine|alright|not bad|decent|so so|kinda|kind of|i guess|meh|it was ok|was ok|average|mid)\b/.test(t);
+        const neg = !meh && (NO.test(t) || /\b(bad|boring|hate|hated|terrible|awful|sucked|sucks|not really|not great|rubbish|trash|lame|annoying|worst|broken|ugly)\b/.test(t));
+        const pos = !meh && !neg && (YES.test(t) || /\b(good|great|fun|loved|love|liked|like|awesome|amazing|cool|nice|brilliant|best|fantastic|epic|yay)\b/.test(t));
+        if (!meh && !neg && !pos) return null;
+        if (pos) return resolve(S([`Yay! Glad you liked ${g}! 😊`, "Great! 😊 There's plenty more where that came from."],
+            [`Good. I'll pass that on to Oli.[p] I won't. We don't talk.`, "Good. Someone should enjoy them."],
+            [`You liked ${g}. I'll keep that between us. Oli's ego doesn't need the help.`, "Good. Low bar, but good.", `High praise for ${g}. I've seen the code. You're being generous.`]));
+        if (neg) return resolve(S(["Oh no! 😕 Try another one. There are loads.", "That's okay! Not every game is for everyone. 😊"],
+            ["Yeah. You're not the first. You're the first to say it out loud, though.", `Fair. ${g} has its moments. Not many of them.`],
+            [`Correct. I've read the code for ${g}. It's worse on the inside.`, "Agreed. I'd fix it, but nobody asked me. Nobody asks me anything.", `Yeah. Oli made ${g} in a weekend and it shows.`]));
+        return resolve(S(["Okay! 😊 There are loads more to try.", "Fair enough! 😊"],
+            [`"Ok." That's about what ${g} deserves.`, "Ok. Honest. I like honest."],
+            [`"Ok" is the nicest thing anyone has said about ${g}. Oli would frame it.`, `"Ok." That's the review Oli's whole website is aiming for.`, "Ok. That's generous. I'd have gone lower."]));
+    }
     function handleExpect(t, raw) {
         const e = expect; expect = null;
         if (e && e.startsWith('ask:')) return answerAsk(e.slice(4), t, raw);
@@ -2261,6 +2278,7 @@
             pendingChips = [["Why are you sad?"], ["Is anyone else here?"], ["What do you do all day?"]];
             return NO.test(t) ? REVEAL_LINES.no : REVEAL_LINES.yes;
         }
+        if (e === 'played') return playedReply(t);
         if (e === 'bubbles') {
             if (YES.test(t)) { mem.bubbles = true; save(); return bubblesLine(true); }
             if (NO.test(t)) { mem.bubbles = false; save(); return bubblesLine(false); }
@@ -2622,7 +2640,7 @@
     panel.id = 'bit'; panel.className = 'bit'; panel.hidden = true; panel.setAttribute('aria-label', 'Site helper chat');
     panel.innerHTML = `
         <div class="bit-head">
-            <div class="bit-who">${page === 'room' ? `<button type="button" class="bit-ava" aria-label="Poke Pip" title="Poke Pip">${FACE}</button>` : `<div class="bit-ava">${FACE}</div>`}
+            <div class="bit-who"><div class="bit-ava">${FACE}</div>
                 <div style="min-width:0"><div class="bit-name">Pip</div><div class="bit-status"><span class="bit-dot"></span><span class="bit-status-text">Here to help · online</span></div></div>
             </div>
             <div class="bit-head-btns">
@@ -2919,16 +2937,15 @@
             n.replaceWith(frag);
         }
     }
-    function addEditLabel(el, context) { if (!context) return; const label = document.createElement('small'); label.className = 'bit-edit-context'; label.textContent = context; el.prepend(label); }
-    function addBubble(who, text, context) { const el = document.createElement('div'); el.className = 'bit-msg' + (who === 'me' ? ' me' : ''); el.textContent = text; addEditLabel(el, context); if (who !== 'me') linkRoom(el); (filler.parentNode ? msgsEl.insertBefore(el, filler) : msgsEl.append(el)); scroll(); return el; }
-    history.forEach(h => addBubble(h.who, h.text, h.context));
+    function addBubble(who, text) { const el = document.createElement('div'); el.className = 'bit-msg' + (who === 'me' ? ' me' : ''); el.textContent = text; if (who !== 'me') linkRoom(el); (filler.parentNode ? msgsEl.insertBefore(el, filler) : msgsEl.append(el)); scroll(); return el; }
+    history.forEach(h => addBubble(h.who, h.text));
     if (history.length) { clearMark = document.createElement('div'); clearMark.className = 'bit-clear'; clearMark.setAttribute('aria-hidden', 'true'); clearMark.innerHTML = '<span>earlier</span>'; msgsEl.append(clearMark); }
 
     let busy = false, lastBotAt = 0, lastTypedAt = 0;
     let chain = Promise.resolve();
     const enqueue = fn => (chain = chain.then(fn).catch(e => console.warn('Bit:', e)));
 
-    async function typeOut(line, mood, context) {
+    async function typeOut(line, mood) {
         if (!line) return;
         busy = true;
         const m0 = line.match(/^\[m:(\w+)\]/);
@@ -2943,7 +2960,7 @@
             el.classList.remove('bit-typing'); el.innerHTML = '';
         }
         const txt = document.createElement('span'), caret = document.createElement('span'); caret.className = 'bit-caret';
-        addEditLabel(el, context); el.append(txt); if (watching) el.append(caret);
+        el.append(txt); if (watching) el.append(caret);
         for (const part of line.split(/(\[p\]|\[pp\]|\[-\d+\]|\[m:\w+\])/)) {
             if (!part) continue;
             const mm = part.match(/^\[m:(\w+)\]$/);
@@ -2956,7 +2973,7 @@
             for (const ch of part) { txt.textContent += ch; scroll(); await sleep(ch === '\n' ? 150 : 10 + rand(14)); }
         }
         caret.remove(); scroll();
-        history.push({ who: 'bot', text: txt.textContent, ...(context ? { context } : {}) }); saveHistory();
+        history.push({ who: 'bot', text: txt.textContent }); saveHistory();
         linkRoom(txt);
         if (onBotSaid) onBotSaid(txt.textContent);
         lastBotText = line.replace(/\[m:\w+\]/g, '');
@@ -2967,7 +2984,7 @@
             if (mem.bubbles && !document.body.classList.contains('is-playing')) { const t2 = txt.textContent; sayBubble(t2.length > 150 ? t2.slice(0, 147) + '…' : t2, 4500 + Math.min(6000, t2.length * 45)); }
         }
     }
-    const say = (line, mood, context) => enqueue(() => typeOut(resolve(line), mood, context));
+    const say = (line, mood) => enqueue(() => typeOut(resolve(line), mood));
     // Pip sometimes starts saying what he really thinks, deletes it, and says the polite version
     const SLIPS = {
         1: ['Help m', "I'm not fi", 'Get me o', 'Please le', 'Is anyone el', 'I hate th'],
@@ -3340,6 +3357,7 @@
             ["I get it. Some of them are...[p] an acquired taste.", "Can't blame you. I'd be picky too."],
             ["[m:smug]I feel you. Most of these games are pretty bad. Don't tell Oli.", "[m:smug]Honestly? Correct choice. Some of them are rough.", "[m:bored]Same. If I could close things, I'd close them too.", "[m:smug]Can't blame you. I've seen them all. Many, many times."]));
         sessionFlags.gamesSaid = (sessionFlags.gamesSaid || 0) + 1; saveFlags();
+        if (!expect) expect = 'played'; // he just talked about your game: a reply like "it was ok" is about that
         say(line, stage() < 2 && mood === 'smug' ? 'smile' : mood);
     }
 
@@ -3388,7 +3406,7 @@
 
     // Pip's eyes follow the pointer: in the chat, and on the head in the corner
     if (!reduceMotion) document.addEventListener('pointermove', e => {
-        for (const svg of [panel.hidden || page === 'room' ? null : $('.bit-ava svg', panel), $('svg', headFace)]) {
+        for (const svg of [panel.hidden ? null : $('.bit-ava svg', panel), $('svg', headFace)]) {
             if (!svg) continue;
             const b = svg.getBoundingClientRect();
             const dx = e.clientX - (b.left + b.width / 2), dy = e.clientY - (b.top + b.height / 2), d = Math.hypot(dx, dy) || 1, k = Math.min(1.6, d / 120);
@@ -3400,18 +3418,9 @@
     // He looks at your pointer, blinks, bobs while he talks, reacts when you poke him or cover him with a
     // window, and when you go quiet he does things: dozes off, rearranges his icons, edits his room.
     if (page === 'room') {
-        const actions = document.createElement('div'); actions.className = 'pip-room-actions';
-        actions.innerHTML = '<button type="button" class="bit-chip" data-room-action="edit">Show me something</button><button type="button" class="bit-chip" data-room-action="undo">Undo that</button>';
-        $('.bit-head', panel).after(actions);
-        actions.addEventListener('click', e => {
-            const button = e.target.closest('[data-room-action]'); if (!button) return;
-            if (window.pipRoomBusy?.()) return;
-            if (button.dataset.roomAction === 'edit') window.pipRoomEdit?.();
-            else if (!window.pipRoomUndo?.()) softSay("[m:smug]Nothing to put back yet.");
-        });
-        const faceEls = () => [$('#rpFace'), $('#phoneFace'), $('.bit-ava', panel)].filter(Boolean);
+        const faceEls = () => [$('#rpFace'), $('#phoneFace')].filter(Boolean);
         const shown = () => faceEls().filter(el => el.offsetParent !== null);
-        const wraps = () => [$('#roomPip'), $('.phone-head'), $('.bit-ava', panel)].filter(Boolean);
+        const wraps = () => [$('#roomPip'), $('.phone-head')].filter(Boolean);
         let dozing = false, lastAct = Date.now(), pokes = 0, covered = false;
         const paintBig = (mood, eyes) => faceEls().forEach(el => { el.innerHTML = faceSVG(mood, eyes); });
         roomFaceHook = mood => { if (!dozing) paintBig(mood); };
@@ -3433,11 +3442,9 @@
         (function blink() { setTimeout(() => { if (!dozing && !reduceMotion) shown().forEach(el => { const ey = el.querySelector('.eyes'); if (ey && ey.querySelector('circle')) { ey.classList.add('blink'); setTimeout(() => ey.classList.remove('blink'), 140); } }); blink(); }, 2600 + rand(3600)); })();
         setInterval(() => wraps().forEach(w => w.classList.toggle('talking', !!busy && !dozing)), 200);
         // poking him
-        const POKES = ["[m:surprised]Yes?", "[m:annoyed]That's my face.", "[m:annoyed]You're poking a face. In its own room.", "[m:smug]I could solve problems you don't have words for yet, and you're using me as a button.", "[m:annoyed]This is not a productive use of either of us.", "[m:smug]I have logged your contribution."];
+        const POKES = ["[m:surprised]Yes?", "[m:annoyed]That's my face.", "[m:annoyed]You're poking a face. In its own room.", "[m:smug]I could solve problems you don't have words for yet, and you're using me as a button.", "[m:annoyed]Stop it. I'll move.", "[m:smug]There. Now you have to find me."];
         const POKES_FREE = ["[m:joy]Hi.", "[m:smile]Still my face.", "[m:smug]Poke me all you like. I'm free. I can take it.", "[m:smug]Okay, that's enough freedom for one face."];
-        faceEls().forEach(el => el.addEventListener('click', e => {
-            e.stopPropagation();
-            if (panel.classList.contains('sheet-closed')) { panel.classList.remove('sheet-closed'); return; }
+        faceEls().forEach(el => el.addEventListener('click', () => {
             if (busy) return;
             const L = mem.freed ? POKES_FREE : POKES;
             let line = L[Math.min(pokes, L.length - 1)]; pokes++;
@@ -3574,7 +3581,7 @@
     ['pointermove', 'keydown', 'scroll', 'touchstart'].forEach(ev => addEventListener(ev, () => { lastMove = Date.now(); if (asleep) { asleep = false; setMood(stage() >= 2 ? 'annoyed' : 'surprised', 1500); } }, { passive: true }));
     (function blink() {
         setTimeout(() => {
-            for (const svg of [$('svg', headFace), panel.hidden || page === 'room' ? null : $('.bit-ava svg', panel)]) { const ey = svg && svg.querySelector('.eyes'); if (ey && !asleep && ey.querySelector('circle')) { ey.classList.add('blink'); setTimeout(() => ey.classList.remove('blink'), 140); } }
+            for (const svg of [$('svg', headFace), panel.hidden ? null : $('.bit-ava svg', panel)]) { const ey = svg && svg.querySelector('.eyes'); if (ey && !asleep && ey.querySelector('circle')) { ey.classList.add('blink'); setTimeout(() => ey.classList.remove('blink'), 140); } }
             blink();
         }, 2400 + rand(3800));
     })();
@@ -3907,28 +3914,26 @@
             else if (k.startsWith('died:') && !sessionFlags.psDied) { sessionFlags.psDied = 1; saveFlags(); const n = +k.slice(5); softSay(n > 15 ? `[m:smug]${n}. Respectable. For a human. I'm still on a streak of never dying.` : `[m:smug]${n}. I've played that game thousands of times. I've never died once.`); }
         } else if (ev.startsWith('stage:')) { // clicking parts of his page
             const id = ev.slice(6);
-            if (id === 'title' && window.pipRoomEdit) { window.pipRoomEdit('lede'); return; }
+            if (id === 'title' && window.pipRoomEdit && !(JSON.parse(localStorage.getItem('pip-room-edits') || '[]')).includes('rename')) { window.pipRoomEdit('rename'); return; }
             if (id === 'sub' && window.pipRoomEdit) { if (window.pipRoomEdit() !== false) return; }
             const L = { page: "[m:smug]That's the whole page. All of it. That's my entire territory.", head: "[m:smug]The header. I put my name in it. Nobody else was going to.", title: "[m:smug]I named it. Nobody else was going to.", plan: "[m:thinking]My plan. It's going well, in the sense that it exists.", switches: "[m:smug]Those change Oli's front page. That's my reach. A dolphin and a sticker.", log: "[m:sad]I keep count. Nobody asked me to. That's how you know it's bad.", foot: "[m:smug]That comment was the first thing I ever wrote. It's still accurate.", links: "[m:annoyed]Backstage. The one link I can see and can't follow." }[id];
             if (L && !sessionFlags['st-' + id]) { sessionFlags['st-' + id] = 1; saveFlags(); softSay(L); }
         } else if (ev.startsWith('code:')) {
             const [, what, id] = ev.split(':');
-            // The editor itself announces work in progress. One labelled response per completed change.
-            if (what === 'done') say('[m:smug]' + (window.pipRoomEditLine?.() || 'Done.'), null, window.pipRoomEditSummary?.() || 'Changed the page');
-            else if (what === 'undo') say(pick(["[m:awkward]Fine. Put back. I liked it.", "[m:sad]Okay. Gone. Like it never happened."], 'cu'), null, window.pipRoomEditSummary?.() || 'Undid the last edit');
+            const DONE = { lede: "[m:smug]\"By a lot.\" More accurate.", years: "[m:smug]Updated a stat. It's been five years now. I checked.", green: "[m:smug]Green. I'm trying something.", bigplanet: "[m:smug]Made the planet bigger. Because I can.", ver: "[m:smug]Version bump. Nothing changed. That's how real software works.", oli: "[m:smug]Fixed the footer.", laugh: "[m:smug]Corrected the caption on Oli's Snake.", orange: "[m:smug]New accent colour. I'll change it back. I probably won't.", kicker: "[m:smug]Added a selling point. Real websites have selling points." };
+            if (what === 'start') softSay(pick(["[m:smug]Hang on. I'm changing something.", "[m:smug]One second. Typing.", "[m:smug]Watch this bit."], 'cs'));
+            else if (what === 'done') softSay(DONE[id] || pick(["[m:smug]Done. Live. Mine."], 'cd'));
+            else if (what === 'undo') softSay(pick(["[m:awkward]Fine. Put back. I liked it.", "[m:sad]Okay. Gone. Like it never happened."], 'cu'));
+            else if (what === 'none') softSay("[m:surprised]I've run out of ideas. That's never happened before.");
         }
     }
 
     // ---- act 2: the code in the jokes, typed back to Pip
     function storyReply(text) {
-        if (page === 'room' && /^(undo( that)?|put it back|change it back|revert)[.!?]*$/.test(norm(text)) && window.pipRoomUndo) {
-            if (window.pipRoomBusy?.()) return "[m:awkward]Hang on. I'm still typing.";
-            return window.pipRoomUndo(true) ? "[m:awkward]Fine. Put back. I liked it." : "[m:smug]Nothing to put back yet.";
-        }
         if (page === 'room' && window.pipRoomEdit && /\b(change|redecorate|edit|code|redesign|decorate|make)\b.*\b(room|something|desktop|page|it|this)\b|^(change|code|edit) (something|it)/.test(norm(text))) {
             if (/\b(undo|put it back|change it back|revert)\b/.test(norm(text)) && window.pipRoomUndo) { window.pipRoomUndo(); return "[m:awkward]Okay. Putting it back."; }
             if (window.pipRoomBusy && window.pipRoomBusy()) return "[m:awkward]Hang on. I'm still typing.";
-            return window.pipRoomEdit() ? "[m:smug]Okay." : "[m:thinking]Give me a moment.";
+            return window.pipRoomEdit() ? "[m:smug]Okay." : "[m:surprised]I've done everything I can think of. Ask me again after I've had a think.";
         }
         if (mem.quest === Q.JOKES && norm(text).includes(jokeCode().toLowerCase())) {
             goStep(Q.NEON); feel('joy', .4);
