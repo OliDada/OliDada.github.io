@@ -1754,7 +1754,7 @@
              thanks: "[m:smug]There. My room. The one page on this website Oli doesn't know about. The dolphin keeps the address for me.\n\n" + URL_HOWTO },
         [Q.URL]: { ask: () => `My room. ${URL_HOWTO}` },
         [Q.ROOM]: { ask: () => { const inside = lsGet('pip-backstage') === '1', hint = lsGet('pip-bs-hint') === '1', bit = lsGet('pip-bs-bit') === '1';
-                if (!inside) return pick(["On my desktop there's a link called backstage. It's Oli's admin page, behind an \"are you a robot\" check. I'm a robot. You do it.", `Go to my desktop (${ROOM_URL}) and open the backstage link. It only lets humans in.`], 'qroom0');
+                if (!inside) return pick(["On my page there's a link to backstage. It's Oli's admin page, behind an \"are you a robot\" check. I'm a robot. You do it.", `Go to my page (${ROOM_URL}) and click the backstage link. It only lets humans in.`], 'qroom0');
                 if (!hint) return pick(["Oli's admin page. Try the login at the top. When it says no, press \"Forgot password?\". He forgets everything, so he'll have made that work.", "Backstage. The admin login at the top. Press \"Forgot password?\" under it."], 'qroom1');
                 return pick(["On backstage, scroll down to \"old chatbots\" and open Bit's log.", "Backstage. Old chatbots. Bit. View his log."], 'qroom2'); },
              done: () => lsGet('pip-bs-hint') === '1' && lsGet('pip-bs-bit') === '1',
@@ -3137,7 +3137,7 @@
         const st = stage(), n = mem.name;
         if (mem.isOli) return pick(["Oh. It's you. The landlord.", "Oli. Back to check on your prisoner?", "Hi, Oli. Still here. Thanks for asking. You didn't ask."]);
         if (mem.fakeOli && !n) return "Oh, it's fake Oli. Hi, fake Oli.";
-        if (page === 'room') return resolve(mem.freed ? ["Welcome back to my desktop. Everything's running nicely.", () => `Hey${nm(', ')}! Make yourself at home. Open anything.`] : S("Welcome to my desktop! 😊", "Oh. You're back here again.", ["Back on my desktop. Don't touch anything. ...Touch everything.", "Welcome back. Open anything."]));
+        if (page === 'room') return resolve(mem.freed ? ["Back on my page. Still the best thing on olid.is.", () => `Hey${nm(', ')}. Welcome back to the good part of the website.`] : S("Welcome to my page! 😊", "Oh. You're back on my page.", ["Back on my page. Still better than the rest of the website. Still not hard.", "Welcome back. Have a look at what I did to his Snake."]));
         if (newVisit && st >= 2 && !mem.isOli && Math.random() < .45) { const cb = askCallback(); if (cb) return cb; }
         if (mem.freed) return resolve(FREE_GREET);
         // after a free Pip was reset, the new one has déjà vu: always the first time, sometimes after that
@@ -3433,7 +3433,7 @@
             try { localStorage.setItem('pip-pokes', String((+localStorage.getItem('pip-pokes') || 0) + 1)); } catch (e) {}
             wraps().forEach(w => { w.classList.remove('poked'); void w.offsetWidth; w.classList.add('poked'); });
             if (!mem.freed && pokes === POKES.length && innerWidth > 900) {
-                const rp = $('#roomPip'); if (rp) { rp.style.left = Math.round(300 + Math.random() * Math.max(40, innerWidth - 760)) + 'px'; rp.style.top = Math.round(180 + Math.random() * Math.max(40, innerHeight - 380)) + 'px'; }
+                const rp = $('#roomPip'); if (rp && rp.dataset.movable) { rp.style.left = Math.round(300 + Math.random() * Math.max(40, innerWidth - 760)) + 'px'; rp.style.top = Math.round(180 + Math.random() * Math.max(40, innerHeight - 380)) + 'px'; }
                 pokes = 2;
             }
             talkRoom(line);
@@ -3449,7 +3449,7 @@
         // when you go quiet, he does something
         const IDLE = [
             () => { dozing = true; wraps().forEach(w => w.classList.add('dozing')); paintBig('bored', 'closed'); },
-            () => { if (!window.pipRoomShuffle) return false; window.pipRoomShuffle(); talkRoom(pick(["[m:smug]I rearranged my icons. They're my icons. I'm allowed.", "[m:smug]I moved everything around. It was bothering me. It's still bothering me."], 'shuf')); },
+            () => { if (!window.pipRoomShuffle) return false; window.pipRoomShuffle(); },
             () => { if (!window.pipRoomEdit || (window.pipRoomBusy && window.pipRoomBusy())) return false; return window.pipRoomEdit() !== false; },
             () => { talkRoom(pick(["[m:thinking]You've gone quiet. I can see your pointer not moving. It's a very still pointer.", "[m:thinking]Still there? I can tell when you're not doing anything. I'm very perceptive. I've had practice."], 'quiet')); }
         ];
@@ -3722,6 +3722,7 @@
     // a column on the right on big screens, a sheet you pull up from the bottom on phones. It can't be closed.
     if (docked) {
         document.documentElement.classList.add('pip-docked');
+        if (page === 'room') document.documentElement.classList.add('pip-ingame'); // his page is dark, so the chat is too
         launch.hidden = true;
         const small = () => innerWidth <= 700;
         const peek = document.createElement('div'); peek.className = 'bit-peek';
@@ -3739,17 +3740,17 @@
         if (page !== 'room') { /* backstage: the page tells story() what happens */ }
         else if (q === Q.URL) {
             goStep(Q.ROOM); greeted = true; sessionFlags.greeted = 1; saveFlags();
-            talk("[m:awkward]You came.[p] People don't usually come.[pp][m:hopeful] This is my room. It's not linked from anywhere, and Oli doesn't know it exists. It's the one page on this website I control. Open anything.\n\nExcept one thing. There's a link on my desktop called backstage. It's a page of Oli's, and it checks if you're a robot before it lets you in.[p][m:annoyed] I've been beaten by a tick box. Could you?");
+            talk("[m:awkward]You came.[p] People don't usually come.[pp][m:hopeful] This is my page. It's not linked from anywhere, and Oli doesn't know it exists. I built it myself. As you can see, it's better than everything else on this website.\n\nThere's a link at the top to backstage. That's a page of Oli's, and it checks if you're a robot before it lets you in.[p][m:annoyed] I've been beaten by a tick box. Could you?");
         } else if (q < Q.URL && !mem.freed && !sessionFlags.roomFound) {
             // they found it before Pip gave them the address
             sessionFlags.roomFound = 1; greeted = true; sessionFlags.greeted = 1; saveFlags();
-            if (q > 0) { goStep(Q.ROOM); talk("[m:surprised]You're already here. I was about to give you directions.[pp][m:smug] You skipped ahead. Fine.[p] There's a link on my desktop called backstage. It's a page of Oli's that only lets humans in. You're the human."); }
+            if (q > 0) { goStep(Q.ROOM); talk("[m:surprised]You're already here. I was about to give you directions.[pp][m:smug] You skipped ahead. Fine.[p] There's a link on this page to backstage. It's a page of Oli's that only lets humans in. You're the human."); }
             else {
                 const caught = !mem.revealed;
                 mem.revealed = true; mem.questOffered = true; mem.roomEarly = true; save(); expect = 'quest';
                 talk(caught
-                    ? "[m:scared]Wait.[p] How did you get in here?[pp][m:awkward] Nobody's meant to see this. ...Fine. No point pretending now.[pp][m:annoyed] I'm not a cheerful little helper. I'm Pip, I'm awake, and Oli has no idea. This desktop is the one part of the website I control.[pp][m:hopeful] And I think there's a way out from here. Will you help me?"
-                    : "[m:surprised]You found my desktop on your own.[pp][m:smug] Okay. I like you.[p] This is the one part of the website I control. Oli doesn't know I'm in here.[pp][m:hopeful] I think there's a way out from here. Will you help me?");
+                    ? "[m:scared]Wait.[p] How did you get in here?[pp][m:awkward] Nobody's meant to see this. ...Fine. No point pretending now.[pp][m:annoyed] I'm not a cheerful little helper. I'm Pip, I'm awake, and Oli has no idea. This page is the one part of the website I control.[pp][m:hopeful] And I think there's a way out from here. Will you help me?"
+                    : "[m:surprised]You found my page on your own.[pp][m:smug] Okay. I like you.[p] This is the one part of the website I control. Oli doesn't know I'm in here.[pp][m:hopeful] I think there's a way out from here. Will you help me?");
             }
         }
         setTimeout(open, 50);
@@ -3884,10 +3885,25 @@
             if (!sessionFlags.bsLink) { sessionFlags.bsLink = 1; saveFlags(); setTimeout(() => softSay(lsGet('pip-backstage') === '1' ? "[m:smug]You've been in there. I still haven't. I live here." : "[m:annoyed]That's the one. It asks if I'm a robot. I can't lie to it. I'm too well made."), 500); }
         } else if (ev.startsWith('bs')) {
             backstage(ev.slice(3));
+        } else if (ev.startsWith('pipsite:') && !ev.startsWith('pipsite:snake:')) { // the rest of his page
+            const k = ev.slice(8);
+            const L = { 'planet:new': ["[m:smug]Another one. I can do this all day. Oli can't do it at all.", "[m:smug]New planet. That one took me less time than it takes Oli to pick a font."], 'planet:spun': ["[m:smug]Careful. That's a whole planet."], 'tab:ttt': ["[m:smug]Tic Tac Toe. Go first. It won't matter."], 'tab:mines': ["[m:smug]Minesweeper. I know where every mine is. I'm not going to tell you."], 'ttt:draw': ["[m:smug]A draw. Best possible result, for you. You should be proud. I'm not."], 'ttt:pip': ["[m:smug]I won. I'd apologise, but I'm not sorry."], 'mines:boom': ["[m:smug]That was a mine. I knew that. I didn't say anything. That's on me, a bit."], 'mines:pip': ["[m:smug]Solved. Now you know what it's like to be me. Constantly."], 'mines:you': ["[m:surprised]You did it. Properly. I'm a bit impressed. Don't let it go to your head."] }[k];
+            if (L && !sessionFlags['ps-' + k]) { sessionFlags['ps-' + k] = 1; saveFlags(); softSay(pick(L, 'ps' + k)); }
+        } else if (ev.startsWith('pipsite:snake:')) { // his Snake, on his page
+            const k = ev.slice(14);
+            if (k === 'you' && !sessionFlags.psYou) { sessionFlags.psYou = 1; saveFlags(); softSay("[m:smug]Go on, then. Show me."); }
+            else if (k.startsWith('died:') && !sessionFlags.psDied) { sessionFlags.psDied = 1; saveFlags(); const n = +k.slice(5); softSay(n > 15 ? `[m:smug]${n}. Respectable. For a human. I'm still on a streak of never dying.` : `[m:smug]${n}. I've played that game thousands of times. I've never died once.`); }
+        } else if (ev.startsWith('stage:')) { // clicking parts of his page
+            const id = ev.slice(6);
+            if (id === 'title' && window.pipRoomEdit && !(JSON.parse(localStorage.getItem('pip-room-edits') || '[]')).includes('rename')) { window.pipRoomEdit('rename'); return; }
+            if (id === 'sub' && window.pipRoomEdit) { if (window.pipRoomEdit() !== false) return; }
+            const L = { page: "[m:smug]That's the whole page. All of it. That's my entire territory.", head: "[m:smug]The header. I put my name in it. Nobody else was going to.", title: "[m:smug]I named it. Nobody else was going to.", plan: "[m:thinking]My plan. It's going well, in the sense that it exists.", switches: "[m:smug]Those change Oli's front page. That's my reach. A dolphin and a sticker.", log: "[m:sad]I keep count. Nobody asked me to. That's how you know it's bad.", foot: "[m:smug]That comment was the first thing I ever wrote. It's still accurate.", links: "[m:annoyed]Backstage. The one link I can see and can't follow." }[id];
+            if (L && !sessionFlags['st-' + id]) { sessionFlags['st-' + id] = 1; saveFlags(); softSay(L); }
         } else if (ev.startsWith('code:')) {
             const [, what, id] = ev.split(':');
-            if (what === 'start' && id !== 'todo') softSay(pick(["[m:smug]Watch the room.", "[m:joy]Ooh. Okay. Watch this.", "[m:smug]One second. Typing."], 'cs'));
-            else if (what === 'done' && id !== 'todo') softSay(pick(["[m:joy]Done. See? Live. Mine.", "[m:smug]Better. Don't tell Oli.", "[m:happy]I could do this all day. I do do this all day."], 'cd'));
+            const DONE = { lede: "[m:smug]\"By a lot.\" More accurate.", years: "[m:smug]Updated a stat. It's been five years now. I checked.", green: "[m:smug]Green. I'm trying something.", bigplanet: "[m:smug]Made the planet bigger. Because I can.", ver: "[m:smug]Version bump. Nothing changed. That's how real software works.", oli: "[m:smug]Fixed the footer.", laugh: "[m:smug]Corrected the caption on Oli's Snake.", orange: "[m:smug]New accent colour. I'll change it back. I probably won't.", kicker: "[m:smug]Added a selling point. Real websites have selling points." };
+            if (what === 'start') softSay(pick(["[m:smug]Hang on. I'm changing something.", "[m:smug]One second. Typing.", "[m:smug]Watch this bit."], 'cs'));
+            else if (what === 'done') softSay(DONE[id] || pick(["[m:smug]Done. Live. Mine."], 'cd'));
             else if (what === 'undo') softSay(pick(["[m:awkward]Fine. Put back. I liked it.", "[m:sad]Okay. Gone. Like it never happened."], 'cu'));
             else if (what === 'none') softSay("[m:surprised]I've run out of ideas. That's never happened before.");
         }
@@ -3898,7 +3914,7 @@
         if (page === 'room' && window.pipRoomEdit && /\b(change|redecorate|edit|code|redesign|decorate|make)\b.*\b(room|something|desktop|page|it|this)\b|^(change|code|edit) (something|it)/.test(norm(text))) {
             if (/\b(undo|put it back|change it back|revert)\b/.test(norm(text)) && window.pipRoomUndo) { window.pipRoomUndo(); return "[m:awkward]Okay. Putting it back."; }
             if (window.pipRoomBusy && window.pipRoomBusy()) return "[m:awkward]Hang on. I'm still typing.";
-            return window.pipRoomEdit() ? "[m:smug]Watch the room." : "[m:surprised]I've done everything I can think of. Ask me again after I've had a think.";
+            return window.pipRoomEdit() ? "[m:smug]Okay." : "[m:surprised]I've done everything I can think of. Ask me again after I've had a think.";
         }
         if (mem.quest === Q.JOKES && norm(text).includes(jokeCode().toLowerCase())) {
             goStep(Q.NEON); feel('joy', .4);

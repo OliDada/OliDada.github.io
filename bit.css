@@ -334,7 +334,12 @@ html.pip-url-step .brand img { pointer-events: none; }
 .pip-roomlink { color: inherit; font-weight: 900; text-decoration: underline; text-underline-offset: 2px; }
 html.pip-url-step .brand-tag { cursor: pointer !important; text-decoration: underline; text-underline-offset: 3px; }
 /* his room: on computers the chat is a full-height column with room to talk */
-@media (min-width: 701px) { html.pip-docked body:has(#desk) .bit { top: 64px; bottom: 20px; height: auto; width: min(440px, calc(100vw - 300px)); } }
+@media (min-width: 701px) { html.pip-docked body:has(#pipsite) .bit { top: 64px; bottom: 20px; height: auto; width: min(440px, calc(100vw - 300px)); } }
 
 /* his room: a bigger face in the chat */
-@media (min-width: 701px) { html.pip-docked body:has(#desk) .bit-ava { width: 76px; height: 76px; border-radius: 18px; } html.pip-docked body:has(#desk) .bit-ava svg { width: 58px; height: 58px; } html.pip-docked body:has(#desk) .bit-name { font-size: 26px; } }
+@media (min-width: 701px) { html.pip-docked body:has(#pipsite) .bit-ava { width: 76px; height: 76px; border-radius: 18px; } html.pip-docked body:has(#pipsite) .bit-ava svg { width: 58px; height: 58px; } html.pip-docked body:has(#pipsite) .bit-name { font-size: 26px; } }
+@media (max-width: 700px) { html.pip-docked.pip-ingame .bit { width: auto; height: min(70vh, 560px); } html.pip-docked.pip-ingame .bit.sheet-closed { height: 64px; } }
+
+/* the settings menu is light, so its text is always dark (pages like /pip define their own --ink) */
+.bit-menu, .bit-menu button { color: #1d1a2b; }
+.bit-menu button.danger { color: #c4211f; }
