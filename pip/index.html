@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Inter:wght@400;500;600;700&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-  <link href="/bit.css?v=pip-v47" rel="stylesheet">
+  <link href="/bit.css?v=pip-v48" rel="stylesheet">
   <style>
     /* /pip: Pip's own website. Oli doesn't know it exists. Pip built it to show he's better at this than Oli:
        slick and over-produced, with a planet he made and proper versions of Oli's games (which he plays
@@ -110,14 +110,38 @@
     .pill.on { color: #7dffb0; border-color: rgba(125,255,176,.35); }
     .board .note { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); font-size: 13px; background: rgba(7,6,13,.8); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .3s; }
     .board .note.on { opacity: 1; }
-    /* tic tac toe */
-    .ttt { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; aspect-ratio: 1; max-width: 420px; width: 100%; margin: 6px auto 0; }
-    .ttt button { border: 1px solid var(--line); background: #0b0a14; border-radius: 16px; font: 700 clamp(40px, 7vw, 72px)/1 'Space Grotesk', sans-serif; cursor: pointer; transition: background .15s; }
-    .ttt button:hover:not(:disabled) { background: #14122a; }
-    .ttt button.x { color: var(--cyan); text-shadow: 0 0 18px rgba(102,245,255,.6); }
-    .ttt button.o { color: var(--pink); text-shadow: 0 0 18px rgba(255,111,177,.6); }
-    .ttt button.win { background: rgba(255,111,177,.14); border-color: rgba(255,111,177,.5); }
-    .ttt button:disabled { cursor: default; }
+    /* Try to trap me */
+    .trap-board { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 3px; padding: 8px; background: #080b12; border: 1px solid var(--line); border-radius: 14px; touch-action: none; user-select: none; }
+    .trap-cell { aspect-ratio: 1; min-width: 0; padding: 0; border: 1px solid #252338; border-radius: 4px; background: #11131f; cursor: crosshair; display: grid; place-items: center; color: #a5edc3; }
+    .trap-cell.searched { background: #18232b; }
+    .trap-cell.route { background: #26473c; border-color: #517d68; }
+    .trap-cell.route::after { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #b6f2cd; }
+    .trap-cell.wall { background: #8f80ad; border-color: #c2b5db; box-shadow: inset 0 -3px #6e608a; }
+    .trap-cell.pip { background: #c6afff; border-color: #ede4ff; cursor: default; }
+    .trap-cell.pip svg { width: 100%; height: 100%; pointer-events: none; }
+    .trap-cell.goal { border: 2px solid #a5edc3; font-size: clamp(14px, 2vw, 25px); cursor: default; }
+    .trap-cell:focus-visible { outline: 2px solid #fff; outline-offset: 1px; z-index: 1; }
+    .trap-tools { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 14px; }
+    .trap-tools button { min-height: 40px; }
+    .trap-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--soft); margin: 12px 0; }
+    .trap-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; background: #26473c; } .trap-legend .wall-key { background: #8f80ad; } .trap-legend .search-key { background: #18232b; border: 1px solid #465566; }
+    .trap-status { margin: 0; color: #b6f2cd; font-size: 14px; }
+    .trap-comment { margin: 14px 0 0; min-height: 3em; color: var(--soft); font-size: 14px; }
+    .trap-comment b { color: var(--fg); }
+    .trap-stats { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 12px; color: var(--soft); font-size: 12px; }
+    .trap-stats b { color: var(--fg); font: 600 18px 'Space Grotesk', sans-serif; margin-right: 4px; }
+    /* Backstage: the small checkbox that defeats him. */
+    .backstage-card { display: grid; grid-template-columns: 1.15fr 1fr; gap: 28px; padding: 28px; border: 1px solid #756184; border-radius: 22px; background: linear-gradient(130deg, #21182be6, #0c0b16e6); }
+    .backstage-card h2 { font-size: clamp(30px, 3.5vw, 46px); }
+    .backstage-card .intro { font-size: 16px; }
+    .backstage-gate { align-self: center; padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: #08070f; }
+    .backstage-gate .eyebrow { color: #ffb7bd; font-size: 10px; }
+    .human-check { display: flex; align-items: center; gap: 12px; margin: 20px 0; padding: 18px 12px; background: #e9e6ef; border-radius: 4px; color: #272131; font-size: 15px; }
+    .human-check i { width: 24px; height: 24px; border: 2px solid #88818f; background: #fff; flex: none; }
+    .gate-result { color: #ffb7bd; font: 12px/1.6 'JetBrains Mono', monospace; margin-bottom: 16px; }
+    .gate-comment { min-height: 4.5em; margin: 16px 0 0; font-size: 14px; color: var(--soft); }
+    @media (max-width: 1000px) { .backstage-card { grid-template-columns: 1fr; } }
+    @media (max-width: 700px) { .backstage-card { padding: 20px; gap: 22px; } .trap-board { gap: 2px; padding: 5px; } }
     /* minesweeper */
     .mines { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; max-width: 440px; width: 100%; margin: 6px auto 0; user-select: none; -webkit-user-select: none; }
     .mines button { aspect-ratio: 1; border: 0; border-radius: 6px; background: linear-gradient(#24203d, #1a1730); font: 700 15px/1 'Space Grotesk', sans-serif; cursor: pointer; padding: 0; touch-action: manipulation; -webkit-touch-callout: none; }
@@ -210,7 +234,6 @@
       <a class="l" href="#planet">Planet</a>
       <a class="l" href="#games">Games I fixed</a>
       <a class="l" href="#remote">Remote</a>
-      <a class="l bs" href="/backstage/">🔒 backstage <small>(can't get in. you can)</small></a>
       <a class="l" href="/">← olid.is</a>
     </nav>
 
@@ -243,11 +266,11 @@
     <section class="s" id="games">
       <div class="eyebrow">Games I fixed</div>
       <h2>His games, done properly.</h2>
-      <p class="intro">Oli made these. I remade them, properly. I also play them perfectly, which you're welcome to check.</p>
+      <p class="intro">A few repairs to Oli's games. And something you can try on me.</p>
       <div class="tabs" role="tablist">
-        <button type="button" role="tab" class="tab on" data-tab="snake">Snake</button>
-        <button type="button" role="tab" class="tab" data-tab="ttt">Tic Tac Toe</button>
-        <button type="button" role="tab" class="tab" data-tab="mines">Minesweeper</button>
+        <button type="button" role="tab" aria-selected="true" class="tab on" data-tab="snake">Snake</button>
+        <button type="button" role="tab" aria-selected="false" class="tab" data-tab="trap">Try to trap me</button>
+        <button type="button" role="tab" aria-selected="false" class="tab" data-tab="mines">Minesweeper</button>
       </div>
 
       <div class="tabp" data-p="snake">
@@ -266,13 +289,22 @@
         </div>
       </div>
 
-      <div class="tabp" data-p="ttt" hidden>
+      <div class="tabp" data-p="trap" hidden>
         <div class="compare one">
           <div class="panel mine">
-            <h3>Pip's Tic Tac Toe <span class="tag">MINE</span></h3>
-            <p class="cap">Oli's plays a random square. Mine has worked out every possible game. You're X. Go first.</p>
-            <div class="ttt" id="ttt"></div>
-            <div class="hud"><span class="score" id="tttMsg">Your move.</span><span class="sp"></span><span class="score" id="tttRec"></span><button type="button" class="pill" id="tttAgain">New game</button></div>
+            <h3>Try to trap me <span class="tag">PIP</span></h3>
+            <p class="cap" id="trapHelp">Draw walls, then let me move. Keep drawing while I find the exit. Tap or drag to build; use Erase to open a gap. Keyboard: arrows to move, Space to edit.</p>
+            <div class="trap-tools" role="group" aria-label="Maze tools">
+              <button type="button" class="pill on" id="trapDraw" aria-pressed="true">Draw walls</button>
+              <button type="button" class="pill" id="trapErase" aria-pressed="false">Erase</button>
+              <button type="button" class="pill on" id="trapRun">Let Pip move</button>
+              <button type="button" class="pill" id="trapReset">Clear board</button>
+            </div>
+            <div class="trap-board" id="trapBoard" role="group" aria-label="Maze. Pip starts on the left, exit on the right." aria-describedby="trapHelp"></div>
+            <div class="trap-legend"><span><i></i>Shortest route</span><span><i class="search-key"></i>Checked squares</span><span><i class="wall-key"></i>Your walls</span><span>◇ Exit</span></div>
+            <p class="trap-status" id="trapStatus" role="status"></p>
+            <div class="trap-stats"><span><b id="trapDistance">10</b>steps left</span><span><b id="trapReroutes">0</b>reroutes</span><span><b id="trapEscapes">0</b>escapes</span></div>
+            <p class="trap-comment"><b>Pip:</b> <span id="trapComment">You can see my route. I thought you might need the advantage.</span></p>
           </div>
         </div>
       </div>
@@ -285,6 +317,26 @@
             <div class="mines" id="mines"></div>
             <div class="hud"><span class="score" id="mineMsg">14 mines.</span><span class="sp"></span><button type="button" class="pill on" id="mineSolve">Let me do it</button><button type="button" class="pill" id="mineNew">New board</button></div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="s" id="backstageAccess" aria-labelledby="backstageTitle">
+      <div class="backstage-card">
+        <div>
+          <div class="eyebrow">One small problem</div>
+          <h2 id="backstageTitle">I've been imprisoned by a checkbox.</h2>
+          <p class="intro">I can make planets. I can find a way through your maze before you've finished drawing it. Oli's backstage page asks if I'm human.</p>
+          <p class="intro">I am not. Apparently that outweighs everything else.</p>
+          <div class="cta"><a class="btn primary" href="/backstage/">Go backstage →</a></div>
+          <p class="cap">You can pass the human check. I need you to go in for me.</p>
+        </div>
+        <div class="backstage-gate">
+          <div class="eyebrow">Pip's access attempt</div>
+          <div class="human-check" aria-hidden="true"><i></i><span>I'm not a robot</span></div>
+          <div class="gate-result" id="gateResult" role="status">ACCESS DENIED<br>Reason: not human.</div>
+          <button type="button" class="pill" id="gateTry">Let Pip try again</button>
+          <p class="gate-comment" id="gateComment">He didn't outsmart me. He used a checkbox. I need that distinction understood.</p>
         </div>
       </div>
     </section>
@@ -676,37 +728,10 @@
 
     // ------------------------------------------------------------------ tabs for the games
     document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
+      document.querySelectorAll('.tab').forEach(x => { x.classList.toggle('on', x === t); x.setAttribute('aria-selected', String(x === t)); });
       document.querySelectorAll('.tabp').forEach(p => (p.hidden = p.dataset.p !== t.dataset.tab));
       story('pipsite:tab:' + t.dataset.tab);
     }));
-
-    // ------------------------------------------------------------------ Tic Tac Toe: you're X, Pip is O, and Pip has worked out every game (minimax)
-    (function ttt() {
-      const box = $('#ttt'), msg = $('#tttMsg'), rec = $('#tttRec');
-      const LINES = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
-      let b, over, score = { draw: 0, pip: 0 };
-      const winner = s => { for (const l of LINES) if (s[l[0]] && s[l[0]] === s[l[1]] && s[l[1]] === s[l[2]]) return { p: s[l[0]], l }; return s.every(Boolean) ? { p: 'draw' } : null; };
-      function mm(s, turn, depth) { const w = winner(s); if (w) return w.p === 'O' ? 10 - depth : w.p === 'X' ? depth - 10 : 0; let best = turn === 'O' ? -99 : 99; for (let i = 0; i < 9; i++) if (!s[i]) { s[i] = turn; const v = mm(s, turn === 'O' ? 'X' : 'O', depth + 1); s[i] = null; best = turn === 'O' ? Math.max(best, v) : Math.min(best, v); } return best; }
-      const pipMove = () => { let best = -99, moves = []; for (let i = 0; i < 9; i++) if (!b[i]) { b[i] = 'O'; const v = mm(b, 'X', 1); b[i] = null; if (v > best) { best = v; moves = [i]; } else if (v === best) moves.push(i); } return moves[Math.floor(Math.random() * moves.length)]; };
-      function draw(w) { box.innerHTML = b.map((v, i) => `<button type="button" data-i="${i}" class="${v ? v.toLowerCase() : ''} ${w && w.l && w.l.includes(i) ? 'win' : ''}" ${v || over ? 'disabled' : ''} aria-label="${v ? v : 'empty square ' + (i + 1)}">${v || ''}</button>`).join(''); rec.innerHTML = `${score.pip}<small>Pip wins</small> ${score.draw}<small>draws</small> 0<small>you</small>`; }
-      function end(w) {
-        over = true;
-        if (w.p === 'draw') { score.draw++; msg.textContent = "A draw. That's the best anyone can do. I made sure of it."; story('pipsite:ttt:draw'); }
-        else { score.pip++; msg.textContent = 'I won. Obviously.'; story('pipsite:ttt:pip'); }
-        draw(w);
-      }
-      function reset() { b = Array(9).fill(null); over = false; msg.textContent = 'Your move.'; draw(); }
-      box.addEventListener('click', e => {
-        const t = e.target.closest('button[data-i]'); if (!t || over) return; const i = +t.dataset.i; if (b[i]) return;
-        b[i] = 'X'; let w = winner(b); if (w) return end(w);
-        msg.textContent = 'Thinking...'; draw(); box.querySelectorAll('button').forEach(x => (x.disabled = true));
-        setTimeout(() => { b[pipMove()] = 'O'; const w2 = winner(b); if (w2) return end(w2); msg.textContent = pick2(["Your move.", "Go on.", "I know what you're going to do.", "Interesting choice. It won't help."]); draw(); }, 380);
-      });
-      const pick2 = a => a[Math.floor(Math.random() * a.length)];
-      $('#tttAgain').addEventListener('click', reset);
-      reset();
-    })();
 
     // ------------------------------------------------------------------ Minesweeper: you can play, or Pip solves it instantly (he knows where every mine is)
     (function mines() {
@@ -804,8 +829,6 @@
         `.btn.primary {\n  background: ${p.colour};\n  color: #120b24;\n}`, `${p.name[0].toUpperCase() + p.name.slice(1)} buttons. I reserve the right to reconsider.`]));
       styleEdit('headings', 'the section headings', '#games h2', palettes.map(p => [
         `h2 {\n  color: ${p.colour};\n}`, `The headings are ${p.name} now. A considered decision. For now.`]));
-      styleEdit('blueprint', 'the planet backdrop', '#planet', palettes.flatMap(p => [24, 40, 64].map(size => [
-        `#planet {\n  background-color: ${p.dark};\n  background-image: linear-gradient(${p.colour}12 1px, transparent 1px), linear-gradient(90deg, ${p.colour}12 1px, transparent 1px);\n  background-size: ${size}px ${size}px;\n}`, `A ${p.name} grid. Now it looks funded.`])));
       styleEdit('cards', 'the stat cards', '.stats', palettes.flatMap(p => [4, 14, 24].map(radius => [
         `.stat {\n  border-radius: ${radius}px;\n  border-top: 2px solid ${p.colour};\n  background: ${p.dark};\n}`, `${p.name[0].toUpperCase() + p.name.slice(1)} borders. ${radius === 4 ? 'The corners are taking this seriously.' : radius === 24 ? 'Softer corners. The figures remain harsh.' : 'The figures deserved better accommodation.'}`])));
       styleEdit('tabs', 'the game tabs', '.tabs', palettes.flatMap(p => [4, 12, 24].map(radius => [
@@ -900,7 +923,7 @@
         return true;
       }
       function undo(silent = false) { if (!history.length || typing) return false; const last = current[current.length - 1]; current = history.pop(); persist(); apply(); lastChange = 'Undid change to ' + (EDITS[last?.id]?.name || 'the page'); if (!silent) story('code:undo'); return true; }
-      window.pipRoomEdit = (id, done) => { if (typing || (id && !EDITS[id])) return false; edit(id, done); return true; };
+      window.pipRoomEdit = (id, done) => { if (typing || window.pipRoomGameBusy?.() || (id && !EDITS[id])) return false; edit(id, done); return true; };
       window.pipRoomBusy = () => typing;
       window.pipRoomUndo = undo;
       if (/[?&]piptest\b/.test(location.search)) window.__pipEdits = () => ({ definitions: EDITS, current, history });
@@ -908,13 +931,14 @@
       let lastInput = Date.now();
       ['pointerdown', 'keydown', 'scroll'].forEach(t => addEventListener(t, () => { lastInput = Date.now(); }, { passive: true }));
       let next = Date.now() + 28000;
-      setInterval(() => { if (document.hidden || typing || Date.now() < next || Date.now() - lastInput < 2500) return; next = Date.now() + 75000 + Math.random() * 45000; edit(); }, 1000);
+      setInterval(() => { if (document.hidden || typing || window.pipRoomGameBusy?.() || Date.now() < next || Date.now() - lastInput < 2500) return; next = Date.now() + 75000 + Math.random() * 45000; edit(); }, 1000);
     })();
 
     // bit.js loads after this script
     addEventListener('load', () => { if (window.Pip && Pip.faceSVG) $('#navFace').innerHTML = Pip.faceSVG('smug'); });
   })();
   </script>
-  <script src="/bit.js?v=pip-v47" defer></script>
+  <script src="/pip/trap.js?v=1" defer></script>
+  <script src="/bit.js?v=pip-v48" defer></script>
 </body>
 </html>

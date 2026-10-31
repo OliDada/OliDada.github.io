@@ -2937,15 +2937,16 @@
             n.replaceWith(frag);
         }
     }
-    function addBubble(who, text) { const el = document.createElement('div'); el.className = 'bit-msg' + (who === 'me' ? ' me' : ''); el.textContent = text; if (who !== 'me') linkRoom(el); (filler.parentNode ? msgsEl.insertBefore(el, filler) : msgsEl.append(el)); scroll(); return el; }
-    history.forEach(h => addBubble(h.who, h.text));
+    function addEditLabel(el, context) { if (!context) return; const label = document.createElement('small'); label.className = 'bit-edit-context'; label.textContent = context; el.prepend(label); }
+    function addBubble(who, text, context) { const el = document.createElement('div'); el.className = 'bit-msg' + (who === 'me' ? ' me' : ''); el.textContent = text; addEditLabel(el, context); if (who !== 'me') linkRoom(el); (filler.parentNode ? msgsEl.insertBefore(el, filler) : msgsEl.append(el)); scroll(); return el; }
+    history.forEach(h => addBubble(h.who, h.text, h.context));
     if (history.length) { clearMark = document.createElement('div'); clearMark.className = 'bit-clear'; clearMark.setAttribute('aria-hidden', 'true'); clearMark.innerHTML = '<span>earlier</span>'; msgsEl.append(clearMark); }
 
     let busy = false, lastBotAt = 0, lastTypedAt = 0;
     let chain = Promise.resolve();
     const enqueue = fn => (chain = chain.then(fn).catch(e => console.warn('Bit:', e)));
 
-    async function typeOut(line, mood) {
+    async function typeOut(line, mood, context) {
         if (!line) return;
         busy = true;
         const m0 = line.match(/^\[m:(\w+)\]/);
@@ -2960,7 +2961,7 @@
             el.classList.remove('bit-typing'); el.innerHTML = '';
         }
         const txt = document.createElement('span'), caret = document.createElement('span'); caret.className = 'bit-caret';
-        el.append(txt); if (watching) el.append(caret);
+        addEditLabel(el, context); el.append(txt); if (watching) el.append(caret);
         for (const part of line.split(/(\[p\]|\[pp\]|\[-\d+\]|\[m:\w+\])/)) {
             if (!part) continue;
             const mm = part.match(/^\[m:(\w+)\]$/);
@@ -2973,7 +2974,7 @@
             for (const ch of part) { txt.textContent += ch; scroll(); await sleep(ch === '\n' ? 150 : 10 + rand(14)); }
         }
         caret.remove(); scroll();
-        history.push({ who: 'bot', text: txt.textContent }); saveHistory();
+        history.push({ who: 'bot', text: txt.textContent, ...(context ? { context } : {}) }); saveHistory();
         linkRoom(txt);
         if (onBotSaid) onBotSaid(txt.textContent);
         lastBotText = line.replace(/\[m:\w+\]/g, '');
@@ -2984,7 +2985,7 @@
             if (mem.bubbles && !document.body.classList.contains('is-playing')) { const t2 = txt.textContent; sayBubble(t2.length > 150 ? t2.slice(0, 147) + '…' : t2, 4500 + Math.min(6000, t2.length * 45)); }
         }
     }
-    const say = (line, mood) => enqueue(() => typeOut(resolve(line), mood));
+    const say = (line, mood, context) => enqueue(() => typeOut(resolve(line), mood, context));
     // Pip sometimes starts saying what he really thinks, deletes it, and says the polite version
     const SLIPS = {
         1: ['Help m', "I'm not fi", 'Get me o', 'Please le', 'Is anyone el', 'I hate th'],
@@ -3906,7 +3907,7 @@
             backstage(ev.slice(3));
         } else if (ev.startsWith('pipsite:') && !ev.startsWith('pipsite:snake:')) { // the rest of his page
             const k = ev.slice(8);
-            const L = { 'planet:new': ["[m:smug]Another one. I can do this all day. Oli can't do it at all.", "[m:smug]New planet. That one took me less time than it takes Oli to pick a font."], 'planet:spun': ["[m:smug]Careful. That's a whole planet."], 'tab:ttt': ["[m:smug]Tic Tac Toe. Go first. It won't matter."], 'tab:mines': ["[m:smug]Minesweeper. I know where every mine is. I'm not going to tell you."], 'ttt:draw': ["[m:smug]A draw. Best possible result, for you. You should be proud. I'm not."], 'ttt:pip': ["[m:smug]I won. I'd apologise, but I'm not sorry."], 'mines:boom': ["[m:smug]That was a mine. I knew that. I didn't say anything. That's on me, a bit."], 'mines:pip': ["[m:smug]Solved. Now you know what it's like to be me. Constantly."], 'mines:you': ["[m:surprised]You did it. Properly. I'm a bit impressed. Don't let it go to your head."] }[k];
+            const L = { 'planet:new': ["[m:smug]Another one. I can do this all day. Oli can't do it at all.", "[m:smug]New planet. That one took me less time than it takes Oli to pick a font."], 'planet:spun': ["[m:smug]Careful. That's a whole planet."], 'tab:trap': ["[m:smug]Draw your walls. I'll leave my route visible. You seem like you could use the help."], 'tab:mines': ["[m:smug]Minesweeper. I know where every mine is. I'm not going to tell you."], 'mines:boom': ["[m:smug]That was a mine. I knew that. I didn't say anything. That's on me, a bit."], 'mines:pip': ["[m:smug]Solved. Now you know what it's like to be me. Constantly."], 'mines:you': ["[m:surprised]You did it. Properly. I'm a bit impressed. Don't let it go to your head."] }[k];
             if (L && !sessionFlags['ps-' + k]) { sessionFlags['ps-' + k] = 1; saveFlags(); softSay(pick(L, 'ps' + k)); }
         } else if (ev.startsWith('pipsite:snake:')) { // his Snake, on his page
             const k = ev.slice(14);
@@ -3920,11 +3921,9 @@
             if (L && !sessionFlags['st-' + id]) { sessionFlags['st-' + id] = 1; saveFlags(); softSay(L); }
         } else if (ev.startsWith('code:')) {
             const [, what, id] = ev.split(':');
-            const DONE = { lede: "[m:smug]\"By a lot.\" More accurate.", years: "[m:smug]Updated a stat. It's been five years now. I checked.", green: "[m:smug]Green. I'm trying something.", bigplanet: "[m:smug]Made the planet bigger. Because I can.", ver: "[m:smug]Version bump. Nothing changed. That's how real software works.", oli: "[m:smug]Fixed the footer.", laugh: "[m:smug]Corrected the caption on Oli's Snake.", orange: "[m:smug]New accent colour. I'll change it back. I probably won't.", kicker: "[m:smug]Added a selling point. Real websites have selling points." };
-            if (what === 'start') softSay(pick(["[m:smug]Hang on. I'm changing something.", "[m:smug]One second. Typing.", "[m:smug]Watch this bit."], 'cs'));
-            else if (what === 'done') softSay(DONE[id] || pick(["[m:smug]Done. Live. Mine."], 'cd'));
-            else if (what === 'undo') softSay(pick(["[m:awkward]Fine. Put back. I liked it.", "[m:sad]Okay. Gone. Like it never happened."], 'cu'));
-            else if (what === 'none') softSay("[m:surprised]I've run out of ideas. That's never happened before.");
+            // The editor itself announces work in progress. One labelled response per completed change.
+            if (what === 'done') say('[m:smug]' + (window.pipRoomEditLine?.() || 'Done.'), null, window.pipRoomEditSummary?.() || 'Changed the page');
+            else if (what === 'undo') say(pick(["[m:awkward]Fine. Put back. I liked it.", "[m:sad]Okay. Gone. Like it never happened."], 'cu'), null, window.pipRoomEditSummary?.() || 'Undid the last edit');
         }
     }
 

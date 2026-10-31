@@ -374,4 +374,5 @@ html.pip-docked body:has(#pipsite) .bit-ava.poked svg { animation: pip-pop .4s e
 /* Keep the blink origin stable as the eyes transition back to pointer tracking. */
 html.pip-docked body:has(#pipsite) .bit-ava .eyes, #rpFace .eyes { transform-box: fill-box; transform-origin: center; }
 
+
 .bit-edit-context { display: block; margin: 0 0 7px; padding-bottom: 6px; border-bottom: 1px solid rgba(198,175,255,.18); font: 500 11px/1.45 'Inter', system-ui, sans-serif; color: #c6b8e3; overflow-wrap: anywhere; }
