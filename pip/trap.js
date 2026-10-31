@@ -121,7 +121,7 @@
     solve();
   }
   setInterval(() => advance(performance.now()), 50);
-  window.pipRoomGameBusy = () => !!board.offsetParent && (drawing || running);
+  window.pipRoomGameBusy = () => { const r = board.getBoundingClientRect(); return !!board.offsetParent && (drawing || running || (r.bottom > 0 && r.top < innerHeight)); };
   solve();
   addEventListener('load', () => { face = window.Pip?.faceSVG('smug') || '●'; render(); });
   if (/[?&]piptest\b/.test(location.search)) window.__pipTrap = () => ({ position, goal: GOAL, walls: [...walls], route: [...route], running, won, reroutes, escapes });

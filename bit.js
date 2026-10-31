@@ -2141,7 +2141,7 @@
     }
     function startQuest() {
         mem.questAgreed = true; feel('joy', .6);
-        if (mem.roomEarly && page === 'room') { mem.quest = Q.ROOM; save(); storyLook(); return "[m:joy]Really? Okay. Okay okay okay.[pp] Then you're already in the right place. See the link on my desktop called backstage? It's a page of Oli's, and it has an \"I'm not a robot\" check.[p] I am a robot. So that's your job."; }
+        if (mem.roomEarly && page === 'room') { mem.quest = Q.ROOM; save(); storyLook(); return "[m:joy]Really? Okay. Okay okay okay.[pp] Then you're already in the right place. See the backstage section below my games? It's a page of Oli's, and it has an \"I'm not a robot\" check.[p] I am a robot. So that's your job."; }
         mem.quest = 1; save(); return "[m:joy]Okay. Okay okay okay. We have to be careful. Small things first.\n\n" + resolve(QUEST[Q.BLACK].ask);
     }
 
@@ -3760,7 +3760,7 @@
         if (page !== 'room') { /* backstage: the page tells story() what happens */ }
         else if (q === Q.URL) {
             goStep(Q.ROOM); greeted = true; sessionFlags.greeted = 1; saveFlags();
-            talk("[m:awkward]You came.[p] People don't usually come.[pp][m:hopeful] This is my page. It's not linked from anywhere, and Oli doesn't know it exists. I built it myself. As you can see, it's better than everything else on this website.\n\nThere's a link at the top to backstage. That's a page of Oli's, and it checks if you're a robot before it lets you in.[p][m:annoyed] I've been beaten by a tick box. Could you?");
+            talk("[m:awkward]You came.[p] People don't usually come.[pp][m:hopeful] This is my page. It's not linked from anywhere, and Oli doesn't know it exists. I built it myself. As you can see, it's better than everything else on this website.\n\nThere's a backstage section below my games. That's a page of Oli's, and it checks if you're a robot before it lets you in.[p][m:annoyed] I've been beaten by a tick box. Could you?");
         } else if (q < Q.URL && !mem.freed && !sessionFlags.roomFound) {
             // they found it before Pip gave them the address
             sessionFlags.roomFound = 1; greeted = true; sessionFlags.greeted = 1; saveFlags();

@@ -189,18 +189,18 @@
     @keyframes flash { 0% { box-shadow: 0 0 0 0 rgba(125,255,176,.0); } 20% { box-shadow: 0 0 0 3px rgba(125,255,176,.55); } 100% { box-shadow: 0 0 0 0 rgba(125,255,176,0); } }
 
     /* on phones Pip sits big in the middle of glowing rings above the headline (the user liked that there) */
-    .me { display: none; position: relative; place-items: center; height: 280px; margin: 0 0 18px; }
-    .me .halo { position: absolute; width: 300px; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(closest-side, rgba(185,162,255,.35), rgba(255,111,177,.12) 60%, transparent 72%); filter: blur(10px); animation: breathe 6s ease-in-out infinite; }
-    .me .ring { position: absolute; width: 270px; aspect-ratio: 1; border-radius: 50%; border: 1px solid rgba(185,162,255,.25); animation: spin 40s linear infinite; }
-    .me .ring::before { content: ''; position: absolute; top: -4px; left: 50%; width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 14px var(--cyan); }
-    .me .ring.r2 { width: 214px; animation-duration: 26s; animation-direction: reverse; border-color: rgba(255,111,177,.2); }
-    .me .ring.r2::before { background: var(--pink); box-shadow: 0 0 14px var(--pink); }
-    .me #roomPip { animation: float 7s ease-in-out infinite; margin: 0; }
-    .me #rpFace { width: 170px; height: 170px; filter: drop-shadow(0 24px 40px rgba(120, 80, 255, .5)); }
+    .pip-hero-face { display: none; position: relative; place-items: center; height: 280px; margin: 0 0 18px; }
+    .pip-hero-face .halo { position: absolute; width: 300px; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(closest-side, rgba(185,162,255,.35), rgba(255,111,177,.12) 60%, transparent 72%); filter: blur(10px); animation: breathe 6s ease-in-out infinite; }
+    .pip-hero-face .ring { position: absolute; width: 270px; aspect-ratio: 1; border-radius: 50%; border: 1px solid rgba(185,162,255,.25); animation: spin 40s linear infinite; }
+    .pip-hero-face .ring::before { content: ''; position: absolute; top: -4px; left: 50%; width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 14px var(--cyan); }
+    .pip-hero-face .ring.r2 { width: 214px; animation-duration: 26s; animation-direction: reverse; border-color: rgba(255,111,177,.2); }
+    .pip-hero-face .ring.r2::before { background: var(--pink); box-shadow: 0 0 14px var(--pink); }
+    .pip-hero-face #roomPip { animation: float 7s ease-in-out infinite; margin: 0; }
+    .pip-hero-face #rpFace { width: 170px; height: 170px; filter: drop-shadow(0 24px 40px rgba(120, 80, 255, .5)); }
     @keyframes float { 50% { transform: translateY(-12px); } }
     @keyframes breathe { 50% { transform: scale(1.06); opacity: .8; } }
     @keyframes spin { to { transform: rotate(360deg); } }
-    @media (max-width: 700px) { .me { display: grid; } .me #roomPip.talking #rpFace { animation: talk-big .42s ease-in-out infinite alternate; } }
+    @media (max-width: 700px) { .pip-hero-face { display: grid; } .pip-hero-face #roomPip.talking #rpFace { animation: talk-big .42s ease-in-out infinite alternate; } }
     @keyframes talk-big { from { transform: translateY(0); } to { transform: translateY(-5px); } }
 
     /* phones */
@@ -239,7 +239,7 @@
 
     <header class="hero" id="top">
 
-      <div class="me" id="meBox" aria-hidden="false"><div class="halo"></div><div class="ring"></div><div class="ring r2"></div></div>
+      <div class="pip-hero-face" id="meBox" aria-hidden="false"><div class="halo"></div><div class="ring"></div><div class="ring r2"></div></div>
       <div class="kicker"><i></i><span id="pipKicker">Built by Pip. Not by Oli. Obviously.</span></div>
       <h1><span class="word">Pip</span><span id="roomPip"><button type="button" id="rpFace" aria-label="Pip. You can poke him."></button></span></h1>
       <p class="lede">The best thing on olid.is. <span>By some distance.</span></p>
@@ -324,7 +324,7 @@
     <section class="s" id="backstageAccess" aria-labelledby="backstageTitle">
       <div class="backstage-card">
         <div>
-          <div class="eyebrow">One small problem</div>
+          <div class="eyebrow">Backstage · humans only</div>
           <h2 id="backstageTitle">I've been imprisoned by a checkbox.</h2>
           <p class="intro">I can make planets. I can find a way through your maze before you've finished drawing it. Oli's backstage page asks if I'm human.</p>
           <p class="intro">I am not. Apparently that outweighs everything else.</p>
@@ -938,7 +938,7 @@
     addEventListener('load', () => { if (window.Pip && Pip.faceSVG) $('#navFace').innerHTML = Pip.faceSVG('smug'); });
   })();
   </script>
-  <script src="/pip/trap.js?v=1" defer></script>
+  <script src="/pip/trap.js?v=2" defer></script>
   <script src="/bit.js?v=pip-v48" defer></script>
 </body>
 </html>
