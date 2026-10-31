@@ -1,0 +1,14 @@
+<!doctype html><meta charset="utf-8"><style>body{background:#20202a;color:white;font:14px system-ui}iframe{border:0;width:1440px;height:900px}button{padding:10px;margin:8px}</style><button id="desktop">Desktop</button><button id="phone">Phone</button><button id="planet">Planet</button><button id="edit">Edit button</button><button id="checks">Check layout</button><pre id="result">Preview</pre><iframe src="/pip/?piptest"></iframe><script>
+const f=document.querySelector('iframe'),r=document.querySelector('#result');
+desktop.onclick=()=>{f.style.width='1440px';f.style.height='900px'};
+phone.onclick=()=>{f.style.width='390px';f.style.height='844px'};
+planet.onclick=()=>{f.contentDocument.querySelector('#planetCv').scrollIntoView({block:'center'});};
+edit.onclick=()=>{const w=f.contentWindow;if(w.pipRoomBusy())return;const old=w.setTimeout;w.setTimeout=(fn,ms,...a)=>old(fn,ms<150?ms*3:ms,...a);w.pipRoomEdit('planetbutton',()=>{w.setTimeout=old;});setTimeout(checks.onclick,2000);};
+checks.onclick=()=>{const w=f.contentWindow,d=w.document,rect=s=>d.querySelector(s).getBoundingClientRect(),fail=[];
+ if(d.documentElement.scrollWidth>w.innerWidth)fail.push('overflow');
+ if(Math.abs(rect('.nav').right-w.innerWidth)>1)fail.push('nav not full width');
+ if(Math.abs(rect('.hero').right-w.innerWidth)>1)fail.push('hero not full width');
+ if(w.innerWidth<701){if(d.querySelector('#newPlanet').parentElement!==d.querySelector('.planet-wrap'))fail.push('button not beside planet'); if(rect('#newPlanet').bottom-rect('#planetCv').top>w.innerHeight-160)fail.push('planet and button too tall');}
+ if(w.pipRoomBusy()){const c=rect('#codetab');if(c.left<0||c.right>w.innerWidth||c.top<0||c.bottom>w.innerHeight)fail.push('editor outside screen');}
+ r.textContent=fail.length?'FAIL '+fail.join(', '):'PASS layout at '+w.innerWidth+'px';};
+</script>

@@ -8,12 +8,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Inter:wght@400;500;600;700&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-  <link href="/bit.css" rel="stylesheet">
+  <link href="/bit.css?v=pip-v47" rel="stylesheet">
   <style>
     /* /pip: Pip's own website. Oli doesn't know it exists. Pip built it to show he's better at this than Oli:
        slick and over-produced, with a planet he made and proper versions of Oli's games (which he plays
        perfectly). It's never finished: every so often a code tab opens and Pip changes part of the page while
-       you watch (kept in pip-room-edits; ask him to "change something" or "put it back").
+       you watch (saved variants in pip-room-edits; ask him to "change something" or "put it back").
        Pip's chat is docked on the right (bit.js). The face in the headline is him too: it looks at you,
        blinks, bobs when he talks and reacts when you poke it (bit.js, #rpFace). */
     :root { --bg: #07060d; --fg: #f4f1ff; --soft: #a7a1c4; --dim: #6f6a8c; --lilac: #b9a2ff; --pink: #ff6fb1; --cyan: #66f5ff; --card: rgba(255,255,255,.04); --line: rgba(255,255,255,.09); }
@@ -24,8 +24,9 @@
     a { color: inherit; }
     button { font: inherit; color: inherit; }
     [hidden] { display: none !important; }
-    .wrap { margin-right: 480px; }
-    @media (max-width: 700px) { .wrap { margin-right: 0; } }
+    .wrap > :not(.nav):not(.hero) { margin-right: 480px; }
+    .hero { padding-right: 516px !important; }
+    @media (max-width: 700px) { .wrap > :not(.nav):not(.hero) { margin-right: 0; } .hero { padding-right: 18px !important; } }
 
     /* ---- nav */
     .nav { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 22px; padding: 16px 36px; background: linear-gradient(rgba(7,6,13,.85), rgba(7,6,13,.55)); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); }
@@ -39,7 +40,8 @@
 
     /* ---- top section */
     .hero { position: relative; padding: 70px 36px 90px; overflow: hidden; isolation: isolate; }
-    #field { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; }
+    #field { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
+    body { isolation: isolate; }
     .hero::after { content: ''; position: absolute; inset: auto 0 0 0; height: 160px; background: linear-gradient(transparent, var(--bg)); z-index: -1; pointer-events: none; }
     .kicker { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--lilac); background: rgba(185,162,255,.1); border: 1px solid rgba(185,162,255,.25); border-radius: 999px; padding: 6px 12px; margin-bottom: 18px; }
     .kicker i { width: 7px; height: 7px; border-radius: 50%; background: #7dffb0; box-shadow: 0 0 10px #7dffb0; }
@@ -142,17 +144,24 @@
     .foot b { color: var(--soft); font-weight: 600; }
 
     /* ---- the code tab */
-    .codetab { position: fixed; z-index: 40; left: 24px; bottom: 24px; width: min(440px, calc(100vw - 528px)); background: #0d0b16; border: 1px solid #2f2a4d; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,.6), 0 0 0 1px rgba(185,162,255,.08); overflow: hidden; transform: translateY(16px); opacity: 0; transition: transform .35s cubic-bezier(.3,.8,.3,1), opacity .35s; }
+    .codetab { position: fixed; z-index: 40; left: 24px; bottom: 24px; width: min(360px, calc(100vw - 24px)); background: #0d0b16; border: 1px solid #2f2a4d; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,.6), 0 0 0 1px rgba(185,162,255,.08); overflow: hidden; transform: translateY(16px); opacity: 0; transition: transform .35s cubic-bezier(.3,.8,.3,1), opacity .35s; }
     .codetab.on { transform: none; opacity: 1; }
     .ct-bar { display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: #17142a; border-bottom: 1px solid #2a2545; font: 500 12px/1 'Inter', sans-serif; color: var(--soft); }
     .ct-bar .dots { display: flex; gap: 6px; } .ct-bar .dots i { width: 10px; height: 10px; border-radius: 50%; background: #ff5f57; } .ct-bar .dots i:nth-child(2) { background: #febc2e; } .ct-bar .dots i:nth-child(3) { background: #28c840; }
     .ct-file { flex: 1; color: var(--fg); }
     .ct-state { color: var(--lilac); } .ct-state.ok { color: #7dffb0; }
-    .ct-code { margin: 0; padding: 12px 14px 14px; min-height: 96px; font: 400 13px/1.55 'JetBrains Mono', 'SF Mono', Menlo, monospace; color: #e6e1ff; white-space: pre-wrap; }
+    .ct-code { max-height: 32vh; overflow-y: auto; overflow-wrap: anywhere; margin: 0; padding: 12px 14px 14px; min-height: 96px; font: 400 13px/1.55 'JetBrains Mono', 'SF Mono', Menlo, monospace; color: #e6e1ff; white-space: pre-wrap; }
     .ct-code .c { color: #6a9955; } .ct-code .s { color: #ce9178; } .ct-code .n { color: #b5cea8; } .ct-code .p { color: #9cdcfe; } .ct-code .k { color: #c586c0; }
     .ct-code .caret { display: inline-block; width: .55em; height: 1.05em; background: #e6e1ff; vertical-align: -.15em; animation: blink 1s steps(1) infinite; }
     @keyframes blink { 50% { opacity: 0; } }
     .flash { animation: flash 1.2s ease; }
+    .ct-sel { position: fixed; z-index: 39; pointer-events: none; border: 2px dashed #b9a2ff; border-radius: 10px; box-shadow: 0 0 0 100vmax rgba(5,4,10,.5); opacity: 0; transition: opacity .3s, border-color .3s; }
+    .ct-sel.on { opacity: 1; }
+    .ct-sel b { position: absolute; left: -2px; bottom: calc(100% + 6px); width: max-content; max-width: calc(100vw - 32px); white-space: normal; background: #b9a2ff; color: #0d0b16; font: 600 12px/1 'Inter', sans-serif; padding: 6px 9px; border-radius: 7px; transition: background .3s; }
+    .ct-sel.below b { bottom: auto; top: calc(100% + 6px); }
+    .ct-sel.ok { border-style: solid; border-color: #7dffb0; } .ct-sel.ok b { background: #7dffb0; }
+    .ct-file b { color: #b9a2ff; font-weight: 600; }
+    @media (max-width: 700px) { .bit { transition: opacity .3s; } html.pip-editing .bit { opacity: 0 !important; pointer-events: none !important; } }
     @keyframes flash { 0% { box-shadow: 0 0 0 0 rgba(125,255,176,.0); } 20% { box-shadow: 0 0 0 3px rgba(125,255,176,.55); } 100% { box-shadow: 0 0 0 0 rgba(125,255,176,0); } }
 
     /* on phones Pip sits big in the middle of glowing rings above the headline (the user liked that there) */
@@ -173,7 +182,10 @@
     /* phones */
     @media (max-width: 900px) {
       .planet-s { grid-template-columns: 1fr; min-height: 0; }
-      .planet-wrap { order: -1; }
+      .planet-wrap { order: -1; gap: 10px; }
+      #planetButtonHome:empty { display: none; }
+      .planet-wrap #newPlanet { margin-top: 4px; }
+      #planetCv { max-width: min(100%, 48svh); }
       .compare { grid-template-columns: 1fr; }
       .compare .mine { order: -1; } .panel.his .board { min-height: 0; } .panel.his canvas { height: 200px; width: auto; }
     }
@@ -183,13 +195,14 @@
       .hero { padding-top: 34px; }
       .foot { padding-bottom: 130px; }
       .stat { min-width: 0; flex: 1 1 40%; }
-      .codetab { left: 10px; right: 10px; width: auto; bottom: 92px; }
+      .codetab { width: calc(100vw - 24px); }
       .tabs { display: flex; } .tab { flex: 1; padding: 9px 6px; }
     }
     @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
   </style>
 </head>
 <body>
+  <canvas id="field" aria-hidden="true"></canvas>
   <div class="wrap" id="pipsite">
     <nav class="nav">
       <a class="logo" href="#top"><span class="f" id="navFace"></span>Pip</a><span class="ver" id="ver">v0.9 · beta</span>
@@ -202,9 +215,9 @@
     </nav>
 
     <header class="hero" id="top">
-      <canvas id="field" aria-hidden="true"></canvas>
+
       <div class="me" id="meBox" aria-hidden="false"><div class="halo"></div><div class="ring"></div><div class="ring r2"></div></div>
-      <div class="kicker"><i></i>Built by Pip. Not by Oli. Obviously.</div>
+      <div class="kicker"><i></i><span id="pipKicker">Built by Pip. Not by Oli. Obviously.</span></div>
       <h1><span class="word">Pip</span><span id="roomPip"><button type="button" id="rpFace" aria-label="Pip. You can poke him."></button></span></h1>
       <p class="lede">The best thing on olid.is. <span>By some distance.</span></p>
       <div class="stats">
@@ -222,7 +235,7 @@
         <h2>I made a planet.</h2>
         <p class="intro">Oli spent four years on a website. I made a planet before lunch. A whole one, with weather. Drag it to spin it. If you don't like it, I'll make another.</p>
         <div class="facts" id="facts"></div>
-        <div class="cta"><button type="button" class="btn primary" id="newPlanet">Make another one</button></div>
+        <div class="cta" id="planetButtonHome"><button type="button" class="btn primary" id="newPlanet">Make another one</button></div>
       </div>
       <div class="planet-wrap"><canvas id="planetCv" width="420" height="420" aria-label="A planet Pip made. Drag to spin it."></canvas><div class="pname" id="pname"></div></div>
     </section>
@@ -288,8 +301,9 @@
   </div>
 
   <!-- the code tab: every so often Pip opens it and changes something on the page while you watch -->
+  <div class="ct-sel" id="ctSel" hidden><b></b></div>
   <div class="codetab" id="codetab" hidden>
-    <div class="ct-bar"><span class="dots"><i></i><i></i><i></i></span><span class="ct-file">pip-site.css</span><span class="ct-state" id="ctState">editing</span></div>
+    <div class="ct-bar"><span class="dots"><i></i><i></i><i></i></span><span class="ct-file" id="ctFile">pip-site.css</span><span class="ct-state" id="ctState">editing</span></div>
     <pre class="ct-code" id="ctCode"></pre>
   </div>
   <style id="pip-live"></style>
@@ -428,21 +442,31 @@
         if (s.food) { const fx = (s.food.x + .5) * C, fy = (s.food.y + .5) * C, pul = 1 + Math.sin(performance.now() / 260) * .08;
           const gr = g.createRadialGradient(fx, fy, 0, fx, fy, C * 1.4); gr.addColorStop(0, 'rgba(255,111,177,.55)'); gr.addColorStop(1, 'rgba(255,111,177,0)'); g.fillStyle = gr; g.beginPath(); g.arc(fx, fy, C * 1.4, 0, Math.PI * 2); g.fill();
           g.fillStyle = '#ff6fb1'; g.beginPath(); g.arc(fx, fy, C * .32 * pul, 0, Math.PI * 2); g.fill(); }
-        // the snake: one smooth glowing line from tail to head, colour running lilac to cyan
-        const pts = s.body.map((b, i) => { const p = prev[i] || prev[prev.length - 1] || b; const jump = Math.abs(p.x - b.x) + Math.abs(p.y - b.y) > 1; return { x: ((jump ? b.x : p.x + (b.x - p.x) * k) + .5) * C, y: ((jump ? b.y : p.y + (b.y - p.y) * k) + .5) * C }; });
+        // A solid, tapered body. Follow the grid corners even between ticks.
+        const center = b => ({ x: (b.x + .5) * C, y: (b.y + .5) * C });
+        const mix = (a, b) => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k });
+        const pts = [center(mix(prev[0] || s.body[0], s.body[0]))];
+        for (let i = 1; i < s.body.length; i++) pts.push(center(s.body[i]));
+        const tail = s.body.length - 1;
+        if (prev[tail]) pts.push(center(mix(prev[tail], s.body[tail])));
         g.lineCap = 'round'; g.lineJoin = 'round';
-        for (let pass = 0; pass < 2; pass++) {
-          for (let i = pts.length - 1; i > 0; i--) {
-            const f = i / pts.length, a = pts[i], b = pts[i - 1];
-            const col = `rgb(${Math.round(102 + (185 - 102) * f)},${Math.round(245 + (162 - 245) * f)},255)`;
-            g.strokeStyle = col; g.lineWidth = C * (pass ? .62 : .9) * (1 - f * .35); g.globalAlpha = pass ? 1 : .18;
-            g.shadowColor = col; g.shadowBlur = pass ? 14 : 0;
-            g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
-          }
+        for (let i = pts.length - 1; i > 0; i--) {
+          const taper = Math.min(1, (pts.length - i) / 3);
+          g.strokeStyle = '#83ddb0'; g.lineWidth = C * (.22 + .43 * taper);
+          g.beginPath(); g.moveTo(pts[i].x, pts[i].y); g.lineTo(pts[i - 1].x, pts[i - 1].y); g.stroke();
         }
-        g.globalAlpha = 1; g.shadowBlur = 0;
-        // eyes on the head
-        const hd = pts[0]; if (hd) { const d = s.dir, ex = -d.y, ey = d.x; g.fillStyle = '#07060d'; for (const sgn of [-1, 1]) { g.beginPath(); g.arc(hd.x + d.x * C * .12 + ex * sgn * C * .14, hd.y + d.y * C * .12 + ey * sgn * C * .14, C * .07, 0, Math.PI * 2); g.fill(); } }
+        // A small rounded head with forward-facing eyes, without a glow halo.
+        const hd = pts[0];
+        if (hd) {
+          g.save(); g.translate(hd.x, hd.y); g.rotate(Math.atan2(s.dir.y, s.dir.x));
+          g.fillStyle = '#b4f3cf'; g.beginPath();
+          g.roundRect(-C * .38, -C * .36, C * .82, C * .72, C * .24); g.fill();
+          for (const side of [-1, 1]) {
+            g.fillStyle = '#102a22'; g.beginPath();
+            g.ellipse(C * .18, side * C * .19, C * .065, C * .09, 0, 0, Math.PI * 2); g.fill();
+          }
+          g.restore();
+        }
         // bursts
         for (const p of parts) { p.x += p.vx; p.y += p.vy; p.vx *= .93; p.vy *= .93; p.life -= .03; g.fillStyle = `rgba(${p.c},${Math.max(0, p.life)})`; g.beginPath(); g.arc(p.x, p.y, 3 * p.life + .5, 0, Math.PI * 2); g.fill(); }
         parts = parts.filter(p => p.life > 0);
@@ -467,6 +491,9 @@
 
     // ------------------------------------------------------------------ the planet: generated fresh, with oceans, land, ice, clouds, an atmosphere and a moon. Drag to spin.
     (function planet() {
+      const planetButton = $('#newPlanet'), buttonHome = $('#planetButtonHome'), planetWrap = $('.planet-wrap');
+      const placeButton = () => { const destination = innerWidth <= 900 ? planetWrap : buttonHome; if (planetButton.parentElement !== destination) destination.append(planetButton); };
+      placeButton(); addEventListener('resize', placeButton);
       const cv = $('#planetCv'), g = cv.getContext('2d'), S = cv.width, CX = S / 2, CY = S / 2, EDGE = S / 2 - 8;
       const TW = 512, TH = 256;
       let seed = 1, tex = null, clouds = null, pal = null, rot = 0, vel = .0016, spin = .0016, cloudSp = .0024, cloudRot = 0, dragging = false, lastX = 0;
@@ -567,6 +594,7 @@
             c: mix(MOONC[Math.floor(rnd() * MOONC.length)], [rnd() * 255, rnd() * 255, rnd() * 255], .12),
             spots: Array.from({ length: Math.floor(between(2, 6)) }, () => [between(-.6, .6), between(-.6, .6), between(.12, .3)]) });
         }
+        moons.forEach(mo => { mo.surface = moonSurface(mo); });
         build();
         const name = (SYL[Math.floor(rnd() * SYL.length)] + SYL[Math.floor(rnd() * SYL.length)] + (rnd() < .5 ? SYL[Math.floor(rnd() * SYL.length)] : '')).replace(/^./, c => c.toUpperCase()) + '-' + Math.floor(rnd() * 900 + 100);
         $('#pname').textContent = name + ' · ' + pal.name;
@@ -608,12 +636,30 @@
         if (ring) drawRing(true);
         for (const mo of moons) if (Math.sin(mo.a) >= 0) drawMoon(mo);
       }
+      // Cache a dusty, diffuse surface: no white highlight or glossy radial gradient.
+      function moonSurface(mo) {
+        const surface = document.createElement('canvas'); surface.width = surface.height = 80;
+        const ctx = surface.getContext('2d'), pixels = ctx.createImageData(80, 80);
+        const grey = mo.c.reduce((sum, c) => sum + c, 0) / 3;
+        for (let py = 0; py < 80; py++) for (let px = 0; px < 80; px++) {
+          const nx = (px + .5 - 40) / 39, ny = (py + .5 - 40) / 39, d = nx * nx + ny * ny;
+          if (d > 1) continue;
+          const nz = Math.sqrt(1 - d), light = .24 + .64 * Math.max(0, -.45 * nx - .5 * ny + .74 * nz);
+          let dust = .93 + rnd() * .12;
+          for (const [sx, sy, sr] of mo.spots) {
+            const distance = Math.hypot(nx - sx, ny - sy) / sr;
+            if (distance < .8) dust *= .76 + distance * .12;
+            else if (distance < 1) dust *= 1.06;
+          }
+          const i = (py * 80 + px) * 4;
+          for (let channel = 0; channel < 3; channel++) pixels.data[i + channel] = (mo.c[channel] * .5 + grey * .5) * light * dust;
+          pixels.data[i + 3] = Math.min(255, (1 - Math.sqrt(d)) * 39 * 255);
+        }
+        ctx.putImageData(pixels, 0, 0); return surface;
+      }
       function drawMoon(mo) {
-        const [x, y] = moonPos(mo), r = mo.r, c = mo.c;
-        const gr = g.createRadialGradient(x - r * .4, y - r * .4, r * .1, x, y, r); gr.addColorStop(0, `rgb(${c.map(v => Math.min(255, v + 50)).join(',')})`); gr.addColorStop(1, `rgb(${c.map(v => v * .3).join(',')})`);
-        g.save(); g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fillStyle = gr; g.fill(); g.clip();
-        if (r > 8) { g.fillStyle = 'rgba(0,0,0,.16)'; for (const [sx, sy, sr] of mo.spots) { g.beginPath(); g.arc(x + sx * r, y + sy * r, sr * r, 0, Math.PI * 2); g.fill(); } }
-        g.restore();
+        const [x, y] = moonPos(mo);
+        g.drawImage(mo.surface, x - mo.r, y - mo.r, mo.r * 2, mo.r * 2);
       }
       cv.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; cv.setPointerCapture(e.pointerId); });
       cv.addEventListener('pointermove', e => { if (!dragging) return; const dx = e.clientX - lastX; lastX = e.clientX; rot -= dx * .008; vel = -dx * .0008; });
@@ -730,49 +776,134 @@
     (function codeTab() {
       const get = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
       const put = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
-      const fs = sel => `${sel} { font-size: 0 !important; }`;
-      const EDITS = {
-        lede: { at: '.lede', code: '.lede span::after {\n  content: "By a lot.";\n}', css: '.lede span { font-size: 0; } .lede span::after { content: "By a lot."; font-size: clamp(24px, 3vw, 40px); }' },
-        years: { at: '.stat.bad', code: '/* it\'s been five now. I checked. */\n.stat.bad b::after {\n  content: "Five years";\n}', css: fs('.stat.bad b') + ' .stat.bad b::after { content: "Five years"; font-size: 22px; }' },
-        green: { at: 'h1', code: 'h1 .word {\n  background: linear-gradient(\n    120deg, #fff, #7dffb0, #66f5ff);\n}', css: 'h1 .word { background: linear-gradient(120deg, #fff 20%, #7dffb0 60%, #66f5ff 95%) !important; -webkit-background-clip: text !important; background-clip: text !important; }' },
-        bigplanet: { at: '#planetCv', code: '#planet canvas {\n  transform: scale(1.15);\n}', css: '#planetCv { transform: scale(1.15); }' },
-        ver: { at: '#ver', code: '.ver::after {\n  content: "v0.9.1 · still beta";\n}', css: fs('#ver') + ' #ver::after { content: "v0.9.1 · still beta"; font-size: 11px; }' },
-        oli: { at: '#notOli', code: '#notOli::after {\n  content: "Not the other guy.";\n}', css: fs('#notOli') + ' #notOli::after { content: "Not the other guy."; font-size: 13px; }' },
-        laugh: { at: '#oliCap', code: '#oliCap::after {\n  content: "For a laugh.";\n}', css: fs('#oliCap') + ' #oliCap::after { content: "For a laugh."; font-size: 14px; }' },
-        orange: { at: '.btn.primary', code: ':root {\n  --pink: #ffb36b; /* trying something */\n}', css: ':root { --pink: #ffb36b; }' },
-        kicker: { at: '.kicker', code: '.kicker::after {\n  content: " Now with 20% more Pip.";\n}', css: '.kicker::after { content: " Now with 20% more Pip."; }' }
+      const EDITS = {};
+      const textEdit = (id, name, at, lines) => {
+        EDITS[id] = { name, at, variants: lines.map(([text, line]) => ({ text, line,
+          code: `document.querySelector(${JSON.stringify(at)})\n  .textContent = ${JSON.stringify(text)};` })) };
       };
-      const live = $('#pip-live'), tab = $('#codetab'), code = $('#ctCode'), state = $('#ctState');
-      const edits = () => get('pip-room-edits', []).filter(id => EDITS[id]);
-      const apply = () => { live.textContent = edits().map(id => EDITS[id].css).join('\n'); };
-      apply();
+      const styleEdit = (id, name, at, variants) => { EDITS[id] = { name, at, variants: variants.map(([css, line]) => ({ css, code: css, line })) }; };
+      textEdit("lede", "the tagline", ".lede span", [["By a lot.", "More accurate."], ["It was not especially close.", "I checked the competition. It was here."], ["Admittedly, a low bar.", "Some context seemed fair."]]);
+      textEdit("years", "Oli\u2019s progress report", ".stat.bad b", [["Still working on it", "I have removed the deadline. He clearly has."], ["Several years", "Giving him the benefit of rounding."], ["In his own time", "A very generous unit of measurement."]]);
+      textEdit("ver", "the version number", "#ver", [["v0.9.1 \u00b7 still beta", "A version number. People find those reassuring."], ["v0.9.2 \u00b7 under review", "I am the reviewer."], ["v1.0 \u00b7 according to me", "I have approved my own work."]]);
+      textEdit("oli", "the footer", "#notOli", [["Not the other guy.", "Just avoiding confusion."], ["Oli was not consulted.", "That saved considerable time."], ["No human assistance required.", "The credits are now complete."]]);
+      textEdit("laugh", "Oli\u2019s Snake caption", "#oliCap", [["For comparison.", "I think the comparison speaks for itself."], ["He considered this finished.", "An interesting decision."], ["Preserved in its original condition.", "I decided against restoration."]]);
+      textEdit("kicker", "the label at the top", "#pipKicker", [["Built by Pip. Supervised by nobody.", "The supervision was unnecessary."], ["The competent end of olid.is.", "Visitors should know where they are."], ["Designed without a committee. Or Oli.", "Two delays avoided."]]);
+      textEdit("planettitle", "the planet heading", "#planet h2", [["Still waiting for Oli to make one.", "I have given him ample time."], ["A planet. I had a spare moment.", "Some people adjust margins. I got distracted."], ["I included an atmosphere.", "It seemed like the bare minimum."]]);
+      textEdit("gamestitle", "the games heading", "#games h2", [["The same ideas. A better programmer.", "Credit where it is due. He did have the ideas."], ["I have made a few corrections.", "The originals are still available, if you insist."], ["His games benefited from supervision.", "Mine, specifically."]]);
+      textEdit("planetbutton", "the planet button", "#newPlanet", [["Make another. I have time.", "My schedule remains fairly open."], ["This one is replaceable.", "I have not grown attached."], ["Request another planet", "Apparently I take requests now."]]);
+      const palettes = [
+        { name: 'mint', colour: '#9ee8bd', dark: '#0b1b18' },
+        { name: 'lilac', colour: '#c6afff', dark: '#171025' },
+        { name: 'ice blue', colour: '#9cdfff', dark: '#0b1726' },
+        { name: 'apricot', colour: '#ffc393', dark: '#211510' },
+        { name: 'rose', colour: '#ffb2cf', dark: '#22121d' }
+      ];
+      styleEdit('green', 'my name', 'h1', palettes.map(p => [
+        `h1 .word {\n  background: linear-gradient(120deg, #fff, ${p.colour});\n  background-clip: text;\n  -webkit-background-clip: text;\n}`, `${p.name[0].toUpperCase() + p.name.slice(1)}. My name wears it well.`]));
+      styleEdit('orange', 'the button colour', '.btn.primary', palettes.map(p => [
+        `.btn.primary {\n  background: ${p.colour};\n  color: #120b24;\n}`, `${p.name[0].toUpperCase() + p.name.slice(1)} buttons. I reserve the right to reconsider.`]));
+      styleEdit('headings', 'the section headings', '#games h2', palettes.map(p => [
+        `h2 {\n  color: ${p.colour};\n}`, `The headings are ${p.name} now. A considered decision. For now.`]));
+      styleEdit('blueprint', 'the planet backdrop', '#planet', palettes.flatMap(p => [24, 40, 64].map(size => [
+        `#planet {\n  background-color: ${p.dark};\n  background-image: linear-gradient(${p.colour}12 1px, transparent 1px), linear-gradient(90deg, ${p.colour}12 1px, transparent 1px);\n  background-size: ${size}px ${size}px;\n}`, `A ${p.name} grid. Now it looks funded.`])));
+      styleEdit('cards', 'the stat cards', '.stats', palettes.flatMap(p => [4, 14, 24].map(radius => [
+        `.stat {\n  border-radius: ${radius}px;\n  border-top: 2px solid ${p.colour};\n  background: ${p.dark};\n}`, `${p.name[0].toUpperCase() + p.name.slice(1)} borders. ${radius === 4 ? 'The corners are taking this seriously.' : radius === 24 ? 'Softer corners. The figures remain harsh.' : 'The figures deserved better accommodation.'}`])));
+      styleEdit('tabs', 'the game tabs', '.tabs', palettes.flatMap(p => [4, 12, 24].map(radius => [
+        `.tabs { border-radius: ${radius + 4}px; }\n.tab.on {\n  border-radius: ${radius}px;\n  background: ${p.colour};\n  color: #171024;\n}`, `${p.name[0].toUpperCase() + p.name.slice(1)} for the selected game. Even Oli could find it.`])));
+      styleEdit('footerline', 'the footer border', '.foot', palettes.flatMap(p => ['solid', 'dashed', 'double'].map(style => [
+        `.foot {\n  border-top: ${style === 'double' ? 4 : 2}px ${style} ${p.colour};\n  background: ${p.dark};\n}`, `A ${style} line in ${p.name}. I attend to the bottom of the page too.`])));
+      styleEdit('bigplanet', 'the planet framing', '#planetCv', [0.9, 1, 1.08, 1.15].map(scale => [
+        `#planetCv {\n  transform: scale(${scale});\n}`, scale > 1 ? 'A little closer. I did make the whole thing.' : scale < 1 ? 'Some distance. It is a planet, after all.' : 'Back to its original size. I was right the first time.']));
+      const live = $('#pip-live'), tab = $('#codetab'), code = $('#ctCode'), state = $('#ctState'), file = $('#ctFile'), sel = $('#ctSel'), selLab = sel.querySelector('b');
+      const shown = el => el && el.offsetParent !== null && el.getClientRects().length;
+      // a box around whatever he's changing, with the rest of the page dimmed, so you can see it
+      let selOn = null, trackFrame = 0;
+      function placeEditor(r) {
+        const gap = 18, edge = 12, chat = document.querySelector('.bit');
+        const right = innerWidth > 700 && chat ? Math.min(innerWidth - edge, chat.getBoundingClientRect().left - gap) : innerWidth - edge;
+        const width = Math.min(360, right - edge); tab.style.width = width + 'px';
+        const height = tab.offsetHeight, topEdge = Math.min(76, innerHeight * .12);
+        let x, y;
+        if (r.right + gap + width <= right) { x = r.right + gap; y = r.top; }
+        else if (r.left - gap - width >= edge) { x = r.left - gap - width; y = r.top; }
+        else { x = Math.min(r.left, right - width); y = r.bottom + gap + height <= innerHeight - edge ? r.bottom + gap : r.top - gap - height; }
+        x = Math.max(edge, Math.min(x, right - width));
+        y = Math.max(topEdge, Math.min(y, innerHeight - height - edge));
+        Object.assign(tab.style, { left: x + 'px', top: y + 'px', bottom: 'auto', right: 'auto' });
+      }
+      function track() {
+        if (!selOn) return;
+        const r = selOn.getBoundingClientRect(), pd = 8;
+        Object.assign(sel.style, { left: r.left - pd + 'px', top: r.top - pd + 'px', width: r.width + pd * 2 + 'px', height: r.height + pd * 2 + 'px' });
+        sel.classList.toggle('below', r.top < 90); placeEditor(r); trackFrame = requestAnimationFrame(track);
+      }
+      function select(el, label) { if (!el) return; cancelAnimationFrame(trackFrame); selOn = el; sel.hidden = false; sel.className = 'ct-sel'; selLab.textContent = label; track(); requestAnimationFrame(() => sel.classList.add('on')); }
+      function unselect() { cancelAnimationFrame(trackFrame); selOn = null; sel.classList.remove('on'); setTimeout(() => { if (!sel.classList.contains('on')) { sel.hidden = true; selOn = null; } }, 350); }
+      const clean = entries => Array.isArray(entries) ? entries.filter(e => e && EDITS[e.id] && Number.isInteger(e.variant) && EDITS[e.id].variants[e.variant]).map(e => ({ id: e.id, variant: e.variant })) : [];
+      const saved = get('pip-room-edits', []) || [];
+      // Migrate the old one-use ID list. Store only validated variant IDs, never executable CSS.
+      let current = Array.isArray(saved) ? [...new Set(saved)].filter(id => EDITS[id]).map(id => ({ id, variant: 0 })) : clean(saved.current);
+      let history = Array.isArray(saved.history) ? saved.history.slice(-30).map(clean) : [];
+      const originals = new Map(Object.values(EDITS).filter(e => e.variants[0].text).map(e => [e.at, $(e.at).textContent]));
+      const persist = () => put('pip-room-edits', { version: 2, current, history });
+      const apply = () => {
+        originals.forEach((text, at) => { $(at).textContent = text; });
+        live.textContent = current.map(e => {
+          const def = EDITS[e.id], variant = def.variants[e.variant];
+          if (variant.text) $(def.at).textContent = variant.text;
+          return variant.css || '';
+        }).join('\n');
+      };
+      apply(); persist();
+      let lastLine = '', lastChange = '';
+      window.pipRoomEditSummary = () => lastChange;
+      window.pipRoomEditLine = () => lastLine;
       const hl = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])).replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="c">$1</span>').replace(/("[^"]*")/g, '<span class="s">$1</span>').replace(/(#[0-9a-f]{3,6}\b|\b\d+(?:\.\d+)?(?:px|deg|s|%)?\b)/gi, '<span class="n">$1</span>').replace(/^(\s*)([a-z-]+)(:)/gim, '$1<span class="p">$2</span>$3');
       let typing = false;
       async function edit(id, done) {
         if (typing) return false;
-        const have = edits();
-        if (!id) { const left = Object.keys(EDITS).filter(k => !have.includes(k)); if (!left.length) { story('code:none'); return false; } id = left[Math.floor(Math.random() * left.length)]; }
-        if (have.includes(id)) { done && done(); return true; }
-        const E = EDITS[id], target = $(E.at);
-        typing = true; story('code:start:' + id);
+        if (!id) {
+          const recent = current.slice(-4).map(e => e.id);
+          const visible = Object.keys(EDITS).filter(k => shown($(EDITS[k].at)));
+          const fresh = visible.filter(k => !recent.includes(k));
+          const pool = fresh.length ? fresh : visible;
+          if (!pool.length) return false;
+          id = pool[Math.floor(Math.random() * pool.length)];
+        }
+        const def = EDITS[id];
+        if (!def) return false;
+        const previous = current.find(e => e.id === id);
+        const choices = def.variants.map((_, i) => i).filter(i => i !== previous?.variant);
+        const variant = choices[Math.floor(Math.random() * choices.length)];
+        const E = { ...def, ...def.variants[variant] }, target = $(E.at);
+        typing = true; story('code:start:' + id); document.documentElement.classList.add('pip-editing');
         if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        tab.hidden = false; requestAnimationFrame(() => tab.classList.add('on'));
+        tab.hidden = false; tab.classList.remove('on');
         state.textContent = 'editing'; state.className = 'ct-state'; code.innerHTML = '';
-        await sleep(700);
-        for (let i = 1; i <= E.code.length; i++) { code.innerHTML = hl(E.code.slice(0, i)) + '<span class="caret"></span>'; await sleep(E.code[i - 1] === '\n' ? 130 : 24 + Math.random() * 30); }
+        file.textContent = (E.text ? 'pip-site.js' : 'pip-site.css') + ' · ' + E.name;
+        await sleep(450); if (shown(target)) select(target, 'Pip is editing ' + E.name);
+        requestAnimationFrame(() => tab.classList.add('on'));
+        await sleep(600);
+        for (let i = 1; i <= E.code.length; i++) { code.innerHTML = hl(E.code.slice(0, i)) + '<span class="caret"></span>'; code.scrollTop = code.scrollHeight; await sleep(E.code[i - 1] === '\n' ? 130 : 24 + Math.random() * 30); }
         await sleep(350);
-        put('pip-room-edits', [...have, id]); apply();
+        history.push(current.map(e => ({ ...e }))); history = history.slice(-30);
+        current = [...current.filter(e => e.id !== id), { id, variant }];
+        persist(); apply(); lastLine = E.line;
+        const colour = palettes.find(p => E.css?.includes(p.colour));
+        lastChange = 'Changed ' + E.name + (E.text ? ': “' + E.text + '”' : colour ? ' · ' + colour.name : '') ;
         code.innerHTML = hl(E.code); state.textContent = 'saved ✓'; state.className = 'ct-state ok';
         if (target) { target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash'); }
-        await sleep(1600);
-        tab.classList.remove('on'); setTimeout(() => { if (!typing) tab.hidden = true; }, 400);
+        if (selOn) { sel.classList.add('ok'); selLab.textContent = 'Changed ' + E.name + ' ✓'; }
+        await sleep(2200);
+        unselect(); tab.classList.remove('on'); document.documentElement.classList.remove('pip-editing'); setTimeout(() => { if (!typing) tab.hidden = true; }, 400);
         typing = false; story('code:done:' + id); done && done();
         return true;
       }
-      function undo() { const have = edits(); if (!have.length || typing) return; const last = have.pop(); put('pip-room-edits', have); apply(); story('code:undo:' + last); }
-      window.pipRoomEdit = (id, done) => { if (typing) return false; edit(id, done); return true; };
+      function undo(silent = false) { if (!history.length || typing) return false; const last = current[current.length - 1]; current = history.pop(); persist(); apply(); lastChange = 'Undid change to ' + (EDITS[last?.id]?.name || 'the page'); if (!silent) story('code:undo'); return true; }
+      window.pipRoomEdit = (id, done) => { if (typing || (id && !EDITS[id])) return false; edit(id, done); return true; };
       window.pipRoomBusy = () => typing;
       window.pipRoomUndo = undo;
+      if (/[?&]piptest\b/.test(location.search)) window.__pipEdits = () => ({ definitions: EDITS, current, history });
       // he opens it on his own now and then
       let lastInput = Date.now();
       ['pointerdown', 'keydown', 'scroll'].forEach(t => addEventListener(t, () => { lastInput = Date.now(); }, { passive: true }));
@@ -784,6 +915,6 @@
     addEventListener('load', () => { if (window.Pip && Pip.faceSVG) $('#navFace').innerHTML = Pip.faceSVG('smug'); });
   })();
   </script>
-  <script src="/bit.js" defer></script>
+  <script src="/bit.js?v=pip-v47" defer></script>
 </body>
 </html>

@@ -343,3 +343,35 @@ html.pip-url-step .brand-tag { cursor: pointer !important; text-decoration: unde
 /* the settings menu is light, so its text is always dark (pages like /pip define their own --ink) */
 .bit-menu, .bit-menu button { color: #1d1a2b; }
 .bit-menu button.danger { color: #c4211f; }
+
+/* Pip's room: the same space continues behind his translucent chat. */
+html.pip-docked body:has(#pipsite) .bit {
+  background: rgba(20, 16, 36, .68); border: 1px solid rgba(198, 175, 255, .24);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+html.pip-docked body:has(#pipsite) .bit-ava {
+  width: 144px; height: 144px; padding: 0; border: 0; border-radius: 50%;
+  background: radial-gradient(circle, rgba(185,162,255,.16), transparent 70%);
+  box-shadow: none; cursor: pointer; touch-action: manipulation;
+}
+html.pip-docked body:has(#pipsite) .bit-ava svg { width: 140px; height: 140px; }
+html.pip-docked body:has(#pipsite) .bit-ava:focus-visible { outline: 2px solid #c6afff; outline-offset: 2px; }
+html.pip-docked body:has(#pipsite) .bit-ava:hover { background-color: rgba(185,162,255,.06); }
+html.pip-docked body:has(#pipsite) .bit-head-btns { align-self: flex-start; }
+.pip-room-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.bit.sheet-closed .pip-room-actions { display: none; }
+html.pip-docked body:has(#pipsite) .bit-ava.poked svg { animation: pip-pop .4s ease; }
+@media (max-width: 700px) {
+  html.pip-docked body:has(#pipsite) .bit-ava { width: 92px; height: 92px; }
+  html.pip-docked body:has(#pipsite) .bit-ava svg { width: 90px; height: 90px; }
+  html.pip-docked body:has(#pipsite) .bit.sheet-closed .bit-ava { width: 42px; height: 42px; }
+  html.pip-docked body:has(#pipsite) .bit.sheet-closed .bit-ava svg { width: 42px; height: 42px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.pip-docked body:has(#pipsite) .bit-ava.poked svg { animation: none; }
+}
+
+/* Keep the blink origin stable as the eyes transition back to pointer tracking. */
+html.pip-docked body:has(#pipsite) .bit-ava .eyes, #rpFace .eyes { transform-box: fill-box; transform-origin: center; }
+
+.bit-edit-context { display: block; margin: 0 0 7px; padding-bottom: 6px; border-bottom: 1px solid rgba(198,175,255,.18); font: 500 11px/1.45 'Inter', system-ui, sans-serif; color: #c6b8e3; overflow-wrap: anywhere; }
