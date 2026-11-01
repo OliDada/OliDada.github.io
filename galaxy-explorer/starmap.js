@@ -1,0 +1,406 @@
+// One full-screen map from the whole galaxy down to a single system's moons.
+// Canvas 2D, redrawn only on interaction. Detail is generated for the current
+// zoom: haze -> procedural light tiles -> real stars -> orbits, planets, moons.
+import { starsInBox, jumpTargets, starPhysics, starDistance, visualTile, glowLevel, VISUAL_EXTENT } from './galaxy.mjs';
+import { generateSystem, starName } from './system.mjs';
+import { bodyPosition, orbitClock } from './orbits.mjs';
+import { LIFE_WORDS } from './biomes.mjs';
+import { floraFor } from './flora.mjs';
+import { faunaFor } from './fauna.mjs';
+
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const fmtLy = (ly) => ly >= 1000 ? `${(ly / 1000).toFixed(ly >= 10000 ? 0 : 1)}k ly` : ly >= 10 ? `${Math.round(ly)} ly` : ly >= .1 ? `${ly.toFixed(1)} ly` : `${Math.round(ly * 63241)} AU`;
+const LIFE_RANK = { none: 0, microbial: 1, simple: 2, complex: 3 };
+
+// Zoom thresholds in pixels per light year.
+const LOCAL_SCALE = 7;          // neighbourhood view
+const REAL_FROM = 4, REAL_TO = 6.5; // procedural light hands over to real stars
+const SYSTEM_FROM = 30, SYSTEM_TO = 90; // orbits fade in
+const MAX_SCALE = 9000;
+const SYSTEM_RADIUS = .3;       // light years the outermost orbit occupies on the chart (systems are compressed)
+
+const names = new Map();
+const nameOf = (star) => { let n = names.get(star.id); if (!n) { n = starName(star.seed); names.set(star.id, n); } return n; };
+const systems = new Map();
+function systemOf(star) {
+  let s = systems.get(star.id);
+  if (!s) {
+    s = generateSystem(star.seed);
+    if (systems.size > 400) systems.clear();
+    systems.set(star.id, s);
+  }
+  if (!s.chartScale) s.chartScale = SYSTEM_RADIUS / (Math.max(...s.bodies.map(b => Math.hypot(b.position[0], b.position[2]))) + 300);
+  return s;
+}
+// Worlds are drawn where they are now on their orbits (orbits.mjs).
+const bodyXY = (star, sys, body) => { const p = bodyPosition(sys, body, orbitClock()); return [star.x + p[0] * sys.chartScale, star.y - p[2] * sys.chartScale]; };
+function readSurvey(seed) { try { const s = JSON.parse(localStorage.getItem(`elsewhere-system-${seed}`) || '{}'); return { records: new Set(s.records || []), visited: new Set(s.visited || []), flora: s.flora || {}, fauna: s.fauna || {} }; } catch { return { records: new Set(), visited: new Set(), flora: {}, fauna: {} }; } }
+
+export function createStarMap(o) {
+  const { here, state, offChart } = o;
+  const $ = (id) => document.getElementById(id);
+  const dialog = $('starMap'), canvas = $('starCanvas'), ctx = canvas.getContext('2d');
+  systems.set(here.id, o.system); // the system you are actually flying in
+  const { range, targets } = jumpTargets(here);
+  const inRange = new Set(targets.map(t => t.star.id));
+  const view = { x: here.x, y: here.y, scale: LOCAL_SCALE };
+  let w = 0, h = 0, dpr = 1, pending = false, drawn = [], haze = null, anim = null;
+  let selected = { star: targets[0]?.star || here, body: null };
+  const isVisited = (star) => star.id === here.id || state.visited.has(star.id);
+  const minScale = () => Math.min(w, h) / (VISUAL_EXTENT * .95);
+  // The panel covers part of the screen; focus targets in the visible part.
+  const panelOpen = () => !document.body.classList.contains('map-panel-collapsed');
+  const focusOffset = () => w > 760 ? [panelOpen() ? 172 : 0, 0] : [0, panelOpen() ? Math.min(h * .46, 420) / 2 : 0];
+  const systemScale = () => Math.min(w - (w > 760 && panelOpen() ? 360 : 0), h - (w <= 760 && panelOpen() ? Math.min(h * .46, 420) : 0)) * .42 / SYSTEM_RADIUS;
+  function focusView(x, y, scale) { const [ox, oy] = focusOffset(); return { x: x + ox / scale, y: y - oy / scale, scale }; }
+
+  const toScreen = (x, y) => [w / 2 + (x - view.x) * view.scale, h / 2 - (y - view.y) * view.scale];
+  const toWorld = (sx, sy) => [view.x + (sx - w / 2) / view.scale, view.y - (sy - h / 2) / view.scale];
+  function resize() {
+    dpr = Math.min(devicePixelRatio || 1, 2); w = canvas.clientWidth; h = canvas.clientHeight;
+    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+  }
+  const requestDraw = () => { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; draw(); }); } };
+
+  // Soft background glow of the whole galaxy; blur suits haze, and sharp detail comes from the points.
+  function buildHaze() {
+    const n = 320, c = document.createElement('canvas'); c.width = c.height = n;
+    const g = c.getContext('2d'), img = g.createImageData(n, n);
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const x = (i / n - .5) * VISUAL_EXTENT, y = (.5 - j / n) * VISUAL_EXTENT, v = glowLevel(x, y) ** .9;
+      const core = Math.exp(-(x * x + y * y) / (VISUAL_EXTENT * .06) ** 2), k = (j * n + i) * 4;
+      img.data[k] = 110 + 140 * core; img.data[k + 1] = 120 + 95 * core; img.data[k + 2] = 190 - 40 * core; img.data[k + 3] = v * 120;
+    }
+    g.putImageData(img, 0, 0); return c;
+  }
+
+  function draw() {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalAlpha = 1;
+    ctx.fillStyle = '#040911'; ctx.fillRect(0, 0, w, h);
+    const s = view.scale, ls = Math.log(s);
+    const [x0, y1] = toWorld(0, 0), [x1, y0] = toWorld(w, h);
+    // 1. Haze.
+    const hazeA = 1 - smooth(Math.log(.08), Math.log(2), ls);
+    if (hazeA > 0) {
+      haze ||= buildHaze();
+      const [hx, hy] = toScreen(-VISUAL_EXTENT / 2, VISUAL_EXTENT / 2);
+      ctx.globalAlpha = hazeA; ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(haze, hx, hy, VISUAL_EXTENT * s, VISUAL_EXTENT * s);
+    }
+    // 2. Procedural light, one quadtree level finer every time the view halves.
+    const fakeA = 1 - smooth(Math.log(REAL_FROM), Math.log(REAL_TO), ls);
+    if (fakeA > 0) {
+      const lv = Math.log2(VISUAL_EXTENT * s / 340), finest = Math.floor(lv), frac = lv - finest;
+      for (let L = 0; L <= Math.min(finest + 1, 14); L++) {
+        const a = fakeA * (L <= finest ? 1 : frac); if (a <= .01) continue;
+        const T = VISUAL_EXTENT / 2 ** L, n = 2 ** L;
+        const tx0 = clamp(Math.floor((x0 + VISUAL_EXTENT / 2) / T), 0, n - 1), tx1 = clamp(Math.floor((x1 + VISUAL_EXTENT / 2) / T), 0, n - 1);
+        const ty0 = clamp(Math.floor((y0 + VISUAL_EXTENT / 2) / T), 0, n - 1), ty1 = clamp(Math.floor((y1 + VISUAL_EXTENT / 2) / T), 0, n - 1);
+        const size = 1.1 + Math.max(0, 1.1 - (finest - L) * .25);
+        for (let tx = tx0; tx <= tx1; tx++) for (let ty = ty0; ty <= ty1; ty++) {
+          for (const b of visualTile(L, tx, ty).buckets) {
+            ctx.globalAlpha = a * b.alpha; ctx.fillStyle = b.color;
+            for (let i = 0; i < b.xs.length; i++) {
+              const sx = w / 2 + (b.xs[i] - view.x) * s, sy = h / 2 - (b.ys[i] - view.y) * s;
+              if (sx > -2 && sx < w + 2 && sy > -2 && sy < h + 2) ctx.fillRect(sx, sy, size, size);
+            }
+          }
+        }
+      }
+    }
+    ctx.globalAlpha = 1; drawn = [];
+    // 3. Real stars (a slab of the disc around your height; distances stay 3D).
+    const realA = smooth(Math.log(REAL_FROM), Math.log(REAL_TO), ls);
+    const sysA = smooth(Math.log(SYSTEM_FROM), Math.log(SYSTEM_TO), ls);
+    let stars = [];
+    if (realA > 0) {
+      stars = starsInBox([x0 - 1, y0 - 1, here.z - 40], [x1 + 1, y1 + 1, here.z + 40]);
+      if (s > 2.5 && s < SYSTEM_TO) {
+        ctx.globalAlpha = realA * (1 - sysA) * .9; ctx.strokeStyle = 'rgba(201,244,204,.16)'; ctx.lineWidth = 1;
+        const [hx, hy] = toScreen(here.x, here.y);
+        for (const t of targets) { const [tx, ty] = toScreen(t.star.x, t.star.y); ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(tx, ty); ctx.stroke(); }
+      }
+      const base = clamp(s / 7, .45, 1.7);
+      for (const st of stars) {
+        const p = starPhysics(st), [sx, sy] = toScreen(st.x, st.y);
+        const r = Math.max(clamp(.8 + p.radius * 1.2, .8, 3.2) * base, Math.min(22, Math.sqrt(p.radius) * .012 * s));
+        ctx.globalAlpha = realA;
+        if (r > 4) {
+          const g = ctx.createRadialGradient(sx, sy, r * .6, sx, sy, r * 3.2);
+          g.addColorStop(0, p.color + '55'); g.addColorStop(1, p.color + '00');
+          ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, r * 3.2, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.fillStyle = p.color;
+        if (r < 1.3) ctx.fillRect(sx - r / 2, sy - r / 2, r, r); else { ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill(); }
+        if (isVisited(st) && st.id !== here.id && s < SYSTEM_FROM) { ctx.strokeStyle = 'rgba(201,244,204,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(sx, sy, r + 3, 0, Math.PI * 2); ctx.stroke(); }
+        drawn.push({ star: st, sx, sy, r: Math.max(r, 6) });
+      }
+    }
+    // 4. Systems.
+    if (sysA > 0) for (const st of stars) drawSystem(st, sysA);
+    ctx.globalAlpha = 1;
+    // Jump range.
+    if (s > .8 && s < SYSTEM_TO * 2) {
+      const [hx, hy] = toScreen(here.x, here.y);
+      ctx.globalAlpha = 1 - smooth(Math.log(SYSTEM_FROM), Math.log(SYSTEM_TO * 2), ls);
+      ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(201,244,204,.55)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(hx, hy, range * s, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+    }
+    drawLabels(stars, sysA);
+    updateChrome();
+  }
+
+  function drawSystem(st, alpha) {
+    const sys = systemOf(st), known = isVisited(st), s = view.scale, k = sys.chartScale;
+    const [cx, cy] = toScreen(st.x, st.y);
+    if (cx < -SYSTEM_RADIUS * s * 1.2 || cx > w + SYSTEM_RADIUS * s * 1.2 || cy < -SYSTEM_RADIUS * s * 1.2 || cy > h + SYSTEM_RADIUS * s * 1.2) return;
+    const survey = st.id === here.id ? o.survey() : null;
+    ctx.lineWidth = 1;
+    for (const b of sys.bodies) {
+      const parent = b.parent && sys.bodies.find(p => p.id === b.parent);
+      const [bx, by] = bodyXY(st, sys, b), [sx, sy] = toScreen(bx, by);
+      if (parent) {
+        const [px, py] = toScreen(...bodyXY(st, sys, parent)), orbitPx = Math.hypot(sx - px, sy - py);
+        if (orbitPx > 6) { ctx.globalAlpha = alpha * .35 * smooth(6, 20, orbitPx); ctx.strokeStyle = '#9fb7c4'; ctx.beginPath(); ctx.arc(px, py, orbitPx, 0, Math.PI * 2); ctx.stroke(); }
+      } else {
+        ctx.globalAlpha = alpha * (known ? .32 : .18); ctx.strokeStyle = known ? '#9fb7c4' : '#6f7f88';
+        if (!known) ctx.setLineDash([3, 5]);
+        ctx.beginPath(); ctx.arc(cx, cy, Math.hypot(b.position[0], b.position[2]) * k * s, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      }
+      const r = clamp(b.radius / 190 * (2.4 + s / 500), 2, 11) * (parent ? .7 : 1);
+      ctx.globalAlpha = alpha;
+      if (b.ringed && known) { ctx.strokeStyle = b.atmosphere; ctx.beginPath(); ctx.ellipse(sx, sy, r * 2, r * .7, -.35, 0, Math.PI * 2); ctx.stroke(); }
+      ctx.fillStyle = known ? b.palette[2] : '#7d8a90';
+      ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill();
+      if (known) { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.arc(sx + r * .35, sy + r * .25, r * .85, -.6, 2.2); ctx.fill(); }
+      if (survey && b.id === survey.activeId) { ctx.fillStyle = '#c9f4cc'; diamond(sx, sy - r - 9, 5); }
+      if (selected.body && selected.body.id === b.id && selected.star.id === st.id) { ctx.strokeStyle = '#c9f4cc'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(sx, sy, r + 5, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 1; }
+      drawn.push({ star: st, body: b, sx, sy, r: Math.max(r + 4, 10) });
+    }
+    ctx.globalAlpha = 1;
+  }
+  function diamond(x, y, r) { ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r * .85, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r * .85, y); ctx.closePath(); ctx.fill(); }
+
+  function drawLabels(stars, sysA) {
+    const s = view.scale;
+    ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+    // Star names.
+    if (s >= LOCAL_SCALE * .8) {
+      ctx.font = `500 ${s > SYSTEM_FROM ? 12 : 10}px system-ui, sans-serif`;
+      let count = 0;
+      for (const d of drawn) {
+        if (d.body || d.star.id === here.id || (selected.star.id === d.star.id && !selected.body)) continue;
+        const important = inRange.has(d.star.id) || isVisited(d.star) || s > 20;
+        if (!important || ++count > 90) continue;
+        ctx.fillStyle = 'rgba(200,215,210,.75)'; ctx.fillText(nameOf(d.star), d.sx + d.r * .6 + 6, d.sy);
+      }
+    }
+    // Planet names in known systems.
+    if (sysA > .5 && s > 180) {
+      ctx.font = '500 11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      for (const d of drawn) if (d.body && isVisited(d.star) && (!d.body.parent || s > 1400)) {
+        ctx.fillStyle = selected.body?.id === d.body.id && selected.star.id === d.star.id ? '#edf5ee' : 'rgba(200,215,210,.8)';
+        ctx.fillText(d.body.name, d.sx, d.sy + d.r + 2);
+      }
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    }
+    // Selected star.
+    if (!selected.body && selected.star.id !== here.id && s > REAL_FROM) {
+      const [sx, sy] = toScreen(selected.star.x, selected.star.y), d = drawn.find(e => !e.body && e.star.id === selected.star.id), r = (d?.r || 6) + 4;
+      ctx.strokeStyle = '#c9f4cc'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#edf5ee'; ctx.font = '600 12px system-ui, sans-serif'; ctx.fillText(nameOf(selected.star), sx + r + 6, sy);
+    }
+    // You are here.
+    if (s < SYSTEM_TO) {
+      const [hx, hy] = toScreen(here.x, here.y);
+      ctx.globalAlpha = 1 - smooth(Math.log(SYSTEM_FROM), Math.log(SYSTEM_TO), Math.log(s));
+      ctx.fillStyle = '#c9f4cc'; diamond(hx, hy, 7);
+      ctx.font = '600 10px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(s >= LOCAL_SCALE * .8 ? `${nameOf(here)} · YOU` : 'YOU ARE HERE', hx, hy + 10);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.globalAlpha = 1;
+    } else {
+      const d = drawn.find(e => !e.body && e.star.id === here.id);
+      if (d) { ctx.fillStyle = 'rgba(237,245,238,.85)'; ctx.font = '600 12px system-ui, sans-serif'; ctx.fillText(`${nameOf(here)} · YOU ARE HERE`, d.sx + d.r + 8, d.sy - d.r - 4); }
+    }
+  }
+
+  function centreStar() {
+    let best = null, bd = Infinity;
+    for (const d of drawn) if (!d.body) { const dd = Math.hypot(d.sx - w / 2, d.sy - h / 2); if (dd < bd) { bd = dd; best = d.star; } }
+    return best;
+  }
+  function updateChrome() {
+    const s = view.scale;
+    let title = 'THE GALAXY', sub = `${Math.max(1, state.visited.size)} star${state.visited.size > 1 ? 's' : ''} visited · ${state.jumps} jump${state.jumps === 1 ? '' : 's'}`;
+    if (s >= SYSTEM_FROM) { const c = centreStar(); if (c) { title = `${nameOf(c).toUpperCase()} SYSTEM`; sub = isVisited(c) ? `${systemOf(c).bodies.length} worlds · ${starPhysics(c).spectralClass} star` : `Unsurveyed · ${systemOf(c).bodies.length} worlds detected`; } }
+    else if (s >= REAL_FROM) { title = 'STELLAR NEIGHBOURHOOD'; sub = `${targets.length} stars within jump range (${range.toFixed(1)} ly)`; }
+    $('mapTitle').textContent = title; $('mapSubtitle').textContent = sub;
+    $('mapScale').textContent = `${fmtLy(w / s)} across · drag to pan · scroll or pinch to zoom · double-tap a star to open its system`;
+  }
+
+  // --- Navigation ---
+  function zoomAt(sx, sy, factor) {
+    anim = null;
+    const [wx, wy] = toWorld(sx, sy);
+    view.scale = clamp(view.scale * factor, minScale(), MAX_SCALE);
+    view.x = wx - (sx - w / 2) / view.scale; view.y = wy + (sy - h / 2) / view.scale;
+    requestDraw();
+  }
+  // Fly so the target's on-screen offset shrinks smoothly while zoom changes in log space.
+  function flyTo(x, y, scale, ms = 900) {
+    scale = clamp(scale, minScale(), MAX_SCALE);
+    ({ x, y } = focusView(x, y, scale));
+    const from = { ...view }, t0 = performance.now(), off = [(x - from.x) * from.scale, (y - from.y) * from.scale];
+    const token = anim = {};
+    (function step(now) {
+      if (anim !== token) return;
+      const t = Math.min(1, (now - t0) / ms), e = t < .5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
+      view.scale = Math.exp(Math.log(from.scale) + (Math.log(scale) - Math.log(from.scale)) * e);
+      view.x = x - off[0] * (1 - e) / view.scale; view.y = y - off[1] * (1 - e) / view.scale;
+      draw();
+      if (t < 1) requestAnimationFrame(step); else anim = null;
+    })(t0);
+  }
+  const flyToStar = (star) => flyTo(star.x, star.y, systemScale());
+  function flyToBody(star, body) { const sys = systemOf(star), [x, y] = bodyXY(star, sys, body); flyTo(x, y, Math.max(view.scale, body.parent ? systemScale() * 6 : systemScale() * 1.6)); }
+
+  function select(star, body = null) {
+    selected = { star, body };
+    if (body && star.id === here.id) o.onSelectBody(body);
+    updatePanel(); requestDraw();
+    document.body.classList.remove('map-panel-collapsed');
+  }
+  function hit(sx, sy) {
+    let best = null, bd = Infinity;
+    for (const d of drawn) { const dd = Math.hypot(d.sx - sx, d.sy - sy) - (d.body ? 4 : 0); if (dd < d.r + 8 && dd < bd) { bd = dd; best = d; } }
+    return best;
+  }
+  function tap(sx, sy, double) {
+    const d = hit(sx, sy);
+    if (d) { select(d.star, d.body || null); if (double) d.body ? flyToBody(d.star, d.body) : flyToStar(d.star); }
+    else if (view.scale < REAL_FROM) { const [x, y] = toWorld(sx, sy); flyTo(x, y, view.scale * 4, 600); }
+    else if (double) zoomAt(sx, sy, 2.5);
+  }
+
+  const pointers = new Map(); let moved = 0, pinch = null, lastTap = 0;
+  canvas.addEventListener('pointerdown', (e) => {
+    canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY }); moved = 0; anim = null;
+    if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), scale: view.scale }; }
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    const prev = pointers.get(e.pointerId); if (!prev) return;
+    const cur = { x: e.offsetX, y: e.offsetY }; pointers.set(e.pointerId, cur);
+    if (pointers.size === 1) { const dx = cur.x - prev.x, dy = cur.y - prev.y; moved += Math.abs(dx) + Math.abs(dy); view.x -= dx / view.scale; view.y += dy / view.scale; requestDraw(); }
+    else if (pointers.size === 2 && pinch) { const [a, b] = [...pointers.values()]; moved += 10; zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, pinch.scale * Math.hypot(a.x - b.x, a.y - b.y) / pinch.dist / view.scale); }
+  });
+  const release = (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    if (pointers.size === 1 && moved < 6 && e.type === 'pointerup') { const now = performance.now(); tap(e.offsetX, e.offsetY, now - lastTap < 320); lastTap = now; }
+    pointers.delete(e.pointerId); if (pointers.size < 2) pinch = null;
+  };
+  canvas.addEventListener('pointerup', release); canvas.addEventListener('pointercancel', release);
+  canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoomAt(e.offsetX, e.offsetY, Math.exp(-e.deltaY * (e.ctrlKey ? .01 : .0018))); }, { passive: false });
+  $('mapZoomIn').onclick = () => zoomAt(w / 2, h / 2, 2);
+  $('mapZoomOut').onclick = () => zoomAt(w / 2, h / 2, .5);
+  $('mapViewGalaxy').onclick = () => flyTo(0, 0, minScale(), 1100);
+  $('mapViewLocal').onclick = () => flyTo(here.x, here.y, LOCAL_SCALE);
+  $('mapViewSystem').onclick = () => { select(here, null); flyToStar(here); };
+  $('closeStarMap').onclick = () => dialog.close();
+  $('mapPanelToggle').onclick = () => document.body.classList.toggle('map-panel-collapsed');
+
+  // --- Side panel ---
+  function updatePanel() {
+    const { star, body } = selected, sys = systemOf(star), known = isVisited(star), isHere = star.id === here.id, p = starPhysics(star);
+    const btn = $('mapAction'); let note = '';
+    if (body) {
+      const parent = body.parent && sys.bodies.find(b => b.id === body.parent);
+      if (known) {
+        const survey = isHere ? o.survey() : readSurvey(sys.seed), status = body.giant ? (survey.visited?.has(body.id) ? 'visited' : 'not yet visited') : survey.records.has(body.id) ? 'signal recorded' : survey.visited?.has(body.id) ? 'visited' : 'unidentified surface signal';
+        $('mapKicker').textContent = `${body.type.toUpperCase()}${parent ? ` · MOON OF ${parent.name.toUpperCase()}` : ''}`;
+        $('mapName').textContent = body.name; $('mapDescription').textContent = body.description; $('mapFacts').textContent = `${body.facts} · ${status}`;
+        // Plant life: how many species, and the ones you have catalogued on foot.
+        const plants = floraFor(body).species, seen = new Set(survey.flora?.[body.id] || []);
+        if (plants.length) {
+          const names = plants.filter(sp => seen.has(sp.id)).map(sp => sp.name);
+          $('mapFacts').textContent += ` · ${seen.size} of ${plants.length} plant species catalogued`;
+          if (names.length) $('mapDescription').textContent += ` Catalogued: ${names.join(', ')}.`;
+        }
+        const animals = faunaFor(body).species, observed = new Set(survey.fauna?.[body.id] || []);
+        if (animals.length) {
+          const names = animals.filter(sp => observed.has(sp.id)).map(sp => sp.name);
+          $('mapFacts').textContent += ` · ${observed.size} of ${animals.length} animal species observed`;
+          if (names.length) $('mapDescription').textContent += ` Observed: ${names.join(', ')}.`;
+        }
+      } else {
+        $('mapKicker').textContent = `UNKNOWN ${parent ? 'MOON' : 'WORLD'} · ${nameOf(star).toUpperCase()}`;
+        $('mapName').textContent = 'Unsurveyed world'; $('mapDescription').textContent = 'Long-range sensors only show its orbit. Jump to this system to learn what it is.'; $('mapFacts').textContent = '';
+      }
+      if (isHere) {
+        const c = o.cruise(body); btn.disabled = !c.enabled; btn.textContent = c.label; note = c.note || '';
+        btn.onclick = () => { if (!btn.disabled) o.onCruise(body); };
+      } else { btn.disabled = true; btn.textContent = 'Jump to this system first'; btn.onclick = null; note = inRange.has(star.id) ? 'It is within jump range: select the star to jump.' : ''; }
+    } else {
+      $('mapKicker').textContent = `${p.spectralClass} STAR · ${isHere ? 'YOU ARE HERE' : known ? 'VISITED' : 'UNVISITED'}`;
+      $('mapName').textContent = nameOf(star);
+      if (known) {
+        const best = sys.bodies.slice().sort((a, b) => LIFE_RANK[b.physics.life] - LIFE_RANK[a.physics.life] || b.physics.habitability - a.physics.habitability)[0];
+        $('mapDescription').textContent = `${sys.bodies.length} worlds. Most promising: ${best.name}, ${best.type.toLowerCase()} · ${LIFE_WORDS[best.physics.life].toLowerCase()}.`;
+      } else $('mapDescription').textContent = `Long-range scan: ${sys.bodies.length} worlds. Surface conditions unknown until you arrive.`;
+      const lum = p.luminosity < .01 ? p.luminosity.toFixed(4) : p.luminosity.toFixed(2);
+      $('mapFacts').textContent = `${p.temperature} K · ${p.mass.toFixed(2)} M☉ · ${lum} L☉ · ${p.age.toFixed(1)} billion years${isHere ? '' : ` · ${starDistance(star, here).toFixed(1)} ly away`}`;
+      const reachable = inRange.has(star.id), ready = o.canJump();
+      btn.disabled = isHere || !reachable || !ready;
+      btn.textContent = isHere ? 'You are here' : !reachable ? `Beyond jump range (${range.toFixed(1)} ly)` : ready ? `Jump to ${nameOf(star)} ↗` : 'Jump drive not ready';
+      btn.onclick = () => { if (!btn.disabled) o.onJump(star, nameOf(star)); };
+      note = isHere ? (offChart ? 'Off-chart system. Jumps are measured from your last charted star.' : 'Double-tap a star, or a world in the list, to zoom in.') : !reachable ? 'Out of range. Jump to a nearer star first and work your way toward it.' : ready ? '' : o.blockedReason();
+    }
+    $('mapNote').textContent = note;
+    // Worlds of the selected system.
+    const list = $('mapWorlds'); list.replaceChildren();
+    $('mapWorldsHeading').textContent = `WORLDS OF ${nameOf(star).toUpperCase()}`;
+    if (!known) { const empty = document.createElement('p'); empty.className = 'map-note'; empty.textContent = `${sys.bodies.length} worlds detected. Visit to survey them.`; list.append(empty); }
+    else {
+      const survey = isHere ? o.survey() : readSurvey(sys.seed);
+      const ordered = sys.bodies.filter(b => !b.parent).flatMap(pl => [pl, ...sys.bodies.filter(m => m.parent === pl.id)]);
+      for (const b of ordered) {
+        const row = document.createElement('button'); row.className = 'world-row' + (body?.id === b.id ? ' selected' : '') + (b.parent ? ' moon' : '');
+        const tag = survey.records.has(b.id) ? 'RECORDED' : isHere && b.id === survey.activeId ? 'HERE' : survey.visited?.has(b.id) ? 'VISITED' : '';
+        row.innerHTML = `<i style="background:${b.palette[2]}"></i><span><strong></strong><small></small></span><em>${tag}</em>`;
+        row.querySelector('strong').textContent = b.name; row.querySelector('small').textContent = `${b.type} · ${LIFE_WORDS[b.physics.life].toLowerCase()}`;
+        row.onclick = () => { select(star, b); flyToBody(star, b); };
+        list.append(row);
+      }
+    }
+    // Jump targets.
+    const jl = $('mapJumps'); jl.replaceChildren();
+    for (const t of targets) {
+      const tp = starPhysics(t.star), row = document.createElement('button');
+      row.className = 'world-row' + (!body && star.id === t.star.id ? ' selected' : '');
+      row.innerHTML = `<i style="background:${tp.color}"></i><span><strong></strong><small>${tp.spectralClass} star · ${t.distance.toFixed(1)} ly</small></span><em>${state.visited.has(t.star.id) ? 'VISITED' : ''}</em>`;
+      row.querySelector('strong').textContent = nameOf(t.star);
+      row.onclick = () => { select(t.star); flyTo(t.star.x, t.star.y, Math.max(LOCAL_SCALE, Math.min(view.scale, SYSTEM_FROM * .6))); };
+      jl.append(row);
+    }
+  }
+
+  return {
+    open(mode = 'local') {
+      if (!dialog.open) dialog.showModal();
+      resize();
+      if (mode === 'system') {
+        const b = o.selectedBody();
+        selected = { star: here, body: b || null };
+        Object.assign(view, focusView(here.x, here.y, systemScale()));
+      } else {
+        if (selected.star.id === here.id && !selected.body && targets[0]) selected = { star: targets[0].star, body: null };
+        Object.assign(view, focusView(here.x, here.y, LOCAL_SCALE));
+      }
+      updatePanel(); draw();
+    },
+    close() { dialog.close(); },
+    get isOpen() { return dialog.open; },
+    resize() { if (dialog.open) { resize(); requestDraw(); } },
+    refresh() { if (dialog.open) { updatePanel(); requestDraw(); } },
+  };
+}
