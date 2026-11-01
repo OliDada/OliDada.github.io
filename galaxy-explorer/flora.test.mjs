@@ -49,9 +49,9 @@ test('suitability is 0 underwater and peaks in the preferred climate', () => {
   assert.ok(best > .3 && worse < best * .1);
 });
 
-test('plants are built and placed on dry land, away from the monument and landing pad', () => {
+test('plants are built and placed on dry land, away from the site and landing pad', () => {
   for (const body of living.filter(b => b.physics.life !== 'microbial').slice(0, 6)) {
-    const terrain = terrainFor(body), signal = new THREE.Vector3(...body.signal);
+    const terrain = terrainFor(body), signal = new THREE.Vector3(...terrain.site); // the dry site the game uses
     const landing = new THREE.Vector3(0, 1, 30 / body.radius).normalize().applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), signal));
     const t0 = performance.now();
     const flora = buildFlora(THREE, { body, terrain, radius: body.radius, signalNormal: signal, landingNormal: landing, budget: 900 });
@@ -70,6 +70,8 @@ test('plants are built and placed on dry land, away from the monument and landin
       }
       total += positions.length / 3;
     }
-    assert.ok(total > 300, `${body.name}: only ${total} plants placed`);
+    // Ocean worlds have little dry land near the site, so fewer plants fit there.
+    const expected = terrain.liquid === 'water' && terrain.coverage > .6 ? 100 : 300;
+    assert.ok(total > expected, `${body.name}: only ${total} plants placed`);
   }
 });

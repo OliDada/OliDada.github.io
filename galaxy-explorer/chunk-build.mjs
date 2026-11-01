@@ -51,6 +51,9 @@ export function buildChunk(body, spec) {
   const positions = new Float32Array(count * 3), colors = new Float32Array(count * 3), normals = new Float32Array(count * 3);
   const wet = t.liquid === 'water' || t.liquid === 'lava';
   const water = wet ? new Float32Array(count * 3) : null;
+  // The sea is a smooth sphere: it gets its own straight-up normals rather than
+  // the ground's, which made it look faceted like the sea floor beneath it.
+  const waterNormals = wet ? new Float32Array(count * 3) : null;
   const mid = faceDirection(spec.face, spec.a0 + spec.size / 2, spec.b0 + spec.size / 2);
   const cn = { x: mid[0], y: mid[1], z: mid[2] };
   const cr = R + t.meshHeight(cn);
@@ -67,6 +70,7 @@ export function buildChunk(body, spec) {
     if (wet) {
       const rw = R + t.sea;
       water[k] = d[0] * rw - center[0]; water[k + 1] = d[1] * rw - center[1]; water[k + 2] = d[2] * rw - center[2];
+      waterNormals[k] = d[0]; waterNormals[k + 1] = d[1]; waterNormals[k + 2] = d[2];
       if (h < t.sea) anyWet = true;
     }
     maxD = Math.max(maxD, Math.hypot(positions[k], positions[k + 1], positions[k + 2]));
@@ -112,7 +116,10 @@ export function buildChunk(body, spec) {
     colors[k] = colors[src]; colors[k + 1] = colors[src + 1]; colors[k + 2] = colors[src + 2];
     for (let c = 0; c < 3; c++) { lodDelta[k + c] = lodDelta[src + c]; lodColor[k + c] = lodColor[src + c]; if (wet) waterDelta[k + c] = waterDelta[src + c]; }
     // Water gets a shallow skirt too, so seams between tiles of different detail never show the sea floor.
-    if (wet) { const wd = drop * .5; water[k] = water[src] - ux * wd; water[k + 1] = water[src + 1] - uy * wd; water[k + 2] = water[src + 2] - uz * wd; }
+    if (wet) {
+      const wd = drop * .5; water[k] = water[src] - ux * wd; water[k + 1] = water[src + 1] - uy * wd; water[k + 2] = water[src + 2] - uz * wd;
+      waterNormals[k] = waterNormals[src]; waterNormals[k + 1] = waterNormals[src + 1]; waterNormals[k + 2] = waterNormals[src + 2];
+    }
   }
-  return { positions, colors, normals, lodDelta, lodColor, water: anyWet ? water : null, waterDelta: anyWet ? waterDelta : null, center, radius: maxD + drop };
+  return { positions, colors, normals, lodDelta, lodColor, water: anyWet ? water : null, waterDelta: anyWet ? waterDelta : null, waterNormals: anyWet ? waterNormals : null, center, radius: maxD + drop };
 }

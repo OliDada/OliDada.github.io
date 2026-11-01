@@ -2,10 +2,15 @@
 // Held keys go into `keys` (KeyboardEvent.code values); everything else is a
 // callback into game.js:
 //   on.map(), on.galaxy(), on.cruise(), on.help(), on.act(), on.interact(),
-//   on.look(dx, dy, k), on.manualControl() (any manual input cancels assists), on.toast(text)
+//   on.look(dx, dy, k), on.manualControl() (any manual input cancels assists), on.toast(text),
+//   on.pick(x, y) (a tap or click on the view: select what is there), on.cycle() (Tab: next target)
 const $ = (id) => document.getElementById(id);
 
 export function setupInput({ keys, canvas, started, mode, modalOpen, on }) {
+    // A long press on the controls or the view must not open the system menu.
+    document.addEventListener("contextmenu", (e) => {
+        if (e.target.closest?.("#touchControls, #world, #hud button")) e.preventDefault();
+    });
     window.addEventListener("keydown", (e) => {
         if (
             ["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(
@@ -20,6 +25,11 @@ export function setupInput({ keys, canvas, started, mode, modalOpen, on }) {
         if (e.code === "KeyG") return on.galaxy();
         if (e.code === "KeyT" && !modalOpen()) return on.cruise();
         if (e.code === "KeyH") return on.help();
+        if (e.code === "KeyC" && started() && !modalOpen()) return on.clear();
+        if (e.code === "Tab" && started() && !modalOpen()) {
+            e.preventDefault();
+            return on.cycle();
+        }
         if (
             !started() ||
             modalOpen() ||
@@ -75,8 +85,13 @@ export function setupInput({ keys, canvas, started, mode, modalOpen, on }) {
             on.toast("Mouse look on. Press Esc to free the cursor.");
         }
     });
+    // A short tap or click without dragging selects whatever is under it. With
+    // the mouse captured, a click selects what is in the middle of the view.
+    let tap = null;
     canvas.addEventListener("pointerdown", (e) => {
         if (!started() || modalOpen()) return;
+        if (mouseLocked()) return void on.pick(innerWidth / 2, innerHeight / 2);
+        tap = { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0 };
         if (e.pointerType === "mouse" && canvas.requestPointerLock) {
             try {
                 const request = canvas.requestPointerLock();
@@ -96,10 +111,15 @@ export function setupInput({ keys, canvas, started, mode, modalOpen, on }) {
             if (!dragging || mouseLocked()) return;
         const dx = e.clientX - lastPointer.x,
             dy = e.clientY - lastPointer.y;
+        if (tap) tap.moved += Math.abs(dx) + Math.abs(dy);
         lastPointer = { x: e.clientX, y: e.clientY };
         look(dx, dy);
     });
-    canvas.addEventListener("pointerup", () => (dragging = false));
+    canvas.addEventListener("pointerup", (e) => {
+        dragging = false;
+        if (tap && tap.moved < 8 && performance.now() - tap.t < 350) on.pick(tap.x, tap.y);
+        tap = null;
+    });
     canvas.addEventListener("pointercancel", () => (dragging = false));
     // Touch joystick: drag the knob to fly or walk (maps onto W/A/S/D).
     const stick = $("joystick");

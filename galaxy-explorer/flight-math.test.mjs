@@ -41,3 +41,15 @@ test("landing and liftoff easing never overshoot and approach both endpoints gen
     assert.ok(smootherstep(0.001) < 1e-7);
     assert.ok(1 - smootherstep(0.999) < 1e-7);
 });
+
+test("climbing speeds up with altitude so leaving orbit is quick", () => {
+    assert.equal(verticalTarget(1, 0, 0, false, 0), 19);
+    assert.ok(verticalTarget(1, 0, 0, false, 300) > 50);
+    assert.ok(verticalTarget(1, 0, 0, true, 500) > 150);
+    // Simulate a climb from 150 m to orbit (600 m) holding lift.
+    let h = 150, v = 0, t = 0;
+    while (h < 600 && t < 60) { v = 19 + (v - 19) * 0; v = verticalTarget(1, 0, 0, false, h); h += v / 60; t += 1 / 60; }
+    assert.ok(t < 12, `climb took ${t.toFixed(1)} s`);
+    // Descending is unchanged.
+    assert.equal(verticalTarget(-1, 0, 0, false, 300), -19);
+});

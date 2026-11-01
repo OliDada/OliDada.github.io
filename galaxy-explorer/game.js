@@ -9,9 +9,21 @@ import { generateSystem, terrainHeight, cruisePoint } from "./system.mjs";
 import { terrainFor } from "./terrain.mjs";
 import { buildSurface, disposeSurface } from "./surface.js";
 import { createKestrel, updateShipEffects } from "./kestrel.js";
-import { createSystemView } from "./system-view.js";
+import { createSystemView, buildSystemViewGradually } from "./system-view.js";
+import { createTerrainStreamer } from "./planet-lod.js";
+import {
+    ARRIVE_LY,
+    toGalaxy,
+    toScene,
+    systemEdge,
+    starGameRadius,
+    createSky,
+    createNearStar,
+    createDriveStreaks,
+    createWorldDots,
+} from "./deep-space.js";
 import { setupInput } from "./input.js";
-import { updateHUD } from "./hud.js";
+import { updateHUD, updateWaypoint } from "./hud.js";
 import { createEngineSound } from "./audio.js";
 import { orbitClock, systemPositions } from "./orbits.mjs";
 import { starById, homeStar } from "./galaxy.mjs";
@@ -32,7 +44,7 @@ const Y = new THREE.Vector3(0, 1, 0);
 const params = new URLSearchParams(location.search);
 const galaxyState = loadGalaxyState();
 let currentStar = starById(params.get("star"));
-const offChart = !currentStar && params.get("seed") !== null;
+let offChart = !currentStar && params.get("seed") !== null;
 if (!currentStar) currentStar = starById(galaxyState.current) || homeStar();
 if (!offChart) {
     galaxyState.current = currentStar.id;
@@ -43,7 +55,10 @@ if (!offChart) {
             history.replaceState(null, "", `?star=${currentStar.id}`);
         } catch {} // some hosts (sandboxed frames) don't allow query strings
 }
-const system = generateSystem(offChart ? params.get("seed") : currentStar.seed);
+let system = generateSystem(offChart ? params.get("seed") : currentStar.seed);
+// The galaxy star whose system is loaded. An off-chart test system (?seed=)
+// sits at your last charted star, but is not that star's real system.
+let loadedId = offChart ? null : currentStar.id;
 // &world=planet-1 starts above a specific world (handy for sharing a planet).
 // Giants have no surface, so they are never the world you are at.
 let activeBody =
@@ -57,7 +72,7 @@ let orbitTime = orbitClock(),
     positions = systemPositions(system, orbitTime);
 const positionOf = (body) => vec(...positions.get(body.id));
 let worldOrigin = positionOf(activeBody);
-let signalNormal = vec(...activeBody.signal);
+let signalNormal = vec(...terrainFor(activeBody).site); // dry, level ground near the signal
 let landingNormal = vec(0, 1, 30 / RADIUS) // landing pad ~30 m from the signal
     .normalize()
     .applyQuaternion(
@@ -126,8 +141,18 @@ function buildSite() {
     });
     scene.add(site.group);
 }
-// Every world, the star and the background stars (system-view.js).
-const systemView = createSystemView(scene, system, { coarse: coarsePointer });
+// Every world and the star of the system you are in (system-view.js). Terrain
+// tiles for every system are built by one shared pool of background threads.
+const streamer = createTerrainStreamer();
+let systemView = createSystemView(scene, system, streamer, { coarse: coarsePointer });
+let edge = systemEdge(system); // beyond this (metres from the star) is interstellar space
+// The real stars of the galaxy, seen from where you are (deep-space.js).
+const sky = createSky(scene, renderer);
+const nearStar = createNearStar(scene);
+const streaks = createDriveStreaks(scene);
+const worldDots = createWorldDots(scene);
+const starPoint = (star) => [star.x, star.y, star.z];
+sky.update(starPoint(currentStar), camera, currentStar.id);
 // Moves every body to where it is now. Near a world you travel with it, so
 // nothing changes locally; in free space and on cruise the ship holds its
 // course through the system while the world you left moves on.
@@ -145,10 +170,8 @@ function advanceOrbits() {
 }
 function positionSystem() {
     systemView.place(positions, worldOrigin);
-    sun.position.copy(systemView.starMesh.position);
+    if (mode !== "deep") sun.position.copy(systemView.starMesh.position);
 }
-buildSite();
-positionSystem();
 
 
 const kestrel = createKestrel();
@@ -168,32 +191,29 @@ let started = false,
     stage = 0,
     discovered = false,
     completed = false;
-const saveKey = `elsewhere-system-${system.seed}`;
-let records = new Set(),
-    visited = new Set([activeBody.id]),
-        catalogue = {}, // plant species catalogued per world: { bodyId: [speciesId] }
+buildSite();
+positionSystem();
+// Survey records are saved per system.
+let saveKey,
+    records = new Set(),
+    visited = new Set(),
+    catalogue = {}, // plant species catalogued per world: { bodyId: [speciesId] }
     bestiary = {}; // animal species observed per world: { bodyId: [speciesId] }
-try {
-    const saved = JSON.parse(localStorage.getItem(saveKey) || "{}");
-    records = new Set(
-        (saved.records || []).filter((id) =>
-            system.bodies.some((b) => b.id === id),
-        ),
-    );
-    visited = new Set([
-        activeBody.id,
-        ...(saved.visited || []).filter((id) =>
-            system.bodies.some((b) => b.id === id),
-        ),
-    ]);
-} catch {}
-try {
-        const savedLife = JSON.parse(localStorage.getItem(saveKey) || "{}");
-    catalogue = savedLife.flora || {};
-    bestiary = savedLife.fauna || {};
-} catch {}
+function loadSurvey(arrivedAt) {
+    saveKey = `elsewhere-system-${system.seed}`;
+    let saved = {};
+    try {
+        saved = JSON.parse(localStorage.getItem(saveKey) || "{}");
+    } catch {}
+    const known = (id) => system.bodies.some((b) => b.id === id);
+    records = new Set((saved.records || []).filter(known));
+    visited = new Set([...(arrivedAt ? [arrivedAt.id] : []), ...(saved.visited || []).filter(known)]);
+    catalogue = saved.flora || {};
+    bestiary = saved.fauna || {};
+}
+loadSurvey(activeBody);
 discovered = records.has(activeBody.id);
-let selectedBody = system.bodies[0],
+let selectedBody = null, // the world you chose as your destination, if any
     travel = null;
 const spaceUp = Y.clone();
 function saveSurvey() {
@@ -335,8 +355,13 @@ function approach() {
 }
 function act() {
     if (!started || modalOpen()) return;
+    if (mode === "deep") {
+        if (course) toggleAutopilot();
+        else openGalaxy();
+        return;
+    }
     if (mode === "space") {
-        beginCruise();
+        cruiseOrAutopilot();
         return;
     }
     if (mode === "transit") {
@@ -447,7 +472,6 @@ function discover() {
     setDiscoveryText(activeBody);
     $("logBtn").hidden = false;
     setStage(2);
-    site.beacon.visible = false;
     keys.clear();
     $("discovery").showModal();
 }
@@ -476,7 +500,8 @@ const input = setupInput({
     on: {
         map: () => (starMap.isOpen ? starMap.close() : openMap()),
         galaxy: () => (starMap.isOpen ? starMap.close() : openGalaxy()),
-        cruise: () => (mode === "transit" ? cancelCruise() : beginCruise()),
+        cruise: () => cruiseOrAutopilot(),
+        clear: () => clearTarget(),
         help: () => {
             if ($("help").open) $("help").close();
             else {
@@ -497,6 +522,8 @@ const input = setupInput({
         },
         manualControl: () => (autoApproach = false),
         toast,
+        pick: (x, y) => pickAt(x, y),
+        cycle: () => cycleTarget(),
     },
 });
 document.addEventListener("visibilitychange", () => (previousTime = performance.now()));
@@ -525,7 +552,7 @@ function switchWorld(body, globalPosition) {
     activeBody = body;
     RADIUS = body.radius;
     worldOrigin = positionOf(body);
-    signalNormal = vec(...body.signal);
+    signalNormal = vec(...terrainFor(body).site);
         landingNormal = vec(0, 1, 30 / RADIUS)
         .normalize()
         .applyQuaternion(
@@ -554,9 +581,10 @@ function switchWorld(body, globalPosition) {
     mode = "flight";
     kestrel.gear = 0;
     discovered = records.has(body.id);
+    if (target?.id === body.id) target = null; // arrived
+    if (selectedBody?.id === body.id) selectedBody = null;
     completed = discovered;
     setStage(discovered ? 3 : 0);
-    site.beacon.visible = !discovered;
     $("logBtn").hidden = !discovered;
     visited.add(body.id);
     saveSurvey();
@@ -585,6 +613,11 @@ function orientSpace(dt) {
 }
 const GIANT_CLEARANCE = 250; // closest approach to a giant's cloud tops
 function updateSpace(dt) {
+    // A selected world, or else your course star: hold the nose on it whenever
+    // you are not steering.
+    const aim = target ? positionOf(target).sub(worldOrigin).sub(shipPosition).normalize() : course ? towardStar(course) : null;
+    if (aim && !steering()) turnToward(aim, dt);
+    const autoThrust = autopilot && course && !target && !keys.has("KeyW") && !keys.has("KeyS") && !keys.has("KeyX");
     const yaw = (keys.has("KeyA") ? 1 : 0) - (keys.has("KeyD") ? 1 : 0);
     shipForward.applyAxisAngle(spaceUp, yaw * dt * 0.85);
     const right = shipForward.clone().cross(spaceUp).normalize();
@@ -598,7 +631,9 @@ function updateSpace(dt) {
         speed,
         brake
             ? 0
-            : ((keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0)) *
+            : autoThrust
+              ? shipForward.dot(aim) > 0.97 ? 900 : 60
+              : ((keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0)) *
                   (boost ? 900 : 220),
         brake ? 4 : 1.4,
         dt,
@@ -617,27 +652,38 @@ function updateSpace(dt) {
         .addScaledVector(shipForward, speed * dt)
         .addScaledVector(spaceUp, verticalSpeed * dt);
     const global = shipPosition.clone().add(worldOrigin);
-    if (global.length() < system.star.radius + 140) {
-        global.setLength(system.star.radius + 145);
+    // The star's exclusion zone and giants' cloud tops are hard limits. The ship
+    // slides along them (no bounce), and slows if it keeps pushing inward.
+    const holdOff = (centre, limit, message) => {
+        const out = global.clone().sub(centre);
+        if (out.length() >= limit) return;
+        out.normalize();
+        global.copy(centre).addScaledVector(out, limit);
         shipPosition.copy(global).sub(worldOrigin);
-        speed = 0;
-        verticalSpeed = 0;
-        toast(`Stellar exclusion zone. Turn away from ${system.star.name}.`);
-    }
-    // Giants: the cloud tops are as far as Kestrel can go.
-    for (const body of system.bodies) {
-        if (!body.giant) continue;
-        const centre = positionOf(body),
-            limit = body.radius + GIANT_CLEARANCE;
-        if (global.distanceTo(centre) < limit) {
-            global.sub(centre).setLength(limit + 2).add(centre);
-            shipPosition.copy(global).sub(worldOrigin);
-            speed = Math.min(speed, 40);
-            verticalSpeed = 0;
-            toast(
+        const inward = -shipForward.dot(out);
+        if (inward > 0) speed = damp(speed, 0, 6 * inward, dt);
+        if (verticalSpeed * spaceUp.dot(out) < 0) verticalSpeed = damp(verticalSpeed, 0, 6, dt);
+        if (toastTime <= 0) toast(message);
+    };
+    holdOff(vec(), system.star.radius + 140, `Stellar exclusion zone. Turn away from ${system.star.name}.`);
+    // Close to a star the hull heats up: the view glows and warnings start well
+    // before the hard limit above.
+    heat = clamp(1 - (global.length() - system.star.radius - 140) / (system.star.radius * 4), 0, 1);
+    if (heat > 0.35 && toastTime <= 0)
+        toast(heat > 0.75 ? `Hull temperature critical. Turn away from ${system.star.name}!` : `Hull temperature rising near ${system.star.name}.`, 2);
+    for (const body of system.bodies)
+        if (body.giant)
+            holdOff(
+                positionOf(body),
+                body.radius + GIANT_CLEARANCE,
                 `${body.name} has no surface: the clouds only thicken into crushing pressure. Its moons are safe to land on.`,
             );
-        }
+    // Past the outermost orbits lies interstellar space.
+    if (global.length() > edge * 0.85 && global.length() < edge && toastTime <= 0)
+        toast(`Leaving the ${system.name} system. The star drive engages beyond the outer orbits.`);
+    if (global.length() > edge) {
+        enterDeep(global);
+        return;
     }
     const nearby = system.bodies
         .filter((body) => !body.giant)
@@ -655,6 +701,8 @@ function updateSpace(dt) {
 }
 function beginCruise() {
     if (!started) return;
+    if (!selectedBody)
+        return void toast("Choose a destination first: press Tab, tap a world, or pick one on the system map (M).");
     if (mode !== "flight" && mode !== "space") {
         toast("Return to your ship and take off before engaging cruise.");
         return;
@@ -728,6 +776,350 @@ function updateCruise(dt) {
         if (destination.giant) arriveAtGiant(destination);
         else switchWorld(destination, global);
     }
+}
+
+// --- Interstellar flight ---------------------------------------------------
+// Beyond a system's edge the ship flies between the galaxy's real stars. Its
+// position is kept in light years (galactic); the scene stays centred on it.
+// The star drive's speed scales with the distance to the nearest star, so
+// crossing light years takes a minute or two and arrivals are gentle. Nearing
+// a star builds its system in the background; at its edge you fly straight in.
+let galactic = null, // ship position (ly) while in deep space
+    course = null, // destination star chosen on the galaxy map
+    autopilot = false,
+    throttle = 0,
+    incoming = null; // { star, system, view, ready } being built ahead of arrival
+const DRIVE_TIME = 5; // seconds to cover the distance to the nearest star, at full throttle
+const PREPARE_LY = 0.4; // start building a system this far out, so its worlds show early
+const edgeCache = new Map();
+function edgeOf(star) {
+    if (star.id === loadedId) return edge;
+    let e = edgeCache.get(star.id);
+    if (!e) {
+        e = systemEdge(generateSystem(star.seed));
+        if (edgeCache.size > 200) edgeCache.clear();
+        edgeCache.set(star.id, e);
+    }
+    return e;
+}
+function enterDeep(global) {
+    const out = toGalaxy(global.clone().normalize());
+    galactic = starPoint(currentStar).map((v, i) => v + out[i] * ARRIVE_LY * 1.05);
+    const shift = shipPosition.clone();
+    shipPosition.set(0, 0, 0);
+    camera.position.sub(shift);
+    mode = "deep";
+    throttle = autopilot && course ? 1 : 0.35;
+    autopilot = autopilot && !!course;
+    systemView.visible = false;
+    if (site) site.group.visible = false;
+    sky.update(galactic, camera);
+    toast(
+        course
+            ? `Star drive engaged. Press T for autopilot to ${starName(course)}.`
+            : "Star drive engaged. Fly toward any star, or set a course on the galaxy map (G).",
+        6,
+    );
+}
+const starName = (star) => (star.id === loadedId ? system.name : nameCache(star));
+const names = new Map();
+function nameCache(star) {
+    let n = names.get(star.id);
+    if (!n) names.set(star.id, (n = generateSystem(star.seed).name));
+    return n;
+}
+// A course replaces any world you had in focus: the ship now points at the star.
+function setCourse(star) {
+    if (!star) return clearTarget();
+    course = star;
+    target = pendingBody = selectedBody = null;
+    starMap.close();
+    if (mode === "deep") {
+        autopilot = true;
+        toast(`Course set for ${starName(star)}. Autopilot engaged; steer to take over.`);
+    } else
+        toast(
+            mode === "space"
+                ? `Course set for ${starName(star)}. Press T for autopilot: it flies you out of the system and on to the star.`
+                : `Course set for ${starName(star)}. Climb above 600 m, then press T for autopilot.`,
+            6,
+        );
+}
+function toggleAutopilot() {
+    if (!course) return void toast("Set a course on the galaxy map (G) first.");
+    autopilot = !autopilot;
+    toast(autopilot ? `Autopilot to ${starName(course)}.` : "Autopilot off. Manual flight.");
+}
+// T and the main button: with a star as your course (and no world in focus),
+// they work the autopilot; otherwise they cruise to the selected world.
+function cruiseOrAutopilot() {
+    if (mode === "deep" || (mode === "space" && course && !target)) toggleAutopilot();
+    else if (mode === "transit") cancelCruise();
+    else if (mode === "flight" && course && !target) toast("Climb above 600 m to leave orbit, then press T for autopilot.");
+    else if (mode === "space" && !selectedBody) cycleTarget();
+    else beginCruise();
+}
+// Where you are in the galaxy (ly): your ship in deep space, else your star.
+const viewer = () => (mode === "deep" ? galactic : starPoint(currentStar));
+const towardStar = (star) => toScene(starPoint(star).map((v, i) => v - viewer()[i])).normalize();
+function startIncoming(star) {
+    if (incoming?.view) incoming.view.dispose();
+    const job = (incoming = { star, system: generateSystem(star.seed), view: null, ready: false });
+    buildSystemViewGradually(scene, job.system, streamer, { coarse: coarsePointer }).then((view) => {
+        if (incoming === job) {
+            job.view = view;
+            job.ready = true;
+        } else view.dispose();
+    });
+}
+// Any steering input (keys, joystick sideways).
+const steering = () => keys.has("KeyA") || keys.has("KeyD") || keys.has("ArrowUp") || keys.has("ArrowDown");
+// Smoothly turns the ship's nose toward a direction, keeping it upright.
+function turnToward(want, dt) {
+    shipForward.lerp(want, 1 - Math.exp(-dt * 1.4)).normalize();
+    spaceUp.addScaledVector(shipForward, -spaceUp.dot(shipForward)).normalize();
+}
+// Where the course points: the chosen world of the system ahead once it can be
+// seen, otherwise its star.
+function courseAim() {
+    if (pendingBody && ahead && ahead.star.id === course.id) {
+        const p = ahead.positions.get(pendingBody.id);
+        return ahead.starScene.clone().add(vec(...p)).sub(shipPosition).normalize();
+    }
+    return toScene(starPoint(course).map((v, i) => v - galactic[i])).normalize();
+}
+// The system around the nearest star, seen from deep space: its worlds as dots
+// around the star from 0.4 ly, and the real worlds once they are close enough
+// to draw (the departing system as you leave, the next one as you arrive).
+let ahead = null,
+    shownView = null,
+    pendingBody = null; // world chosen in the system ahead; becomes the target on arrival
+const aheadSystems = new Map();
+function systemOfStar(star) {
+    if (star.id === loadedId) return system;
+    if (incoming?.star.id === star.id) return incoming.system;
+    let s = aheadSystems.get(star.id);
+    if (!s) {
+        if (aheadSystems.size > 20) aheadSystems.clear();
+        aheadSystems.set(star.id, (s = generateSystem(star.seed)));
+    }
+    return s;
+}
+function showSystemAhead(entry, offset, d) {
+    const star = entry.star;
+    if (d > 0.4) {
+        if (shownView) shownView.visible = false;
+        shownView = ahead = null;
+        worldDots.hide();
+        return;
+    }
+    const sys = systemOfStar(star),
+        metresPerLy = edgeOf(star) / ARRIVE_LY,
+        starScene = toScene(offset).multiplyScalar(metresPerLy),
+        positions = systemPositions(sys, orbitClock());
+    ahead = { star, system: sys, starScene, positions, real: false };
+    const view = star.id === loadedId ? systemView : incoming?.ready && incoming.star.id === star.id ? incoming.view : null;
+    if (shownView && shownView !== view) shownView.visible = false;
+    shownView = null;
+    if (view) {
+        // The real worlds, as a miniature when far off (see systemView.place).
+        const reach = starScene.length(),
+            scale = Math.min(1, 45000 / reach);
+        view.visible = true;
+        view.place(positions, starScene.clone().negate(), scale);
+        view.update(camera.position, streamer);
+        shownView = view;
+        ahead.real = true;
+        ahead.scale = scale;
+        nearStar.hide();
+    }
+    // Dots mark worlds still too small to see (under ~2 pixels across), so the
+    // system is visible from afar; each dot gives way to its world as it grows.
+    const pixels = innerHeight / 2 / Math.tan((camera.fov * Math.PI) / 360);
+    worldDots.show(
+        camera,
+        sys.bodies
+            .map((b) => ({ b, at: starScene.clone().add(vec(...positions.get(b.id))) }))
+            .filter((e) => !view || (e.b.radius / e.at.length()) * pixels < 2)
+            .map((e) => ({ dir: e.at.normalize(), color: e.b.palette[2] })),
+    );
+}
+function updateDeep(dt) {
+    const steer = steering();
+    const yaw = (keys.has("KeyA") ? 1 : 0) - (keys.has("KeyD") ? 1 : 0);
+    shipForward.applyAxisAngle(spaceUp, yaw * dt * 0.85);
+    const right = shipForward.clone().cross(spaceUp).normalize();
+    const pitch = (keys.has("ArrowUp") ? 1 : 0) - (keys.has("ArrowDown") ? 1 : 0);
+    shipForward.applyAxisAngle(right, pitch * dt * 0.7).normalize();
+    spaceUp.applyAxisAngle(right, pitch * dt * 0.7).normalize();
+    bankAngle = damp(bankAngle, yaw * 0.25, 4, dt);
+    // With a course set, the ship holds its heading toward it whenever you are
+    // not steering; steering takes over until you let go.
+    let want = null;
+    if (course && !steer) {
+        want = courseAim();
+        turnToward(want, dt);
+    }
+    const manualThrottle = keys.has("KeyW") || keys.has("KeyS") || keys.has("KeyX");
+    if (autopilot && want && !manualThrottle) throttle = damp(throttle, shipForward.dot(want) > 0.97 ? 1 : 0.15, 1.5, dt);
+    else if (keys.has("KeyX")) throttle = damp(throttle, 0, 4, dt);
+    else throttle = clamp(throttle + ((keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0)) * dt * 0.45, 0, 1);
+    const boost = keys.has("ShiftLeft") || keys.has("ShiftRight");
+    const nearest = sky.stars[0];
+    const d = nearest ? nearest.distance : 1;
+    const lyPerSecond = (throttle * Math.max(d, 0.0008)) / (boost ? DRIVE_TIME / 2.5 : DRIVE_TIME);
+    const step = toGalaxy(shipForward);
+    for (let i = 0; i < 3; i++) galactic[i] += step[i] * lyPerSecond * dt;
+    speed = 120 + throttle * 600; // for engine glow
+    verticalSpeed = 0;
+    sky.update(galactic, camera);
+    orientSpace(dt);
+    streaks.update(camera, shipForward, throttle * (boost ? 1 : 0.7), dt);
+    if (!nearest) return;
+    // Light comes from the nearest star.
+    const toStar = toScene(starPoint(nearest.star).map((v, i) => v - galactic[i])).normalize();
+    sun.position.copy(toStar).multiplyScalar(1000);
+    sun.color.set(nearest.physics.color).lerp(new THREE.Color(0xffffff), 0.45);
+    sun.intensity = 3.1 * clamp(0.25 + 0.75 * (ARRIVE_LY * 30) / Math.max(d, ARRIVE_LY), 0.25, 1);
+    // The star ahead grows into a sphere as you close in.
+    const offset = starPoint(nearest.star).map((v, i) => v - galactic[i]);
+    if (d < 0.3)
+        nearStar.show(camera, offset, edgeOf(nearest.star) / ARRIVE_LY, starGameRadius(nearest.physics), nearest.physics.color);
+    else nearStar.hide();
+    showSystemAhead(nearest, offset, d);
+    // Build the system ahead before you get there.
+    if (d < PREPARE_LY && nearest.star.id !== loadedId && incoming?.star.id !== nearest.star.id)
+        startIncoming(nearest.star);
+    if (d < ARRIVE_LY) {
+        // Enter when this star is your course, when you have no course, or when
+        // you steer into it yourself. Otherwise the drive skims past its edge.
+        const entering = shipForward.dot(toStar) > 0.2 && (!course || course.id === nearest.star.id || steer);
+        const ready = nearest.star.id === loadedId || (incoming?.ready && incoming.star.id === nearest.star.id);
+        if (entering && ready) return arriveInSystem(nearest.star, offset);
+        const back = offset.map((v) => -v / d);
+        galactic = starPoint(nearest.star).map((v, i) => v + back[i] * ARRIVE_LY);
+        if (entering) {
+            throttle = Math.min(throttle, 0.2);
+            if (toastTime <= 0) toast(`Charting the ${starName(nearest.star)} system…`, 1.5);
+        }
+    }
+}
+// offset: star minus ship (ly). Enters the star's system at its edge, on the
+// side you came from, still heading the way you were flying.
+function arriveInSystem(star, offset) {
+    const fresh = star.id !== loadedId;
+    if (fresh) {
+        systemView.dispose();
+        systemView = incoming.view;
+        system = incoming.system;
+        incoming = null;
+        currentStar = star;
+        loadedId = star.id;
+        offChart = false;
+        edge = systemEdge(system);
+        galaxyState.current = star.id;
+        galaxyState.visited.add(star.id);
+        saveGalaxyState(galaxyState);
+        try {
+            history.replaceState(null, "", `?star=${star.id}`);
+        } catch {}
+        if (site) {
+            scene.remove(site.group);
+            disposeSurface(site.group);
+            site = null;
+        }
+        starMap.setHere(star, system);
+        loadSurvey(null);
+        if (course?.id === star.id) course = null;
+    }
+    nearStar.hide();
+    streaks.hide();
+    worldDots.hide();
+    if (shownView && shownView !== incoming?.view) shownView.visible = false;
+    shownView = ahead = null;
+    autopilot = false;
+    positions = systemPositions(system, orbitClock());
+    const d = Math.hypot(...offset);
+    const entry = toScene(offset.map((v) => -v / d)).multiplyScalar(edge * 0.97);
+    // Coordinates are kept relative to the nearest solid world.
+    if (fresh || !site) {
+        activeBody = system.bodies
+            .filter((b) => !b.giant)
+            .sort((a, b) => positionOf(a).distanceTo(entry) - positionOf(b).distanceTo(entry))[0];
+        RADIUS = activeBody.radius;
+        signalNormal = vec(...terrainFor(activeBody).site);
+        landingNormal = vec(0, 1, 30 / RADIUS)
+            .normalize()
+            .applyQuaternion(new THREE.Quaternion().setFromUnitVectors(Y, signalNormal));
+        discovered = records.has(activeBody.id);
+    }
+    worldOrigin = positionOf(activeBody);
+    shipPosition.copy(entry).sub(worldOrigin);
+    camera.position.add(shipPosition);
+    mode = "space";
+    speed = 150;
+    systemView.visible = true;
+    if (site) site.group.visible = true;
+    sun.intensity = 3.1;
+    sun.color.set(system.star.color).lerp(new THREE.Color(0xffffff), 0.45);
+    positionSystem();
+    sky.update(starPoint(star), camera, star.id);
+    selectedBody = null;
+    target = null;
+    if (pendingBody && system.bodies.some((b) => b.id === pendingBody.id)) {
+        // The world you picked on the way in: aim for it.
+        selectedBody = target = system.bodies.find((b) => b.id === pendingBody.id);
+    }
+    pendingBody = null;
+    refreshWorldLabels();
+    toast(
+        fresh
+            ? `Entering the ${system.name} system: ${system.bodies.length} worlds around a ${system.star.physics.spectralClass} star. Press M to choose one.`
+            : `Back in the ${system.name} system.`,
+        6,
+    );
+}
+// What the HUD shows in deep space.
+function deepInfo() {
+    if (mode !== "deep") {
+        if (!course || target) return null;
+        const d = Math.hypot(...starPoint(course).map((v, i) => v - viewer()[i]));
+        return { name: starName(course), isCourse: true, autopilot, distance: d, point: towardStar(course).multiplyScalar(5000).add(camera.position) };
+    }
+    const nearest = sky.stars[0];
+    const aimed = course || nearest?.star;
+    if (!aimed) return null;
+    const offset = starPoint(aimed).map((v, i) => v - galactic[i]);
+    const d = Math.hypot(...offset);
+    const nd = nearest ? nearest.distance : 1;
+    return {
+        name: pendingBody && course ? `${pendingBody.name} · ${starName(course)}` : starName(aimed),
+        isCourse: !!course,
+        autopilot,
+        distance: d,
+        nearestName: nearest ? starName(nearest.star) : "",
+        nearestDistance: nd,
+        // Multiples of light speed.
+        lightSpeeds: ((throttle * Math.max(nd, 0.0008)) / DRIVE_TIME) * 31557600,
+        point: (course ? courseAim() : toScene(offset).normalize()).multiplyScalar(5000).add(camera.position),
+    };
+}
+// After a jump: in open space a little way from a world, on its sunlit side,
+// facing it. Fly in to reach its orbit.
+function arriveNear(body) {
+    mode = "space";
+    const sunward = positionOf(body).negate().normalize();
+    const side = sunward.clone().cross(Y).normalize();
+    const dir = sunward.multiplyScalar(0.8).addScaledVector(side, 0.45).addScaledVector(Y, 0.3).normalize();
+    shipPosition.copy(dir).multiplyScalar(body.radius * 3 + 1100);
+    shipForward = shipPosition.clone().negate().normalize();
+    spaceUp.copy(Y).addScaledVector(shipForward, -Y.dot(shipForward)).normalize();
+    speed = verticalSpeed = 0;
+    selectedBody = target = body;
+    camera.position.copy(shipPosition).addScaledVector(shipForward, -30).addScaledVector(spaceUp, 12);
+    camera.up.copy(spaceUp);
+    camera.lookAt(shipPosition.clone().addScaledVector(shipForward, 32));
+    orientSpace(1);
 }
 // Giants are visited from space: hold position facing the planet.
 function arriveAtGiant(body) {
@@ -945,7 +1337,6 @@ function updateWalk(dt) {
                 .addScaledVector(direction, walkingSpeed * dt)
                 .normalize(),
         );
-        // Keep the player outside the central solid pedestal; interaction is available around it.
         const wet = terrainFor(activeBody).isLiquid(next);
         if (wet && toastTime <= 0)
             toast(
@@ -953,11 +1344,7 @@ function updateWalk(dt) {
                     ? "Lava ahead. Too hot to go further."
                     : "The water is too deep to go further.",
             );
-        if (
-            !wet &&
-            Math.acos(clamp(next.dot(signalNormal), -1, 1)) * RADIUS > 3.7
-        )
-            playerNormal.copy(next);
+        if (!wet) playerNormal.copy(next);
     }
     playerForward = tangent(playerForward, playerNormal);
             bob += moving && jumpHeight <= 0 ? dt * walkingSpeed * 1.8 : 0;
@@ -1051,14 +1438,14 @@ function updateCamera(dt) {
             orbitYaw = THREE.MathUtils.damp(orbitYaw, 0, 2, dt);
             orbitPitch = THREE.MathUtils.damp(orbitPitch, 0.18, 2, dt);
         }
-        const inSpace = mode === "space" || mode === "transit";
+        const inSpace = mode === "space" || mode === "transit" || mode === "deep";
         const up = inSpace ? spaceUp.clone() : shipPosition.clone().normalize();
         const back = shipForward.clone().negate().applyAxisAngle(up, orbitYaw);
         const framing = Math.max(1, 0.65 / camera.aspect);
         const desired = shipPosition
             .clone()
             .addScaledVector(back, 26 * framing * Math.cos(orbitPitch))
-            .addScaledVector(up, (21 + 20 * Math.sin(orbitPitch)) * framing);
+            .addScaledVector(up, ((inSpace ? 11 : 21) + 20 * Math.sin(orbitPitch)) * framing);
         const normal = desired.clone().normalize();
         const floor = surfaceRadius(normal) + 2;
         if (!inSpace && desired.length() < floor)
@@ -1068,8 +1455,11 @@ function updateCamera(dt) {
         camera.lookAt(
             shipPosition
                 .clone()
-                .addScaledVector(shipForward, 12)
-                .addScaledVector(up, inSpace ? 0 : -7),
+                // In space, look far ahead so what you fly toward sits mid-screen.
+                .addScaledVector(shipForward, inSpace ? 32 : 12)
+                // Near the ground the camera looks down a little; this fades out
+                // while climbing, so leaving orbit doesn't jolt the view.
+                .addScaledVector(up, inSpace ? 0 : -7 * (1 - smoothstep((altitude() - 120) / 480))),
         );
         camera.fov = THREE.MathUtils.damp(
             camera.fov,
@@ -1079,6 +1469,167 @@ function updateCamera(dt) {
         );
     }
     camera.updateProjectionMatrix();
+}
+
+// --- Targets --------------------------------------------------------------
+// Tap or click a world or star (or press Tab) to select it. Its name and
+// distance show on the waypoint, and in space the ship keeps its nose on it
+// whenever you are not steering. In deep space, stars and the worlds of the
+// system ahead can be picked; picking one sets your course.
+let target = null; // a world of this system
+function targetCandidates() {
+    const out = [];
+    if (mode === "deep") {
+        for (const e of sky.stars.slice(0, 400))
+            out.push({ kind: "star", star: e.star, point: toScene(starPoint(e.star).map((v, i) => v - galactic[i])).normalize().multiplyScalar(5000).add(camera.position) });
+        if (ahead)
+            for (const b of ahead.system.bodies) {
+                const p = ahead.starScene.clone().add(vec(...ahead.positions.get(b.id)));
+                out.push({ kind: "body", body: b, star: ahead.star, point: p.normalize().multiplyScalar(5000).add(camera.position) });
+            }
+    } else {
+        for (const b of system.bodies)
+            if (b.id !== activeBody.id || mode === "space" || mode === "transit")
+                out.push({ kind: "body", body: b, point: positionOf(b).sub(worldOrigin) });
+        // Other stars, so you can find the way to another system.
+        for (const e of sky.stars.slice(0, 300))
+            if (e.star.id !== currentStar.id)
+                out.push({ kind: "star", star: e.star, point: towardStar(e.star).multiplyScalar(5000).add(camera.position) });
+    }
+    return out;
+}
+function onScreen(point) {
+    const v = point.clone().project(camera);
+    const ahead = point.clone().sub(camera.position).dot(camera.getWorldDirection(vec())) > 0;
+    return ahead && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05 ? [(v.x * 0.5 + 0.5) * innerWidth, (-v.y * 0.5 + 0.5) * innerHeight] : null;
+}
+function pickAt(x, y) {
+    if (mode === "walk" || mode === "landing" || mode === "takeoff") return;
+    let best = null,
+        bestD = coarsePointer ? 60 : 40;
+    for (const c of targetCandidates()) {
+        const s = onScreen(c.point);
+        if (!s) continue;
+        // Worlds win over stars at the same spot.
+        const d = Math.hypot(s[0] - x, s[1] - y) - (c.kind === "body" ? 10 : 0);
+        if (d < bestD) {
+            bestD = d;
+            best = c;
+        }
+    }
+    if (best) chooseTarget(best);
+    else if ((mode === "space" || mode === "deep") && (target || course || selectedBody)) clearTarget();
+}
+let cycleIndex = -1;
+function cycleTarget() {
+    if (mode === "walk" || mode === "landing" || mode === "takeoff") return;
+    // Nothing chosen yet: start with the nearest world, wherever it is.
+    if (mode !== "deep" && !selectedBody && !course) {
+        const nearest = targetCandidates()
+            .filter((c) => c.kind === "body")
+            .sort((a, b) => a.point.distanceTo(shipPosition) - a.body.radius - (b.point.distanceTo(shipPosition) - b.body.radius))[0];
+        if (nearest) {
+            cycleIndex = -1;
+            return chooseTarget(nearest);
+        }
+    }
+    // Only what is on screen: nearest worlds first, then the nearest stars.
+    const reach = (c) =>
+        c.kind === "star"
+            ? 1e12 + Math.hypot(...starPoint(c.star).map((v, i) => v - viewer()[i]))
+            : mode === "deep"
+              ? 1e6 + ahead.starScene.clone().add(vec(...ahead.positions.get(c.body.id))).length()
+              : c.point.distanceTo(shipPosition);
+    const list = targetCandidates()
+        .filter((c) => onScreen(c.point))
+        .map((c) => ({ c, d: reach(c) }))
+        .sort((a, b) => a.d - b.d)
+        .slice(0, 12);
+    if (!list.length) return void toast("Nothing in view to select. Turn toward a world or star.");
+    cycleIndex = (cycleIndex + 1) % list.length;
+    chooseTarget(list[cycleIndex].c);
+}
+const fmtDistance = (m) => (m >= 10000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
+const fmtLightYears = (ly) => (ly < 0.05 ? `${Math.max(1, Math.round(ly * 63241))} AU` : `${ly.toFixed(2)} ly`);
+function chooseTarget(c) {
+    if (c.kind === "star") {
+        course = c.star;
+        target = pendingBody = selectedBody = null;
+        const ly = Math.hypot(...starPoint(c.star).map((v, i) => v - viewer()[i]));
+        toast(`Course: ${starName(c.star)}, ${fmtLightYears(ly)}. The ship points there when you are not steering; T for autopilot, C to clear.`, 5);
+    } else if (mode === "deep") {
+        course = c.star;
+        pendingBody = c.body;
+        toast(`Course: ${c.body.name}, ${c.body.type.toLowerCase()} of ${starName(c.star)}. T for autopilot.`, 5);
+    } else {
+        selectedBody = target = c.body;
+        const m = positionOf(c.body).sub(worldOrigin).distanceTo(shipPosition) - c.body.radius;
+        toast(
+            `Target: ${c.body.name}, ${c.body.type.toLowerCase()}, ${fmtDistance(m)}. ${mode === "space" ? "The ship keeps its nose on it when you are not steering. " : ""}T to cruise there.`,
+            5,
+        );
+    }
+    starMap.refresh();
+}
+// C, the Clear button, tapping empty space, or Clear course on the map.
+function clearTarget() {
+    if (!target && !course && !selectedBody) return;
+    target = course = pendingBody = selectedBody = null;
+    autopilot = false;
+    starMap.refresh();
+    toast("Target cleared. Free flight.");
+}
+
+// --- Skies ---------------------------------------------------------------
+// Worlds with enough air have a sky. Its colour comes from the air (the biome's
+// atmosphere tint) lit by the star: bright by day, warm at sunrise and sunset,
+// dark at night. It fades to black as you climb out, stars fade in daylight,
+// and haze softens distant land. Thin or no air keeps the black sky of space.
+const SPACE = new THREE.Color("#07101d"),
+    DUSK = new THREE.Color("#ff7a45");
+const skyDay = new THREE.Color(),
+    skyNow = new THREE.Color(),
+    skyNight = new THREE.Color();
+scene.fog = new THREE.FogExp2(SPACE.getHex(), 0);
+function airOf(body) {
+    // 0 below ~0.03 bar, about 0.6 at Earth's 1 bar, 1 for very thick air.
+    const p = body.physics?.pressure ?? 0;
+    return clamp((Math.log10(Math.max(p, 1e-4)) + 1.5) / 2.5, 0, 1);
+}
+function updateAtmosphere() {
+    const air = airOf(activeBody);
+    let k = 0;
+    if (air > 0 && mode !== "deep") {
+        const height = camera.position.length() - RADIUS;
+        k = air * (1 - smoothstep((height - 40) / (300 + 600 * air)));
+    }
+    const up = camera.position.clone().normalize(),
+        elevation = up.dot(sun.position.clone().normalize()); // the star's height in your sky
+    const day = smoothstep((elevation + 0.1) / 0.35),
+        dusk = clamp(1 - Math.abs(elevation - 0.03) / 0.22, 0, 1);
+    // The air's own colour, slightly tinted by the star and brighter in thick air.
+    skyDay.set(activeBody.atmosphere).lerp(sun.color, 0.12).multiplyScalar(0.95 + 0.5 * air);
+    skyNight.copy(skyDay).multiplyScalar(0.06);
+    // Sunrise and sunset: a gentle warm shift, then dimming into night.
+    skyNow.copy(skyDay).lerp(DUSK, dusk * 0.28);
+    skyNow.lerp(skyNight, 1 - day);
+    scene.background.copy(SPACE).lerp(skyNow, k);
+    scene.fog.color.copy(scene.background);
+    scene.fog.density = k * (0.00012 + 0.00045 * air);
+    sky.setDaylight(k * day);
+}
+
+// Heat glow at the screen edges when flying close to a star.
+let heat = 0,
+    shownHeat = 0;
+const heatGlow = document.createElement("div");
+heatGlow.style.cssText =
+    "position:fixed;inset:0;pointer-events:none;z-index:1;opacity:0;background:radial-gradient(ellipse at center,rgba(255,170,90,0) 35%,rgba(255,120,40,.55) 80%,rgba(255,210,150,.85) 100%)";
+document.body.append(heatGlow);
+function updateHeat(dt) {
+    if (mode !== "space") heat = 0;
+    shownHeat = damp(shownHeat, heat, 4, dt);
+    heatGlow.style.opacity = shownHeat < 0.01 ? "0" : shownHeat.toFixed(3);
 }
 
 // The HUD reads live state through these getters (hud.js).
@@ -1095,7 +1646,10 @@ const hudState = {
     get verticalSpeed() { return verticalSpeed; },
     get signalNormal() { return signalNormal; },
     get worldOrigin() { return worldOrigin; },
-    system,
+    get system() { return system; },
+    get deep() { return deepInfo(); },
+    get target() { return target; },
+    clearTarget,
     camera,
     shipShadow,
     surfacePoint,
@@ -1104,6 +1658,7 @@ const hudState = {
     openMap,
     act,
     approach,
+    openGalaxy,
     positionOf,
 };
 const refreshHUD = () => updateHUD(hudState);
@@ -1119,7 +1674,8 @@ function frame(now) {
     if (!paused) {
         animationTime += dt;
         if (started) {
-            if (mode === "space") updateSpace(dt);
+            if (mode === "deep") updateDeep(dt);
+            else if (mode === "space") updateSpace(dt);
             else if (mode === "transit") updateCruise(dt);
             else if (mode === "flight") updateFlight(dt);
             else if (mode === "landing" || mode === "takeoff")
@@ -1127,11 +1683,11 @@ function frame(now) {
             else if (mode === "walk") updateWalk(dt);
         } else orientShip();
         updateCamera(dt);
-        site.core.rotation.y += dt * 0.5;
-        site.core.position.y = 4 + Math.sin(animationTime * 1.4) * 0.3;
-        site.ring.rotation.z += dt * 0.2;
-        if (site.flora) site.flora.update(animationTime);
-        if (site.fauna && mode !== "space" && mode !== "transit")
+        if (started) updateWaypoint(hudState);
+        updateHeat(dt);
+        updateAtmosphere();
+        if (site) animateSite(dt);
+        if (site?.fauna && mode !== "space" && mode !== "transit" && mode !== "deep")
             site.fauna.update(
                 dt,
                 animationTime,
@@ -1141,7 +1697,6 @@ function frame(now) {
                       ? { position: shipPosition, onFoot: false }
                       : null,
             );
-        site.beacon.material.opacity = 0.1 + Math.sin(animationTime * 2) * 0.045;
         updateShipEffects(
             kestrel,
             {
@@ -1172,12 +1727,16 @@ function frame(now) {
         verticalSpeed,
     );
     if (!starMap.isOpen) {
-        systemView.update(camera.position);
+        if (mode !== "deep") {
+            systemView.update(camera.position, streamer);
+            sky.follow(camera);
+        } else streamer.pump(4);
         renderer.render(scene, camera); // the full-screen map hides the scene
     }
 }
 window.addEventListener("resize", () => {
     starMap.resize();
+    sky.resize();
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
@@ -1198,8 +1757,10 @@ camera.up.copy(shipPosition.clone().normalize());
 camera.lookAt(shipPosition);
 refreshWorldLabels();
 setStage(discovered ? 3 : 0);
-site.beacon.visible = !discovered;
 refreshHUD();
+function animateSite(dt) {
+    if (site.flora) site.flora.update(animationTime);
+}
 requestAnimationFrame(frame);
 
 // --- Galaxy travel: jumps reload into the destination system. ---
@@ -1207,8 +1768,12 @@ let jumping = false;
 const starMap = createStarMap({
     here: currentStar,
     system,
+    deep: () => (mode === "deep" ? { position: galactic, course } : null),
+    onCourse: (star) => setCourse(star),
+    clearCourse: () => clearTarget(),
+    course: () => course,
     state: galaxyState,
-    offChart,
+    offChart: () => offChart,
     canJump: () => started && mode === "space" && !jumping,
     blockedReason: () =>
         !started
@@ -1247,6 +1812,7 @@ const starMap = createStarMap({
     selectedBody: () => selectedBody,
     onSelectBody: (body) => {
         selectedBody = body;
+        if (body.id !== activeBody.id) target = body;
     },
     cruise: (body) => {
         if (body.id === activeBody.id && mode !== "space" && mode !== "transit")
@@ -1285,9 +1851,11 @@ try {
     ) {
         sessionStorage.removeItem("elsewhere-arrival");
         start();
+        arriveNear(activeBody);
         playArrival();
         toast(
-            `Jump complete: ${system.name}, a ${system.star.physics.spectralClass} star with ${system.bodies.length} worlds. You are above ${activeBody.name}.`,
+            `Jump complete: ${system.name}, a ${system.star.physics.spectralClass} star with ${system.bodies.length} worlds. ${activeBody.name} is ahead.`,
+            6,
         );
     }
 } catch {}

@@ -9,12 +9,12 @@ const mix = (a, b, t) => a + (b - a) * t;
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 // RGBA cloud map, W × H, equirectangular; row 0 is the south pole.
-export function giantPixels(body, W, H) {
+// Rows from j0 to j1 are written into out, so a map can be filled in slices.
+export function giantPixels(body, W, H, out = new Uint8Array(W * H * 4), j0 = 0, j1 = H) {
   const noise = makeNoise(body.seed, 'clouds'), streaks = makeNoise(body.seed, 'streaks');
   const pal = body.palette.map(rgb), storm = rgb(body.rock), haze = rgb(body.atmosphere);
   const bands = body.bands, turb = body.turbulence, phase = (body.seed % 1000) / 159;
-  const out = new Uint8Array(W * H * 4);
-  for (let j = 0; j < H; j++) {
+  for (let j = j0; j < j1; j++) {
     const lat = -Math.PI / 2 + (j + .5) / H * Math.PI, cl = Math.cos(lat), y = Math.sin(lat);
     for (let i = 0; i < W; i++) {
       const lon = (i + .5) / W * Math.PI * 2, x = cl * Math.cos(lon), z = cl * Math.sin(lon);
@@ -63,12 +63,86 @@ export function ringProfile(body, N) {
   return out;
 }
 
-export function createGiant(THREE, body, { coarse = false } = {}) {
+// The cloud map is ~9 m per texel, which looks soft up close. This adds fine
+// streaks and eddies on the GPU from the point's position on the sphere, so
+// detail stays sharp at any distance. It fades out far away, where the map
+// alone is enough (and the noise would shimmer).
+function addCloudDetail(material, R, body) {
+  const seed = (body.seed % 997) / 97;
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.detailRadius = { value: R };
+    shader.uniforms.detailSeed = { value: seed };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vCloud;\nvarying float vCloudDist;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCloud = normalize(position);')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvCloudDist = -mvPosition.z;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vCloud;
+varying float vCloudDist;
+uniform float detailRadius;
+uniform float detailSeed;
+float cHash(vec3 p) { p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419)); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float cNoise(vec3 x) {
+  vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(cHash(i), cHash(i + vec3(1,0,0)), f.x), mix(cHash(i + vec3(0,1,0)), cHash(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(cHash(i + vec3(0,0,1)), cHash(i + vec3(1,0,1)), f.x), mix(cHash(i + vec3(0,1,1)), cHash(i + vec3(1,1,1)), f.x), f.y), f.z);
+}`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+{
+  // Stretched along the bands (y is latitude): long thin streaks with eddies between.
+  vec3 q = vCloud * detailRadius / 34.0 + vec3(detailSeed);
+  float warp = cNoise(q * vec3(1.0, 3.0, 1.0)) * 1.6;
+  float d = 0.0, amp = 0.5, total = 0.0;
+  vec3 s = vec3(q.x + warp, q.y * 7.0, q.z + warp);
+  for (int o = 0; o < 5; o++) { d += amp * cNoise(s); total += amp; amp *= 0.5; s *= vec3(2.1, 2.3, 2.1); }
+  d = d / total - 0.5;
+  float near = 1.0 - smoothstep(detailRadius * 0.6, detailRadius * 3.0, vCloudDist);
+  diffuseColor.rgb *= 1.0 + d * 0.5 * near;
+}`)
+      // The scene's sky light is tuned for planet surfaces; on a giant it would
+      // tint the clouds. Mostly starlight here, with a dim night side.
+      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.indirectDiffuse *= 0.3;');
+  };
+  material.customProgramCacheKey = () => 'giant-cloud-detail';
+}
+
+// Banded rings with gaps, lying in the local XZ plane. Shared by gas giants and
+// ringed rocky worlds, so every ring in the game looks and renders the same way.
+export function createRing(THREE, body, inner, outer, { segments = 192, opacity = 1 } = {}) {
+  const N = 512, profile = ringProfile(body, N), ringColor = rgb(body.crystal), data = new Uint8Array(N * 4);
+  for (let i = 0; i < N; i++) for (let c = 0; c < 3; c++) data[i * 4 + c] = ringColor[c] * profile[i * 2 + 1];
+  for (let i = 0; i < N; i++) data[i * 4 + 3] = profile[i * 2] * 235 * opacity;
+  const tex = new THREE.DataTexture(data, N, 1);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
+  const geo = new THREE.RingGeometry(inner, outer, segments, 1);
+  // Map u across the ring (inner to outer edge) instead of the default planar layout.
+  const pos = geo.attributes.position, uv = geo.attributes.uv;
+  for (let i = 0; i < pos.count; i++) uv.setXY(i, (Math.hypot(pos.getX(i), pos.getY(i)) - inner) / (outer - inner), .5);
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.renderOrder = 2;
+  return { mesh, disposables: [tex, geo, mesh.material] };
+}
+
+export function createGiant(THREE, body, { coarse = false, gradual = false } = {}) {
   const R = body.radius, group = new THREE.Group(), tilted = new THREE.Group();
   tilted.rotation.z = body.tilt;
   group.add(tilted);
   const W = coarse ? 512 : 1024, H = W / 2;
-  const map = new THREE.DataTexture(giantPixels(body, W, H), W, H);
+  // Built gradually, the map fills a slice of rows per frame; `ready` resolves when done.
+  const pixels = new Uint8Array(W * H * 4);
+  let ready = null;
+  if (!gradual) giantPixels(body, W, H, pixels);
+  else ready = (async () => {
+    const rows = coarse ? 12 : 24;
+    for (let j = 0; j < H; j += rows) {
+      giantPixels(body, W, H, pixels, j, Math.min(H, j + rows));
+      await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+    }
+    map.needsUpdate = true;
+  })();
+  const map = new THREE.DataTexture(pixels, W, H);
   map.colorSpace = THREE.SRGBColorSpace;
   map.wrapS = THREE.RepeatWrapping;
   map.magFilter = THREE.LinearFilter; map.minFilter = THREE.LinearMipmapLinearFilter; map.generateMipmaps = true;
@@ -76,34 +150,23 @@ export function createGiant(THREE, body, { coarse = false } = {}) {
   const hot = body.physics.clouds === 'silicate' || body.physics.clouds === 'alkali';
   const material = new THREE.MeshStandardMaterial({ map, roughness: .95, metalness: 0,
     ...(hot ? { emissive: 0xffffff, emissiveMap: map, emissiveIntensity: body.physics.clouds === 'silicate' ? .45 : .15 } : {}) });
-  const sphere = new THREE.Mesh(new THREE.SphereGeometry(R, coarse ? 64 : 96, coarse ? 40 : 64), material);
+  addCloudDetail(material, R, body);
+  const sphere = new THREE.Mesh(new THREE.SphereGeometry(R, coarse ? 128 : 192, coarse ? 80 : 128), material);
   tilted.add(sphere);
-  const halo = new THREE.Mesh(new THREE.SphereGeometry(R * 1.02, 48, 32), new THREE.MeshBasicMaterial({
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(R * 1.02, coarse ? 96 : 160, coarse ? 64 : 96), new THREE.MeshBasicMaterial({
     color: body.atmosphere, transparent: true, opacity: .12, side: THREE.BackSide, depthWrite: false, blending: THREE.AdditiveBlending }));
   tilted.add(halo);
   const disposables = [map, material, sphere.geometry, halo.geometry, halo.material];
   if (body.ringed) {
-    const inner = R * (body.physics.kind === 'ice' ? 1.45 : 1.3), outer = R * (body.physics.kind === 'ice' ? 1.95 : 2.25), N = 512;
-    const profile = ringProfile(body, N), ringColor = rgb(body.crystal), data = new Uint8Array(N * 4);
-    for (let i = 0; i < N; i++) for (let c = 0; c < 3; c++) data[i * 4 + c] = ringColor[c] * profile[i * 2 + 1];
-    for (let i = 0; i < N; i++) data[i * 4 + 3] = profile[i * 2] * 235;
-    const tex = new THREE.DataTexture(data, N, 1);
-    tex.colorSpace = THREE.SRGBColorSpace; tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
-    const geo = new THREE.RingGeometry(inner, outer, coarse ? 128 : 192, 1);
-    // Map u across the ring (inner to outer edge) instead of the default planar layout.
-    const pos = geo.attributes.position, uv = geo.attributes.uv;
-    for (let i = 0; i < pos.count; i++) uv.setXY(i, (Math.hypot(pos.getX(i), pos.getY(i)) - inner) / (outer - inner), .5);
-    const ring = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
-    ring.rotation.x = -Math.PI / 2;
-    ring.renderOrder = 2;
-    tilted.add(ring);
-    disposables.push(tex, geo, ring.material);
+    const ring = createRing(THREE, body, R * (body.physics.kind === 'ice' ? 1.45 : 1.3), R * (body.physics.kind === 'ice' ? 1.95 : 2.25), { segments: coarse ? 128 : 192 });
+    tilted.add(ring.mesh);
+    disposables.push(...ring.disposables);
   }
   // A full turn takes a few minutes; big gas giants spin fastest.
   const spin = (Math.PI * 2) / (body.physics.kind === 'gas' ? 240 : 360);
   let last = performance.now();
   return {
-    body, group,
+    body, group, ready,
     update() { const now = performance.now(); sphere.rotation.y += spin * Math.min(.1, (now - last) / 1000); last = now; },
     dispose() { for (const d of disposables) d.dispose(); },
   };

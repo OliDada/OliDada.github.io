@@ -27,21 +27,26 @@ test('seas cover about the share the physics asks for', () => {
     if (t.liquid !== 'water') continue;
     let wet = 0; const n = 1500;
     for (let i = 0; i < n; i++) if (t.height(unit(i, n)) < t.sea) wet++;
-    // The signal plateau is dry land, so allow some shortfall on near-total ocean worlds.
     assert.ok(Math.abs(wet / n - t.coverage) < .1, `${b.name}: ${(wet / n).toFixed(2)} wet vs ${t.coverage.toFixed(2)}`);
     checked++;
   }
   assert.ok(checked >= 5, `only ${checked} water worlds`);
 });
 
-test('the signal site is always a flat, dry, reachable plateau', () => {
+test('the signal site is dry, fairly level ground near the generated point', () => {
+  let level = 0;
   for (const b of worlds) {
-    const t = terrainFor(b), s = { x: b.signal[0], y: b.signal[1], z: b.signal[2] };
-    assert.ok(!t.isLiquid(s), `${b.name} signal is under ${t.liquid}`);
-    // Points inside the plateau (within 30 m) share the site height and are dry.
-    const tilt = (a) => { const v = { x: s.x + Math.sin(a) * 30 / b.radius, y: s.y, z: s.z + Math.cos(a) * 30 / b.radius }, d = Math.hypot(v.x, v.y, v.z); return { x: v.x / d, y: v.y / d, z: v.z / d }; };
-    for (let a = 0; a < 6.28; a += .7) { const p = tilt(a); assert.ok(Math.abs(t.height(p) - t.siteHeight) < 1e-9); assert.ok(!t.isLiquid(p)); }
+    const t = terrainFor(b), s = { x: t.site[0], y: t.site[1], z: t.site[2] };
+    assert.ok(Math.abs(Math.hypot(s.x, s.y, s.z) - 1) < 1e-9);
+    assert.ok(!t.isLiquid(s), `${b.name} site is under ${t.liquid}`);
+    const away = Math.acos(Math.min(1, s.x * b.signal[0] + s.y * b.signal[1] + s.z * b.signal[2])) * b.radius;
+    assert.ok(away < 300, `${b.name} site ${away.toFixed(0)} m from the signal point`);
+    // Level enough to land: the ground rises at most ~1 m per metre around it, on most worlds.
+    const e = 4 / b.radius, h = t.height(s);
+    const n2 = { x: s.x + e, y: s.y, z: s.z }, l = Math.hypot(n2.x, n2.y, n2.z);
+    if (Math.abs(t.height({ x: n2.x / l, y: n2.y / l, z: n2.z / l }) - h) / 4 < 1) level++;
   }
+  assert.ok(level > worlds.length * .9, `${level} of ${worlds.length} sites level`);
 });
 
 test('surfaces, colours and seas are consistent', () => {

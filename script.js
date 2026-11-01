@@ -256,6 +256,7 @@ async function playFromAnchor(anchor) {
     if (player && frame) {
         document.body.classList.add('is-playing');
         // Snake plays in a smaller window at the top of the page, with the site around it
+        document.body.classList.toggle('terminal-player', match?.playerLayout === 'terminal');
         document.body.classList.toggle('snake-small', /\/snake\//i.test(String(path)));
         // stop the 3D background while a game runs, so the two don't fight over the graphics card
         try { if (window.__threeScene && window.__threeScene.pause) window.__threeScene.pause(); } catch (e) {}
@@ -756,7 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (player) { player.style.display = 'none'; player.setAttribute('aria-hidden', 'true'); player.classList.remove('fullscreen'); }
         if (frame) frame.src = 'about:blank';
         showPlayerControls(null);
-        document.body.classList.remove('is-playing', 'snake-small');
+        document.body.classList.remove('is-playing', 'snake-small', 'terminal-player');
         try {
             const bg = document.getElementById('three-canvas');
             if (bg && bg.style.visibility !== 'hidden' && window.__threeScene && window.__threeScene.resume) window.__threeScene.resume();

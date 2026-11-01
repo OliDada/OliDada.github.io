@@ -111,7 +111,7 @@ export function createPlanet(THREE, streamer, body, { segments = 20 } = {}) {
   function geometryFrom(positions, data, withColor, node) {
     const g = new THREE.BufferGeometry(), n = positions.length / 3;
     g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(withColor ? data.normals : data.waterNormals, 3));
     if (withColor) { g.setAttribute('color', new THREE.BufferAttribute(data.colors, 3)); g.setAttribute('lodColor', new THREE.BufferAttribute(data.lodColor, 3)); }
     g.setAttribute('lodDelta', new THREE.BufferAttribute(withColor ? data.lodDelta : data.waterDelta, 3));
     // Fully blended to the parent's shape by the distance at which the parent would replace this tile.

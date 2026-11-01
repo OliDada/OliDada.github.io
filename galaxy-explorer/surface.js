@@ -1,5 +1,5 @@
-// The landing site around a world's signal: atmosphere glow, rocks, crystals,
-// the monument, plant and animal life, and what you collide with on foot.
+// The landing site around a world's signal: atmosphere glow, rocks, plant and
+// animal life, and what you collide with on foot.
 // Rebuilt whenever you arrive at a world; game.js owns where you are.
 import * as THREE from "./vendor/three.module.js";
 import { terrainFor } from "./terrain.mjs";
@@ -9,7 +9,7 @@ import { buildFauna } from "./fauna-mesh.js";
 const Y = new THREE.Vector3(0, 1, 0);
 const vec = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 
-// Things you bump into on foot (rocks, crystals, pillars, plants), kept in a
+// Things you bump into on foot (rocks and plants), kept in a
 // coarse spatial grid so each step only checks what is nearby.
 const GRID = 10;
 function buildGrid(list) {
@@ -137,104 +137,8 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         });
     }
     group.add(rocks);
-    // Scatter low mineral outcrops near the site, leaving the central footpath open.
-    const crystalMaterial = new THREE.MeshStandardMaterial({
-        color: body.crystal,
-        emissive: 0x315a48,
-        emissiveIntensity: 0.35,
-        roughness: 0.6,
-        flatShading: true,
-    });
-    const crystals = new THREE.InstancedMesh(
-        new THREE.ConeGeometry(0.35, 1.8, 5),
-        crystalMaterial,
-        140,
-    );
-    for (let i = 0; i < 140; i++) {
-        const a = random() * 6.28,
-            d = (10 + random() * 45) / RADIUS;
-        const n = vec(Math.cos(a) * d, 1, Math.sin(a) * d).normalize();
-        if (Math.abs(n.x) < 0.025 && n.z > 0) n.x += 0.045;
-        n.normalize().applyQuaternion(
-            new THREE.Quaternion().setFromUnitVectors(Y, signalNormal),
-        );
-        dummy.position.copy(surfacePoint(n, 0.4));
-        dummy.quaternion.setFromUnitVectors(Y, n);
-        dummy.scale.setScalar(0.5 + random() * 1.2);
-        dummy.updateMatrix();
-                crystals.setMatrixAt(i, dummy.matrix);
-        obstacles.push({
-            p: dummy.position.clone(),
-            r: 0.3 * dummy.scale.x,
-            h: 1.8 * dummy.scale.x,
-        });
-    }
-    group.add(crystals);
-
-    // The observatory: three broken standing stones around a suspended core.
-    const monument = new THREE.Group();
-    monument.position.copy(surfacePoint(signalNormal));
-    monument.quaternion.setFromUnitVectors(Y, signalNormal);
-    group.add(monument);
-    const stone = new THREE.MeshStandardMaterial({
-        color: 0x263f44,
-        metalness: 0.25,
-        roughness: 0.7,
-        flatShading: true,
-    });
-    const luminous = new THREE.MeshStandardMaterial({
-        color: 0xc5ffe0,
-        emissive: 0x7ef9cd,
-        emissiveIntensity: 2.5,
-    });
-    for (let i = 0; i < body.landmarkCount; i++) {
-        const a = (i * Math.PI * 2) / body.landmarkCount + 0.5;
-        const pillar = new THREE.Mesh(
-            new THREE.BoxGeometry(1.4, 7 + i * 0.7, 1.7),
-            stone,
-        );
-        pillar.position.set(Math.cos(a) * 3, 3.5 + i * 0.35, Math.sin(a) * 3);
-        pillar.rotation.y = -a;
-        pillar.rotation.z = i === 1 ? -0.13 : 0.06;
-                monument.add(pillar);
-        obstacles.push({
-            p: pillar.position
-                .clone()
-                .setY(0)
-                .applyQuaternion(monument.quaternion)
-                .add(monument.position),
-            r: 1.2,
-            h: 9,
-        });
-        const slit = new THREE.Mesh(
-            new THREE.BoxGeometry(0.09, 4.5, 1.73),
-            luminous,
-        );
-        slit.position.copy(pillar.position);
-        slit.rotation.copy(pillar.rotation);
-        monument.add(slit);
-    }
-    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.75), luminous);
-    core.position.y = 4;
-    monument.add(core);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(2, 0.035, 8, 64), luminous);
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = 1.1;
-    monument.add(ring);
-    const beacon = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.11, 0.25, 85, 8),
-        new THREE.MeshBasicMaterial({
-            color: 0xa6f0d0,
-            transparent: true,
-            opacity: 0.18,
-            depthWrite: false,
-        }),
-    );
-    beacon.position.y = 43;
-    monument.add(beacon);
-    const glow = new THREE.PointLight(0xa4ffcb, 15, 24, 1.5);
-    glow.position.y = 4;
-    monument.add(glow);
+    // (The standing stones and crystal ring that used to mark the site are gone;
+    // the site is ordinary terrain now.)
 
     // Plant life: species generated from this world's environment, placed where they would thrive.
     const flora = buildFlora(THREE, {
@@ -268,22 +172,9 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
     });
     group.add(fauna.group);
 
-    if (body.ringed) {
-        const planetaryRing = new THREE.Mesh(
-            new THREE.RingGeometry(RADIUS * 1.45, RADIUS * 2.05, 128),
-            new THREE.MeshBasicMaterial({
-                color: body.atmosphere,
-                side: THREE.DoubleSide,
-                transparent: true,
-                opacity: 0.27,
-                depthWrite: false,
-            }),
-        );
-        planetaryRing.rotation.x = Math.PI / 2 + 0.12;
-        group.add(planetaryRing);
-    }
+    // Rings are drawn once, by system-view.js, for every world (including this one).
     return {
-        group, obstacles, core, ring, beacon, glow, flora, fauna,
+        group, obstacles, flora, fauna,
         nearbyObstacles: (p) => nearbyIn(grid, p),
     };
 }

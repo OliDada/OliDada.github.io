@@ -43,7 +43,7 @@ function buildGiant({ id, name, physics, star, seed, r, position, orbit, angle, 
   return {
     id, name, biome, ...giantLook(physics, star, r), giant: true,
     type: biome, description: describeGiant(physics), facts: giantFacts(physics),
-    note: '', title: '', message: '', starTemperature: star.temperature,
+    note: '', title: '', message: '', starTemperature: star.temperature, starAge: star.age,
     seed, radius: giantRadius(physics), orbit, angle, position, ringed, parent: null,
     // Arrival point for cruise: on the day side, a little above the orbital
     // plane, so the planet and its rings are seen side-on and lit.
@@ -63,7 +63,7 @@ function buildWorld({ id, name, physics, star, seed, r, parent, position, orbit,
     description: describe(biome, { ...physics, isMoon: !!parent }),
     facts: factLine(physics),
     note: b.note, title: b.title, message: b.message,
-    starTemperature: star.temperature,
+    starTemperature: star.temperature, starAge: star.age,
     // Sizes are compressed for play but keep a wide range: small rocks stay small, big worlds are several times larger.
     seed, radius: parent ? Math.round(70 + 160 * physics.radius ** 1.2) : Math.round(110 + 260 * physics.radius ** 1.3),
     orbit, angle, position, ringed, parent: parent ? parent.id : null,

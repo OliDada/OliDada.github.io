@@ -137,17 +137,8 @@ function buildTerrain(body) {
   else if (ph.waterState === 'ice' && ph.waterCoverage > .3) { liquid = 'ice'; coverage = ph.waterCoverage * .55; }
   const sea = liquid ? samples[Math.min(samples.length - 1, Math.floor(coverage * samples.length))] : -Infinity;
 
-  // The signal site is a flat plateau, raised above any sea so it is always reachable.
-  const signal = { x: body.signal[0], y: body.signal[1], z: body.signal[2] };
-  const plateauInner = 40 / (body.radius || 180), plateauOuter = 90 / (body.radius || 180); // ~40 m flat, easing out to ~90 m
-  // Capped at a moderate altitude so the site is not on a cold summit.
-  const ground = liquid === 'water' || liquid === 'lava' ? sea : minH;
-  const siteHeight = Math.max(Math.min(raw(signal), ground + (maxH - ground) * .35), liquid === 'water' || liquid === 'lava' ? sea + 1.8 : -Infinity);
-  function height(n) {
-    const d = Math.hypot(n.x - signal.x, n.y - signal.y, n.z - signal.z);
-    const t = smooth(plateauInner, plateauOuter, d);
-    return t >= 1 ? raw(n) : siteHeight + (raw(n) - siteHeight) * t;
-  }
+  // The terrain is left exactly as generated: no flattened site.
+  const height = raw;
   // The top surface: what a ship hovers over. Frozen seas are solid ground.
   const surface = liquid ? (n) => Math.max(height(n), sea) : height;
   const isLiquid = (n) => (liquid === 'water' || liquid === 'lava') && height(n) < sea;
@@ -195,5 +186,33 @@ function buildTerrain(body) {
     const grain = .93 + .1 * nB(n.x * 23, n.y * 23, n.z * 23);
     return [c[0] * grain, c[1] * grain, c[2] * grain];
   }
-  return { raw, height, surface, meshHeight, isLiquid, color, climate, sea, liquid, coverage, minH, maxH, waterColor, siteHeight, lush };
+  // The signal site: the nearest dry, fairly level ground to the generated signal
+  // point, found by searching outward in a spiral (it is never under water or lava).
+  const R = body.radius || 180, liquidAt = (n) => (liquid === 'water' || liquid === 'lava') && raw(n) < sea + 1;
+  const slope = (n) => {
+    const e = 6 / R, a = { x: n.x + e, y: n.y, z: n.z }, b = { x: n.x, y: n.y + e, z: n.z }, c = { x: n.x, y: n.y, z: n.z + e };
+    const u = (v) => { const l = Math.hypot(v.x, v.y, v.z); return { x: v.x / l, y: v.y / l, z: v.z / l }; };
+    const h0 = raw(n);
+    return Math.max(Math.abs(raw(u(a)) - h0), Math.abs(raw(u(b)) - h0), Math.abs(raw(u(c)) - h0)) / 6;
+  };
+  let site = body.signal;
+  {
+    const s0 = { x: body.signal[0], y: body.signal[1], z: body.signal[2] };
+    const helper = Math.abs(s0.y) < .9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
+    let ux = s0.y * helper.z - s0.z * helper.y, uy = s0.z * helper.x - s0.x * helper.z, uz = s0.x * helper.y - s0.y * helper.x;
+    const ul = Math.hypot(ux, uy, uz); ux /= ul; uy /= ul; uz /= ul;
+    const vx = s0.y * uz - s0.z * uy, vy = s0.z * ux - s0.x * uz, vz = s0.x * uy - s0.y * ux;
+    let best = null, bestScore = Infinity;
+    for (let i = 0; i < 400; i++) {
+      const ang = i * 2.39996, dist = Math.sqrt(i) * 14 / R; // ~14 m apart, out to ~280 m
+      const p = { x: s0.x + (ux * Math.cos(ang) + vx * Math.sin(ang)) * dist, y: s0.y + (uy * Math.cos(ang) + vy * Math.sin(ang)) * dist, z: s0.z + (uz * Math.cos(ang) + vz * Math.sin(ang)) * dist };
+      const l = Math.hypot(p.x, p.y, p.z); p.x /= l; p.y /= l; p.z /= l;
+      if (liquidAt(p)) continue;
+      const score = slope(p) * 4 + dist * R / 120;
+      if (score < bestScore) { bestScore = score; best = p; }
+      if (best && i > 40 && bestScore < .9) break;
+    }
+    if (best) site = [best.x, best.y, best.z];
+  }
+  return { raw, height, surface, meshHeight, isLiquid, color, climate, sea, liquid, coverage, minH, maxH, waterColor, site, lush };
 }

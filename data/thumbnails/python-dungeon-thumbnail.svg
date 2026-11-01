@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <title>Dungeon Crawler Python terminal</title>
+  <desc>A green ASCII goblin from the game, above the terminal's attack prompt.</desc>
+  <rect width="600" height="600" rx="24" fill="#0c1411" />
+  <g fill="#8be28b" font-family="Menlo, Consolas, monospace" font-size="28">
+    <text y="65"><tspan x="190">,</tspan><tspan x="344">,</tspan></text>
+    <text y="93"><tspan x="168">/</tspan><tspan x="190">(</tspan><tspan x="212">.</tspan><tspan x="234">-</tspan><tspan x="256">-</tspan><tspan x="278">.</tspan><tspan x="300">)</tspan><tspan x="322">\</tspan></text>
+    <text y="121"><tspan x="80">|</tspan><tspan x="102">\</tspan><tspan x="168">\</tspan><tspan x="190">/</tspan><tspan x="344">\</tspan><tspan x="366">/</tspan><tspan x="432">/</tspan><tspan x="454">|</tspan></text>
+    <text y="149"><tspan x="80">|</tspan><tspan x="124">\</tspan><tspan x="168">/</tspan><tspan x="212">=</tspan><tspan x="234">.</tspan><tspan x="300">.</tspan><tspan x="322">=</tspan><tspan x="366">\</tspan><tspan x="410">/</tspan><tspan x="454">|</tspan></text>
+    <text y="177"><tspan x="102">\</tspan><tspan x="124">(</tspan><tspan x="168">\</tspan><tspan x="256">o</tspan><tspan x="278">\</tspan><tspan x="300">/</tspan><tspan x="322">o</tspan><tspan x="410">/</tspan><tspan x="454">)</tspan><tspan x="476">/</tspan></text>
+    <text y="205"><tspan x="124">\</tspan><tspan x="146">_</tspan><tspan x="168">,</tspan><tspan x="212">'</tspan><tspan x="234">-</tspan><tspan x="256">/</tspan><tspan x="322">\</tspan><tspan x="344">-</tspan><tspan x="366">'</tspan><tspan x="410">,</tspan><tspan x="432">_</tspan><tspan x="454">/</tspan></text>
+    <text y="233"><tspan x="168">/</tspan><tspan x="256">\</tspan><tspan x="278">_</tspan><tspan x="300">_</tspan><tspan x="322">/</tspan><tspan x="410">\</tspan></text>
+    <text y="261"><tspan x="168">\</tspan><tspan x="212">\</tspan><tspan x="234">_</tspan><tspan x="256">_</tspan><tspan x="278">/</tspan><tspan x="300">\</tspan><tspan x="322">_</tspan><tspan x="344">_</tspan><tspan x="366">/</tspan><tspan x="410">/</tspan></text>
+    <text y="289"><tspan x="124">_</tspan><tspan x="146">_</tspan><tspan x="168">_</tspan><tspan x="190">\</tspan><tspan x="234">\</tspan><tspan x="256">|</tspan><tspan x="278">-</tspan><tspan x="300">-</tspan><tspan x="322">|</tspan><tspan x="344">/</tspan><tspan x="388">/</tspan><tspan x="410">_</tspan><tspan x="432">_</tspan><tspan x="454">_</tspan></text>
+    <text y="317"><tspan x="80">/</tspan><tspan x="102">`</tspan><tspan x="212">\</tspan><tspan x="366">/</tspan><tspan x="476">`</tspan><tspan x="498">\</tspan></text>
+    <text y="345"><tspan x="58">/</tspan><tspan x="234">'</tspan><tspan x="256">-</tspan><tspan x="278">-</tspan><tspan x="300">-</tspan><tspan x="322">-</tspan><tspan x="344">'</tspan><tspan x="520">\</tspan></text>
+  </g><path d="M36 391h528" stroke="#314b3b" stroke-width="2" />
+  <g font-family="Menlo, Consolas, monospace">
+    <text x="36" y="431" fill="#e4eee5" font-size="25" font-weight="bold">A wild Goblin appears!</text>
+    <text x="36" y="480" fill="#8be28b" font-size="23">1. Attack</text>
+    <text x="36" y="516" fill="#a6b9ab" font-size="23">2. Use healing potion</text>
+    <text x="36" y="563" fill="#8be28b" font-size="27">&gt; 1</text>
+  </g>
+  <rect x="100" y="541" width="14" height="26" fill="#8be28b" />
+</svg>

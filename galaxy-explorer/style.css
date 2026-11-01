@@ -81,3 +81,10 @@ body.walking .touch-alt button[data-key="KeyR"],body.walking .touch-alt button[d
  .mission{display:none}#touchControls{bottom:58px}.joystick{width:96px;height:96px}.touch-alt button{width:46px;height:46px}
 }
 @media(pointer:coarse){.prototype{display:none}}
+/* Touch play: no text selection, callout menu or tap highlight while holding
+   controls or dragging the view (form fields stay selectable). */
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+input,textarea{-webkit-user-select:text;user-select:text}
+#touchControls,#touchControls *,.joystick,.joystick *,#world,#hud button{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+
+.map-course{width:100%;margin-top:8px}

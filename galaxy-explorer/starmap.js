@@ -12,6 +12,16 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const fmtLy = (ly) => ly >= 1000 ? `${(ly / 1000).toFixed(ly >= 10000 ? 0 : 1)}k ly` : ly >= 10 ? `${Math.round(ly)} ly` : ly >= .1 ? `${ly.toFixed(1)} ly` : `${Math.round(ly * 63241)} AU`;
 const LIFE_RANK = { none: 0, microbial: 1, simple: 2, complex: 3 };
+// Long-range scan: the ship can sense biosignatures (atmospheric gases life
+// produces) at stars within jump range, before you visit. Strength hints at
+// the most advanced life in the system without naming the world.
+const SCAN = [
+  { tag: '', text: 'No biosignatures detected.', color: null },
+  { tag: 'FAINT LIFE', text: 'Faint biosignatures: microbial life possible.', color: 'rgba(170,205,160,.75)' },
+  { tag: 'LIFE', text: 'Clear biosignatures: plant life likely.', color: 'rgba(150,235,140,.9)' },
+  { tag: 'RICH LIFE', text: 'Strong biosignatures: complex life likely, with animals.', color: 'rgba(120,255,150,1)' },
+];
+function biosignature(sys) { return Math.max(0, ...sys.bodies.map(b => LIFE_RANK[b.physics?.life] || 0)); }
 
 // Zoom thresholds in pixels per light year.
 const LOCAL_SCALE = 7;          // neighbourhood view
@@ -38,12 +48,14 @@ const bodyXY = (star, sys, body) => { const p = bodyPosition(sys, body, orbitClo
 function readSurvey(seed) { try { const s = JSON.parse(localStorage.getItem(`elsewhere-system-${seed}`) || '{}'); return { records: new Set(s.records || []), visited: new Set(s.visited || []), flora: s.flora || {}, fauna: s.fauna || {} }; } catch { return { records: new Set(), visited: new Set(), flora: {}, fauna: {} }; } }
 
 export function createStarMap(o) {
-  const { here, state, offChart } = o;
+  let { here } = o;
+  const { state } = o;
+  const offChart = () => o.offChart();
   const $ = (id) => document.getElementById(id);
   const dialog = $('starMap'), canvas = $('starCanvas'), ctx = canvas.getContext('2d');
   systems.set(here.id, o.system); // the system you are actually flying in
-  const { range, targets } = jumpTargets(here);
-  const inRange = new Set(targets.map(t => t.star.id));
+  let { range, targets } = jumpTargets(here);
+  let inRange = new Set(targets.map(t => t.star.id));
   const view = { x: here.x, y: here.y, scale: LOCAL_SCALE };
   let w = 0, h = 0, dpr = 1, pending = false, drawn = [], haze = null, anim = null;
   let selected = { star: targets[0]?.star || here, body: null };
@@ -116,7 +128,7 @@ export function createStarMap(o) {
     let stars = [];
     if (realA > 0) {
       stars = starsInBox([x0 - 1, y0 - 1, here.z - 40], [x1 + 1, y1 + 1, here.z + 40]);
-      if (s > 2.5 && s < SYSTEM_TO) {
+      if (s > 2.5 && s < SYSTEM_TO && !o.deep()) {
         ctx.globalAlpha = realA * (1 - sysA) * .9; ctx.strokeStyle = 'rgba(201,244,204,.16)'; ctx.lineWidth = 1;
         const [hx, hy] = toScreen(here.x, here.y);
         for (const t of targets) { const [tx, ty] = toScreen(t.star.x, t.star.y); ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(tx, ty); ctx.stroke(); }
@@ -134,6 +146,10 @@ export function createStarMap(o) {
         ctx.fillStyle = p.color;
         if (r < 1.3) ctx.fillRect(sx - r / 2, sy - r / 2, r, r); else { ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill(); }
         if (isVisited(st) && st.id !== here.id && s < SYSTEM_FROM) { ctx.strokeStyle = 'rgba(201,244,204,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(sx, sy, r + 3, 0, Math.PI * 2); ctx.stroke(); }
+        if (inRange.has(st.id) && s < SYSTEM_FROM) {
+          const level = biosignature(systemOf(st));
+          if (level) { ctx.strokeStyle = SCAN[level].color; ctx.lineWidth = level === 3 ? 2 : 1.2; ctx.setLineDash(level === 1 ? [2, 3] : []); ctx.beginPath(); ctx.arc(sx, sy, r + 6, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
+        }
         drawn.push({ star: st, sx, sy, r: Math.max(r, 6) });
       }
     }
@@ -141,7 +157,7 @@ export function createStarMap(o) {
     if (sysA > 0) for (const st of stars) drawSystem(st, sysA);
     ctx.globalAlpha = 1;
     // Jump range.
-    if (s > .8 && s < SYSTEM_TO * 2) {
+    if (s > .8 && s < SYSTEM_TO * 2 && !o.deep()) {
       const [hx, hy] = toScreen(here.x, here.y);
       ctx.globalAlpha = 1 - smooth(Math.log(SYSTEM_FROM), Math.log(SYSTEM_TO * 2), ls);
       ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(201,244,204,.55)'; ctx.lineWidth = 1;
@@ -211,8 +227,22 @@ export function createStarMap(o) {
       ctx.strokeStyle = '#c9f4cc'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
       ctx.fillStyle = '#edf5ee'; ctx.font = '600 12px system-ui, sans-serif'; ctx.fillText(nameOf(selected.star), sx + r + 6, sy);
     }
+    // In deep space: the ship between the stars, and its course.
+    const deep = o.deep();
+    if (deep) {
+      const [px, py] = toScreen(deep.position[0], deep.position[1]);
+      if (deep.course) {
+        const [cx, cy] = toScreen(deep.course.x, deep.course.y);
+        ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(201,244,204,.7)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(cx, cy); ctx.stroke(); ctx.setLineDash([]);
+      }
+      ctx.fillStyle = '#c9f4cc'; diamond(px, py, 7);
+      ctx.font = '600 10px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText('YOU · DEEP SPACE', px, py + 10);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    }
     // You are here.
-    if (s < SYSTEM_TO) {
+    else if (s < SYSTEM_TO) {
       const [hx, hy] = toScreen(here.x, here.y);
       ctx.globalAlpha = 1 - smooth(Math.log(SYSTEM_FROM), Math.log(SYSTEM_TO), Math.log(s));
       ctx.fillStyle = '#c9f4cc'; diamond(hx, hy, 7);
@@ -234,7 +264,7 @@ export function createStarMap(o) {
     const s = view.scale;
     let title = 'THE GALAXY', sub = `${Math.max(1, state.visited.size)} star${state.visited.size > 1 ? 's' : ''} visited · ${state.jumps} jump${state.jumps === 1 ? '' : 's'}`;
     if (s >= SYSTEM_FROM) { const c = centreStar(); if (c) { title = `${nameOf(c).toUpperCase()} SYSTEM`; sub = isVisited(c) ? `${systemOf(c).bodies.length} worlds · ${starPhysics(c).spectralClass} star` : `Unsurveyed · ${systemOf(c).bodies.length} worlds detected`; } }
-    else if (s >= REAL_FROM) { title = 'STELLAR NEIGHBOURHOOD'; sub = `${targets.length} stars within jump range (${range.toFixed(1)} ly)`; }
+    else if (s >= REAL_FROM) { const alive = targets.filter(t => biosignature(systemOf(t.star))).length; title = 'STELLAR NEIGHBOURHOOD'; sub = `${targets.length} stars within jump range (${range.toFixed(1)} ly) · ${alive ? `signs of life at ${alive} (green rings)` : 'no signs of life in range'}`; }
     $('mapTitle').textContent = title; $('mapSubtitle').textContent = sub;
     $('mapScale').textContent = `${fmtLy(w / s)} across · drag to pan · scroll or pinch to zoom · double-tap a star to open its system`;
   }
@@ -341,20 +371,33 @@ export function createStarMap(o) {
         btn.onclick = () => { if (!btn.disabled) o.onCruise(body); };
       } else { btn.disabled = true; btn.textContent = 'Jump to this system first'; btn.onclick = null; note = inRange.has(star.id) ? 'It is within jump range: select the star to jump.' : ''; }
     } else {
-      $('mapKicker').textContent = `${p.spectralClass} STAR · ${isHere ? 'YOU ARE HERE' : known ? 'VISITED' : 'UNVISITED'}`;
+      $('mapKicker').textContent = `${p.spectralClass} STAR · ${isHere ? (o.deep() ? 'LAST SYSTEM' : 'YOU ARE HERE') : known ? 'VISITED' : 'UNVISITED'}`;
       $('mapName').textContent = nameOf(star);
       if (known) {
         const best = sys.bodies.slice().sort((a, b) => LIFE_RANK[b.physics.life] - LIFE_RANK[a.physics.life] || b.physics.habitability - a.physics.habitability)[0];
         $('mapDescription').textContent = `${sys.bodies.length} worlds. Most promising: ${best.name}, ${best.type.toLowerCase()} · ${LIFE_WORDS[best.physics.life].toLowerCase()}.`;
-      } else $('mapDescription').textContent = `Long-range scan: ${sys.bodies.length} worlds. Surface conditions unknown until you arrive.`;
+      } else if (inRange.has(star.id)) $('mapDescription').textContent = `Long-range scan: ${sys.bodies.length} worlds. ${SCAN[biosignature(sys)].text}`;
+      else $('mapDescription').textContent = `${sys.bodies.length} worlds. Beyond scanner range: jump closer to look for signs of life.`;
       const lum = p.luminosity < .01 ? p.luminosity.toFixed(4) : p.luminosity.toFixed(2);
       $('mapFacts').textContent = `${p.temperature} K · ${p.mass.toFixed(2)} M☉ · ${lum} L☉ · ${p.age.toFixed(1)} billion years${isHere ? '' : ` · ${starDistance(star, here).toFixed(1)} ly away`}`;
       const reachable = inRange.has(star.id), ready = o.canJump();
       btn.disabled = isHere || !reachable || !ready;
       btn.textContent = isHere ? 'You are here' : !reachable ? `Beyond jump range (${range.toFixed(1)} ly)` : ready ? `Jump to ${nameOf(star)} ↗` : 'Jump drive not ready';
       btn.onclick = () => { if (!btn.disabled) o.onJump(star, nameOf(star)); };
-      note = isHere ? (offChart ? 'Off-chart system. Jumps are measured from your last charted star.' : 'Double-tap a star, or a world in the list, to zoom in.') : !reachable ? 'Out of range. Jump to a nearer star first and work your way toward it.' : ready ? '' : o.blockedReason();
+      // Any star can also be flown to: set a course and leave the system.
+      const courseBtn = $('mapCourse'), deep = o.deep(), coursed = deep?.course?.id === star.id || o.course?.()?.id === star.id;
+      courseBtn.hidden = isHere && !deep && !offChart();
+      courseBtn.disabled = false;
+      courseBtn.textContent = coursed ? 'Clear course ×' : `${deep ? 'Fly' : 'Set course'} to ${nameOf(star)} ↗`;
+      courseBtn.onclick = () => { if (coursed) { o.clearCourse(); updatePanel(); } else o.onCourse(star); };
+      if (deep) {
+        btn.hidden = true;
+        const ly = Math.hypot(star.x - deep.position[0], star.y - deep.position[1], star.z - deep.position[2]);
+        note = `${ly.toFixed(1)} ly from your position. The star drive slows as you near a star, so arrivals are gentle.`;
+      } else btn.hidden = false;
+      if (!deep) note = isHere ? (offChart() ? 'Off-chart test system, placed at your last charted star. Jump, or set a course and fly out.' : 'Double-tap a star, or a world in the list, to zoom in.') : !reachable ? 'Out of range. Jump to a nearer star first and work your way toward it.' : ready ? '' : o.blockedReason();
     }
+    if (body) { $('mapCourse').hidden = true; btn.hidden = false; }
     $('mapNote').textContent = note;
     // Worlds of the selected system.
     const list = $('mapWorlds'); list.replaceChildren();
@@ -377,7 +420,7 @@ export function createStarMap(o) {
     for (const t of targets) {
       const tp = starPhysics(t.star), row = document.createElement('button');
       row.className = 'world-row' + (!body && star.id === t.star.id ? ' selected' : '');
-      row.innerHTML = `<i style="background:${tp.color}"></i><span><strong></strong><small>${tp.spectralClass} star · ${t.distance.toFixed(1)} ly</small></span><em>${state.visited.has(t.star.id) ? 'VISITED' : ''}</em>`;
+      row.innerHTML = `<i style="background:${tp.color}"></i><span><strong></strong><small>${tp.spectralClass} star · ${t.distance.toFixed(1)} ly</small></span><em>${[state.visited.has(t.star.id) ? 'VISITED' : '', SCAN[biosignature(systemOf(t.star))].tag].filter(Boolean).join(' · ')}</em>`;
       row.querySelector('strong').textContent = nameOf(t.star);
       row.onclick = () => { select(t.star); flyTo(t.star.x, t.star.y, Math.max(LOCAL_SCALE, Math.min(view.scale, SYSTEM_FROM * .6))); };
       jl.append(row);
@@ -392,6 +435,10 @@ export function createStarMap(o) {
         const b = o.selectedBody();
         selected = { star: here, body: b || null };
         Object.assign(view, focusView(here.x, here.y, systemScale()));
+      } else if (o.deep()) {
+        const p = o.deep().position;
+        if (!selected.star || selected.body) selected = { star: o.deep().course || targets[0]?.star || here, body: null };
+        Object.assign(view, focusView(p[0], p[1], LOCAL_SCALE));
       } else {
         if (selected.star.id === here.id && !selected.body && targets[0]) selected = { star: targets[0].star, body: null };
         Object.assign(view, focusView(here.x, here.y, LOCAL_SCALE));
@@ -402,5 +449,13 @@ export function createStarMap(o) {
     get isOpen() { return dialog.open; },
     resize() { if (dialog.open) { resize(); requestDraw(); } },
     refresh() { if (dialog.open) { updatePanel(); requestDraw(); } },
+    // After flying into another system: it becomes "here" for jumps and the panel.
+    setHere(star, sys) {
+      here = star;
+      systems.set(star.id, sys);
+      ({ range, targets } = jumpTargets(here));
+      inRange = new Set(targets.map(t => t.star.id));
+      selected = { star: targets[0]?.star || here, body: null };
+    },
   };
 }

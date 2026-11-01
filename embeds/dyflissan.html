@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dýflissan</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0c0c0c; color: #d4d4d4; font: 16px/1.5 monospace; }
+    main { padding: 24px; text-align: center; }
+    button, a { color: #8be28b; font: inherit; }
+    button { padding: 10px 18px; border: 1px solid #555; border-radius: 6px; background: #2a2a2c; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Dýflissan</h1>
+    <p>A text adventure in Icelandic. Choose a door and search for gold.</p>
+    <button id="play" type="button">Play</button>
+    <p><a href="/backstage/python/Dyflissan.py">Python source</a></p>
+  </main>
+  <script src="/backstage/pyterm.js?v=embedded-1"></script>
+  <script>
+    const play = () => PyTerm.run({ main: 'Dyflissan.py', embedded: true });
+    document.getElementById('play').addEventListener('click', play);
+    document.querySelector('main').hidden = true;
+    play();
+  </script>
+</body>
+</html>

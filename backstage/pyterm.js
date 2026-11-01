@@ -33,6 +33,11 @@
     .pyt-caret { display: inline-block; width: .6em; height: 1.15em; vertical-align: -.2em; background: #d4d4d4; animation: pytblink 1.05s steps(1) infinite; }
     @keyframes pytblink { 50% { opacity: 0; } }
     @media (max-width: 700px) { .pyt-back { padding: 0; } .pyt { height: 100%; border-radius: 0; } .pyt-out { font-size: 12px; padding: 10px 10px 18px; } .pyt-pad { display: grid !important; } }
+    .pyt-back.pyt-embedded { padding: 0; background: #0c0c0c; }
+    .pyt-embedded .pyt { width: 100%; height: 100%; border: 0; border-radius: 0; box-shadow: none; }
+    .pyt-embedded .pyt-bar { display: none; }
+    .pyt-embedded .pyt-out { min-height: 0; white-space: pre; overflow-wrap: normal; }
+    .pyt-embedded [data-again] { align-self: flex-start; margin: 8px 14px; padding: 8px 12px; border: 1px solid #555; border-radius: 5px; background: #2a2a2c; color: #ddd; font: inherit; cursor: pointer; }
     .pyt.game .pyt-out { flex: none; height: 92px; border-top: 1px solid #222; font-size: 12px; padding: 8px 12px; }
     .pyt-screen { flex: 1; min-height: 0; display: grid; place-items: center; background: #000; position: relative; }
     .pyt-screen canvas { position: absolute; inset: 0; margin: auto; max-width: 100%; max-height: 100%; width: auto !important; height: auto !important; image-rendering: pixelated; outline: none; display: block; }
@@ -67,9 +72,9 @@
             out.scrollTop = out.scrollHeight;
         });
     }
-    function open(title, game) {
+    function open(title, game, embedded = false) {
         close();
-        const back = document.createElement('div'); back.className = 'pyt-back';
+        const back = document.createElement('div'); back.className = 'pyt-back' + (embedded ? ' pyt-embedded' : '');
         back.innerHTML = `<div class="pyt" role="dialog" aria-label="${esc(title)}"><div class="pyt-bar"><span class="pyt-dots"><i title="Close"></i><i></i><i></i></span><span class="pyt-title">${esc(title)}</span><button type="button" data-again hidden>Run again</button><button type="button" data-close>Close</button></div>
             ${game ? '<div class="pyt-screen"><span class="pyt-hint">' + (matchMedia('(pointer: coarse)').matches ? 'use the arrow buttons' : 'click the game, then use the arrow keys') + '</span><div class="pyt-pad" aria-hidden="true"><button type="button" data-k="ArrowUp">▲</button><button type="button" data-k="ArrowLeft">◀</button><button type="button" data-k="ArrowDown">▼</button><button type="button" data-k="ArrowRight">▶</button></div></div>' : ''}<pre class="pyt-out" tabindex="0"><span class="pyt-line" hidden><input class="pyt-in" aria-label="Type here" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="send"><span class="pyt-caret"></span></span></pre></div>`;
         document.body.append(back);
@@ -100,8 +105,9 @@
         out.addEventListener('click', () => { if (pending && !getSelection().toString()) inp.focus(); });
         back.querySelector('[data-close]').onclick = close;
         back.querySelector('.pyt-dots i').onclick = close;
-        back.addEventListener('click', e => { if (e.target === back) close(); });
-        document.addEventListener('keydown', escClose);
+        back.addEventListener('click', e => { if (!embedded && e.target === back) close(); });
+        if (!embedded) document.addEventListener('keydown', escClose);
+        if (embedded) back.querySelector('.pyt').append(back.querySelector('[data-again]'));
         return back;
     }
     // one canvas for pygame, reused between runs (SDL keeps hold of it)
@@ -247,10 +253,10 @@ async def _run(src, filename, cwd, token):
     async function run(prog, title) {
         const P = typeof prog === 'string' ? { main: prog } : prog;
         const file = P.main, dir = file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '', base = file.slice(file.lastIndexOf('/') + 1);
-        const back = open(title || ('python3 ' + base), P.pygame), id = ++runId;
+        const back = open(title || ('python3 ' + base), P.pygame, P.embedded), id = ++runId;
         const again = back.querySelector('[data-again]');
         again.onclick = () => run(prog, title);
-        write(`oli@${host()} ${dir || 'backstage'} % `, 'cmd'); write(`python3 ${base}\n`);
+        if (!P.embedded) { write(`oli@${host()} ${dir || 'backstage'} % `, 'cmd'); write(`python3 ${base}\n`); }
         let src;
         try { src = await fetchSrc(file); } catch (e) { write(String(e.message) + '\n', 'err'); return; }
         if (!pyodide) write('Starting Python (first time takes a few seconds)...\n', 'dim');

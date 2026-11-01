@@ -317,3 +317,13 @@ body.snake-small.is-playing .player-stage { height: min(440px, 58vh, calc(100vw 
   body.snake-small.is-playing { overflow: auto; }
   body.snake-small.is-playing .player-area { position: relative; inset: auto; z-index: auto; border-radius: var(--radius); margin: 10px auto 18px; }
 }
+
+/* Python adventures use their terminal's natural size, with one outer toolbar. */
+body.terminal-player.is-playing .player-area:not(.fullscreen) {
+  width: min(844px, calc(100vw - 24px)); height: auto !important;
+  margin: 18px auto 24px; position: relative; inset: auto;
+}
+body.terminal-player.is-playing .player-area:not(.fullscreen) .player-stage {
+  height: min(580px, calc(100dvh - 110px)); flex: none !important;
+}
+body.terminal-player.is-playing:has(.player-area:not(.fullscreen)) { overflow: auto; }

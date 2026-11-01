@@ -191,6 +191,7 @@ export function updateShipEffects(kestrel, s, dt) {
             mode === "flight" ||
             mode === "space" ||
             mode === "transit" ||
+            mode === "deep" ||
             maneuvering;
         engine.scale.y =
             0.12 +
@@ -198,7 +199,7 @@ export function updateShipEffects(kestrel, s, dt) {
             Math.sin(animationTime * 40) * 0.025;
     }
     const dustPower =
-        mode === "space" || mode === "transit"
+        mode === "space" || mode === "transit" || mode === "deep"
             ? 0
             : liftPower * clamp(1 - agl / 18, 0, 1);
     dust.visible = dustPower > 0.025;
