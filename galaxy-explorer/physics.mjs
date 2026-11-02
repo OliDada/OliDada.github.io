@@ -192,13 +192,33 @@ export function makeWorld(
         clamp(star.age / 1.2, 0, 1) *
         (1 - star.flareActivity * 0.45) *
         (tidallyLocked && !parent ? 0.75 : 1);
-    let life = "none";
+    let life = "none",
+        biochemistry = null;
     if (roll.life < habitability ** 0.6) {
+        biochemistry = "carbon";
         life = "microbial";
         if (!subsurfaceOcean && habitability > 0.3 && star.age > 1.5)
             life = "simple";
         if (!subsurfaceOcean && habitability > 0.5 && star.age > 3)
             life = "complex";
+    }
+
+    // Seas of something other than water, and life built on other chemistry.
+    const exotic = exoticChemistry(
+        { temperature, pressure, volatiles, volcanism, waterState, gravity },
+        star,
+        tidallyLocked && !parent,
+    );
+    const solvent =
+        waterState === "liquid" ? "water" : exotic.seas ? exotic.solvent : null;
+    const solventCoverage =
+        waterState === "liquid" ? waterCoverage : exotic.seas;
+    if (life === "none" && exotic.habitability > 0 && roll.life < exotic.habitability ** 0.6) {
+        // Exotic chemistry is slower than carbon in water, so it needs more time to get going.
+        biochemistry = exotic.solvent === "rock" ? "silicon" : exotic.chemistry;
+        life = "microbial";
+        if (exotic.habitability > 0.28 && star.age > 2.5) life = "simple";
+        if (exotic.habitability > 0.42 && star.age > 4) life = "complex";
     }
     return {
         au,
@@ -221,7 +241,43 @@ export function makeWorld(
         volcanism,
         habitability,
         life,
+        biochemistry,
+        solvent,
+        solventCoverage,
     };
+}
+
+// Life without liquid water. Carbon in water is the best chemistry we know, but
+// not the only one people take seriously:
+//   ammonia  - liquid ammonia (about -78 to -33 °C at 1 bar) on cold worlds with thick air
+//   methane  - lakes of liquid methane and ethane on very cold worlds, like Titan (-180 °C)
+//   sulfur   - hot volcanic worlds where sulfur compounds do the work water does
+//   silicon  - very hot worlds where carbon chemistry falls apart but silicon chains hold
+// Each gets a habitability score like water worlds, scaled down: these are long shots.
+// No random numbers are drawn here, so worlds without exotic chemistry are unchanged.
+export function exoticChemistry(w, star, locked = false) {
+    const { temperature: T, pressure: P, volatiles: V, volcanism: Vo, waterState, gravity } = w;
+    const none = { chemistry: null, solvent: null, seas: 0, habitability: 0 };
+    if (waterState === "liquid") return none;
+    const common =
+        bell(gravity, 1, 1.6) *
+        clamp(star.age / 2, 0, 1) *
+        (1 - star.flareActivity * 0.45) *
+        (locked ? 0.75 : 1);
+    let pick = none;
+    if (T > 85 && T < 125 && P > 0.3 && V > 0.3)
+        pick = { chemistry: "methane", solvent: "methane", seas: clamp(V * 0.5, 0.08, 0.45),
+            habitability: 0.5 * bell(T, 100, 14) * clamp(P / 0.8, 0, 1) };
+    else if (T > 190 && T < 250 && P > 0.3 && V > 0.3)
+        pick = { chemistry: "ammonia", solvent: "ammonia", seas: clamp(V * 0.6, 0.1, 0.6),
+            habitability: 0.65 * bell(T, 218, 18) * clamp(P / 0.6, 0, 1) };
+    else if (T > 330 && T < 560 && Vo > 0.4 && P > 0.05)
+        pick = { chemistry: "sulfur", solvent: "sulfur", seas: T > 390 ? clamp(Vo * 0.15, 0.04, 0.14) : 0,
+            habitability: 0.55 * bell(T, 430, 70) * clamp((Vo - 0.35) / 0.35, 0, 1) * clamp(P / 0.3, 0, 1) };
+    else if (T > 560 && T < 1150 && P > 0.1)
+        pick = { chemistry: "silicon", solvent: "rock", seas: 0,
+            habitability: 0.62 * bell(T, 820, 170) * clamp(P / 0.6, 0, 1) };
+    return { ...pick, habitability: pick.habitability * common };
 }
 
 // Gas and ice giants. Beyond the frost line ice lets planetary cores grow big
@@ -306,5 +362,8 @@ export function makeGiant(star, au, r) {
         volcanism: 0,
         habitability: 0,
         life: "none",
+        biochemistry: null,
+        solvent: null,
+        solventCoverage: 0,
     };
 }

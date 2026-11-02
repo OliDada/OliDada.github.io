@@ -41,10 +41,11 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
       const fit = suitability(sp, climate), relaxed = tries > count * 25 ? Math.max(fit, .2) : fit;
       if (r() > relaxed) continue;
       dummy.position.copy(n).multiplyScalar(radius + h - .05);
-      dummy.quaternion.setFromUnitVectors(Y, n);
+      // Flat growths (mats, crusts) lie along the slope; everything else grows upright.
+      dummy.quaternion.setFromUnitVectors(Y, sp.form === 'mat' || sp.form === 'crust' ? slopeNormal(THREE, terrain, radius, n) : n);
       dummy.rotateY(r() * Math.PI * 2);
       dummy.rotateX((r() - .5) * .12);
-      const s = sp.form === 'mat' ? .6 + r() * 1.2 : .7 + r() * .6;
+      const s = sp.form === 'mat' || sp.form === 'crust' ? .6 + r() * 1.2 : .7 + r() * .6;
       dummy.scale.setScalar(s);
       dummy.updateMatrix();
       const index = positions.length / 3;
@@ -73,6 +74,13 @@ export function plantFootprint(sp) {
     case 'stalk': return { r: H * .03 + .15, h: H };
     case 'shrub': return { r: H * .45, h: H * .8 };
     case 'mound': return { r: H * .65, h: H * .6 };
+    case 'crystal': return { r: H * .25, h: H };
+    case 'glasstree': return { r: H * .06 + .25, h: H };
+    case 'chimney': return { r: H * .22, h: H };
+    case 'plume': return { r: H * .05 + .15, h: H };
+    case 'bulb': return { r: H * .4, h: H * .9 };
+    case 'sheet': return { r: H * .12 + .15, h: H };
+    case 'filament': return { r: .15, h: H };
     default: return null;
   }
 }
@@ -176,12 +184,89 @@ function buildGeometry(THREE, sp, r) {
     }
     add(new THREE.ConeGeometry(H * .1, H * .25, 5).translate(0, H * .125, 0), M(), c.leaf, true);
   } else if (sp.form === 'mat') {
-    for (let i = 0; i < 6; i++) { const rad = .5 + r() * 1.3; add(cyl(rad, rad * 1.05, H, 9), M((r() - .5) * 3, 0, (r() - .5) * 3, 0, r() * 6), leaf(i), true); }
+    // Overlapping patches, each a little thicker than the last so no two tops are
+    // level (level tops flicker against each other), and each reaching down into the
+    // ground so uneven terrain never shows beneath or pokes through a gap.
+    const sink = .6;
+    for (let i = 0; i < 6; i++) { const rad = .5 + r() * 1.3, h = H * (1 + i * .35); add(cyl(rad, rad * 1.05, h + sink, 9), M((r() - .5) * 3, -sink, (r() - .5) * 3, 0, r() * 6), leaf(i), true); }
     add(cyl(.2, .2, .01, 5), M(), c.stem, false);
   } else if (sp.form === 'mound') {
     const layers = 2 + sp.segments % 3;
     for (let i = 0; i < layers; i++) { const rad = H * (.75 - i * .15); add(blob(rad, 1), M((r() - .5) * .2, H * .25 * i, (r() - .5) * .2, 0, r() * 6, 0, 1, .55, 1), c.leaf2, false); }
     add(blob(H * .3, 1), M(0, H * .25 * layers + H * .05, 0, 0, 0, 0, 1, .5, 1), c.leaf, true);
+  } else if (sp.form === 'crystal') {
+    // A cluster of hexagonal prisms with pointed tips, leaning outward.
+    const n = 5 + sp.seed % 5;
+    for (let i = 0; i < n; i++) {
+      const a = i / n * Math.PI * 2 + r(), tilt = i ? .25 + r() * .5 : 0, h = H * (i ? .4 + r() * .5 : 1), w = H * (.06 + r() * .05);
+      const m = M(Math.cos(a) * H * .08, 0, Math.sin(a) * H * .08, 0, a, tilt);
+      add(cyl(w, w, h * .8, 6), m, leaf(i), true);
+      add(new THREE.ConeGeometry(w, h * .2, 6).translate(0, h * .9, 0), m, i % 3 ? c.leaf : c.accent, true);
+    }
+    add(cyl(H * .2, H * .25, H * .06, 6), M(), c.stem, false);
+  } else if (sp.form === 'glasstree') {
+    // A faceted glass trunk that splits into angled crystal branches.
+    const tr = H * .06;
+    add(cyl(tr * .7, tr, H * .5, 5), M(), c.stem, false);
+    const n = 3 + sp.seed % 3;
+    for (let i = 0; i < n; i++) {
+      const a = i / n * Math.PI * 2 + r() * .5, tilt = .45 + r() * .4, len = H * (.35 + r() * .2), y0 = H * (.4 + r() * .1);
+      add(cyl(tr * .25, tr * .5, len, 5), M(0, y0, 0, 0, a, -tilt), c.stem, false);
+      const tx = Math.cos(-a) * Math.sin(tilt) * len, ty = y0 + Math.cos(tilt) * len, tz = Math.sin(-a) * Math.sin(tilt) * len;
+      for (let k = 0; k < 3; k++) add(new THREE.ConeGeometry(H * .04, H * (.15 + r() * .12), 5).translate(0, H * .08, 0), M(tx, ty, tz, (r() - .5) * .9, r() * 6, (r() - .5) * .9), k ? leaf(i + k) : c.accent, true);
+    }
+    add(new THREE.ConeGeometry(H * .05, H * .3, 5).translate(0, H * .15, 0), M(0, H * .5, 0), c.accent, true);
+  } else if (sp.form === 'chimney') {
+    // A rough mineral chimney; tube-feeders crowd its rim.
+    const tiers = 3 + sp.segments % 3;
+    for (let i = 0; i < tiers; i++) { const f = i / tiers, rad = H * (.22 - f * .1); add(cyl(rad * .85, rad, H / tiers * 1.05, 7), M((r() - .5) * H * .03, H * f, (r() - .5) * H * .03, 0, r() * 6), i % 2 ? c.stem : c.leaf2, false); }
+    const tubes = 6 + sp.seed % 6;
+    for (let i = 0; i < tubes; i++) {
+      const a = r() * 6.28, d = H * (.05 + r() * .08), h = H * (.2 + r() * .2), m = M(Math.cos(a) * d, H * .95, Math.sin(a) * d, (r() - .5) * .5, 0, (r() - .5) * .5);
+      add(cyl(H * .015, H * .015, h, 4), m, c.leaf, true);
+      add(blob(H * .03), new THREE.Matrix4().copy(m).multiply(new THREE.Matrix4().makeTranslation(0, h, 0)), c.accent, true);
+    }
+  } else if (sp.form === 'plume') {
+    // Feathery fans on a short stalk, like a sea pen.
+    add(cyl(H * .03, H * .05, H * .45, 5), M(), c.stem, false);
+    const n = 5 + sp.seed % 4;
+    for (let i = 0; i < n; i++) {
+      const a = i / n * Math.PI * 2, tilt = .3 + r() * .5;
+      add(new THREE.ConeGeometry(H * .09, H * .6, 3).scale(1, 1, .2).translate(0, H * .3, 0), M(0, H * .4, 0, 0, a, tilt), leaf(i), true);
+    }
+    add(blob(H * .07), M(0, H * .45, 0), c.accent, true);
+  } else if (sp.form === 'bulb') {
+    // Waxy swollen bulbs on short necks, in a clump.
+    const n = 3 + sp.seed % 4;
+    for (let i = 0; i < n; i++) {
+      const a = i / n * Math.PI * 2 + r(), d = i ? H * .3 : 0, h = H * (i ? .35 + r() * .3 : .7), rad = H * (.18 + r() * .12) * sp.leafSize;
+      add(cyl(rad * .2, rad * .3, h, 6), M(Math.cos(a) * d, 0, Math.sin(a) * d), c.stem, false);
+      add(blob(rad, 1), M(Math.cos(a) * d, h + rad * .6, Math.sin(a) * d, 0, r() * 6, 0, 1, 1.25, 1), leaf(i), true);
+      if (i % 2 === 0) add(blob(rad * .3), M(Math.cos(a) * d, h + rad * 1.75, Math.sin(a) * d), c.accent, true);
+    }
+  } else if (sp.form === 'sheet') {
+    // Thin upright sails, slightly curled, catching the faint light.
+    const n = 2 + sp.seed % 3;
+    add(cyl(H * .06, H * .08, H * .08, 6), M(), c.stem, false);
+    for (let i = 0; i < n; i++) {
+      const a = i / n * Math.PI + r() * .4, w = H * (.25 + r() * .15), h = H * (.7 + r() * .3);
+      const g = new THREE.BoxGeometry(w, h, .04, 4, 6, 1).translate(0, h / 2, 0), P = g.attributes.position;
+      for (let k = 0; k < P.count; k++) {
+        const f = P.getY(k) / h, taper = Math.sin(Math.min(1, f * 1.15 + .12) * Math.PI) * .9 + .1; // narrow base, broad middle, pointed tip
+        P.setX(k, P.getX(k) * taper); P.setZ(k, P.getZ(k) + (P.getX(k) / w) ** 2 * w * 1.2 + Math.sin(f * 3) * w * .12 + f * f * w * .5);
+      }
+      add(g, M(0, H * .05, 0, 0, a, (r() - .5) * .25), leaf(i), true);
+    }
+  } else if (sp.form === 'filament') {
+    // A towering thin thread, beaded with pods; only possible in deep cold and weak winds.
+    add(cyl(H * .006, H * .012, H, 4), M(), c.stem, false);
+    const beads = 4 + sp.segments;
+    for (let i = 1; i <= beads; i++) add(blob(H * (.012 + .014 * (i % 3 === 0)), 0), M(0, H * i / (beads + 1), 0, 0, 0, 0, 1, 1.6, 1), i % 3 === 0 ? c.accent : c.leaf, true);
+    for (let i = 0; i < 4; i++) add(new THREE.ConeGeometry(H * .01, H * .08, 3).translate(0, H * .04, 0), M(0, H, 0, 0, i * 1.57, .7), c.leaf2, true);
+  } else if (sp.form === 'crust') {
+    // Overlapping plates of dark growth, built up in layers.
+    for (let i = 0; i < 7; i++) { const rad = .4 + r() * 1.1, h = H * (.3 + r() * .7) * (1 + i * .04); add(cyl(rad * .8, rad, h + .5, 7), M((r() - .5) * 2.6, -.5, (r() - .5) * 2.6, (r() - .5) * .2, r() * 6, (r() - .5) * .2), leaf(i), true); }
+    add(cyl(.2, .2, .01, 5), M(), c.stem, false);
   }
 
   // Merge: stems first, then foliage, each part non-indexed with its colour baked in.
@@ -203,4 +288,14 @@ function buildGeometry(THREE, sp, r) {
   geometry.addGroup(stemVerts, pos.length / 3 - stemVerts, 1);
   geometry.computeBoundingSphere();
   return geometry;
+}
+
+// The ground's own normal at n, from heights 1.5 m away in two directions.
+function slopeNormal(THREE, terrain, radius, n) {
+  const a = new THREE.Vector3(0, 1, 0).cross(n);
+  if (a.lengthSq() < 1e-6) a.set(1, 0, 0).cross(n);
+  a.normalize();
+  const b = n.clone().cross(a), at = (d) => { const m = n.clone().addScaledVector(d, 1.5 / radius).normalize(); return m.multiplyScalar(radius + terrain.height(m)); };
+  const p0 = n.clone().multiplyScalar(radius + terrain.height(n)), g = at(b).sub(p0).cross(at(a).sub(p0)).normalize();
+  return g.dot(n) < 0 ? g.negate() : g;
 }

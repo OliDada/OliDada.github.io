@@ -87,7 +87,9 @@ test("worlds get colder further from the star, and physics stays consistent", ()
             if (p.waterState === "ice") assert.ok(p.temperature < 273);
             if (p.life !== "none")
                 assert.ok(
-                    p.waterState === "liquid" || p.subsurfaceOcean,
+                    p.waterState === "liquid" ||
+                        p.subsurfaceOcean ||
+                        (p.biochemistry && p.biochemistry !== "carbon"),
                     `${b.name} has life without water`,
                 );
             if (b.biome === "Frozen") assert.ok(p.temperature < 273);

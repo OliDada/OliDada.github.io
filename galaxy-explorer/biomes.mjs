@@ -265,12 +265,18 @@ export function worldLook(biomeName, p, star, r) {
                 : c,
         );
     }
+    // Methane worlds: organic haze settles as orange-brown dust, as on Titan.
+    if (p.solvent === "methane") {
+        const tint = (hex, t) => "#" + [1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * (1 - t) + parseInt("4a2e1a".slice(i - 1, i + 1), 16) * t).toString(16).padStart(2, "0")).join("");
+        palette = palette.map((c, i) => tint(c, 0.92 - i * 0.08));
+    }
     // Thin air shows almost no glow; thick air glows strongly.
     const airGlow =
         p.pressure <= 0
             ? 0
             : clamp(0.25 + Math.log10(p.pressure + 0.01) * 0.3, 0.1, 1);
-    const atmosphere = shift(biome.atmosphere, hue, 0, -(1 - airGlow) * 0.35);
+    const baseAir = p.solvent === "methane" ? "#c4884a" : biome.atmosphere; // Titan-like orange haze
+    const atmosphere = shift(baseAir, hue, 0, -(1 - airGlow) * 0.35);
     return {
         palette,
         atmosphere,
@@ -296,6 +302,10 @@ export function airWords(p) {
     return "crushing air";
 }
 export function waterWords(p) {
+    if (p.solvent === "methane") return "lakes of liquid methane";
+    if (p.solvent === "ammonia")
+        return p.waterState === "ice" ? "ammonia seas between water ice" : "ammonia seas";
+    if (p.solvent === "sulfur") return "pools of molten sulfur";
     if (p.waterState === "liquid")
         return p.waterCoverage > 0.7
             ? "global oceans"
@@ -318,13 +328,19 @@ export const LIFE_WORDS = {
     complex: "Complex life",
 };
 
+// Life label, naming the chemistry when it is not carbon in water.
+export function lifeLabel(p) {
+    const chem = p.biochemistry && p.biochemistry !== "carbon" ? ` (${p.biochemistry}-based)` : "";
+    return LIFE_WORDS[p.life] + (p.life === "none" ? "" : chem);
+}
+
 export function describe(biomeName, p) {
     const biome = BIOMES[biomeName];
     const facts = `${celsius(p.temperature)} °C, ${p.gravity.toFixed(2)} g, ${airWords(p)}, ${waterWords(p)}.`;
     const lifeLine =
         p.life === "none"
             ? ""
-            : ` ${LIFE_WORDS[p.life]} detected${p.subsurfaceOcean ? " below the ice" : ""}.`;
+            : ` ${lifeLabel(p)} detected${p.subsurfaceOcean && p.biochemistry === "carbon" ? " below the ice" : ""}.`;
     const locked =
         p.tidallyLocked && !p.isMoon ? " One side always faces the star." : "";
     const tagline =
@@ -341,7 +357,7 @@ export function factLine(p) {
             ? `${p.pressure < 0.1 ? p.pressure.toFixed(3) : p.pressure.toFixed(2)} bar`
             : "no air",
         waterWords(p),
-        LIFE_WORDS[p.life].toLowerCase(),
+        lifeLabel(p).toLowerCase(),
     ].join(" · ");
 }
 

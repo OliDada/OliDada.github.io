@@ -198,7 +198,8 @@ let saveKey,
     records = new Set(),
     visited = new Set(),
     catalogue = {}, // plant species catalogued per world: { bodyId: [speciesId] }
-    bestiary = {}; // animal species observed per world: { bodyId: [speciesId] }
+    bestiary = {}, // animal species observed per world: { bodyId: [speciesId] }
+    traces = {}; // worlds where you have seen what an intelligent species built: { bodyId: level }
 function loadSurvey(arrivedAt) {
     saveKey = `elsewhere-system-${system.seed}`;
     let saved = {};
@@ -210,6 +211,7 @@ function loadSurvey(arrivedAt) {
     visited = new Set([...(arrivedAt ? [arrivedAt.id] : []), ...(saved.visited || []).filter(known)]);
     catalogue = saved.flora || {};
     bestiary = saved.fauna || {};
+    traces = saved.traces || {};
 }
 loadSurvey(activeBody);
 discovered = records.has(activeBody.id);
@@ -225,6 +227,7 @@ function saveSurvey() {
                 visited: [...visited],
                 flora: catalogue,
                 fauna: bestiary,
+                traces,
             }),
         );
     } catch {}
@@ -1632,6 +1635,19 @@ function updateHeat(dt) {
     heatGlow.style.opacity = shownHeat < 0.01 ? "0" : shownHeat.toFixed(3);
 }
 
+// Animals hunt each other whether or not you watch; if a catch happens near you, say so.
+const sunDirection = new THREE.Vector3();
+let lastHuntToast = -Infinity;
+function witnessHunts(watcher) {
+    if (!watcher || animationTime - lastHuntToast < 25) return;
+    for (const e of site.fauna.events)
+        if (e.type === "catch" && e.position.distanceTo(watcher.position) < 70) {
+            lastHuntToast = animationTime;
+            toast(`You watch a ${e.hunter.sp.name} catch a ${e.prey.sp.name}.`, 5);
+            return;
+        }
+}
+
 // The HUD reads live state through these getters (hud.js).
 const hudState = {
     get mode() { return mode; },
@@ -1687,16 +1703,16 @@ function frame(now) {
         updateHeat(dt);
         updateAtmosphere();
         if (site) animateSite(dt);
-        if (site?.fauna && mode !== "space" && mode !== "transit" && mode !== "deep")
-            site.fauna.update(
-                dt,
-                animationTime,
+        if (site?.fauna && mode !== "space" && mode !== "transit" && mode !== "deep") {
+            const watcher =
                 mode === "walk"
                     ? { position: surfacePoint(playerNormal), onFoot: true }
                     : altitude() < 60
                       ? { position: shipPosition, onFoot: false }
-                      : null,
-            );
+                      : null;
+            site.fauna.update(dt, animationTime, watcher, sunDirection.copy(sun.position).normalize());
+            witnessHunts(watcher);
+        }
         updateShipEffects(
             kestrel,
             {
@@ -1760,6 +1776,22 @@ setStage(discovered ? 3 : 0);
 refreshHUD();
 function animateSite(dt) {
     if (site.flora) site.flora.update(animationTime);
+    if (site.structures) site.structures.update(animationTime);
+    checkTraces(dt);
+}
+// Seeing a settlement (on foot nearby, or flying low over it) records who built it.
+let tracesTimer = 0;
+function checkTraces(dt) {
+    const built = site.structures;
+    if (!built?.civ || traces[activeBody.id] || (tracesTimer += dt) < 0.5) return;
+    tracesTimer = 0;
+    const here = mode === "walk" ? surfacePoint(playerNormal) : ["flight", "landed", "landing", "takeoff"].includes(mode) && altitude() < 140 ? shipPosition : null;
+    if (!here) return;
+    const reach = (mode === "walk" ? 45 : 110) + built.civ.unit * 10;
+    if (!built.sites.some((n) => n.clone().multiplyScalar(RADIUS).distanceTo(here) < reach)) return;
+    traces[activeBody.id] = built.civ.level;
+    saveSurvey();
+    toast(`Signs of intelligence. ${built.civ.description}`, 9);
 }
 requestAnimationFrame(frame);
 
@@ -1808,6 +1840,7 @@ const starMap = createStarMap({
                 activeId: activeBody.id,
         flora: catalogue,
         fauna: bestiary,
+        traces,
     }),
     selectedBody: () => selectedBody,
     onSelectBody: (body) => {
@@ -1859,3 +1892,5 @@ try {
         );
     }
 } catch {}
+// Not a jump arrival after all (or storage is blocked): show the start menu as usual.
+if (!started) document.documentElement.classList.remove("arriving");

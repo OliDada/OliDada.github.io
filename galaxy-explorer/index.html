@@ -10,6 +10,16 @@
         />
         <title>Elsewhere — Procedural Worlds</title>
         <link rel="stylesheet" href="style.css" />
+        <!-- After a jump the page reloads into the new system: hide the start menu from
+             the first frame instead of showing it until the game has loaded. -->
+        <script>
+            try {
+                if (sessionStorage.getItem("elsewhere-arrival")) document.documentElement.classList.add("arriving");
+            } catch {}
+        </script>
+        <style>
+            .arriving #intro { display: none; }
+        </style>
     </head>
     <body>
         <canvas
@@ -288,6 +298,8 @@
                     <div id="mapWorlds" class="map-list"></div>
                     <div class="eyebrow list-heading">IN JUMP RANGE</div>
                     <div id="mapJumps" class="map-list"></div>
+                    <div class="eyebrow list-heading" id="mapRadioHeading">RADIO SIGNALS</div>
+                    <div id="mapRadio" class="map-list"></div>
                     <details class="offchart">
                         <summary>Off-chart systems (seed)</summary>
                         <form id="seedForm">

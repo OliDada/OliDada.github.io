@@ -22,6 +22,28 @@ export const FORMS = {
   stalk:     { height: [2, 7], sway: 1.1, noun: 'pod-stalk', fit: e => .4 * (.4 + e.lowG) * bell(e.T, 290, 28) },
   mat:       { height: [.08, .16], sway: 0, noun: 'mat',  fit: e => e.microbial },
   mound:     { height: [.5, 1.6], sway: 0, noun: 'mound', fit: e => e.microbial * .8 },
+  // Life on other chemistry (see exoticChemistry in physics.mjs). Only grows on its own kind of world.
+  crystal:   { chem: 'silicon', height: [.8, 3], sway: 0, noun: 'shard', fit: e => .7 },
+  glasstree: { chem: 'silicon', height: [3, 8], sway: .05, noun: 'glasswood', fit: e => e.complex * .8 },
+  chimney:   { chem: 'sulfur', height: [1, 4], sway: 0, noun: 'chimney', fit: e => .7 },
+  plume:     { chem: 'sulfur', height: [.6, 2], sway: .7, noun: 'plume', fit: e => .55 * (.3 + e.complex) },
+  bulb:      { chem: 'ammonia', height: [.6, 2.4], sway: .2, noun: 'bulb', fit: e => .7 },
+  sheet:     { chem: 'ammonia', height: [2, 7], sway: .5, noun: 'sail', fit: e => .3 + e.complex * .6 },
+  filament:  { chem: 'methane', height: [4, 16], sway: .35, noun: 'thread', fit: e => .6 },
+  crust:     { chem: 'methane', height: [.3, 1.2], sway: 0, noun: 'crust', fit: e => .7 },
+};
+// Colours of non-carbon life: [hue, saturation, lightness] ranges.
+export const CHEM_COLORS = {
+  silicon: { hue: [160, 290], sat: [.15, .45], light: [.55, .78] },   // glassy, pale, cool
+  sulfur: { hue: [35, 62], sat: [.6, .9], light: [.4, .58] },        // yellow, amber, orange
+  ammonia: { hue: [200, 290], sat: [.12, .35], light: [.6, .8] },     // pale waxy blue and lilac
+  methane: { hue: [-10, 30], sat: [.35, .6], light: [.18, .34] },    // dark red-brown, like tar
+};
+export const CHEM_TEXT = {
+  silicon: 'Silicon-based: its chemistry needs the heat that would cook carbon life.',
+  sulfur: 'Sulfur-based: it lives off volcanic sulfur rather than sunlight and water.',
+  ammonia: 'Ammonia-based: it uses liquid ammonia where we would use water.',
+  methane: 'Methane-based: liquid methane is its water, and at this cold everything about it is slow.',
 };
 
 const SYLLABLES = ['thal', 've', 'oru', 'kesh', 'mir', 'lan', 'sef', 'ira', 'qo', 'bryn', 'tess', 'ul', 'vak', 'ny', 'pel', 'dro', 'saa', 'cor', 'fen', 'ilu', 'mae', 'zor', 'eth', 'ri'];
@@ -42,17 +64,20 @@ export function environment(body) {
     dim: clamp(1 - light, 0, 1) * .8 + (p.tidallyLocked ? .25 : 0), lowG: clamp(1 - p.gravity, 0, 1),
     complex: p.life === 'complex' ? 1 : p.life === 'simple' ? .35 : 0,
     microbial: p.life === 'microbial' ? 1 : 0, gravity: p.gravity, pressure: p.pressure, starT, light,
+    chem: p.biochemistry || 'carbon',
   };
 }
 
 export function floraFor(body) {
   const p = body.physics;
-  if (!p || p.life === 'none' || p.subsurfaceOcean && p.waterState === 'ice') return { species: [], environment: null };
+  if (!p || p.life === 'none' || p.subsurfaceOcean && p.waterState === 'ice' && p.biochemistry === 'carbon') return { species: [], environment: null };
   const e = environment(body), r = rng(body.seed, 'flora');
   // Which forms can live here, weighted by fit.
   // Microbial worlds only grow microbial forms; multicellular forms need simple or complex life.
   const microbialForm = (form) => form === 'mat' || form === 'mound';
-  const candidates = Object.entries(FORMS).map(([form, f]) => ({ form, w: f.fit(e) * (microbialForm(form) ? 1 : 1 - e.microbial) })).filter(c => c.w > .04);
+  // Each chemistry grows its own forms; microbial mats and mounds grow on any of them.
+  const chemOk = (form, f) => microbialForm(form) || (f.chem || 'carbon') === e.chem;
+  const candidates = Object.entries(FORMS).map(([form, f]) => ({ form, w: chemOk(form, f) ? f.fit(e) * (microbialForm(form) ? 1 : 1 - e.microbial) : 0 })).filter(c => c.w > .04);
   if (!candidates.length) return { species: [], environment: e };
   const count = p.life === 'complex' ? r.int(5, 8) : p.life === 'simple' ? r.int(3, 5) : r.int(1, 2);
   const veg = vegetationShift(e.starT);
@@ -68,7 +93,8 @@ export function floraFor(body) {
     for (const c of candidates) { roll -= c.w * (used.has(c.form) ? .35 : 1); if (roll <= 0) { form = c.form; break; } }
     used.add(form);
     const f = FORMS[form];
-    const hue = baseHue + r.range(-35, 35), sat = r.range(.3, .65), light = baseLight + r.range(-.1, .1);
+    const cc = CHEM_COLORS[e.chem];
+    const hue = cc ? r.range(...cc.hue) : baseHue + r.range(-35, 35), sat = cc ? r.range(...cc.sat) : r.range(.3, .65), light = cc ? r.range(...cc.light) : baseLight + r.range(-.1, .1);
     const glow = (form === 'fungus' || form === 'stalk' || form === 'mat') && r() < glowChance ? r.range(.5, 1) : r() < glowChance * .3 ? r.range(.3, .7) : 0;
     const accentHue = hue + r.pick([150, 180, 210, -60, 60]);
     const height = r.range(...f.height) * (form === 'mat' ? 1 : gravityScale);
@@ -77,8 +103,8 @@ export function floraFor(body) {
     name = name[0].toUpperCase() + name.slice(1);
     // Preferred habitat (from the climate at a point): temperature, moisture and altitude bands.
     const habitat = {
-      T: form === 'conifer' ? 270 : form === 'palm' || form === 'succulent' ? 300 : 285 + r.range(-8, 8),
-      Tw: r.range(14, 26),
+      T: e.chem !== 'carbon' ? e.T + r.range(-8, 8) : form === 'conifer' ? 270 : form === 'palm' || form === 'succulent' ? 300 : 285 + r.range(-8, 8),
+      Tw: r.range(14, 26) * (e.chem !== 'carbon' ? 1.6 : 1),
       moist: form === 'succulent' ? r.range(.15, .35) : form === 'palm' || form === 'mat' || form === 'mound' ? r.range(.7, .95) : r.range(.45, .8),
       moistW: r.range(.18, .3),
       shore: form === 'palm' || form === 'mat' || form === 'mound' || r() < .15,
@@ -89,7 +115,7 @@ export function floraFor(body) {
       trunkRatio: r.range(.035, .07) * (e.gravity > 1.4 ? 1.4 : 1), branches: r.int(form === 'tree' ? 2 : 0, form === 'tree' ? 5 : 3),
       leafShape: r.pick(['round', 'round', 'umbrella', 'column', 'cluster']), leafSize: r.range(.7, 1.3), arms: r.int(0, 3), segments: r.int(3, 5),
       colors: {
-        stem: form === 'mat' ? hsl(hue, sat, light - .1) : hsl(r.range(15, 45) + (veg.hue < -60 ? -30 : 0), r.range(.2, .45), r.range(.18, .32)),
+        stem: form === 'mat' ? hsl(hue, sat, light - .1) : cc ? hsl(hue + 18, sat * .7, light - .14) : hsl(r.range(15, 45) + (veg.hue < -60 ? -30 : 0), r.range(.2, .45), r.range(.18, .32)),
         leaf: hsl(hue, sat, light), leaf2: hsl(hue + r.range(-20, 20), sat * .9, light - .08),
         accent: hsl(accentHue, r.range(.5, .85), r.range(.5, .68)),
       },
@@ -124,10 +150,14 @@ const FORM_TEXT = {
   tree: 'trees with spreading canopies', conifer: 'spired trees built from stacked tiers', palm: 'slender trunks crowned with drooping fronds',
   shrub: 'clustered bushes', grass: 'tufts of blade-like leaves', succulent: 'fleshy, water-hoarding pillars', fungus: 'stalked caps that feed on decay',
   stalk: 'thin stalks bearing swollen seed pods', mat: 'mats of colonial microbes', mound: 'layered mounds built by microbial colonies',
+  crystal: 'clusters of glassy, growing crystals', glasstree: 'branching trunks of faceted glass', chimney: 'mineral chimneys crowned with feeding tubes',
+  plume: 'feathery plumes that filter sulfur from the air', bulb: 'clumps of waxy, swollen bulbs', sheet: 'thin translucent sails turned toward the light',
+  filament: 'impossibly tall threads, beaded with slow-growing pods', crust: 'tar-dark crusts spreading across the ground',
 };
 function describeSpecies(s, e) {
   const where = s.habitat.shore ? 'along shorelines' : s.habitat.highland ? 'on high ground' : s.habitat.moist > .65 ? 'in wet lowlands' : s.habitat.moist < .38 ? 'in dry ground' : 'across temperate ground';
   const glow = s.glow > .45 ? ' It glows softly, a common trait in this dim light.' : s.glow > 0 ? ' It gives off a faint glow.' : '';
   const why = e.gravity < .6 && s.height > 3 ? ' Low gravity lets it grow unusually tall.' : e.gravity > 1.4 ? ' Strong gravity keeps it squat and thick-stemmed.' : '';
-  return `${SIZE(s.height)[0].toUpperCase() + SIZE(s.height).slice(1)}, ${HUE_WORDS(s.colors.leaf)} ${FORM_TEXT[s.form]}, found ${where}.${glow}${why}`;
+  const chem = CHEM_TEXT[e.chem] ? ` ${CHEM_TEXT[e.chem]}` : '';
+  return `${SIZE(s.height)[0].toUpperCase() + SIZE(s.height).slice(1)}, ${HUE_WORDS(s.colors.leaf)} ${FORM_TEXT[s.form]}, found ${where}.${glow}${why}${chem}`;
 }

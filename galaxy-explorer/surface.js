@@ -5,6 +5,7 @@ import * as THREE from "./vendor/three.module.js";
 import { terrainFor } from "./terrain.mjs";
 import { buildFlora, plantFootprint } from "./flora-mesh.js";
 import { buildFauna } from "./fauna-mesh.js";
+import { buildStructures } from "./structures-mesh.js";
 
 const Y = new THREE.Vector3(0, 1, 0);
 const vec = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -134,6 +135,7 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
             p: dummy.position.clone(),
             r: Math.max(dummy.scale.x, dummy.scale.z) * 0.8,
             h: dummy.scale.y * 0.9 + size * 0.25,
+            rock: i, // so a settlement built later can clear it
         });
     }
     group.add(rocks);
@@ -150,31 +152,74 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         budget: coarse ? 900 : 1600,
     });
     group.add(flora.group);
-    for (const { species, positions, scales } of flora.placed) {
-        const foot = plantFootprint(species);
-        if (!foot) continue; // grasses and microbial mats are walked over
-        for (let i = 0; i < scales.length; i++)
-            obstacles.push({
-                p: vec(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]),
-                r: foot.r * scales[i],
-                h: foot.h * scales[i],
-            });
-    }
-    const grid = buildGrid(obstacles);
 
-    // Animal life: species generated from this world's environment, roaming near the site.
+    // Animal life: species generated from this world's environment, living near the site:
+    // they eat the plants above, drink at the shore, hunt each other and sleep by night or day.
     const fauna = buildFauna(THREE, {
         body: body,
         terrain: terrainInfo,
         radius: RADIUS,
         signalNormal,
         budget: coarse ? 50 : 90,
+        plants: flora.placed, // grazers walk to these and eat
     });
     group.add(fauna.group);
 
+    // What an intelligent species has built, around its herds' homes (moves those homes onto buildable ground).
+    const structures = buildStructures(THREE, {
+        body: body,
+        terrain: terrainInfo,
+        radius: RADIUS,
+        signalNormal,
+        landingNormal,
+        fauna,
+    });
+    group.add(structures.group);
+    obstacles.push(...structures.obstacles);
+
+    // Builders clear their ground: plants inside settlements are removed (a few are kept),
+    // and the rest become obstacles on foot.
+    const zero = new THREE.Matrix4().makeScale(0, 0, 0), n = vec(),
+        clear = structures.clearings.map((c) => ({ n: c.n, cos: Math.cos(c.r / RADIUS) }));
+    for (const { species, positions, scales, mesh } of flora.placed) {
+        const foot = plantFootprint(species);
+        let cleared = false;
+        for (let i = 0; i < scales.length; i++) {
+            n.set(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+            n.normalize();
+            if (clear.some((c) => c.n.dot(n) > c.cos) && ((i * 2654435761) >>> 0) % 7 !== 0) {
+                mesh.setMatrixAt(i, zero);
+                cleared = true;
+                continue;
+            }
+            if (foot) // grasses and microbial mats are walked over
+                obstacles.push({
+                    p: vec(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]),
+                    r: foot.r * scales[i],
+                    h: foot.h * scales[i],
+                });
+        }
+        if (cleared) mesh.instanceMatrix.needsUpdate = true;
+    }
+    // Rocks too: a rock is cleared if any part of it lies inside cleared ground.
+    let rocksCleared = false;
+    for (let k = obstacles.length - 1; k >= 0; k--) {
+        const o = obstacles[k];
+        if (o.rock === undefined) continue;
+        const reach = Math.cos(o.r / RADIUS);
+        n.copy(o.p).normalize();
+        if (clear.some((c) => c.n.dot(n) > Math.cos(Math.acos(Math.min(1, c.cos)) + Math.acos(reach)))) {
+            rocks.setMatrixAt(o.rock, zero);
+            obstacles.splice(k, 1);
+            rocksCleared = true;
+        }
+    }
+    if (rocksCleared) rocks.instanceMatrix.needsUpdate = true;
+    const grid = buildGrid(obstacles);
+
     // Rings are drawn once, by system-view.js, for every world (including this one).
     return {
-        group, obstacles, flora, fauna,
+        group, obstacles, flora, fauna, structures,
         nearbyObstacles: (p) => nearbyIn(grid, p),
     };
 }

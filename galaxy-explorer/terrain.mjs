@@ -132,8 +132,12 @@ function buildTerrain(body) {
   const samples = fibonacciSphere(700).map(raw).sort((a, b) => a - b);
   const minH = samples[0], maxH = samples[samples.length - 1];
   let liquid = null, coverage = 0;
+  // Seas behave the same whatever they are made of; solvent only changes their colour.
+  const solvent = ph.solvent || (ph.waterState === 'liquid' ? 'water' : null);
   if (ph.waterState === 'liquid') { liquid = 'water'; coverage = ph.waterCoverage; }
-  else if (body.biome === 'Volcanic' && ph.temperature > 230) { liquid = 'lava'; coverage = .06 + ph.volcanism * .12; }
+  else if (solvent === 'methane' || solvent === 'ammonia') { liquid = 'water'; coverage = ph.solventCoverage; }
+  else if (body.biome === 'Volcanic' && ph.temperature > 230 && solvent !== 'sulfur') { liquid = 'lava'; coverage = .06 + ph.volcanism * .12; }
+  else if (solvent === 'sulfur') { liquid = 'water'; coverage = ph.solventCoverage; }
   else if (ph.waterState === 'ice' && ph.waterCoverage > .3) { liquid = 'ice'; coverage = ph.waterCoverage * .55; }
   const sea = liquid ? samples[Math.min(samples.length - 1, Math.floor(coverage * samples.length))] : -Infinity;
 
@@ -149,13 +153,21 @@ function buildTerrain(body) {
   const pal = body.palette.map(rgb);
   const vegShift = vegetationShift(body.starTemperature || 5600);
   const lush = ph.life === 'simple' || ph.life === 'complex';
-  const vegetation = shiftHue(rgb(ph.life === 'complex' ? '#4f7d43' : '#6d8a52'), vegShift.hue, vegShift.light);
+  const chem = ph.biochemistry || 'carbon';
+  // Ground cover of non-carbon life: dark red tar-like growth on methane worlds,
+  // pale waxy crusts on ammonia worlds, yellow-black sulfur growths, glassy silicon.
+  const CHEM_VEG = { methane: '#5b2a2c', ammonia: '#8f93b8', sulfur: '#a88a2a', silicon: '#7aa3a6' };
+  const vegetation = chem === 'carbon' ? shiftHue(rgb(ph.life === 'complex' ? '#4f7d43' : '#6d8a52'), vegShift.hue, vegShift.light) : rgb(CHEM_VEG[chem]);
+  const vegT = chem === 'carbon' ? [255, 268, 305, 322] : [ph.temperature - 70, ph.temperature - 50, ph.temperature + 20, ph.temperature + 40];
   const forest = vegetation.map(v => v * .72);
-  const sand = mix(rgb('#d8c79c'), pal[3], .3), snow = rgb('#edf3f6'), iceColor = mix(rgb('#d6e8f1'), rgb(body.atmosphere), .12);
+  const sand = mix(rgb({ methane: '#7a5230', sulfur: '#d6c25a' }[solvent] || '#d8c79c'), pal[3], .3), snow = rgb(solvent === 'methane' ? '#c9a77c' : '#edf3f6'), iceColor = mix(rgb('#d6e8f1'), rgb(body.atmosphere), .12);
   const crust = rgb('#2b2020'), mats = mix(pal[1], rgb('#6c7a52'), .5);
-  const waterColor = liquid === 'lava' ? rgb('#ff5a1f') : mix(rgb('#15506e'), rgb(body.atmosphere), .1);
+  const SEA = { water: '#15506e', methane: '#2e2116', ammonia: '#5d7f86', sulfur: '#b9731a' };
+  const waterColor = liquid === 'lava' ? rgb('#ff5a1f') : mix(rgb(SEA[solvent] || SEA.water), rgb(body.atmosphere), .1);
   const lo = liquid === 'water' || liquid === 'lava' ? sea : minH, span = Math.max(1, maxH - lo);
   const baseT = ph.temperature;
+  // Frost: water snow below freezing; on worlds with methane or ammonia seas, frost of those near the poles.
+  const frostT = solvent === 'methane' || solvent === 'ammonia' ? baseT - 20 : 266;
   function ramp(t) {
     const f = Math.min(2.999, Math.max(0, t * 3)), i = Math.floor(f);
     return mix(pal[i], pal[i + 1], f - i);
@@ -177,11 +189,11 @@ function buildTerrain(body) {
     else if (liquid === 'lava' && above < 1.2) c = mix(crust, rgb('#7a2a14'), smooth(1.2, 0, above));
     else if (liquid === 'ice' && h <= sea + .01) c = iceColor;
     else {
-      if (lush && localT > 255 && localT < 322) {
-        const v = smooth(.35, .62, moist) * smooth(255, 268, localT) * smooth(322, 305, localT);
+      if (lush && localT > vegT[0] && localT < vegT[3]) {
+        const v = smooth(.35, .62, moist) * smooth(vegT[0], vegT[1], localT) * smooth(vegT[3], vegT[2], localT);
         c = mix(c, moist > .7 ? forest : vegetation, v * .9);
       } else if (ph.life === 'microbial' && liquid === 'water' && above < 4) c = mix(c, mats, .35);
-      if (localT < 266 && (ph.pressure > .01 || ph.volatiles > .2) && liquid !== 'lava') c = mix(c, snow, smooth(266, 248, localT) * .92);
+      if (localT < frostT && (ph.pressure > .01 || ph.volatiles > .2) && liquid !== 'lava') c = mix(c, snow, smooth(frostT, frostT - 18, localT) * .92);
     }
     const grain = .93 + .1 * nB(n.x * 23, n.y * 23, n.z * 23);
     return [c[0] * grain, c[1] * grain, c[2] * grain];
@@ -214,5 +226,5 @@ function buildTerrain(body) {
     }
     if (best) site = [best.x, best.y, best.z];
   }
-  return { raw, height, surface, meshHeight, isLiquid, color, climate, sea, liquid, coverage, minH, maxH, waterColor, site, lush };
+  return { raw, height, surface, meshHeight, isLiquid, color, climate, sea, liquid, solvent, coverage, minH, maxH, waterColor, site, lush };
 }

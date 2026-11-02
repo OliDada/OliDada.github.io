@@ -59,7 +59,7 @@ test('surfaces, colours and seas are consistent', () => {
       assert.ok(Math.abs(h) < 70, `${b.name} height ${h}`);
       for (const v of t.color(p, t.meshHeight(p))) assert.ok(v >= 0 && v <= 1.1);
     }
-    if (b.physics.waterState !== 'liquid') assert.notEqual(t.liquid, 'water');
+    if (b.physics.waterState !== 'liquid' && !b.physics.solvent) assert.notEqual(t.liquid, 'water');
   }
 });
 
