@@ -92,7 +92,7 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
       creatures.push({ sp, eco: sp.ecology, mesh, index: i, herd: centre, band: herd, n, heading, speed: 0, target: 0, cycle: r() * 6.28, timer: r() * 3, state: 'idle',
         alt: sp.altitude[0] + r() * (sp.altitude[1] - sp.altitude[0]), altPhase: r() * 6.28, r,
         hunger: er() * .6, thirst: er() * .6, scan: er() * .5, goal: null, face: null, prey: null, threat: null, chase: 0, rest: 0, hidden: 0,
-        tilt: 0, sink: 0, dive: 0 });
+        tilt: 0, sink: 0, dive: 0, cooldown: er() * 10, stalking: false });
     }
   }
   const bySpecies = new Map(species.map(s => [s.id, creatures.filter(c => c.sp === s)]));
@@ -150,7 +150,7 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
       c.hidden -= dt;
       if (c.hidden > 0 || !respawn(c, player)) { c.hidden = Math.max(c.hidden, .01); c.mesh.setMatrixAt(c.index, hidden); return; }
     }
-    c.timer -= dt; c.scan -= dt; c.rest -= dt;
+    c.timer -= dt; c.scan -= dt; c.rest -= dt; c.cooldown -= dt;
     c.hunger = Math.min(1, c.hunger + eco.hungerRate * dt);
     if (eco.drinks) c.thirst = Math.min(1, c.thirst + eco.thirstRate * dt);
     const awake = isAwake(eco.activity, sun ? c.n.dot(sun) : null);
@@ -176,12 +176,25 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
         c.heading.lerp(away, Math.min(1, dt * 6)); c.target = sp.speed.run; reacting('flee');
       }
     }
-    // 2. You: skittish animals bolt (sleepers let you come closer), curious ones come over.
+    // 2. You, as prey: big aggressive hunters stalk you on foot, close in at a run and
+    //    lunge, then back off for a while. Your ship is a refuge (you are not on foot there).
+    else if (eco.stalksYou && player?.onFoot && awake && !c.prey && c.cooldown <= 0 && playerDist < (c.stalking ? eco.sight * 1.7 : eco.sight)) {
+      c.heading.lerp(tangent(toPlayer, c.n), Math.min(1, dt * (playerDist < 8 ? 7 : 3)));
+      c.target = playerDist > 16 ? sp.speed.walk * .9 : sp.speed.run;
+      if (flying) c.dive = Math.min(1, c.dive + dt * (playerDist < 25 ? .9 : 0));
+      if (!c.stalking) { c.stalking = true; events.push({ type: 'stalk', creature: c }); }
+      reacting('stalk');
+      if (playerDist < sp.size * .6 + 1.4) {
+        events.push({ type: 'attack', creature: c, damage: Math.min(.45, .16 + sp.size * .07 + sp.traits.aggression * .1), from: c.n.clone() });
+        c.cooldown = 10 + c.r() * 8; c.stalking = false; c.heading.negate(); c.target = sp.speed.walk; c.state = 'idle'; c.timer = 3;
+      }
+    }
+    // 2b. Otherwise: skittish animals bolt (sleepers let you come closer), curious ones come over.
     else if (sp.behavior === 'skittish' && playerDist < fear * (sleeping ? .5 : 1)) {
       const away = tangent(toPlayer.clone().negate(), c.n);
       if (c.heading.dot(away) < -.5) away.addScaledVector(c.n.clone().cross(c.heading), 1.2); // wheel round rather than freeze when you are dead ahead
       c.heading.lerp(away, Math.min(1, dt * 6)); c.target = sp.speed.run; c.prey = null; reacting('flee');
-    } else if (sp.behavior === 'curious' && player?.onFoot && playerDist < 35 && awake && !c.prey) {
+    } else if (sp.behavior === 'curious' && player?.onFoot && playerDist < 35 && awake && !c.prey && !eco.stalksYou) {
       c.heading.lerp(tangent(toPlayer, c.n), Math.min(1, dt * 2)); c.target = playerDist > 4 + sp.size * 2 ? sp.speed.walk : 0; reacting('approach');
     }
     // 3. The hunt: stalk at a walk, then sprint; give up when tired or outrun.
@@ -259,6 +272,7 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
         if (flying) c.heading.applyAxisAngle(c.n, dt * .25); // lazy circles
       }
     }
+    if (c.state !== 'stalk') c.stalking = false; // lost you, or you got back aboard
     if (!c.prey) c.dive = Math.max(0, c.dive - dt * .3);
     // A leash keeps everything within the explorable area.
     if (c.n.angleTo(signalNormal) * radius > RANGE) steer(c, signalNormal, 1, dt);

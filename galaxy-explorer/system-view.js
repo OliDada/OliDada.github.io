@@ -16,7 +16,8 @@ const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => res
 function buildWorld(body, streamer, coarse, gradual) {
     const planet = body.giant
         ? createGiant(THREE, body, { coarse, gradual })
-        : createPlanet(THREE, streamer, body);
+        // Grid points per terrain tile: finer on laptops; phones get a lighter grid.
+        : createPlanet(THREE, streamer, body, { segments: coarse ? 24 : 32, lite: coarse });
     if (body.ringed && !body.giant) {
         // Rocky worlds use the same banded rings as the giants, kept inside
         // their moons' orbits (which start 420 m above the surface).

@@ -27,7 +27,9 @@ test('tiles follow the terrain exactly and carry skirts and water', () => {
   for (let j = 0; j <= S; j += 3) for (let i = 0; i <= S; i += 3) {
     const k = (j * (S + 1) + i) * 3, p = [out.positions[k] + out.center[0], out.positions[k + 1] + out.center[1], out.positions[k + 2] + out.center[2]];
     const d = faceDirection(4, -.5 + i / S, -.5 + j / S);
-    assert.ok(Math.abs(Math.hypot(...p) - (waterWorld.radius + t.meshHeight({ x: d[0], y: d[1], z: d[2] }))) < 1e-3);
+    // Each tile shows the terrain with detail finer than it can draw smoothed away (meshHeight's spacing).
+    const spacing = waterWorld.radius * 1 * Math.PI / 4 / S;
+    assert.ok(Math.abs(Math.hypot(...p) - (waterWorld.radius + t.meshHeight({ x: d[0], y: d[1], z: d[2] }, spacing))) < 1e-3);
   }
   // Skirt vertices sit below their edge vertex.
   const e0 = edge[0] * 3, s0 = (S + 1) ** 2 * 3;
@@ -40,7 +42,7 @@ test('tiles follow the terrain exactly and carry skirts and water', () => {
 test('detail rises near the camera and falls away again', () => {
   const streamer = createTerrainStreamer(), planet = createPlanet(THREE, streamer, big, { segments: 10 });
   const visibleTiles = () => planet.group.children.filter(m => m.visible && m.geometry.attributes.color);
-  const step = (cam, n = 60) => { for (let i = 0; i < n; i++) { planet.update(cam); streamer.pump(1000); } planet.update(cam); };
+  const step = (cam, n = 60) => { for (let i = 0; i < n; i++) { planet.update(cam, { instant: true }); streamer.pump(1000); } planet.update(cam, { instant: true }); };
   const far = new THREE.Vector3(0, 0, big.radius * 30);
   step(far, 3);
   assert.ok(visibleTiles().length <= 6); // from far away: only root tiles, far side culled
@@ -73,4 +75,17 @@ test('fully blended, a fine tile lies exactly on its parent tile (no pop, no sea
     else expect = P(pi + .5, pj - .5).map((v, c) => (v + P(pi - .5, pj + .5)[c]) / 2);
     assert.ok(Math.hypot(...m.map((v, c) => v - expect[c])) < 1e-3, `vertex ${i},${j} is off the parent surface`);
   }
+});
+
+test('after a sudden camera jump, detail eases in instead of snapping', () => {
+  const streamer = createTerrainStreamer(), planet = createPlanet(THREE, streamer, big, { segments: 10 });
+  const count = () => planet.group.children.filter(m => m.visible && m.geometry.attributes.color).length;
+  const far = new THREE.Vector3(0, 0, big.radius * 3), ground = new THREE.Vector3(0, 0, big.radius + terrainFor(big).surface({ x: 0, y: 0, z: 1 }) + 2);
+  for (let i = 0; i < 40; i++) { planet.update(far, { instant: true }); streamer.pump(1000); }
+  const before = count();
+  for (let i = 0; i < 40; i++) { planet.update(ground); streamer.pump(1000); } // same instant: detail is still measured from near where the camera was
+  const eased = count();
+  for (let i = 0; i < 400; i++) { planet.update(ground, { instant: true }); streamer.pump(1000); }
+  assert.ok(eased < count() && before <= eased + 4, `${before} -> ${eased} -> ${count()}`);
+  planet.dispose();
 });

@@ -8,18 +8,25 @@
 // Everything is merged into two meshes (one lit, one glowing): two draw calls however
 // big the city. Footings reach into the ground so nothing floats on a slope. THREE is passed in.
 import { rng } from './rng.mjs';
-import { civilizationFor } from './structures.mjs';
+import { civilizationOf } from './civilizations.mjs';
+import { networkFor } from './settlements.mjs';
 
 const SINK = 1.6; // metres every footing reaches below the lowest ground it stands on
-const BUDGET = 160000; // vertices; far-off towns stop here so phones stay smooth
+const BUDGET = 200000; // vertices in all; far-off towns stop here so phones stay smooth
+const NEAR_BUDGET = 170000; // vertices for the places built in full near the site
 const WALKERS = ['hands', 'grazers', 'rollers', 'tripods', 'tentacles'];
 
-export function buildStructures(THREE, { body, terrain, radius, signalNormal, landingNormal, fauna }) {
+// colonist: a spacefaring civilization from another world of this system that has
+// settled this one (civilizations.mjs colonistOf); it builds a colony here.
+export function buildStructures(THREE, { body, terrain, radius, signalNormal, landingNormal, fauna, colonist = null }) {
+  THREE_REF = THREE;
   const group = new THREE.Group(), obstacles = [], sites = [];
-  const civ = fauna ? civilizationFor(body, fauna.species) : null;
-  const homes = civ ? fauna.homes?.get(civ.species.id) || [] : [];
+  const native = fauna?.species.length ? civilizationOf(body) : null;
+  // Colonists live under glass pressure domes, whatever they build at home.
+  const civ = native || (colonist ? { ...colonist, colony: true, material: 'glass', culture: 'domes', hearths: false, fields: false } : null);
+  const homes = native ? fauna.homes?.get(civ.species.id) || [] : [];
   const none = { group, civ: null, obstacles, sites, clearings: [], pieces: 0, update() {} };
-  if (!civ || !homes.length) return none;
+  if (!civ || (native && !homes.length)) return none;
 
   const r = rng(body.seed, 'structures', civ.species.id), u = civ.unit, tall = civ.tall, level = civ.level;
   const C = colours(THREE, body, civ);
@@ -55,8 +62,8 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   // place(frame, distance, angle, footprint radius, height, build, options): finds the
   // ground, stands the piece upright facing the frame's centre and lets build() add
   // parts in local coordinates. Refuses water, steep ground, crowding, and the signal and pad.
-  function place(f, dist, angle, foot, height, build, { face = true, spacing = 1, aloft = false, road = false } = {}) {
-    const n = pointAt(f, dist, angle);
+  function place(f, dist, angle, foot, height, build, { face = true, spacing = 1, aloft = false, road = false, at = null, faceTo = null } = {}) {
+    const n = at || pointAt(f, dist, angle);
     if (n.angleTo(signalNormal) * radius < 14 + foot || n.angleTo(landingNormal) * radius < 16 + foot) return false;
     for (const p of placed) if ((!road || !p.road) && p.n.angleTo(n) * radius < (p.foot + foot) * (road ? .7 : spacing)) return false;
     if (road) for (const p of placed) if (p.road && p.n.angleTo(n) * radius < foot * 1.2) return false;
@@ -68,8 +75,8 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       const h = terrain.surface(m); lo = Math.min(lo, h); hi = Math.max(hi, h);
     }
     if (hi - lo > SINK * .9 + (aloft ? foot : foot * .5)) return false;
-    const to = f.home.clone().sub(n), up = n;
-    const fwd = face && dist > .5 ? to.addScaledVector(n, -to.dot(n)).normalize() : fr.north;
+    const to = (faceTo || f.home).clone().sub(n), up = n;
+    const fwd = face && (faceTo || dist > .5) && to.lengthSq() > 1e-14 ? to.addScaledVector(n, -to.dot(n)).normalize() : fr.north;
     const right = up.clone().cross(fwd).normalize();
     const base = new THREE.Matrix4().makeBasis(right, up, fwd).setPosition(n.clone().multiplyScalar(radius + lo));
     build((g, local, colour, bright = false) => (bright ? glow : lit).add(g, world.multiplyMatrices(base, local), colour));
@@ -102,6 +109,18 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       const w = 6, d = 5;
       add(sunk(box(w, .1 + SINK, d)), L(), C.soil);
       for (let z = -d / 2 + .5; z < d / 2; z += .9) for (let x = -w / 2 + .4; x < w / 2; x += .7) add(cone(.17, .5 + r() * .25, 4), L(x + (r() - .5) * .1, .1, z), C.crop);
+    },
+    crates(add) { for (let i = 0; i < 3; i++) add(box(.5 * u, .45 * u, .5 * u), L((i - 1) * .55 * u, (i === 1 ? .45 * u : 0), 0, 0, r() * .4), i % 2 ? C.wood : C.wall2); },
+    fencedField(add) {
+      common.field(add);
+      for (const [x, z, w, d] of [[0, 2.7, 6.4, .08], [0, -2.7, 6.4, .08], [3.2, 0, .08, 5.4], [-3.2, 0, .08, 5.4]]) add(box(w, .55, d), L(x, 0, z), C.wood);
+      for (const x of [-3.2, 0, 3.2]) for (const z of [-2.7, 2.7]) add(sunk(box(.12, .8 + SINK, .12)), L(x, 0, z), C.wood);
+    },
+    dish(add) {
+      const h = 2.2 * u;
+      add(sunk(cyl(.7 * u, .75 * u, SINK)), L(), C.metal); add(cyl(.25 * u, .4 * u, h, 6), L(), C.metal);
+      add(new THREE.SphereGeometry(1.6 * u, 12, 4, 0, Math.PI * 2, 0, .7), L(0, h + 1.2 * u, 0, Math.PI - .7, 0, 0), C.metal2);
+      add(ball(.1 * u), L(0, h + 2 * u, .7 * u), C.beacon, true);
     },
     slab(add) { add(sunk(box(1.8 * u, .14 + SINK, 1.8 * u)), L(0, 0, 0, 0, r() * .2), C.road); },
     light(add) { add(ball(.35 * u), L(0, 2.5 * u, 0), C.window, true); add(sunk(cyl(.08 * u, .1 * u, 2.4 * u + SINK, 4)), L(), C.metal); },
@@ -503,88 +522,149 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   }[{ hands: 'rocket', tentacles: 'grown', tripods: 'cradle', drifters: 'tether', hive: 'silo', web: 'silo', burrowers: 'silo', nests: 'rail', grazers: 'track', rollers: 'track' }[civ.family]];
   const launchFoot = { rocket: 5.5, grown: 3.5, cradle: 7.5, tether: 5.5, silo: 6.5, rail: 4, track: 4 }[{ hands: 'rocket', tentacles: 'grown', tripods: 'cradle', drifters: 'tether', hive: 'silo', web: 'silo', burrowers: 'silo', nests: 'rail', grazers: 'track', rollers: 'track' }[civ.family]] * u;
 
-  // --- Where to build -------------------------------------------------------
+  // --- The settlement network (settlements.mjs) -------------------------------
+  // The capital stands beside the landing site; places within DETAIL metres are built
+  // in full (streets, plots, landmarks), the rest of the world's towns as simple
+  // clusters with night lights. Builders' herds move into the places near the site.
   const aloft = civ.family === 'drifters';
-  const groundOk = (n, span) => {
-    let lo = Infinity, hi = -Infinity; const f = frameAt(n);
-    for (let k = 0; k < 9; k++) { const m = k ? pointAt(f, span * (k > 4 ? 1 : .5), k * Math.PI / 4) : n; if (terrain.isLiquid(m)) return Infinity; const h = terrain.surface(m); lo = Math.min(lo, h); hi = Math.max(hi, h); }
-    return hi - lo;
-  };
-  const full = ([0, 10, 16, 26, 32, 32][level]) * u, chosen = [];
-  for (const k of [1, .6, .35, .18]) {
-    const span = full * k;
-    for (const home of homes.slice(0, 4)) {
-      if (chosen.includes(home)) continue;
-      const f = frameAt(home); let best = null, bestScore = Infinity;
-      for (let d = 0; d <= 120; d += 8) for (let j = 0; j < 12; j++) {
-        const n = pointAt(f, d, j / 12 * Math.PI * 2 + d * .1), fromSignal = n.angleTo(signalNormal) * radius;
-        if (fromSignal < Math.min(span, 40) + 26 || fromSignal > 220 || n.angleTo(landingNormal) * radius < Math.min(span, 40) + 26) continue;
-        if (chosen.some(c => c.angleTo(n) * radius < (span + full) * 1.1)) continue;
-        const score = groundOk(n, span) * (aloft ? .4 : 1) + d * .015;
-        if (score < bestScore) { bestScore = score; best = n; }
-      }
-      if (best && bestScore < 2 + span * .25) { home.copy(best); chosen.push(home); }
-    }
-    if (chosen.length) break;
-  }
-  if (!chosen.length) return none;
+  const net = networkFor(body, civ, terrain, { colony: !!civ.colony });
+  if (!net.capital) return none;
+  const DETAIL = 230;
+  const siteV = signalNormal.clone();
+  const places = net.settlements.map(s => ({ ...s, v: V(...s.n) }));
+  // The capital and up to three more places near the site are built in full.
+  const near = [places[0], ...places.slice(1).filter(s => s.v.angleTo(siteV) * radius - s.radius < DETAIL).slice(0, 3)], far = places.filter(s => !near.includes(s));
+  near.forEach((s, i) => { if (homes[i]) homes[i].copy(s.v); });
+  for (const s of near) sites.push(s.v.clone());
+  const SIZE = { camp: .45, village: .7, colony: .8, town: .95, city: 1.2, metropolis: 1.55, capital: 1.75 };
 
-  // --- Layout ----------------------------------------------------------------
-  const frames = chosen.map(frameAt), main = frames[0];
-  for (const f of frames) sites.push(f.home.clone());
+  // Ground laid along the terrain: streets, roads and plazas are strips and discs whose
+  // every vertex sits on the ground (a little above it), so they follow every slope.
+  const groundPoint = (n, lift) => { if (terrain.isLiquid(n)) return null; return n.clone().multiplyScalar(radius + terrain.surface(n) + lift); };
+  const strip = (points, width, colour, lift = .14) => {
+    const pos = [];
+    let prev = null;
+    for (let i = 0; i < points.length; i++) {
+      const n = points[i], nxt = points[Math.min(i + 1, points.length - 1)], prv = points[Math.max(i - 1, 0)];
+      const along = nxt.clone().sub(prv); along.addScaledVector(n, -along.dot(n));
+      if (along.lengthSq() < 1e-14) { prev = null; continue; }
+      const side = n.clone().cross(along.normalize()).multiplyScalar(width / 2 / radius);
+      const a = groundPoint(n.clone().add(side).normalize(), lift), b = groundPoint(n.clone().sub(side).normalize(), lift);
+      const cur = a && b ? [a, b] : null;
+      if (cur && prev) pos.push(...prev[0].toArray(), ...prev[1].toArray(), ...cur[0].toArray(), ...prev[1].toArray(), ...cur[1].toArray(), ...cur[0].toArray());
+      prev = cur;
+    }
+    if (pos.length) lit.add(flatGeometry(pos), new THREE.Matrix4(), colour);
+  };
+  const disc = (centre, rad, colour, lift = .12) => {
+    const f = frameAt(centre), pos = [], rings = 4, segs = 18, pt = (d, a) => groundPoint(pointAt(f, d, a), lift);
+    for (let i = 0; i < rings; i++) for (let j = 0; j < segs; j++) {
+      const d0 = rad * i / rings, d1 = rad * (i + 1) / rings, a0 = j / segs * Math.PI * 2, a1 = (j + 1) / segs * Math.PI * 2;
+      const p00 = pt(d0, a0), p01 = pt(d0, a1), p10 = pt(d1, a0), p11 = pt(d1, a1);
+      if (!p00 || !p01 || !p10 || !p11) continue;
+      pos.push(...p00.toArray(), ...p11.toArray(), ...p10.toArray(), ...p00.toArray(), ...p01.toArray(), ...p11.toArray());
+    }
+    if (pos.length) lit.add(flatGeometry(pos), new THREE.Matrix4(), colour);
+  };
+  const paved = level >= 3, walkers = WALKERS.includes(civ.family);
+  const streetColour = paved ? C.road : C.path, streetWidth = (paved ? 2.4 : 1.5) * Math.min(u, 1.6);
+
+  // A place near the site, grown rather than stamped: a centre (gathering place or
+  // great structure on a plaza), streets winding outward, buildings on plots along
+  // them that are bigger and taller toward the core, landmarks in the core of cities,
+  // a ring road in big cities, fields beyond the edge, and a spaceport for capitals.
   const foot = (k) => 2 * u * k * (civ.culture === 'terraced' ? 1.2 : 1);
   const home = (k) => (add) => style.home(add, k), great = (k) => (add) => style.great(add, k);
-  if (level === 1) {
-    for (const f of frames.slice(0, 3)) {
-      if (civ.hearths) settle(f, 2 * u, r() * 6, 1.1 * u, .3, common.hearth);
-      for (let i = 0, n = 1 + Math.floor(r() * 2); i < n; i++) settle(f, (4 + r() * 4) * u, r() * 6.28, foot(.5), 2 * u, home(.5), { aloft });
-      for (let i = 0, n = 2 + Math.floor(r() * 3); i < n; i++) settle(f, (7 + r() * 9) * u, r() * 6.28, .7 * u, 2 * u, common.cairn, { face: false });
+  function grow(s) {
+    const f = frameAt(s.v), big = SIZE[s.kind], Rm = s.radius, isCapital = s === places[0];
+    if (level === 1 || s.kind === 'camp') { // a camp: a hearth, shelters, cairns
+      if (civ.hearths) settle(f, 1.5 * u, r() * 6, 1.1 * u, .3, common.hearth);
+      for (let i = 0, n = 2 + Math.floor(r() * 2); i < n; i++) settle(f, (3.5 + r() * 3) * u, i / n * 6.28 + r(), foot(.5), 2 * u, home(.5), { aloft });
+      for (let i = 0, n = 2 + Math.floor(r() * 3); i < n; i++) settle(f, (8 + r() * 6) * u, r() * 6.28, .7 * u, 2 * u, common.cairn, { face: false });
+      return;
     }
-  } else {
-    // Rings of dwellings around the centrepiece; cities are denser and bigger.
-    const rings = level === 2 ? [[8.5, 7]] : level === 3 ? [[10, 8], [17, 11], [24, 7]] : [[11, 9], [18, 13], [25, 16], [32, 12]];
-    const gk = [0, 0, .6, 1.2, 1.7, 1.9][level];
-    settle(main, 0, 0, Math.max(2, 5 * u * gk), 6 * u, great(gk), { face: false, aloft });
-    if (civ.hearths) settle(main, (level === 2 ? 3.4 : 6) * u, r() * 6, 1.1 * u, .3, common.hearth);
-    rings.forEach(([d, n], ri) => {
-      const k = level === 2 ? .9 + r() * .2 : 1.45 - ri * .12;
-      for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2 + ri * .37 + (r() - .5) * .2; settle(main, d * u + r() * 1.5 * u, a, foot(k), 4 * u, home(k), { aloft }); }
-    });
-    if (civ.fields) for (let i = 0; i < (level === 2 ? 2 : 5); i++) settle(main, (rings.at(-1)[0] + 7) * u + i * 2, r() * 6.28, 4, .2, common.field);
-    // Smaller towns at the other homes.
-    for (const f of frames.slice(1)) {
-      settle(f, 0, 0, Math.max(2, 4 * u * gk * .6), 4 * u, great(gk * .6), { face: false, aloft });
-      for (let i = 0, n = level === 2 ? 3 : 6; i < n; i++) settle(f, (level === 2 ? 6 : 9) * u, i / n * 6.28 + r(), foot(1), 4 * u, home(1), { aloft });
+    const plaza = Math.min(Rm * .2, 9 * u);
+    if (walkers) disc(s.v, plaza + 1.5 * u, paved ? C.plaza : C.path);
+    settle(f, 0, 0, Math.max(2, 4.2 * u * big * (isCapital ? 1 : .7)), 6 * u, great(big * (isCapital ? .95 : .65)), { face: false, aloft });
+    if (civ.hearths && level <= 3) settle(f, plaza * .8, r() * 6, 1.1 * u, .3, common.hearth);
+    // Streets: from the plaza edge outward, wandering a little.
+    const streets = Math.max(3, Math.min(8, Math.round(2.5 + civ.cohesion * 2 + big * 1.6)));
+    const lines = [];
+    for (let i = 0; i < streets; i++) {
+      let a = i / streets * Math.PI * 2 + r() * .5, d = plaza;
+      const pts = [];
+      while (d < Rm) { pts.push({ d, a, n: pointAt(f, d, a) }); d += 3 * u; a += (r() - .5) * .22 * (6 * u / Math.max(d, 6 * u)); }
+      lines.push(pts);
     }
-    if (level >= 5 && launch) settle(main, (rings.at(-1)[0] + 16) * u, r() * 6.28, launchFoot, 12 * u, launch, { face: false });
+    // A ring road through the middle of big places.
+    if (big >= 1.15) { const rr = Rm * .55, pts = []; for (let a = 0; a <= Math.PI * 2 + .01; a += 2.5 * u / rr) pts.push({ d: rr, a, n: pointAt(f, rr, a), ring: true }); lines.push(pts); }
+    if (walkers) for (const pts of lines) strip(pts.map(p => p.n), streetWidth * (pts[0]?.ring ? 1.1 : 1), streetColour);
+    // Plots along the streets, both sides; core first so the best spots go to the biggest buildings.
+    const plots = [];
+    for (const pts of lines) for (let i = 1; i < pts.length; i++) for (const side of [-1, 1]) plots.push({ ...pts[i], side, ring: pts[0].ring, prev: pts[i - 1].n, next: pts[Math.min(i + 1, pts.length - 1)].n });
+    plots.sort((x, y) => x.d - y.d);
+    let landmarks = 0;
+    for (const p of plots) {
+      if (lit.count() > NEAR_BUDGET * (isCapital ? .8 : 1)) break;
+      const t = p.d / Rm, core = t < .35;
+      let k = (.85 + big * .45) * (1 - t * .45) * (.9 + r() * .2);
+      const landmark = level >= 3 && core && landmarks < Math.round(big * 3) && r() < .35;
+      if (landmark) k = big * .42;
+      const fp = landmark ? Math.max(2, 4.2 * u * k) : foot(k), off = streetWidth / 2 + fp + .6 * u;
+      // Stand beside the street, facing it.
+      const along = p.next.clone().sub(p.prev); along.addScaledVector(p.n, -along.dot(p.n));
+      if (along.lengthSq() < 1e-14) continue;
+      const sideV = p.n.clone().cross(along.normalize()).multiplyScalar(p.side * off / radius);
+      const n = p.n.clone().add(sideV).normalize();
+      if (r() < .12 && !landmark && !core) continue; // gaps: gardens and yards
+      if (place(f, 0, 0, fp, (landmark ? 8 : 4) * u, landmark ? great(k) : home(k * (lights && core ? 1.2 : 1)), { aloft, at: n, faceTo: p.n }) && landmark) landmarks++;
+    }
+    // Street lamps for those that light their world; small props for those with hands.
+    if (walkers && lights) for (const pts of lines) for (let i = 2; i < pts.length; i += 3) place({ ...frameAt(pts[i].n), home: pts[i].n }, streetWidth / 2 + .4 * u, pts[i].a + Math.PI / 2, .3 * u, 2.4 * u, common.light, { face: false, spacing: .3 });
+    if (civ.family === 'hands') for (let i = 0; i < Math.round(big * 8); i++) settle(f, (plaza + r() * (Rm - plaza)), r() * 6.28, .6 * u, .8 * u, common.crates, { spacing: .6 });
+    // Fields beyond the edge, fenced by those with hands.
+    if (civ.fields) for (let i = 0, n = Math.round(2 + big * 4); i < n; i++) settle(f, Rm + (4 + r() * 10) * u, r() * 6.28, 4, .2, civ.family === 'hands' ? common.fencedField : common.field, { spacing: .9 });
+    // The capital's spaceport; radio dishes and beacons for spacefarers.
+    if (isCapital && level >= 5 && launch) settle(f, Rm + 16 * u, r() * 6.28, launchFoot, 12 * u, launch, { face: false });
+    if (level >= 5) for (let i = 0; i < Math.round(big * 2); i++) settle(f, Rm * (.6 + r() * .4), r() * 6.28, 1.8 * u, 4 * u, common.dish, { spacing: .8 });
   }
-  // Paths and roads: walkers pave, others mark their way with stones.
-  const paves = WALKERS.includes(civ.family) && level >= 3;
-  const trail = (from, to, step) => {
-    const d = from.angleTo(to) * radius;
-    if (d > 260) return;
-    for (let s = (level >= 3 ? 6 : 14) * u; s < d - 6 * u; s += step) {
-      const n = from.clone().lerp(to, s / d).normalize(), g = frameAt(n);
-      if (paves) place({ ...g, home: n }, 0, 0, .9 * u, .1, common.slab, { face: false, road: true });
-      else place({ ...g, home: n }, 1.6 * u, 0, .5 * u, 2 * u, common.marker, { face: false });
+  for (const s of near) grow(s);
+
+  // Roads between places: laid along the ground near the site (walkers pave theirs once
+  // they build cities; before that they are earth tracks). Tool users mark trails with stones.
+  const placeOf = new Map(places.map(s => [s.id, s]));
+  for (const road of net.roads) {
+    const a = placeOf.get(road.a), b = placeOf.get(road.b), d = a.v.angleTo(b.v) * radius;
+    if (!walkers && level > 1) continue; // fliers, drifters, burrowers and hives need no roads
+    const pts = [];
+    for (let s = a.radius * .85; s <= d - b.radius * .85; s += (level === 1 ? 11 * u : 2.2)) {
+      const n = a.v.clone().lerp(b.v, s / d).normalize();
+      if (n.angleTo(siteV) * radius > DETAIL + 120) { if (pts.length > 1 && level > 1) strip(pts, streetWidth * 1.2, streetColour); pts.length = 0; continue; }
+      if (level === 1) place({ ...frameAt(n), home: n }, 1.6 * u, 0, .5 * u, 2 * u, common.marker, { face: false });
+      else pts.push(n);
     }
-  };
-  for (const f of frames.slice(1)) trail(main.home, f.home, paves ? 1.6 * u : 11 * u);
-  if (paves) { // avenues from the centre, and for planet-shapers roads to the horizon
-    const len = level >= 4 ? 230 : 30 * u;
-    for (let i = 0; i < (level >= 4 ? 6 : 4); i++) { const a = i / (level >= 4 ? 6 : 4) * Math.PI * 2 + .3, n = pointAt(main, len, a); trail(main.home, n, 1.6 * u); }
-    if (level >= 4) for (let i = 0; i < 10; i++) place(main, (12 + r() * 25) * u, r() * 6.28, .5 * u, 2.4 * u, common.light, { face: false });
+    if (pts.length > 1) strip(pts, streetWidth * 1.2, streetColour);
   }
-  // Planet-shapers: towns all over the world, lit at night.
-  if (level >= 4) {
-    const wr = rng(body.seed, 'structures-world');
-    let towns = 0;
-    for (let i = 0; i < 1400 && towns < 260 && lit.count() < BUDGET; i++) {
-      const y = wr() * 2 - 1, b = wr() * Math.PI * 2, s = Math.sqrt(1 - y * y), n = V(Math.cos(b) * s, y, Math.sin(b) * s);
-      if (n.angleTo(signalNormal) * radius < 260 || terrain.isLiquid(n)) continue;
-      const f = frameAt(n);
-      if (place({ ...f, home: n }, 0, 0, 2.5 * u, 0, (add) => { style.small(add); add(ball(.9 * u), L(2 * u, 1.2 * u, 0), C.window, true); }, { face: false, spacing: .5 })) towns++;
+
+  // The rest of the world: towns as simple clusters, joined by nothing you can see
+  // from here, and lit at night for those that light their world (seen from orbit).
+  const lightPos = [];
+  const cluster = { camp: 2, village: 4, colony: 5, town: 7, city: 12, metropolis: 18, capital: 18 };
+  for (const s of far) {
+    const f = frameAt(s.v);
+    for (let i = 0, n = cluster[s.kind] || 4; i < n && lit.count() < BUDGET; i++) {
+      const d = i ? Math.sqrt(r()) * s.radius * .75 : 0;
+      place(f, d, r() * 6.28, 2.2 * u, 0, (add) => style.small(add), { face: true, spacing: .45, aloft });
     }
+    if (level >= 3) for (let i = 0, n = Math.round((cluster[s.kind] || 4) * (lights ? 2.2 : .8)); i < n; i++) {
+      const m = pointAt(f, Math.sqrt(r()) * s.radius, r() * 6.28);
+      if (!terrain.isLiquid(m)) lightPos.push(...m.clone().multiplyScalar(radius + terrain.surface(m) + 1.5).toArray());
+    }
+  }
+  if (lightPos.length) {
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(lightPos, 3));
+    const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: C.window, size: lights ? 2.6 : 1.8, sizeAttenuation: false, transparent: true, opacity: lights ? .95 : .7, depthWrite: false }));
+    pts.frustumCulled = false; pts.name = 'night-lights'; group.add(pts);
   }
 
   // Spacefarers: satellites and a station in orbit.
@@ -622,9 +702,9 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   const litMesh = new THREE.Mesh(lit.geometry(), new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .9 }));
   const glowMesh = new THREE.Mesh(glow.geometry(), new THREE.MeshBasicMaterial({ vertexColors: true }));
   for (const mesh of [litMesh, glowMesh]) { mesh.frustumCulled = false; group.add(mesh); }
-  // Ground the builders have cleared: their settlements and each piece's footprint.
-  const clearings = [...placed.filter(p => !p.road || level >= 3).map(p => ({ n: p.n, r: p.foot + 1.5 })), ...sites.map((n, i) => ({ n, r: (i ? .5 : 1) * ([0, 6, 12, 26, 34, 34][level]) * u }))];
-  return { group, civ, obstacles, sites, clearings, pieces: placed.length, update };
+  // Ground the builders have cleared: their places near the site and each piece's footprint.
+  const clearings = [...placed.filter(p => !p.road).map(p => ({ n: p.n, r: p.foot + 1.5 })), ...near.map(s => ({ n: s.v, r: s.radius + 2 * u }))];
+  return { group, civ, obstacles, sites, clearings, pieces: placed.length, network: net, update };
 }
 
 // Colours from the world and the builders: stone from its rock, walls from the
@@ -641,11 +721,21 @@ function colours(THREE, body, civ) {
     stone: mix(rock, '#8d8a85', .3), stone2: mix(rock, '#5c5a58', .4), wall, wall2: mix(wall, '#000', .18),
     wood: mix('#6b4a2f', rock, .2), roof: civ.material === 'ice' ? mix(wall, '#ffffff', .3) : mix(body.palette[1] || '#8a7a4a', '#6b5a33', .5),
     door: '#1a1410', accent: prim, accent2: sec, soil: mix(body.palette[2] || '#5a4630', '#3a2a1a', .6), crop: mix(body.palette[1] || '#4f7a3a', '#6bd44f', .35),
-    turf: mix(body.palette[1] || '#6b8a4a', '#55703a', .4), leaf, bag: mix(sec, '#ffffff', .35), line: '#3a3330', road: mix(rock, '#77736c', .5),
+    turf: mix(body.palette[1] || '#6b8a4a', '#55703a', .4), leaf, bag: mix(sec, '#ffffff', .35), line: '#3a3330', road: mix(rock, '#6f6b66', .55),
+    path: mix(body.palette[2] || '#7a6648', '#8a7356', .45), plaza: mix(rock, '#a39d93', .45),
     ember: '#ff7a2a', flame: '#ffc46b', window: civ.species.glow ? mix('#ffd98a', sp.glow || prim, .4) : '#ffd98a', beacon: '#ff4a4a',
     metal: '#9aa5ad', metal2: '#d7dde1', concrete: '#8b8f91', scorch: '#2b2b2b', hull: '#eef1f2',
   };
 }
+
+// Triangles given as world positions (for ground strips and discs), with normals.
+function flatGeometry(pos) {
+  const g = new THREE_REF.BufferGeometry();
+  g.setAttribute('position', new THREE_REF.Float32BufferAttribute(pos, 3));
+  g.computeVertexNormals();
+  return g;
+}
+let THREE_REF = null;
 
 // Collects geometry pieces (baked into world space with a colour) and merges them.
 function merger(THREE) {

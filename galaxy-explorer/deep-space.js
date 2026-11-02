@@ -175,19 +175,20 @@ export function createNearStar(scene) {
 
 // Faint streaks rushing past the ship while the star drive runs, so speed is
 // felt even though the stars barely move. Kept around the camera.
-export function createDriveStreaks(scene, count = 220) {
-    const R = 260, L = 900;
+// Options (for other uses, such as dust rushing past near worlds): R and L size
+// the cloud around the camera, min keeps streaks off the camera, color tints them.
+export function createDriveStreaks(scene, count = 220, { R = 260, L = 900, min = 30, color = 0xbfe8ff } = {}) {
     const pos = new Float32Array(count * 6), seeds = new Float32Array(count * 3);
     let seed = 0xd21e;
     const random = () => (seed = (1664525 * seed + 1013904223) >>> 0) / 4294967296;
     for (let i = 0; i < count; i++) {
-        const a = random() * Math.PI * 2, r = 30 + random() * R;
+        const a = random() * Math.PI * 2, r = min + random() * R;
         seeds.set([Math.cos(a) * r, Math.sin(a) * r, (random() - 0.5) * 2 * L], i * 3);
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), L * 2);
-    const material = new THREE.LineBasicMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+    const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
     const lines = new THREE.LineSegments(geo, material);
     lines.frustumCulled = false;
     lines.visible = false;
@@ -196,15 +197,16 @@ export function createDriveStreaks(scene, count = 220) {
     let travel = 0;
     return {
         hide() { lines.visible = false; },
-        // power: 0..1 (throttle); forward: unit direction of flight.
-        update(camera, forward, power, dt) {
+        // power: 0..1 (throttle); forward: unit direction of flight. flow, when
+        // given, sets the real rush speed, streak length and opacity instead.
+        update(camera, forward, power, dt, flow = null) {
             lines.visible = power > 0.02;
             if (!lines.visible) return;
-            travel += dt * (300 + 2600 * power);
+            travel += dt * (flow ? flow.speed : 300 + 2600 * power);
             side.crossVectors(forward, Math.abs(forward.y) < 0.95 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)).normalize();
             up.crossVectors(side, forward);
             basis.makeBasis(side, up, forward);
-            const len = 20 + 260 * power;
+            const len = flow ? flow.len : 20 + 260 * power;
             for (let i = 0; i < count; i++) {
                 const z = ((((seeds[i * 3 + 2] - travel) % (2 * L)) + 3 * L) % (2 * L)) - L;
                 p.set(seeds[i * 3], seeds[i * 3 + 1], z).applyMatrix4(basis);
@@ -214,7 +216,7 @@ export function createDriveStreaks(scene, count = 220) {
             }
             geo.attributes.position.needsUpdate = true;
             lines.position.copy(camera.position);
-            material.opacity = 0.06 + 0.22 * power;
+            material.opacity = flow ? flow.opacity : 0.06 + 0.22 * power;
         },
     };
 }

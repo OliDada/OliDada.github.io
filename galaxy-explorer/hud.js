@@ -41,7 +41,7 @@ function updateDeepHUD(g) {
     $("crosshair").style.display = "none";
     document.body.classList.remove("walking");
     $("controlHint").innerHTML =
-        "<kbd>W S</kbd> throttle <kbd>A D</kbd> steer <kbd>↑ ↓</kbd> pitch <kbd>SHIFT</kbd> boost <kbd>T</kbd> autopilot <span>G galaxy map · H controls</span>";
+        "<kbd>MOUSE</kbd> steer <kbd>W S</kbd> throttle <kbd>A D</kbd> turn <kbd>SHIFT</kbd> boost <kbd>T</kbd> autopilot <span>Q look around · G galaxy map · H controls</span>";
 }
 
 const fmtM = (m) => (m >= 10000 ? `${(m / 1000).toFixed(1)} <small>km</small>` : `${Math.round(m)} <small>m</small>`);
@@ -98,14 +98,12 @@ function updateMainHUD(g) {
     $("altLabel").textContent = inSpace
         ? "TO DESTINATION"
         : isWalking
-          ? stage === 2
-              ? "TO SHIP"
-              : "TO SIGNAL"
+          ? "TO SHIP"
           : mode === "flight" && altitude() > 200
             ? "ALTITUDE · ORBIT AT 600 M"
             : "ALTITUDE";
     $("altitude").innerHTML =
-        inSpace && !selectedBody ? "–" : fmtM(Math.max(0, inSpace ? shipPosition.distanceTo(destination) - selectedBody.radius : isWalking ? (stage === 2 ? surfacePoint(playerNormal).distanceTo(shipPosition) : distanceToSignal()) : altitude()));
+        inSpace && !selectedBody ? "–" : fmtM(Math.max(0, inSpace ? shipPosition.distanceTo(destination) - selectedBody.radius : isWalking ? surfacePoint(playerNormal).distanceTo(shipPosition) : altitude()));
     $("speed").innerHTML =
         `${(isWalking ? Math.abs(speed) : Math.hypot(speed, verticalSpeed)).toFixed(0)} <small>m/s</small>`;
     const displayedVertical =
@@ -124,7 +122,7 @@ function updateMainHUD(g) {
           ? "↑ Take off [L]"
           : autoApproach
             ? "× Cancel approach"
-            : "◎ Approach signal";
+            : "◎ Find landing site";
     $("approachBtn").onclick = inSpace
         ? openMap
         : mode === "landed"
@@ -147,11 +145,15 @@ function updateMainHUD(g) {
     else if (isWalking) {
         const nearShip =
             surfacePoint(playerNormal).distanceTo(shipPosition) < 9;
-        label = nearShip
-            ? "Board Kestrel <kbd>E</kbd>"
-            : distanceToSignal() < 9
-              ? "Investigate <kbd>E</kbd>"
-              : "Follow the marker <kbd>E</kbd>";
+        label = distanceToSignal() < 9 && !g.discovered
+            ? "Investigate <kbd>E</kbd>"
+            : g.scanLabel
+              ? `${g.scanLabel} <kbd>E</kbd>`
+              : nearShip
+                ? "Board Kestrel <kbd>E</kbd>"
+                : distanceToSignal() < 9
+                  ? "Investigate <kbd>E</kbd>"
+                  : ""; // nothing to do here: no button (the waypoint shows the way)
     } else
         label =
             altitude() > 32
@@ -160,11 +162,14 @@ function updateMainHUD(g) {
                   ? "Slow to land <kbd>L</kbd>"
                   : `Land on ${activeBody.name} <kbd>L</kbd>`;
     $("actionBtn").innerHTML = label;
+    $("actionBtn").hidden = !label;
         $("crosshair").style.display = isWalking ? "block" : "none";
     document.body.classList.toggle("walking", isWalking);
     $("controlHint").innerHTML = isWalking
-        ? "<kbd>W A S D</kbd> walk <kbd>SPACE</kbd> jump <kbd>E</kbd> interact <span>Click: mouse look · M map · H controls</span>"
-        : "<kbd>W S</kbd> thrust <kbd>A D</kbd> steer <kbd>R F</kbd> lift <kbd>↑ ↓</kbd> pitch <kbd>SHIFT</kbd> boost <span>Click: mouse look · M map · H controls</span>";
+        ? "<kbd>W A S D</kbd> walk <kbd>SPACE</kbd> jump <kbd>E</kbd> scan / interact <span>Click: mouse look · M map · H controls</span>"
+        : inSpace
+          ? "<kbd>MOUSE</kbd> steer <kbd>W S</kbd> thrust <kbd>A D</kbd> slide <kbd>R F</kbd> up / down <kbd>SHIFT</kbd> boost <kbd>X</kbd> brake <span>Click to steer · Q look around · H controls</span>"
+          : "<kbd>MOUSE</kbd> steer <kbd>W S</kbd> thrust <kbd>A D</kbd> turn <kbd>R F</kbd> lift <kbd>SHIFT</kbd> boost <kbd>X</kbd> brake <span>Click to steer · Q look around · H controls</span>";
 }
 
 // The waypoint marker, updated every frame so it moves smoothly with the view.

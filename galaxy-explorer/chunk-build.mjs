@@ -49,6 +49,8 @@ export function buildChunk(body, spec) {
   const { edge } = chunkIndices(S);
   const count = V * V + edge.length;
   const positions = new Float32Array(count * 3), colors = new Float32Array(count * 3), normals = new Float32Array(count * 3);
+  // What the ground is made of at each vertex (grass, bare rock, snow, 0..1): picks the close-up detail drawn by the shader.
+  const cover = new Float32Array(count * 3);
   const wet = t.liquid === 'water' || t.liquid === 'lava';
   const water = wet ? new Float32Array(count * 3) : null;
   // The sea is a smooth sphere: it gets its own straight-up normals rather than
@@ -60,50 +62,87 @@ export function buildChunk(body, spec) {
   const center = [mid[0] * cr, mid[1] * cr, mid[2] * cr];
   let anyWet = false, maxD = 0;
   const n = { x: 0, y: 0, z: 0 };
-  for (let j = 0; j < V; j++) for (let i = 0; i < V; i++) {
-    const d = faceDirection(spec.face, spec.a0 + spec.size * i / S, spec.b0 + spec.size * j / S);
+  const spacing = R * spec.size * Math.PI / 4 / S; // metres between grid points
+  // Two surfaces are worked out: this tile's own, and its parent's (the next coarser
+  // level, twice the spacing). Each level only keeps ground detail it can show
+  // (terrain.mjs fades out bumps and colour noise finer than about three grid
+  // spacings), so nothing aliases into blocky squares. The parent's surface is what
+  // this tile blends into with distance (geomorphing), so when the parent replaces
+  // it, or it replaces the parent, nothing changes on screen.
+  // Grid points run from -2 to S + 2: a ring around the tile so slope, hollows and
+  // normals are measured the same way on both sides of a tile edge.
+  const O = 2, E = S + 1 + 2 * O, idx = (i, j) => (j + O) * E + i + O;
+  const dirs = new Float64Array(E * E * 3), own = new Float64Array(E * E).fill(NaN), par = new Float64Array(E * E).fill(NaN);
+  for (let j = -O; j <= S + O; j++) for (let i = -O; i <= S + O; i++) {
+    const d = faceDirection(spec.face, spec.a0 + spec.size * i / S, spec.b0 + spec.size * j / S), e = idx(i, j);
+    dirs[e * 3] = d[0]; dirs[e * 3 + 1] = d[1]; dirs[e * 3 + 2] = d[2];
     n.x = d[0]; n.y = d[1]; n.z = d[2];
-    const h = t.meshHeight(n), r = R + h, k = (j * V + i) * 3;
-    positions[k] = d[0] * r - center[0]; positions[k + 1] = d[1] * r - center[1]; positions[k + 2] = d[2] * r - center[2];
-    normals[k] = d[0]; normals[k + 1] = d[1]; normals[k + 2] = d[2];
-    const c = t.color(n, h); colors[k] = c[0]; colors[k + 1] = c[1]; colors[k + 2] = c[2];
+    if (i >= -1 && i <= S + 1 && j >= -1 && j <= S + 1) own[e] = t.meshHeight(n, spacing);
+    if (!(i % 2) && !(j % 2)) par[e] = t.meshHeight(n, spacing * 2);
+  }
+  // Slope and hollowness at grid point (i, j) of a surface, using neighbours `st` points away.
+  const shapeAt = (hs, i, j, st, sp, out) => {
+    const e = idx(i, j), at = (ii, jj) => idx(ii, jj);
+    const p = (k, h) => [dirs[k * 3] * (R + h), dirs[k * 3 + 1] * (R + h), dirs[k * 3 + 2] * (R + h)];
+    const A = p(at(i + st, j), hs[at(i + st, j)]), B = p(at(i - st, j), hs[at(i - st, j)]), C = p(at(i, j + st), hs[at(i, j + st)]), D = p(at(i, j - st), hs[at(i, j - st)]);
+    const ux = A[0] - B[0], uy = A[1] - B[1], uz = A[2] - B[2], vx = C[0] - D[0], vy = C[1] - D[1], vz = C[2] - D[2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; // u × v points outward on every face
+    const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+    out.nx = nx; out.ny = ny; out.nz = nz;
+    out.slope = 1 - Math.max(0, nx * dirs[e * 3] + ny * dirs[e * 3 + 1] + nz * dirs[e * 3 + 2]);
+    out.hollow = ((hs[at(i + st, j)] + hs[at(i - st, j)] + hs[at(i, j + st)] + hs[at(i, j - st)]) / 4 - hs[e]) / sp;
+    out.spacing = sp;
+    return out;
+  };
+  const shape = {}, pshape = {}, info = {};
+  // The parent's position and colour at its own grid points (even i and j), relative to the tile centre.
+  const parPos = new Float32Array(count * 3), parCol = new Float32Array(count * 3);
+  const colourAt = (i, j, h, sh, outArr, k, withCover) => {
+    const e = idx(i, j); n.x = dirs[e * 3]; n.y = dirs[e * 3 + 1]; n.z = dirs[e * 3 + 2];
+    // terrain.mjs works in sRGB (the palettes are hex colours); the renderer expects
+    // linear vertex colours, so convert, or every world looks washed out and pale.
+    const col = t.color(n, h, sh, info);
+    outArr[k] = col[0] ** 2.2; outArr[k + 1] = col[1] ** 2.2; outArr[k + 2] = col[2] ** 2.2;
+    if (withCover) { cover[k] = info.veg; cover[k + 1] = info.bare; cover[k + 2] = info.snow; }
+  };
+  for (let j = 0; j <= S; j++) for (let i = 0; i <= S; i++) {
+    const e = idx(i, j), k = (j * V + i) * 3, h = own[e];
+    const dx = dirs[e * 3], dy = dirs[e * 3 + 1], dz = dirs[e * 3 + 2];
+    positions[k] = dx * (R + h) - center[0]; positions[k + 1] = dy * (R + h) - center[1]; positions[k + 2] = dz * (R + h) - center[2];
+    shapeAt(own, i, j, 1, spacing, shape);
+    normals[k] = shape.nx; normals[k + 1] = shape.ny; normals[k + 2] = shape.nz;
+    colourAt(i, j, h, shape, colors, k, true);
+    if (!(i % 2) && !(j % 2)) {
+      const hp = par[e];
+      parPos[k] = dx * (R + hp) - center[0]; parPos[k + 1] = dy * (R + hp) - center[1]; parPos[k + 2] = dz * (R + hp) - center[2];
+      colourAt(i, j, hp, shapeAt(par, i, j, 2, spacing * 2, pshape), parCol, k, false);
+    }
     if (wet) {
       const rw = R + t.sea;
-      water[k] = d[0] * rw - center[0]; water[k + 1] = d[1] * rw - center[1]; water[k + 2] = d[2] * rw - center[2];
-      waterNormals[k] = d[0]; waterNormals[k + 1] = d[1]; waterNormals[k + 2] = d[2];
+      water[k] = dx * rw - center[0]; water[k + 1] = dy * rw - center[1]; water[k + 2] = dz * rw - center[2];
+      waterNormals[k] = dx; waterNormals[k + 1] = dy; waterNormals[k + 2] = dz;
       if (h < t.sea) anyWet = true;
     }
     maxD = Math.max(maxD, Math.hypot(positions[k], positions[k + 1], positions[k + 2]));
   }
-  // Surface normals from neighbouring grid points (used to light the skirts like the
-  // ground beside them, so hairline gaps between tiles are invisible).
-  const P = (i, j) => (Math.min(S, Math.max(0, j)) * V + Math.min(S, Math.max(0, i))) * 3;
-  for (let j = 0; j < V; j++) for (let i = 0; i < V; i++) {
-    const a = P(i + 1, j), b = P(i - 1, j), c = P(i, j + 1), d = P(i, j - 1), k = (j * V + i) * 3;
-    const ux = positions[a] - positions[b], uy = positions[a + 1] - positions[b + 1], uz = positions[a + 2] - positions[b + 2];
-    const vx = positions[c] - positions[d], vy = positions[c + 1] - positions[d + 1], vz = positions[c + 2] - positions[d + 2];
-    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; // u × v points outward on every face
-    const l = Math.hypot(nx, ny, nz) || 1;
-    normals[k] = nx / l; normals[k + 1] = ny / l; normals[k + 2] = nz / l;
-  }
-  // Geomorphing: where each vertex sits in the next coarser level of detail. Odd
-  // vertices move onto the line (or diagonal) between their even neighbours, which is
-  // exactly the coarser tile's surface; the shader blends toward it with distance, so
-  // switching detail levels never pops and tile edges meet their coarser neighbours.
+  // Geomorphing: how far each vertex is from the parent's surface. Even vertices sit
+  // on the parent's own grid points; odd ones on the line (or diagonal) between them,
+  // which is exactly the parent's triangle. The shader blends toward it with
+  // distance, so switching detail levels never pops and tile edges meet coarser neighbours.
   const lodDelta = new Float32Array(count * 3), lodColor = new Float32Array(count * 3);
   const waterDelta = wet ? new Float32Array(count * 3) : null;
-  const morph = (src, out, j, i) => {
+  const morph = (own, target, out, j, i) => {
+    const k = (j * V + i) * 3;
     let a, b;
     if (i % 2 && !(j % 2)) { a = j * V + i - 1; b = j * V + i + 1; }
     else if (!(i % 2) && j % 2) { a = (j - 1) * V + i; b = (j + 1) * V + i; }
     else if (i % 2 && j % 2) { a = (j - 1) * V + i + 1; b = (j + 1) * V + i - 1; } // the coarse quad's diagonal
-    else return;
-    const k = (j * V + i) * 3;
-    for (let c = 0; c < 3; c++) out[k + c] = (src[a * 3 + c] + src[b * 3 + c]) / 2 - src[k + c];
+    else { for (let c = 0; c < 3; c++) out[k + c] = target[k + c] - own[k + c]; return; }
+    for (let c = 0; c < 3; c++) out[k + c] = (target[a * 3 + c] + target[b * 3 + c]) / 2 - own[k + c];
   };
   for (let j = 0; j < V; j++) for (let i = 0; i < V; i++) {
-    morph(positions, lodDelta, j, i); morph(colors, lodColor, j, i);
-    if (wet) morph(water, waterDelta, j, i);
+    morph(positions, parPos, lodDelta, j, i); morph(colors, parCol, lodColor, j, i);
+    if (wet) morph(water, water, waterDelta, j, i);
   }
   // Skirt vertices: copies of the edge, pulled toward the planet centre.
   const quad = R * spec.size * Math.PI / 4 / S, drop = quad * 1.5 + 1;
@@ -114,6 +153,7 @@ export function buildChunk(body, spec) {
     positions[k] = positions[src] - ux * drop; positions[k + 1] = positions[src + 1] - uy * drop; positions[k + 2] = positions[src + 2] - uz * drop;
     normals[k] = normals[src]; normals[k + 1] = normals[src + 1]; normals[k + 2] = normals[src + 2];
     colors[k] = colors[src]; colors[k + 1] = colors[src + 1]; colors[k + 2] = colors[src + 2];
+    cover[k] = cover[src]; cover[k + 1] = cover[src + 1]; cover[k + 2] = cover[src + 2];
     for (let c = 0; c < 3; c++) { lodDelta[k + c] = lodDelta[src + c]; lodColor[k + c] = lodColor[src + c]; if (wet) waterDelta[k + c] = waterDelta[src + c]; }
     // Water gets a shallow skirt too, so seams between tiles of different detail never show the sea floor.
     if (wet) {
@@ -121,5 +161,5 @@ export function buildChunk(body, spec) {
       waterNormals[k] = waterNormals[src]; waterNormals[k + 1] = waterNormals[src + 1]; waterNormals[k + 2] = waterNormals[src + 2];
     }
   }
-  return { positions, colors, normals, lodDelta, lodColor, water: anyWet ? water : null, waterDelta: anyWet ? waterDelta : null, waterNormals: anyWet ? waterNormals : null, center, radius: maxD + drop };
+  return { positions, colors, normals, cover, lodDelta, lodColor, water: anyWet ? water : null, waterDelta: anyWet ? waterDelta : null, waterNormals: anyWet ? waterNormals : null, center, radius: maxD + drop };
 }

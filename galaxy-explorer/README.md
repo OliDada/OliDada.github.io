@@ -64,7 +64,30 @@ The terrain is never flattened: the signal site is simply the nearest dry, fairl
 
 Living worlds get their own species (`flora.mjs`): 1–2 microbial forms (mats, layered mounds) on microbial worlds, 3–5 species with simple life, 5–8 with complex life. Each world's environment decides which forms thrive: broad-canopied trees, tiered spires, fronds, bushes, grasses, water-hoarding pillars, stalked caps or pod-stalks. Temperature and water favour some forms over others. Gravity sets height (low gravity grows tall, thin plants; high gravity keeps them squat). The star's light sets leaf colour, from green under Sun-like stars to near-black and magenta under red dwarfs. Dim light makes bioluminescence common. Exotic worlds grow their own forms instead: glassy crystal clusters and branching glasswood (silicon), mineral chimneys crowned with feeding tubes and feathery plumes (sulfur), waxy bulbs and translucent sails (ammonia), and towering beaded threads and tar-dark crusts (methane). Every species has a generated name, colours, shape and a preferred habitat (temperature, moisture, shoreline or highland), and is described from those traits.
 
-`flora-mesh.js` builds one low-poly model per species and draws every plant of that species as an instance, which keeps it to a couple of draw calls per species (about 1,600 plants on desktop, 900 on touch devices). Plants are placed where the terrain's local climate suits them, mostly around the landing region with the rest across the world, never under water, at the site itself or on the landing pad. They sway in the wind, more in thick air and less in thin. Flat growths (microbial mats, crusts) lie along the slope, in overlapping patches of slightly different thickness that reach into the ground, so they never flicker or float. Walk near a plant to catalogue its species; catalogued species are saved per world and listed on the star map.
+`flora-mesh.js` builds one low-poly model per species and draws every plant of that species as an instance, which keeps it to a couple of draw calls per species (about 1,600 plants on desktop, 900 on touch devices). Plants are placed where the terrain's local climate suits them, mostly around the landing region with the rest across the world, never under water, at the site itself or on the landing pad. They sway in the wind, more in thick air and less in thin. Flat growths (microbial mats, crusts) lie along the slope, in overlapping patches of slightly different thickness that reach into the ground, so they never flicker or float. Scan a plant (see Scanning) to catalogue its species; catalogued species are saved per world and listed on the star map.
+
+## Geology
+
+Every world with a surface has geology to find (`geology.mjs`), chosen from its physics, so even a lifeless moon is worth landing on.
+
+**Rocks**, 2–3 types on every world, look like natural boulders, layered outcrops, rubble and ice:
+
+- **Volcanic:** basalt, obsidian, green olivine rock.
+- **Airless:** pale anorthosite and impact breccia.
+- **Where water once lay:** sandstone, shale, limestone (built from shells where there is sea life), rust-red ironstone, white gypsum.
+- **Elsewhere:** granite, water ice on frozen worlds, sulfur crusts on toxic and sulfur worlds.
+
+**Landforms** are rarer, on about 2 worlds in 5:
+
+- **Volcanic:** basalt columns and fumaroles.
+- **Desert:** hoodoos and rock arches.
+- **Frozen:** penitentes, pingos and cryovolcanoes.
+- **Amethyst and silicon worlds:** crystal spires.
+- **Toxic and sulfur worlds:** mineral terraces and sulfur chimneys.
+- **Wet worlds:** karst pinnacles and sea stacks.
+- **Anywhere:** rare geodes and iron meteorites.
+
+Only vents and chimneys glow. Weak gravity makes everything taller. `geology-mesh.js` spreads each kind thinly over the whole world on dry ground, with more on bigger worlds: up to 60 of a rock type and 24 of a landform. Two of each rock type and one of each landform sit within 150 m of the landing site, so every landing has something to scan. High landforms take the highest ground, coastal ones sit by the water. Each kind is one instanced mesh, plus one for any glowing parts. Scan rocks and landforms to record them (both count as Geology). They are solid on foot, and settlements clear them from their ground.
 
 ## Animal life
 
@@ -79,7 +102,7 @@ Worlds with simple or complex life get animals (`fauna.mjs`): 1–3 small crawle
 
 Future systems should read the traits, not the derived values. Ecology (below) does.
 
-`fauna-mesh.js` builds one model per species. The body, neck, head and tail are one smooth tube swept along a spine (tail, hips, belly or insect waist, shoulders, neck, skull, snout) with countershading and stripes, spots or a saddle on the back. Limbs are jointed tubes (hip, knee, ankle, toe) rooted inside the body, so everything connects. Eyes are eyeballs with pupils set into the head. Each species is drawn with instancing in one draw call, and animated in the vertex shader from a per-animal gait cycle: legs swing at the hip and fold at the knee on the forward swing, arms swing opposite the legs, wings flap, tails and tentacles curl toward the tip, coils ripple, and normals rotate with the limbs so lighting follows. A small behaviour model moves each animal over the sphere: grazers wander and graze in herds and bolt, hunters and curious species approach, fliers and drifters circle overhead; ground animals turn back at water, and everything stays within about 230 m of the site. Get close enough to observe an animal and its species is recorded; observed species are saved per world and listed on the star map.
+`fauna-mesh.js` builds one model per species. The body, neck, head and tail are one smooth tube swept along a spine (tail, hips, belly or insect waist, shoulders, neck, skull, snout) with countershading and stripes, spots or a saddle on the back. Limbs are jointed tubes (hip, knee, ankle, toe) rooted inside the body, so everything connects. Eyes are eyeballs with pupils set into the head. Each species is drawn with instancing in one draw call, and animated in the vertex shader from a per-animal gait cycle: legs swing at the hip and fold at the knee on the forward swing, arms swing opposite the legs, wings flap, tails and tentacles curl toward the tip, coils ripple, and normals rotate with the limbs so lighting follows. A small behaviour model moves each animal over the sphere: grazers wander and graze in herds and bolt, hunters and curious species approach, fliers and drifters circle overhead; ground animals turn back at water, and everything stays within about 230 m of the site. Get close enough to scan an animal and its species is recorded; observed species are saved per world and listed on the star map.
 
 ## Ecology
 
@@ -112,19 +135,48 @@ Animals now live off each other and their world (`ecology.mjs`, acted on in `fau
 
 Grown cultures build from their own bodies' products (shell, silk, wax, living wood, membrane); the rest use the world's own materials: timber where forests grow, ice on frozen worlds, clay in deserts, glass on silicon worlds, otherwise stone. Accents use the species' own colours, buildings scale with the builders' size, and weak gravity builds taller.
 
-**What each step looks like** (`structures-mesh.js`), around the builders' herds' homes near the site. Each home moves to open, dry, fairly level ground well clear of the signal and the pad, and the herd moves with it, so the builders live there.
+**Temperament and extent** (`civilizations.mjs`). Tier says what a civilization *can* build; its temperament says how far it spreads and how it treats its land:
 
-- **Tool users**: cairns, trails of marked stones between homes, simple shelters in their own style, and hearths where there is air to burn.
-- **Village builders**: a village of dwellings around a gathering place, small hamlets at their other homes, and tended fields if they eat plants.
-- **City builders**: dense cities in three rings of larger dwellings around a great structure (pagoda, stepped pyramid, pavilion, great comb, funnel web, giant spiral, amphitheatre, henge, perch-tree, great loop…), with avenues for species that walk and towns at their other homes.
-- **Planet-shapers**: bigger cities with street lights, roads running to the horizon, and towns all over the world, lit at night and visible from orbit. Their radio signals reach the next star.
-- **Spacefarers**: a launch site in their own idiom: rockets on gantries (hands), grown launch towers (tentacled walkers), a giant tripod cradle, a tether climbing out of sight into orbit (drifters), launch silos (hives, spiders, burrowers), a rail up a towering perch (fliers) or a long launch ramp (grazers and rollers). Satellites and a ring station circle the world.
+- **Ambition** (from aggression, metabolism and sociality, plus a culture roll) decides how far it expands.
+- **Cohesion** (from sociality): a few great, crowded places, or many scattered ones.
+- **Harmony** (from a plant diet, caution, and grown cultures): living lightly on the land, or clearing and paving it.
+
+Together with the tier they give an **extent**: local, regional, continental, planetary, or **system**, where ambitious spacefarers settle the nearest rocky worlds and moons of their system (`colonistOf`). Colonists live under glass pressure domes around a spaceport, whatever they build at home. The temperament is part of the civilization's description.
+
+**The settlement network** (`settlements.mjs`). Each civilization's world gets a fixed network, deterministic like everything else:
+
+- The **capital** stands beside the landing site (on open, dry, fairly level ground, possibly a coast), so you land next to it.
+- Depending on the extent, **cities, towns and villages** spread over a region, a continent or the whole planet, never overlapping.
+- They are joined by **roads**: a spanning tree from the capital that avoids crossing much water.
+
+The star map summarises it once you have recorded the settlement: "Settlements: a capital, 5 cities, 19 towns and 26 villages".
+
+**What a place looks like** (`structures-mesh.js`). The capital and up to three more places near the site are built in full, grown rather than stamped:
+
+- a centre (a gathering place or great structure on a plaza);
+- 3–8 streets winding outward, and a ring road through big cities;
+- buildings on plots along the streets, facing them, bigger and taller toward the core;
+- landmarks in the core of cities, gaps for yards;
+- street lamps for planet-shapers and above, and crates for species with hands;
+- fields beyond the edge (fenced by those with hands), radio dishes for spacefarers, and a spaceport beside the capital.
+
+Streets, plazas and roads are strips and discs laid along the terrain, every vertex on the ground, so they follow every slope. Walkers have earth tracks before they build cities and paved roads after. Fliers, drifters, burrowers and hives need no roads, and tool users mark trails with standing stones. The rest of the world's places are simple clusters of the culture's buildings. Cities and above light them at night (points visible from orbit). Size by tier:
+
+- **Tool users**: camps with a hearth, shelters in their own style, and cairns.
+- **Village builders**: a village around a gathering place, and others nearby if ambitious.
+- **City builders**: a city around a great structure (pagoda, stepped pyramid, pavilion, great comb, funnel web, giant spiral, amphitheatre, henge, perch-tree, great loop…), with towns and villages around it.
+- **Planet-shapers**: a capital and cities across a continent or the whole world, lit at night, with radio heard from the next star.
+- **Spacefarers**: all that, plus a launch site in their own idiom: rockets on gantries (hands), grown launch towers (tentacled walkers), a giant tripod cradle, a tether climbing out of sight into orbit (drifters), launch silos (hives, spiders, burrowers), a rail up a towering perch (fliers) or a long launch ramp (grazers and rollers). Satellites and a ring station circle the world.
+
+The places near the site are capped at about 170k vertices and the whole world at 200k, so a spacefaring capital builds in about 0.1 s and still draws in two calls.
 
 Builders clear their ground, so most plants inside a settlement are gone. Everything is merged into two meshes (one lit, one glowing), whatever the size: two draw calls. Vertices are capped (far-off towns stop at the budget), so the biggest world builds in under 0.1 s. Footings reach into the ground, so nothing floats on a slope. Buildings are solid on foot, while fields, roads and hearths can be walked over. Walking within about 45 m of a settlement, or flying low over it, records it: a message describes the builders, and the star map lists the world with their tier. Builders also clear rocks and most plants from their ground.
 
 **Radio signals** (`signals.mjs`). Planet-shapers and spacefarers broadcast, and their signals carry much farther than the jump drive: planet-shapers are heard out to 80 light years, spacefarers out to 150. Every system within 150 light years of your star is checked in a background thread (`signals-worker.js`, or in small slices if workers are unavailable), taking well under a second on a laptop, and the result is cached per star. On the map, each source is a gold signal mark at every zoom, out to the galaxy view, and you can tap it. The side panel lists them nearest first (**RADIO SIGNALS · N HEARD**). Selecting one says who lives there, how far it is, and that you can set a course and fly there, or jump closer star by star. Within jump range they also get a gold ring and a SIGNALS tag. Ocean worlds with no dry land near the landing site have nowhere to build.
 
 **Life on the map.** In the system view, surveyed worlds with life carry the same rings as stars on the galaxy chart (dashed for microbes, bolder for animals, violet for exotic chemistry), and the world list tags them FAINT LIFE, LIFE or RICH LIFE, plus EXOTIC. A selected world says how rare its life is galaxy-wide, for example "Complex life with animals: very rare, about 1 world in 76". The odds are listed separately for water-based and exotic life, and `starmap.test.mjs` checks them against the generator.
+
+**Danger without combat.** Some big, aggressive hunters (`stalksYou` in `ecology.mjs`; never intelligent species) see an explorer on foot as prey. About 1 world in 8 with animals has one, and their descriptions say so. A stalker that notices you (within its sight range, while it is awake) closes in at a walk, then charges and lunges. Fliers swoop. After a lunge it backs off for 10–18 s. Each lunge knocks you back and takes 16–45% of your suit's integrity. The suit recovers once you have been left alone for 6 s, and a readout shows it while it is damaged. If it fails, the Kestrel's emergency recall puts you back beside the ship. Aboard the ship you are always safe. There are no weapons: the answer is to keep moving, get back aboard, or come back by day if the hunter is nocturnal.
 
 The star map's **long-range scan** senses biosignatures at stars within jump range before you visit: green rings on the chart (dashed for faint), and the panel and jump list say whether life is faint (microbial), clear (plants) or strong (complex life with animals).
 
@@ -135,6 +187,8 @@ Worlds with air have a sky (about 0.03 bar and up; thicker air gives a stronger,
 ## Rendering and travel
 
 Every planet and moon, including the one you are on, is drawn by one level-of-detail system (`planet-lod.js`). Each world is a cube projected onto a sphere, and each face is a quadtree of tiles. A tile splits into four finer tiles when the camera is closer than about twice its width, and merges back as you leave. Detail therefore rises smoothly as you approach anything, so a nearby moon sharpens too and there is no jump when entering orbit. Close up, triangles are about 0.6 m across. Changes between detail levels are smoothed (geomorphing): every vertex also stores where it sits in the next coarser level, and the shader blends toward that by distance, so a tile already looks exactly like its parent when the two are swapped, and tile edges meet coarser neighbours without gaps. Skirts are lit with the ground's own normals, so any remaining hairline gap is invisible. Tiles beyond the horizon are not drawn, and the coarser tile stays visible until its four children are ready, so detail never leaves holes. Skirts along tile edges, on land and water, hide seams between tiles of different detail. Tiles are built in background threads (`terrain-worker.js`, falling back to the main thread if workers are unavailable), and the coarsest level of every world is built at load so nothing pops in empty. Water and lava are tiles too, matching the terrain's detail. A logarithmic depth buffer keeps distant seas and coastlines from flickering.
+
+Up close the ground gets extra detail from its shader, at no cost in triangles: grain and speckle on grass and sand, a network of cracks on rock, ice and crust, pits in volcanic and toxic crust, and a slight bump so the light catches it. Each vertex carries what the ground is made of there (grass, bare rock, snow, from `terrain.mjs`), which picks the pattern. Every noise layer fades out once it gets smaller than a pixel, and the whole effect fades out between 14 m and 34 m, so distant ground never shimmers. Phones get a lighter version without the cracks and finest layer.
 
 Worlds are compressed but cover a wide range: planets are roughly 105–540 m in radius and moons 100–190 m. Site features (the landing pad, rock and plant regions) are measured in metres, so they look the same on any size of world. World coordinates are rebased on arrival. Cruise moves through space above the orbital plane and can be disengaged; manual flight crosses between worlds too.
 
@@ -148,18 +202,30 @@ Every planet and moon moves along a circular orbit (`orbits.mjs`). Time is the r
 
 Coordinates in the scene are relative to the world you are at. Near a world (flying, landed, on foot) you travel with it, so nothing local changes; the star, sunlight and the other worlds move around you, and the day side turns as a world circles its star. In free space and on cruise the ship holds its course through the system, and cruises follow their destination along its orbit.
 
-Distances and planet sizes are intentionally compressed. There is no combat, inventory, or full game-state save.
+Distances and planet sizes are intentionally compressed. There is no combat, mining, inventory or crafting, by design: see `PROGRESSION.md` for the game's direction (knowledge and contact as the currencies).
 
-Planned gameplay (documenting life to upgrade the ship) is described in `PROGRESSION.md`.
+## Scanning
+
+On foot, aim the crosshair at a plant, an animal or a rock. When it is within reach, a ring appears around the crosshair, with the thing's name below it, or "Unknown animal" if you have not recorded one. **Hold E** (or the *Hold to scan* button on touch) until the ring fills, about 1.3 s. Look away, walk off or let go and it drains. A card then shows the name, a one-line description, labelled facts and tags, and what the scan counted toward. Aim at something you have already recorded and press **E** to see its card again. Under the world's name, the HUD has one row each for plants, animals and geology, showing how many are recorded. Messages appear at the top of the screen, clear of the crosshair and the ship marker. `scanning.js` finds what you are aiming at and builds the card; `scan-ui.js` draws the prompt and the card.
+
+## Codex and upgrades
+
+Everything you record (plants, animals, formations, settlements, field notes, worlds you arrive at and radio sources you hear) goes into one **codex** for the whole galaxy (`codex.mjs`, saved as `elsewhere-codex-v1`). Each entry keeps the traits that matter (body plan, diet, biome, chemistry and so on), and older per-system saves are copied in on first load.
+
+The codex drives the **upgrade line** (`upgrades.mjs`). There is one main line of upgrades in three chapters named after the ship (Kestrel, Petrel, Albatross), and each step upgrades the ship, the suit or your knowledge. Optional side upgrades (scanner, vehicles, extra suit gear) hang off the line. The next main step is always being researched, and you can pick one side upgrade to research alongside it. Only research can be installed, so nothing unlocks by accident; scans made earlier count. Tasks are written as things to do ("Scan a plant on a Desert world"), and for each one `objectives.mjs` finds the nearest world that would move it forward: here, elsewhere in the system, or one or two jumps away. **Show on map** opens the star map there. Press **U** or the ⬡ button for the upgrade screen, a picture of the line where you can tap any upgrade for its card. To install, hold its button until the bar fills. The panel at the top right shows the research in progress, with the nearest place for its next task. Working effects today: Suit plating, Jump drive II/III (16 and 24 ly) and slower hull heating with Heat plating. The others are on the roadmap in `PROGRESSION.md`.
 
 ## Check
 
 `node --test galaxy-explorer/*.test.mjs`
 
-Tests cover motion stability, descent limits, landing easing, seed determinism, body spacing, cruise paths, stellar physics, an Earth-like sanity check, physical consistency (water state vs temperature, no life without water), galaxy-wide variety, giant physics and placement (moons clear of the cloud tops, nothing crowding a giant's moon system), seamless giant cloud maps and ring gaps, and orbits over time (radii and heights kept, outer planets slower, speeds capped, no collisions or crowding at any time), and interstellar frames (axes match the map, worlds stay inside the system edge, stars look the same size from both sides of the edge), and ecology (food webs follow diet and size, dim worlds favour the night, hunters catch prey that later return, grazers eat plants and animals drink without walking into the sea, animals sleep outside their hours and wake, and the ecosystem costs under 2 ms a frame), intelligence (the most advanced species builds in its body family's cultures, and only species with hands build houses and rockets; settlements stand on dry ground clear of the site and within walking range, grow with level and house their builders; planet-shapers spread across the world within the vertex budget; satellites stay in orbit), and life rarity on the map. The browser playtest covers map selection, travel, landing, and surface interaction.
+Tests cover motion stability, descent limits, landing easing, seed determinism, body spacing, cruise paths, stellar physics, an Earth-like sanity check, physical consistency (water state vs temperature, no life without water), galaxy-wide variety, giant physics and placement (moons clear of the cloud tops, nothing crowding a giant's moon system), seamless giant cloud maps and ring gaps, and orbits over time (radii and heights kept, outer planets slower, speeds capped, no collisions or crowding at any time), and interstellar frames (axes match the map, worlds stay inside the system edge, stars look the same size from both sides of the edge), and ecology (food webs follow diet and size, dim worlds favour the night, hunters catch prey that later return, grazers eat plants and animals drink without walking into the sea, animals sleep outside their hours and wake, and the ecosystem costs under 2 ms a frame), intelligence (the most advanced species builds in its body family's cultures, and only species with hands build houses and rockets; settlements stand on dry ground clear of the site and within walking range, grow with level and house their builders; planet-shapers spread across the world within the vertex budget; satellites stay in orbit; rocks, plants and formations are cleared from settlements), civilizations as named entities and radio signals (sources are real, heard within range, the same in slices or in one pass), geology (2–4 fitting kinds per world, on dry ground all over the world, a few near the site, clear of the site itself), scanning (the nearest unrecorded thing in reach, never one already recorded; clean cards), danger (stalkers notice you, lunge once or twice and never while you are aboard; intelligent species never stalk), and life rarity on the map. The browser playtest covers map selection, travel, landing, and surface interaction.
 
 ## Files
 
+- `codex.mjs`: the galaxy-wide codex of everything recorded, with traits copied in; backfill from per-system saves
+- `upgrades.mjs`: the upgrade line as data (main steps, side upgrades, gear, chapters), task matching, research, progress, hints and the effects the game reads
+- `upgrades-ui.js`: the upgrade screen (U), drawn as the upgrade line, and the research panel on the HUD
+- `objectives.mjs`: the nearest place for each research task
 - `PROGRESSION.md`: the plan for gameplay: documenting life unlocks ship upgrades; the upgrade tree and its to-do list
 - `index.html`, `style.css`: HUD, dialogs, and navigation atlas
 - `game.js`: the game state machine: flight, landing, walking, space, cruise, camera, discovery and saving; wires the modules below together
@@ -185,9 +251,14 @@ Tests cover motion stability, descent limits, landing easing, seed determinism, 
 - `fauna.mjs`: animal species generated from each world's environment
 - `fauna-mesh.js`: animal models, shader animation and behaviour
 - `ecology.mjs`: each species' activity cycle, food web, hunger, thirst, sight and stamina
+- `civilizations.mjs`: civilizations as entities (id, tier name, reach, home world); saves store tier names
+- `geology.mjs`, `geology-mesh.js`: rock and ice formations per world, spread over the whole world with a few near the site
+- `groundcover.js`: grass tufts, flowers, pebbles and shards in a circle around the player (42 m, 26 m on phones), on a fixed grid so nothing moves when you walk away and back; what grows comes from the ground colour logic in `terrain.mjs` (grass, bare rock, snow)
+- `scanning.js`, `scan-ui.js`: what you are aiming at on foot, the hold-to-scan prompt at the crosshair and the result card
 - `structures.mjs`: which species builds, its body family, culture and material, and how it is described
 - `signals.mjs`, `signals-worker.js`: which civilizations can be heard from your star, scanned in the background
-- `structures-mesh.js`: every culture's buildings, layouts for each step of the ladder, roads, launch sites, satellites and station
+- `settlements.mjs`: each civilization's settlement network across its world (capital beside the landing site, cities, towns, villages, roads)
+- `structures-mesh.js`: every culture's buildings, grown street layouts, roads laid along the ground, distant towns and night lights, colonies, launch sites, satellites and station
 - `inspect.mjs`: command-line system viewer and statistics
 - `galaxy.mjs`: spiral density field, on-demand star cells, jump targets
 - `starmap.js`: the unified full-screen star map (galaxy → neighbourhood → system → moons)

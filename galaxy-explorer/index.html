@@ -34,19 +34,12 @@
             <div class="top-right">
                 <span class="prototype">SYSTEM TEST / 002</span
                 ><button
-                    id="galaxyBtn"
-                    class="map-open"
-                    title="Star map: nearby stars (G)"
-                    aria-label="Open star map on nearby stars"
-                >
-                    ✦ <span>GALAXY</span></button
-                ><button
                     id="mapBtn"
                     class="map-open"
-                    title="System map (M)"
-                    aria-label="Open system map"
+                    title="Star map (M). G opens it on nearby stars."
+                    aria-label="Open the star map"
                 >
-                    ◉ <span>MAP</span></button
+                    ◉ <span>MAP</span><kbd>M</kbd></button
                 ><button
                     id="logBtn"
                     title="Expedition log"
@@ -77,17 +70,10 @@
                 </div>
                 <h1 id="worldName">VESPER</h1>
                 <p id="worldType">A world waiting to be explored.</p>
+                <div id="worldTally" hidden></div>
             </section>
-            <section class="mission">
-                <div class="eyebrow">
-                    EXPEDITION 01 <span id="stepCount">01 / 04</span>
-                </div>
-                <h2 id="objective">Follow the signal</h2>
-                <p id="objectiveDetail">
-                    Something is transmitting from the surface.
-                </p>
-                <div class="progress"><i id="progress"></i></div>
-            </section>
+            <!-- The next upgrade, or first steps (filled by upgrades-ui.js). -->
+            <section class="mission" id="guide" aria-live="polite"></section>
             <div id="waypoint">
                 <span class="diamond">◇</span
                 ><strong id="waypointLabel">UNKNOWN SIGNAL</strong
@@ -118,22 +104,25 @@
                 </section>
                 <section class="actions">
                     <button id="approachBtn" class="secondary">
-                        ◎ Approach signal</button
+                        ◎ Find landing site</button
                     ><button id="actionBtn" class="primary">
                         Descend to land <kbd>L</kbd>
                     </button>
                 </section>
                 <div class="control-hint" id="controlHint">
-                    <kbd>W S</kbd> thrust <kbd>A D</kbd> steer
+                    <kbd>MOUSE</kbd> steer <kbd>W S</kbd> thrust <kbd>A D</kbd> turn
                     <kbd>R F</kbd> altitude <kbd>SHIFT</kbd> boost
-                    <span>Drag to look · H controls</span>
+                    <span>Click to steer · Q look around · H controls</span>
                 </div>
             </footer>
             <div id="touchControls" aria-label="Touch movement controls">
                 <div id="joystick" class="joystick" aria-label="Movement stick: drag to fly or walk"><i></i></div>
                 <div class="touch-alt">
-                    <button data-key="KeyR" aria-label="Ascend">＋</button
-                    ><button data-key="KeyF" aria-label="Descend">−</button
+                    <button data-key="KeyR" class="fly-btn" aria-label="Ascend">＋</button
+                    ><button data-toggle="ShiftLeft" class="boost-btn" aria-label="Boost (tap to switch on or off)">»</button
+                    ><button data-key="KeyF" class="fly-btn" aria-label="Descend">−</button
+                    ><button data-key="KeyX" class="fly-btn brake-btn" aria-label="Brake (hold)">■</button
+                    ><button data-toggle="KeyQ" class="fly-btn look-btn" aria-label="Look around: drag looks instead of steering (tap to switch)">LOOK</button
                     ><button data-key="Space" class="jump-btn" aria-label="Jump">⤒</button>
                 </div>
             </div>
@@ -172,6 +161,8 @@
                 <dd>Engage / disengage cruise to the selected world</dd>
                 <dt>G</dt>
                 <dd>Star map, opened on nearby stars</dd>
+                <dt>U</dt>
+                <dd>Upgrades: what you document builds the ship</dd>
             </dl>
             <p>
                 The star map zooms from the whole galaxy down to a single
@@ -181,27 +172,32 @@
                 are at.
             </p>
             <p>
-                Climb above 600 m to enter free spaceflight. Use W/S, A/D, ↑/↓
-                and R/F to fly between planets; Shift boosts your spaceflight
-                speed. Cruise follows a short assisted route. Every solid world
+                Climb above 600 m to enter free spaceflight. Click the view and
+                the mouse steers the ship; W/S thrust, R/F climb and sink, and
+                near worlds A/D slide you sideways. Shift boosts your
+                spaceflight speed. Hold Q to look around without steering. Cruise follows a short assisted route. Every solid world
                 supports landing and walking. The star is not landable.
             </p>
             <h3>At the helm</h3>
             <dl>
+                <dt>Mouse</dt>
+                <dd>Steer: click the view, then move the mouse to turn and pitch the ship (Esc frees the cursor). On touch, drag the view.</dd>
+                <dt>Q</dt>
+                <dd>Hold to look around the ship without steering. On touch, tap LOOK.</dd>
                 <dt>W / S</dt>
                 <dd>Forward / reverse thrust</dd>
                 <dt>A / D</dt>
-                <dd>Turn left / right</dd>
+                <dd>Near worlds: slide left / right. In the air and between stars: turn.</dd>
                 <dt>R / F</dt>
                 <dd>Lift / descend with vertical thrusters</dd>
-                <dt>↑ / ↓</dt>
-                <dd>Pitch up / down while flying forward</dd>
                 <dt>Shift</dt>
-                <dd>Boost</dd>
+                <dd>Boost (on touch, tap » to switch it on and off)</dd>
                 <dt>X</dt>
-                <dd>Brake forward and vertical motion</dd>
-                <dt>Mouse</dt>
-                <dd>Click the view, then move the mouse to look around (Esc frees the cursor). On touch, drag.</dd>
+                <dd>Brake forward, sideways and vertical motion (on touch, hold ■)</dd>
+                <dt>Arrows</dt>
+                <dd>Turn and pitch from the keyboard, no mouse needed</dd>
+                <dt></dt>
+                <dd><label><input type="checkbox" id="invertPitch" /> Invert mouse pitch (mouse up = nose down)</label></dd>
                 <dt>L</dt>
                 <dd>Land / take off</dd>
             </dl>
@@ -215,16 +211,16 @@
                 <dd>Jump (higher on low-gravity worlds)</dd>
                 <dt>E</dt>
                 <dd>Investigate / board ship</dd>
-                <dt>Walk near</dt>
-                <dd>Catalogue a plant species</dd>
+                <dt>E</dt>
+                <dd>Aim at a plant, animal or rock and hold E until the ring fills to scan it. On something already scanned, press E to see what you recorded. Scans count toward upgrades (U).</dd>
                 <dt>Shift</dt>
                 <dd>Walk faster</dd>
             </dl>
             <p>
                 Land below 32 m and under 18 m/s forward speed. Landing deploys
                 the gear and gently settles the ship; takeoff charges the lift
-                engines and rises clear of the ground. “Approach signal” takes
-                you to a safe landing area. Manual input cancels the approach.
+                engines and rises clear of the ground. “Find landing site” flies
+                you down to a flat, safe landing pad. Manual input cancels it.
                 Your discovery is saved on this browser; your flight position
                 resets on reload.
             </p>

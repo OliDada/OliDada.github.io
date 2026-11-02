@@ -154,8 +154,12 @@ export function cruisePoint(start, departure, end, t) {
   const ease = x => x * x * (3 - 2 * x);
   if (t < .22) { const u = ease(Math.max(0, t / .22)); return start.map((v, i) => v + (departure[i] - v) * u); }
   const u = ease(Math.min(1, (t - .22) / .78));
-  // Travel above the orbital plane, avoiding the star and intervening planets.
-  const control = [(departure[0] + end[0]) / 2, Math.max(departure[1], end[1]) + 5000, (departure[2] + end[2]) / 2];
+  // Travel above the orbital plane, avoiding the star and intervening planets. Short
+  // hops (a moon and its planet) take a low arc instead: climbing 5 km to cross a
+  // few hundred metres meant flying straight up and straight down.
+  const d = Math.hypot(end[0] - departure[0], end[2] - departure[2]);
+  const lift = d < 1500 ? 300 + d * .35 : 5000;
+  const control = [(departure[0] + end[0]) / 2, Math.max(departure[1], end[1]) + lift, (departure[2] + end[2]) / 2];
   return departure.map((v, i) => (1 - u) * (1 - u) * v + 2 * (1 - u) * u * control[i] + u * u * end[i]);
 }
 

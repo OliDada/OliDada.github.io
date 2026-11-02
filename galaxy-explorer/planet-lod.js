@@ -7,16 +7,103 @@
 import { buildChunk, chunkIndices, faceDirection } from './chunk-build.mjs';
 import { terrainFor } from './terrain.mjs';
 
+// Close-up surface detail, drawn in the ground's shader so it costs no triangles:
+// cracks and grain on rock, speckled grass, fine sand, pitted crust, ice veins.
+// It shades the colour and tilts the lighting (a bump), using noise on the
+// world position. Each noise layer fades out once it is smaller than a pixel, and
+// the whole effect fades out gently far away (40-90 m; 25-50 m on phones). It is
+// balanced to leave the ground's average colour unchanged, so there is no visible
+// edge where it ends. 'lite' (phones) uses fewer noise layers. Runs after addMorph.
+const STYLE = { rocky: [1, 0, 0, 0], volcanic: [.8, 0, 0, 1], sand: [0, 1, 0, 0], ice: [0, 0, 1, 0], toxic: [.3, 0, 0, 1], soft: [0, 0, 0, 0] };
+// objects: for rocks and formations (instanced meshes, no per-vertex cover): drawn as bare rock.
+export function addSurfaceDetail(material, { ground, airless, lite = false, objects = false }) { addDetail(material, ground, airless, lite, objects); }
+function addDetail(material, ground, airless, lite, objects = false) {
+  const style = STYLE[ground] || (airless ? STYLE.rocky : STYLE.soft);
+  const before = material.onBeforeCompile, key = material.customProgramCacheKey;
+  material.onBeforeCompile = (shader, renderer) => {
+    before(shader, renderer);
+    shader.uniforms.uStyle = { value: style };
+    shader.vertexShader = (objects ? '' : 'attribute vec3 cover;\n') + 'varying vec3 vCover; varying vec3 vDetailPos;\n' + shader.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
+      vCover = ${objects ? 'vec3(0.0, 1.0, 0.0)' : 'cover'};
+      #ifdef USE_INSTANCING
+        vDetailPos = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+      #else
+        vDetailPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+      #endif`);
+    shader.fragmentShader = `uniform vec4 uStyle; varying vec3 vCover; varying vec3 vDetailPos;
+      float dHash(vec3 p) { p = fract(p * .3183099 + .1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+      float dNoise(vec3 x) {
+        vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(mix(dHash(i), dHash(i + vec3(1, 0, 0)), f.x), mix(dHash(i + vec3(0, 1, 0)), dHash(i + vec3(1, 1, 0)), f.x), f.y),
+                   mix(mix(dHash(i + vec3(0, 0, 1)), dHash(i + vec3(1, 0, 1)), f.x), mix(dHash(i + vec3(0, 1, 1)), dHash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+      }
+` + shader.fragmentShader
+      .replace('#include <color_fragment>', `#include <color_fragment>
+      float detailK = 1.0 - smoothstep(${lite ? '25.0, 50.0' : '40.0, 90.0'}, length(vViewPosition));
+      float detailH = 0.0;
+      if (detailK > 0.0) {
+        vec3 P = vDetailPos;
+        // Each layer fades out once its features get smaller than a pixel, so nothing shimmers.
+        float px = length(fwidth(P));
+        float w2 = 1.0 - smoothstep(.2, .45, 17.0 * px), w3 = 1.0 - smoothstep(.2, .45, 41.0 * px);
+        float grass = vCover.x * (1.0 - vCover.z), snow = vCover.z;
+        float rock = clamp(max(vCover.y, uStyle.x) * (1.0 - snow) * (1.0 - grass), 0.0, 1.0);
+        float sand = uStyle.y * (1.0 - grass) * (1.0 - snow), ice = max(uStyle.z * (1.0 - grass), snow * .5);
+        float crust = uStyle.w * (1.0 - grass) * (1.0 - snow);
+        float n1 = dNoise(P * 6.0), n2 = mix(.5, dNoise(P * 17.0), w2);
+        float n3 = ${lite ? '.5' : 'mix(.5, dNoise(P * 41.0), w3)'};
+        float crack = 0.0, crackAvg = 0.0; // crackAvg: its average, subtracted so the cracks don't darken the ground overall
+        ${lite ? '' : `if (rock + ice + crust > .05) { // a network of cracks: edges between random cells, about a metre across
+          vec3 C = P / 1.15 + (vec3(dNoise(P * .9), dNoise(P * .9 + 5.0), dNoise(P * .9 + 9.0)) - .5) * .6;
+          vec3 ci = floor(C); float f1 = 9.0, f2 = 9.0;
+          for (int x = -1; x <= 1; x++) for (int y = -1; y <= 1; y++) for (int z = -1; z <= 1; z++) {
+            vec3 c = ci + vec3(x, y, z), o = c + vec3(dHash(c), dHash(c + 3.1), dHash(c + 7.7));
+            float d = length(C - o);
+            if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) f2 = d;
+          }
+          float width = .035 + 1.2 * px; // never thinner than about a pixel
+          float crackFade = 1.0 - smoothstep(.3, .6, 1.15 * px * 8.0);
+          crack = (1.0 - smoothstep(0.0, width, f2 - f1)) * smoothstep(.35, .55, dNoise(P * .4 + 2.0)) * crackFade;
+          crackAvg = .04 * width / .035 * crackFade;
+        }`}
+        float w1 = 1.0 - smoothstep(.2, .45, 6.0 * px), pits = smoothstep(.74, .88, n1) * w1;
+        float f = 1.0
+          + grass * ((n1 - .5) * .2 + (n2 - .5) * .16 + (n3 - .5) * .1)
+          + rock * ((n1 - .5) * .1 + (n2 - .5) * .16 + (n3 - .5) * .1 - (crack - crackAvg) * .45)
+          + sand * ((n2 - .5) * .08 + (n3 - .5) * .1)
+          + ice * ((n1 - .5) * .05 + (crack - crackAvg) * .18)
+          + crust * (-(pits - .051 * w1) * .14 + (n3 - .5) * .08 - (crack - crackAvg) * .25);
+        diffuseColor.rgb *= mix(1.0, f, detailK);
+        detailH = (grass * (n1 * .3 + n2 * .4 + n3 * .3) * .02 + rock * (n1 * .3 + n2 * .15 + n3 * .06 - crack * .25) * .06
+                + sand * (n2 * .5 + n3 * .5) * .008 + ice * (n1 * .02 - crack * .015) + crust * (-pits * .015 + n2 * .015 - crack * .02)) * detailK;
+      }`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+      if (detailK > 0.0) { // bump: tilt the normal by the slope of detailH across the pixel
+        vec3 dpx = dFdx(-vViewPosition), dpy = dFdy(-vViewPosition);
+        float hx = dFdx(detailH), hy = dFdy(detailH);
+        vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx);
+        float det = dot(dpx, r1);
+        normal = normalize(abs(det) * normal - sign(det) * (hx * r1 + hy * r2) * 2.5);
+      }`);
+  };
+  material.customProgramCacheKey = () => (objects ? 'objects' : key()) + '-detail-' + style.join(',') + (lite ? '-lite' : '');
+}
+
 const SPLIT = 1.8;
-const MORPH_START = .7;   // a tile starts blending toward its parent's shape at 70% of the parent's split distance
+const MORPH_START = .7;
+const FADE_IN = .7;       // seconds for a newly shown tile to ease from its parent's shape into its own
+const JUMP = 8;           // metres: a camera move bigger than this in one frame is a jump (e.g. stepping out of the ship)   // a tile starts blending toward its parent's shape at 70% of the parent's split distance
 
 // Vertex-shader blend between a tile's own shape (near) and its parent's (far).
-function addMorph(material, withColor) {
+// lodCam: { value: Vector3 }, the camera position detail is measured from (world
+// space); it eases after a sudden camera jump (see update()) so detail never pops.
+function addMorph(material, withColor, lodCam) {
   material.onBeforeCompile = (shader) => {
-    shader.vertexShader = 'attribute vec3 lodDelta;\nattribute vec2 lodRange;\n' + (withColor ? 'attribute vec3 lodColor;\n' : '') +
+    shader.uniforms.uLodCam = lodCam;
+    shader.vertexShader = 'uniform vec3 uLodCam;\nattribute vec3 lodDelta;\nattribute vec2 lodRange;\n' + (withColor ? 'attribute vec3 lodColor;\n' : '') +
       shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
         vec4 lodWorld = modelMatrix * vec4(position, 1.0);
-        float lodK = clamp((distance(lodWorld.xyz, cameraPosition) - lodRange.x) / max(lodRange.y - lodRange.x, 1e-3), 0.0, 1.0);
+        float lodK = clamp((distance(lodWorld.xyz, uLodCam) - lodRange.x) / max(lodRange.y - lodRange.x, 1e-3), 0.0, 1.0);
         transformed += lodDelta * lodK;` + (withColor ? `
         #ifdef USE_COLOR
           vColor.rgb += lodColor * lodK;
@@ -79,7 +166,7 @@ export function createTerrainStreamer({ maxWorkers = 3 } = {}) {
   };
 }
 
-export function createPlanet(THREE, streamer, body, { segments = 20 } = {}) {
+export function createPlanet(THREE, streamer, body, { segments = 20, lite = false } = {}) {
   const terrain = terrainFor(body), R = body.radius;
   const group = new THREE.Group();
   // Faceted ground; skirts use smooth shading with the ground's own normals so they
@@ -87,15 +174,18 @@ export function createPlanet(THREE, streamer, body, { segments = 20 } = {}) {
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
   const skirtMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
   const lava = terrain.liquid === 'lava', wet = lava || terrain.liquid === 'water';
-  const liquidColor = new THREE.Color(...terrain.waterColor);
+  const liquidColor = new THREE.Color().setRGB(...terrain.waterColor, THREE.SRGBColorSpace);
   const waterMaterial = wet ? new THREE.MeshStandardMaterial(lava
     ? { color: new THREE.Color('#4a1606'), emissive: liquidColor, emissiveIntensity: .75, roughness: .8 }
     : { color: liquidColor, transparent: true, opacity: .84, roughness: .16, metalness: .08 }) : null;
-  addMorph(material, true);
-  addMorph(skirtMaterial, true);
+  const lodCam = { value: new THREE.Vector3(1e9, 0, 0) };
+  addMorph(material, true, lodCam);
+  addDetail(material, terrain.ground, terrain.airless, lite);
+  addMorph(skirtMaterial, true, lodCam);
   const gridIndexCount = segments * segments * 6;
-  if (waterMaterial) addMorph(waterMaterial, false);
+  if (waterMaterial) addMorph(waterMaterial, false, lodCam);
   const { indices } = chunkIndices(segments);
+  const waterIndices = indices.subarray(0, gridIndexCount);
   const maxLevel = Math.max(2, Math.ceil(Math.log2(R * Math.PI / 2 / segments / FINEST)));
   const mountain = Math.acos(R / (R + Math.max(5, terrain.maxH)));
   const planet = { body, key: `${body.id}:${body.seed}`, group, terrain, attach, update, dispose, maxLevel };
@@ -112,13 +202,16 @@ export function createPlanet(THREE, streamer, body, { segments = 20 } = {}) {
     const g = new THREE.BufferGeometry(), n = positions.length / 3;
     g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     g.setAttribute('normal', new THREE.BufferAttribute(withColor ? data.normals : data.waterNormals, 3));
-    if (withColor) { g.setAttribute('color', new THREE.BufferAttribute(data.colors, 3)); g.setAttribute('lodColor', new THREE.BufferAttribute(data.lodColor, 3)); }
+    if (withColor) { g.setAttribute('color', new THREE.BufferAttribute(data.colors, 3)); g.setAttribute('cover', new THREE.BufferAttribute(data.cover, 3)); g.setAttribute('lodColor', new THREE.BufferAttribute(data.lodColor, 3)); }
     g.setAttribute('lodDelta', new THREE.BufferAttribute(withColor ? data.lodDelta : data.waterDelta, 3));
     // Fully blended to the parent's shape by the distance at which the parent would replace this tile.
-    const end = node.level ? SPLIT * node.arc * 2 * .95 : 1e9, range = new Float32Array(n * 2);
+    const end = node.lodEnd = node.level ? SPLIT * node.arc * 2 * .95 : 1e9, range = new Float32Array(n * 2);
     for (let i = 0; i < n; i++) { range[i * 2] = end * MORPH_START; range[i * 2 + 1] = end; }
     g.setAttribute('lodRange', new THREE.BufferAttribute(range, 2));
-    g.setIndex(new THREE.BufferAttribute(indices, 1)); // own attribute object: disposing one tile must not free another's buffer
+    // Own attribute object: disposing one tile must not free another's buffer. Water
+    // leaves out the skirts: being see-through, skirts overlapping the next tile's
+    // water drew darker lines along every tile edge (a grid of rectangles on the sea).
+    g.setIndex(new THREE.BufferAttribute(withColor ? indices : waterIndices, 1));
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), data.radius);
     if (withColor) { g.addGroup(0, gridIndexCount, 0); g.addGroup(gridIndexCount, indices.length - gridIndexCount, 1); }
     return g;
@@ -135,7 +228,33 @@ export function createPlanet(THREE, streamer, body, { segments = 20 } = {}) {
     }
     node.state = 'ready';
   }
-  function show(node, on) { if (node.mesh) node.mesh.visible = on; if (node.water) node.water.visible = on; }
+  // A tile shown for the first time starts out looking exactly like its parent and
+  // eases into its own detail over FADE_IN seconds, so new detail never pops in
+  // (it does this by sliding its blend range in from zero; see fadeTiles()).
+  const fading = new Set();
+  function show(node, on) {
+    if (on && node.level && node.fade === undefined && node.mesh) { node.fade = 0; setRange(node, 0); fading.add(node); }
+    if (node.mesh) node.mesh.visible = on; if (node.water) node.water.visible = on;
+  }
+  function setRange(node, u) {
+    for (const m of [node.mesh, node.water]) {
+      if (!m) continue;
+      const a = m.geometry.attributes.lodRange, arr = a.array, end = Math.max(node.lodEnd * u, 1e-3), start = node.lodEnd * MORPH_START * u;
+      for (let i = 0; i < arr.length; i += 2) { arr[i] = start; arr[i + 1] = end; }
+      a.needsUpdate = true;
+    }
+  }
+  let lastFade = performance.now();
+  function fadeTiles() {
+    const now = performance.now(), dt = Math.min(.1, (now - lastFade) / 1000); lastFade = now;
+    for (const node of fading) {
+      if (node.disposed) { fading.delete(node); continue; }
+      node.fade = Math.min(1, node.fade + dt / FADE_IN);
+      const u = node.fade * node.fade * (3 - 2 * node.fade);
+      setRange(node, u);
+      if (node.fade >= 1) fading.delete(node);
+    }
+  }
   function hideTree(node) { show(node, false); if (node.children) for (const c of node.children) hideTree(c); }
   function disposeTree(node) {
     node.disposed = true;
@@ -149,8 +268,24 @@ export function createPlanet(THREE, streamer, body, { segments = 20 } = {}) {
   const roots = [0, 1, 2, 3, 4, 5].map(f => makeNode(f, 0, -1, -1, 2));
   for (const r of roots) attach(r, buildChunk(body, r.spec));
 
+  // Detail follows the camera, but after a sudden jump (stepping out of the ship,
+  // arriving at a world) it eases over from where the camera was, so the ground
+  // refines smoothly instead of snapping to a new level of detail.
+  const lagOffset = new THREE.Vector3(), lastCam = new THREE.Vector3(), lagged = new THREE.Vector3();
+  let lastLag = 0, seen = false;
   // cam: camera position relative to the planet centre (THREE.Vector3).
-  function update(cam) {
+  // instant: skip the easing after a jump (tests, or when a hard cut is wanted).
+  function update(realCam, { instant = false } = {}) {
+    const now = performance.now(), dt = Math.min(.1, (now - lastLag) / 1000); lastLag = now;
+    if (!seen) { lastCam.copy(realCam); seen = true; }
+    if (realCam.distanceTo(lastCam) > JUMP) lagOffset.add(lastCam).sub(realCam);
+    lagOffset.multiplyScalar(instant ? 0 : Math.exp(-dt / .35));
+    if (lagOffset.lengthSq() < 1e-4) lagOffset.set(0, 0, 0);
+    lastCam.copy(realCam);
+    const cam = lagged.copy(realCam).add(lagOffset);
+    group.updateWorldMatrix(true, false);
+    lodCam.value.copy(cam).applyMatrix4(group.matrixWorld);
+    fadeTiles();
     const D = cam.length();
     const horizon = D > R ? Math.acos(Math.min(1, R / D)) : Math.PI;
     const visit = (node) => {

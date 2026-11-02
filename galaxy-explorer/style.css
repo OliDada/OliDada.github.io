@@ -88,3 +88,180 @@ input,textarea{-webkit-user-select:text;user-select:text}
 #touchControls,#touchControls *,.joystick,.joystick *,#world,#hud button{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 
 .map-course{width:100%;margin-top:8px}
+
+/* Upgrades (upgrades-ui.js): one list per branch, a sheet on phones */
+#upgradesBtn{position:relative}#upgradesBtn.has-ready{border-color:var(--mint);color:var(--mint)}
+.up-badge:not([hidden]){position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;border-radius:8px;background:var(--mint);color:#152921;font:700 9px/16px 'DM Sans',sans-serif;font-style:normal;text-align:center;padding:0 4px}
+#upgrades{width:min(760px,94vw);max-width:none;padding:28px 30px 24px;max-height:90vh;display:none;flex-direction:column}#upgrades[open]{display:flex}
+#upgrades .close{position:absolute;top:16px;right:18px;z-index:1}#upgrades h2{margin:12px 0 6px}.up-summary{margin:0 0 14px}
+@media(max-width:700px),(pointer:coarse){
+ #upgrades{width:100vw;max-width:100vw;max-height:88vh;margin:auto 0 0;border-radius:14px 14px 0 0;padding:20px 16px 14px;border-bottom:0}
+ #upgrades h2{font-size:22px;margin:8px 0 4px}.up-summary{font-size:10px!important;line-height:1.5!important}
+}
+
+/* Scanning (scanning.js, scan-ui.js): the ◎ marker and the card */
+.scan-marker{position:fixed;left:0;top:0;z-index:2;pointer-events:none;opacity:0;transition:opacity .2s;display:flex;flex-direction:column;align-items:center;margin-left:-60px;width:120px;margin-top:-26px}
+.scan-marker.visible{opacity:1}
+.scan-ring{width:52px;height:52px;border-radius:50%;border:1.5px solid #c9f4ccaa;box-shadow:0 0 14px #c9f4cc44,inset 0 0 10px #c9f4cc22;position:relative;animation:scanPulse 1.6s ease-in-out infinite}
+.scan-ring::after{content:'';position:absolute;inset:-1.5px;border-radius:50%;background:conic-gradient(var(--mint) var(--p,0%),transparent 0);-webkit-mask:radial-gradient(circle,transparent 22px,#000 23px);mask:radial-gradient(circle,transparent 22px,#000 23px)}
+.scan-ring::before{content:'';position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:var(--mint);box-shadow:0 0 8px var(--mint)}
+.scanning .scan-ring{animation:none;border-color:#c9f4cc55}
+.scan-marker.done .scan-ring{animation:scanDone .6s ease-out}
+.scan-label{margin-top:8px;font-size:9px;font-weight:600;letter-spacing:2px;color:#e3f3cd;text-shadow:0 1px 6px #000;white-space:nowrap}
+.scan-marker kbd{margin:5px 0 0;color:#152921;background:var(--mint);border:0;font-weight:700;letter-spacing:1px;font-size:9px;padding:3px 6px}
+.scanning kbd{background:none;color:var(--mint)}
+@keyframes scanPulse{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.08);opacity:1}}
+@keyframes scanDone{0%{transform:scale(1);box-shadow:0 0 0 0 #c9f4cc}100%{transform:scale(1.9);opacity:0;box-shadow:0 0 0 18px #c9f4cc00}}
+.scan-card{position:absolute;left:36px;bottom:150px;width:340px;max-height:calc(100vh - 340px);overflow:auto;z-index:2;pointer-events:auto;background:#0b1a21ee;backdrop-filter:blur(18px);border:1px solid #c9f4cc40;border-radius:10px;padding:18px 20px 16px;box-shadow:0 20px 60px #0008;opacity:0;transform:translateY(10px);transition:opacity .25s,transform .25s}
+.scan-card.in{opacity:1;transform:none}.scan-card[hidden]{display:none}
+.scan-close{position:absolute;top:8px;right:8px;border:0;background:none;font-size:20px;line-height:1;padding:4px 8px;color:var(--muted)}
+.scan-eyebrow{font-size:9px;font-weight:600;letter-spacing:2px;color:var(--mint);padding-right:24px}
+.scan-card h3{font:500 24px 'Space Grotesk',sans-serif;letter-spacing:-.5px;margin:8px 0 0;color:var(--ink)}
+.scan-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.scan-tags span{font-size:9px;letter-spacing:1px;text-transform:uppercase;border:1px solid #c9f4cc55;color:var(--mint);border-radius:10px;padding:2px 8px}
+.scan-tags .tone-warn{border-color:#ff9a7a88;color:#ffb39a}.scan-tags .tone-gold{border-color:#e8c98f88;color:#f0d49a}
+.scan-lede{font-size:13px;line-height:1.55;color:#c9dad4;margin:10px 0 12px}
+.scan-card dl{display:grid;grid-template-columns:80px 1fr;gap:6px 12px;margin:0;font-size:11px;border-top:1px solid var(--line);padding-top:12px}
+.scan-card dt{color:var(--muted);letter-spacing:.5px}.scan-card dd{margin:0;color:#dce9e4}
+.scan-foot{margin-top:14px;padding-top:10px;border-top:1px solid var(--line);font-size:11px;color:#aabdba}
+.scan-foot::before{content:'◆ ';color:var(--mint)}
+.scan-foot.ready{color:var(--mint);font-weight:600}
+/* The next-upgrade guide (upgrades-ui.js) in place of the old expedition objective */
+#guide h2{margin:12px 0 6px}
+#guide.ready{border-top-color:var(--mint)}#guide.ready h2{color:var(--mint)}
+.guide-needs{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:6px}
+.guide-needs li{display:flex;justify-content:space-between;gap:10px;font-size:11px;color:#c9dad4;line-height:1.4}
+.guide-needs li span::before{content:'○ ';color:#c9f4cc99}.guide-needs li.done{color:var(--muted)}.guide-needs li.done span::before{content:'● ';color:var(--mint)}
+.guide-needs b{font-weight:500;white-space:nowrap;color:var(--mint)}
+.guide-tip{display:block;margin-top:8px;font-size:10px;line-height:1.5;color:#9fc4b6}
+.guide-btn{margin-top:14px;padding:10px 14px;font-size:12px}
+@media(pointer:coarse),(max-width:700px){
+ .scan-card{left:12px;right:12px;width:auto;top:132px;bottom:auto;max-height:calc(100vh - 330px);padding:14px 16px 12px}
+ .scan-card h3{font-size:19px}.scan-lede{font-size:12px;margin:8px 0 10px}.scan-card dl{grid-template-columns:70px 1fr;font-size:10px;gap:4px 10px}
+ #guide .guide-needs{display:grid;margin-top:4px}#guide .guide-needs li{font-size:9px}#guide .guide-needs li.done,#guide .guide-needs li:not(.done)~li{display:none}
+ #guide .guide-tip{display:none}#guide.first p{display:block;font-size:10px;line-height:1.5;margin-top:4px;color:#c9dad4}#guide .guide-btn{margin-top:6px;padding:7px 10px;font-size:10px}
+}
+
+/* The scan prompt around the crosshair (scan-ui.js) */
+.scan-prompt{position:fixed;left:50%;top:50%;width:0;height:0;z-index:2;pointer-events:none;opacity:0;transition:opacity .15s}
+.scan-prompt.visible{opacity:1}
+.scan-prompt .scan-ring{position:absolute;left:-30px;top:-30px;width:60px;height:60px;margin:0}
+.scan-prompt.known .scan-ring{animation:none;border-color:#c9f4cc55;border-style:dashed;box-shadow:none}
+.scan-prompt.known .scan-ring::before{display:none}
+.scan-prompt.done .scan-ring{animation:scanDone .6s ease-out}
+.scan-prompt .scan-ring::after{-webkit-mask:radial-gradient(circle,transparent 26px,#000 27px);mask:radial-gradient(circle,transparent 26px,#000 27px)}
+.scan-text{position:absolute;top:-21px;left:44px;text-align:left;white-space:nowrap}
+.scan-text strong{display:block;font:500 16px 'Space Grotesk',sans-serif;color:#eef7ef;text-shadow:0 1px 8px #000,0 0 2px #000}
+.scan-text span{display:block;margin-top:6px;font-size:10px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:var(--mint);text-shadow:0 1px 6px #000}
+.scan-text kbd{color:#152921;background:var(--mint);border:0;font-weight:700;margin:0 4px;text-shadow:none}
+.scan-prompt.known strong{color:#cfe6dc}
+/* What is left to record on this world: a row per kind */
+#worldTally{margin-top:14px;display:grid;gap:8px;width:210px}#worldTally[hidden]{display:none}
+.tally-row{display:grid;grid-template-columns:1fr auto;gap:5px 10px;align-items:baseline;font-size:11px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:#c9dad4}
+.tally-row b{font-weight:500;font-size:13px;letter-spacing:0;color:var(--ink)}
+.tally-row i{grid-column:1/-1;height:2px;background:#bed5ce25;position:relative;overflow:hidden}
+.tally-row i::after{content:'';position:absolute;inset:0;background:var(--mint);transform:scaleX(var(--f,0));transform-origin:left;transition:transform .5s}
+.tally-row.done span,.tally-row.done b{color:var(--mint)}
+/* Hold-to-install (upgrades-ui.js) */
+.hold{position:relative;overflow:hidden;-webkit-user-select:none;user-select:none;touch-action:none;-webkit-touch-callout:none}
+.hold span{position:relative;z-index:1}
+.hold::before{content:'';position:absolute;inset:0;background:#86d892;transform:scaleX(var(--fill,0));transform-origin:left}
+.hold.holding{box-shadow:0 0 0 3px #c9f4cc44}
+.hold.done{animation:installPulse .7s ease-out}
+@keyframes installPulse{0%{box-shadow:0 0 0 0 #c9f4cc}100%{box-shadow:0 0 0 22px #c9f4cc00}}
+/* Messages sit at the top, clear of the crosshair, the waypoint and the controls */
+#toast{top:92px;bottom:auto}
+@media(pointer:coarse),(max-width:700px){
+ #toast{top:176px}
+ .scan-card{top:200px}
+ .location #worldTally{position:fixed;right:14px;top:58px;width:132px;gap:5px;margin:0}
+ .tally-row{font-size:8px;letter-spacing:1px}.tally-row b{font-size:10px}
+ .scan-text strong{font-size:14px}.scan-text span{font-size:9px}
+ .scan-text{top:auto;bottom:40px;left:0;transform:translateX(-50%);text-align:center}
+}
+
+/* No centre dot in the scan ring: the crosshair is already there */
+.scan-prompt .scan-ring::before{display:none}
+
+/* Top bar: icon, label and key centred in each button; keys hidden on touch */
+.top-right button{display:inline-flex;align-items:center;justify-content:center;line-height:1}
+.top-right button[hidden]{display:none}
+.top-right .map-open{gap:7px}
+.top-right .map-open span{margin:0 -1px 0 0}
+.top-right .map-open kbd{margin:0;font-size:9px;padding:2px 4px;line-height:1;opacity:.7}
+@media(pointer:coarse),(max-width:700px){.top-right .map-open kbd{display:none}.top-right .map-open{gap:0}}
+
+/* The upgrade line (upgrades-ui.js): a picture of the line, and a card for the chosen upgrade */
+#upgrades{width:min(940px,95vw)}
+.up-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.95fr);gap:24px;overflow-y:auto;min-height:0;margin-top:12px;padding:4px 2px 8px}
+.up-tree{grid-column:1;grid-row:1}
+.up-detail{grid-column:2;grid-row:1;position:sticky;top:0;align-self:start;background:#0a171ecc;border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+.up-chapter{display:flex;flex-direction:column;align-items:flex-start;padding-left:42%;margin:16px 0 6px}
+.up-chapter:first-child{margin-top:2px}
+.up-chapter span{display:inline-flex;align-items:center;gap:8px;padding:6px 14px 6px 10px;border-radius:16px;border:1px solid #c9f4cc40;background:#0d1d24;font:500 15px 'Space Grotesk',sans-serif;color:var(--ink)}
+.up-chapter span .up-icon{width:18px;height:18px}
+.up-chapter small{font-size:10px;color:var(--muted);margin-top:5px;max-width:280px;line-height:1.5}
+.up-chapter.far{opacity:.5}
+.up-row{display:grid;grid-template-columns:42% 1fr;align-items:center;position:relative;min-height:60px}
+.up-row::before{content:'';position:absolute;left:calc(42% + 21px);top:0;bottom:0;width:2px;background:#ffffff1c}
+.up-row.lit::before{background:var(--mint)}
+.up-sides{display:flex;flex-direction:column;align-items:flex-end;gap:2px;padding-right:20px;position:relative;align-self:stretch;justify-content:center}
+.up-sides:not(:empty)::after{content:'';position:absolute;right:0;top:50%;width:20px;border-top:1px dashed #ffffff40}
+.up-node{display:flex;align-items:center;gap:12px;background:none!important;border:0;padding:6px 0;text-align:left;color:inherit;backdrop-filter:none;border-radius:0}
+.up-node.side{flex-direction:row-reverse;text-align:right;gap:9px;padding:3px 0}
+.up-dot{width:44px;height:44px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;z-index:1;background:#0b1820;border:1px dashed #ffffff45;color:#ffffff70;transition:transform .15s}
+.up-node:hover .up-dot{transform:scale(1.06)}
+.up-node.side .up-dot{width:32px;height:32px}
+.up-icon{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.up-node.side .up-icon{width:16px;height:16px}
+.installed .up-dot,.up-dot.installed{background:#173327;border:1px solid var(--mint);color:var(--mint)}
+.researching .up-dot,.up-dot.researching{background:#33291a;border:2px solid #e8c98f;color:#f0d49a}
+.ready .up-dot,.up-dot.ready{background:#173327;border:2px solid var(--mint);color:var(--mint);animation:readyPulse 1.6s ease-in-out infinite}
+.available .up-dot,.up-dot.available{background:#221f36;border:1px solid #b6a6f0aa;color:#cfc4fa}
+@keyframes readyPulse{0%,100%{box-shadow:0 0 0 0 #c9f4cc66}50%{box-shadow:0 0 0 7px #c9f4cc00}}
+.up-node.selected .up-dot{outline:2px solid #ffffffcc;outline-offset:3px}
+.up-text strong{display:block;font-size:13px;font-weight:500;color:var(--ink)}
+.up-text small{display:block;font-size:10px;color:var(--muted);margin-top:2px}
+.up-node.side .up-text strong{font-size:11.5px}
+.up-node.locked .up-text strong{color:#ffffff80}
+.up-node.researching .up-text small{color:#f0d49a}.up-node.ready .up-text small{color:var(--mint)}
+.up-card-head{display:flex;gap:12px;align-items:center}
+.up-dot.big{width:52px;height:52px}.up-dot.big .up-icon{width:26px;height:26px}
+.up-card-head .eyebrow{font-size:9px;letter-spacing:1.6px}
+.up-card-head h3{margin:4px 0 0;font:500 22px 'Space Grotesk',sans-serif;color:var(--ink)}
+.up-effect{margin:12px 0 0!important;color:#c9dad4!important;font-size:13px!important}
+.up-status{margin:4px 0 0!important;font-size:10.5px!important;color:#e8c98f!important;line-height:1.5!important}
+.up-state{margin:10px 0 0!important;font-size:11.5px!important;color:#c9dad4!important}
+.up-state.researching{color:#f0d49a!important}.up-state.ready,.up-state.installed{color:var(--mint)!important}
+.up-tasks{list-style:none;padding:12px 0 0;margin:12px 0 0;display:grid;gap:12px;border-top:1px solid var(--line)}
+.up-tasks li{display:grid;grid-template-columns:16px 1fr auto;gap:10px;align-items:start;font-size:13px;color:var(--ink)}
+.up-tasks li.done .up-label{color:var(--muted)}
+.up-tasks small{display:block;font-size:10.5px;color:var(--muted);margin-top:3px;line-height:1.5}
+.up-tasks b{font-weight:500;font-size:12px;color:#c9dad4;white-space:nowrap}
+.up-check{width:14px;height:14px;border:1px solid #c9f4cc66;border-radius:3px;font-size:10px;line-height:13px;text-align:center;color:#152921;margin-top:2px}
+.up-tasks li.done .up-check{background:var(--mint);border-color:var(--mint)}
+.up-hint{display:block;font-size:10.5px;color:#9fc4b6!important;margin-top:4px;line-height:1.5}
+.up-place{display:flex;align-items:center;gap:10px;margin-top:5px;flex-wrap:wrap}
+.up-place small{color:var(--mint)!important;margin:0!important;font-size:11px!important}
+.up-place button{padding:5px 10px;font-size:10.5px;border-radius:5px}
+.up-actions{margin-top:16px;display:flex;gap:8px}.up-actions button{padding:11px 16px;font-size:12px}
+.guide-side{margin-top:10px;font-size:10px;color:#cfc4fa;letter-spacing:.3px}
+@media(max-width:760px){
+ .up-layout{grid-template-columns:minmax(0,1fr);gap:14px}
+ .up-tree,.up-detail{grid-column:1;grid-row:auto}
+ .up-detail{position:static;padding:14px}
+ .up-row{grid-template-columns:38% 1fr}.up-row::before{left:calc(38% + 21px)}
+ .up-chapter{padding-left:38%}
+ .up-sides{padding-right:14px}.up-sides:not(:empty)::after{width:14px}
+ .up-node.side .up-text small{display:none}
+ .up-text strong{font-size:12px}
+ .up-card-head h3{font-size:19px}
+ .guide-side{display:none}
+}
+
+/* Touch flight buttons: two columns (lift/boost, sink/brake, look/jump).
+   Boost and Look are toggles; walking keeps only boost (run) and jump. */
+.touch-alt{grid-template-columns:repeat(2,auto)}
+.touch-alt button.on{background:var(--mint);color:#152921;border-color:var(--mint)}
+.touch-alt .look-btn{font-size:10px!important;letter-spacing:1px;font-weight:600}
+body.walking .touch-alt .fly-btn{display:none}

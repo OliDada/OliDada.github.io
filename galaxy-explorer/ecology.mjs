@@ -11,6 +11,7 @@
 //   sight      how far it notices prey or danger (m), from perception.
 //   stamina    how long it will chase (s): metabolism and aggression.
 //   defends    big or aggressive grazers face a hunter down instead of running.
+//   stalksYou  big, aggressive hunters (never intelligent ones) stalk you on foot and lunge.
 //
 // Draws come from their own key path, so no existing trait or world changes.
 import { rng } from './rng.mjs';
@@ -52,6 +53,8 @@ export function ecologyFor(species, body, e) {
       sight: 10 + t.perception * 30,
       stamina: 3 + t.metabolism * 5 + t.aggression * 3,
       defends: t.diet === 'herbivore' && s.size > .8 && (t.aggression > .3 || s.horns >= 2),
+      // Big, bold hunters without a mind for culture see an explorer on foot as prey.
+      stalksYou: t.diet === 'carnivore' && t.aggression > .6 && !s.civilization && s.plan !== 'floater' && s.size > (flying ? 1.3 : 1.1),
     };
   }
   for (const s of species) for (const id of out[s.id].prey) out[id].predators.push(s.id);
@@ -78,5 +81,6 @@ export function describeEcology(s, eco, species) {
   const when = { diurnal: 'Active by day.', nocturnal: 'Active by night.', crepuscular: 'Active at dawn and dusk.', any: '' }[eco.activity];
   const hunts = eco.prey.length ? ` Hunts the ${list(eco.prey)}.` : '';
   const hunted = eco.predators.length ? ` Hunted by the ${list(eco.predators)}${eco.defends ? ', but stands its ground' : ''}.` : '';
-  return `${when}${hunts}${hunted}`.trim();
+  const danger = eco.stalksYou ? ' Dangerous: it stalks explorers on foot.' : '';
+  return `${when}${hunts}${hunted}${danger}`.trim();
 }

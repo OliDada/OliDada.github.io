@@ -34,6 +34,12 @@ import {
     playArrival,
 } from "./galaxy-ui.js";
 import { createStarMap } from "./starmap.js";
+import { createCodex, backfill, floraEntry, faunaEntry, formationEntry, settlementEntry, fieldNoteEntry, worldEntry, signalEntry } from "./codex.mjs";
+import { UPGRADES, progress, advanced, recordedOn, jumpRange as rangeFor, suitDamageScale, suitRecoveryScale, heatScale } from "./upgrades.mjs";
+import { createUpgradeScreen } from "./upgrades-ui.js";
+import { findScanTarget, followTarget, cardFor, wordFor } from "./scanning.js";
+import { createScanUI } from "./scan-ui.js";
+import { civilizationOf, colonistOf } from "./civilizations.mjs";
 
 // Surface flight uses coordinates relative to the current world; space travel is continuous.
 const $ = (id) => document.getElementById(id);
@@ -65,6 +71,40 @@ let activeBody =
     system.bodies.find((b) => b.id === params.get("world") && !b.giant) ||
     system.bodies.find((b) => b.id === system.startId);
 let RADIUS = activeBody.radius;
+// The codex: everything documented in every system, and the upgrades it unlocks
+// (codex.mjs, upgrades.mjs, upgrades-ui.js; plan in PROGRESSION.md).
+const codex = createCodex();
+if (!codex.backfilled) backfill(codex);
+codex.add(worldEntry(system, activeBody));
+const upgradeScreen = createUpgradeScreen({
+    codex,
+    onOpen: () => { keys.clear(); if (starMap?.isOpen) starMap.close(); },
+    onUnlock: (id) => applyUpgrade(id),
+    touch: coarsePointer,
+});
+// Records a codex entry and works out what it moved forward:
+// { added, ready (an upgrade that just became ready), moved, progressText, text }.
+// text is a sentence to append to a toast ("" if nothing to say).
+function recordInfo(entry) {
+    const before = progress(codex.entries, codex.unlocked);
+    if (!codex.add(entry)) return { added: false, text: "" };
+    const moved = advanced(before, progress(codex.entries, codex.unlocked));
+    upgradeScreen.refresh();
+    updateTally(true);
+    const ready = moved.find((m) => m.ready);
+    const m = moved.find((x) => x.id === codex.tracked) || moved.find((x) => x.have < x.count) || moved[0];
+    const s = m && m.have >= m.count && m.spread.find((x) => x.have < x.need);
+    const progressText = m ? (s ? `${s.have} of ${s.need} ${s.label}` : `${m.label} · ${m.have}/${m.count}`) : "";
+    const text = ready ? ` Upgrade ready: ${ready.name}. Open Upgrades (U).` : m ? ` Counts toward ${m.name} (${s ? progressText : `${m.have} / ${m.count}`}).` : "";
+    return { added: true, ready, moved: m, progressText, text };
+}
+const record = (entry) => recordInfo(entry).text;
+function applyUpgrade(id) {
+    const u = UPGRADES[id];
+    if (id.startsWith("jumpDrive")) starMap?.setRange?.(rangeFor(codex.unlocked));
+    updateTally(true);
+    toast(u.status === "planned" ? `${u.name} unlocked. Its effect is not built yet (see PROGRESSION.md).` : `${u.name} installed. ${u.effect}`, 6);
+}
 const vec = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 // Where every body is right now (orbits.mjs). Coordinates in the scene are
 // relative to the world you are at (worldOrigin).
@@ -124,22 +164,44 @@ const fill = new THREE.DirectionalLight(0x749bd5, 0.65);
 fill.position.set(200, -100, -300);
 scene.add(fill);
 
-// The landing site around the current world's signal (surface.js), rebuilt on arrival.
+// The landing site around the current world's signal (surface.js), built on arrival.
+// The last few sites are kept, so hopping between a moon and its planet (or coming
+// back) doesn't rebuild them, and a cruise builds its destination's site on the way.
 let site = null;
-function buildSite() {
-    if (site) {
-        scene.remove(site.group);
-        disposeSurface(site.group);
-    }
-    site = buildSurface({
-        body: activeBody,
-        radius: RADIUS,
-        signalNormal,
-        landingNormal,
-        surfacePoint,
+const siteCache = new Map(); // body id -> site, oldest first
+function makeSite(body) {
+    const R = body.radius, t = terrainFor(body), signal = vec(...t.site);
+    return buildSurface({
+        body,
+        radius: R,
+        signalNormal: signal,
+        landingNormal: vec(0, 1, 30 / R).normalize().applyQuaternion(new THREE.Quaternion().setFromUnitVectors(Y, signal)),
+        surfacePoint: (n, offset = 0) => n.clone().multiplyScalar(R + t.surface(n) + offset),
         coarse: coarsePointer,
+        colonist: colonistOf(system, body),
     });
+}
+function clearSites() {
+    if (site) scene.remove(site.group);
+    for (const s of siteCache.values()) disposeSurface(s.group);
+    siteCache.clear();
+    site = null;
+}
+function buildSite() {
+    if (site) scene.remove(site.group);
+    const next = siteCache.get(activeBody.id) ?? makeSite(activeBody);
+    siteCache.delete(activeBody.id);
+    siteCache.set(activeBody.id, next); // now the newest
+    for (const [id, old] of siteCache) {
+        if (siteCache.size <= 3) break;
+        if (old === next) continue;
+        disposeSurface(old.group);
+        siteCache.delete(id);
+    }
+    site = next;
+    site.group.visible = true;
     scene.add(site.group);
+    if (!activeBody.giant) codex.add(worldEntry(system, activeBody, siteTotals()));
 }
 // Every world and the star of the system you are in (system-view.js). Terrain
 // tiles for every system are built by one shared pool of background threads.
@@ -150,6 +212,9 @@ let edge = systemEdge(system); // beyond this (metres from the star) is interste
 const sky = createSky(scene, renderer);
 const nearStar = createNearStar(scene);
 const streaks = createDriveStreaks(scene);
+// Dust and ice motes rushing past near worlds: they move at your real speed, so
+// going faster is something you see, not just a number.
+const spaceDust = createDriveStreaks(scene, 170, { R: 70, L: 260, min: 7, color: 0xe4f2ec });
 const worldDots = createWorldDots(scene);
 const starPoint = (star) => [star.x, star.y, star.z];
 sky.update(starPoint(currentStar), camera, currentStar.id);
@@ -165,6 +230,12 @@ function advanceOrbits() {
         shipPosition.sub(shift);
         camera.position.sub(shift);
     }
+    if (holding && mode === "space") {
+        const now = positionOf(holding.body), moved = now.clone().sub(holding.last);
+        shipPosition.add(moved);
+        camera.position.add(moved);
+        holding.last.copy(now);
+    } else holding = null;
     worldOrigin.copy(origin);
     positionSystem();
 }
@@ -183,6 +254,35 @@ let verticalSpeed = 0,
     bankAngle = 0,
     turnVelocity = 0,
     maneuver = null;
+// Mouse / drag steering in flight: movement is queued here and eased into the
+// ship's heading over the next frames, so mice and trackpads both turn smoothly.
+let steerYaw = 0,
+    steerPitch = 0,
+    aimPitch = 0, // nose angle held in atmospheric flight, set with the mouse
+    strafeSpeed = 0, // sideways thrust near worlds (A/D in space)
+    lastMouseSteer = -1e9,
+    lastFreeLook = -1e9,
+    invertPitch = false;
+// Speed feel and orbit transitions (camera).
+let spaceBlend = 0, // 0 = flying near a world's surface, 1 = in space; eases between the two
+    rushLevel = 0, // 0..1, how fast you are going for the camera
+    reveal = 0, // camera pull-back as you break orbit
+    exitGlide = 0, // the climb carrying on for a moment after breaking orbit
+    exitClimb = 0,
+    lastLocal = null,
+    lastBodyId = null;
+const flowVel = new THREE.Vector3(); // ship velocity relative to the world it is near
+try { invertPitch = localStorage.getItem("elsewhere.invertPitch") === "1"; } catch {}
+{
+    const box = document.getElementById("invertPitch");
+    if (box) {
+        box.checked = invertPitch;
+        box.addEventListener("change", () => {
+            invertPitch = box.checked;
+            try { localStorage.setItem("elsewhere.invertPitch", invertPitch ? "1" : "0"); } catch {}
+        });
+    }
+}
 
 let started = false,
     mode = "flight",
@@ -199,7 +299,8 @@ let saveKey,
     visited = new Set(),
     catalogue = {}, // plant species catalogued per world: { bodyId: [speciesId] }
     bestiary = {}, // animal species observed per world: { bodyId: [speciesId] }
-    traces = {}; // worlds where you have seen what an intelligent species built: { bodyId: level }
+    traces = {}, // worlds where you have seen what an intelligent species built: { bodyId: tier name }
+    strata = {}; // rock and ice formations recorded per world: { bodyId: [formationId] }
 function loadSurvey(arrivedAt) {
     saveKey = `elsewhere-system-${system.seed}`;
     let saved = {};
@@ -212,6 +313,7 @@ function loadSurvey(arrivedAt) {
     catalogue = saved.flora || {};
     bestiary = saved.fauna || {};
     traces = saved.traces || {};
+    strata = saved.geology || {};
 }
 loadSurvey(activeBody);
 discovered = records.has(activeBody.id);
@@ -228,6 +330,7 @@ function saveSurvey() {
                 flora: catalogue,
                 fauna: bestiary,
                 traces,
+                geology: strata,
             }),
         );
     } catch {}
@@ -324,13 +427,12 @@ function setStage(next) {
             `Signal recorded. Open the star map (M) for another world, or zoom out on it (G) to jump to another star.`,
         ],
     ];
-    $("objective").textContent = entries[stage][0];
-    $("objectiveDetail").textContent = entries[stage][1];
-    $("stepCount").textContent = `0${stage + 1} / 04`;
-    $("progress").style.width = `${(stage + 1) * 25}%`;
+    // The objective panel now shows the next upgrade (upgrades-ui.js); the signal
+    // still guides you through the waypoint and the action button.
+    void entries;
 }
 function modalOpen() {
-    return $("help").open || $("discovery").open || $("starMap").open;
+    return $("help").open || $("discovery").open || $("starMap").open || upgradeScreen.isOpen;
 }
 function start() {
     if (started) return;
@@ -373,7 +475,7 @@ function act() {
     }
     if (mode === "flight") {
         if (altitude() > 32) {
-            toast("Descend below 32 m with F, or use Approach signal.");
+            toast("Descend below 32 m with F, or use Find landing site.");
             return;
         }
         if (Math.abs(speed) > 18) {
@@ -425,19 +527,20 @@ function act() {
     } else if (mode === "walk") {
         const shipDistance =
             surfacePoint(playerNormal).distanceTo(shipPosition);
-        if (shipDistance < 9) {
+        if (distanceToSignal() < 9 && !discovered) {
+            discover();
+        } else if (scanTarget?.known) {
+            showScanCard(scanTarget, null);
+        } else if (scanTarget) {
+            // Something new: holding E scans it (updateScan).
+        } else if (shipDistance < 9) {
             mode = "landed";
             speed = 0;
             verticalSpeed = 0;
             toast("Back aboard Kestrel. Press L to lift off.");
         } else if (distanceToSignal() < 9) {
             discover();
-        } else
-            toast(
-                stage === 2
-                    ? "Follow the Kestrel marker to return to your ship."
-                    : "Follow the signal. Get closer to investigate.",
-            );
+        }
     }
 }
 function interact() {
@@ -461,17 +564,14 @@ function interact() {
         if (stage === 0) setStage(1);
         jumpHeight = 0;
         jumpVelocity = 0;
-        toast(
-            coarsePointer
-                ? "On foot. Drag to look, use the stick to walk, ⤒ to jump."
-                : "On foot. Click the view for mouse look; WASD to walk, Space to jump.",
-        );
     } else if (mode === "walk") act();
 }
 function discover() {
     discovered = true;
     records.add(activeBody.id);
     saveSurvey();
+    const noteText = record(fieldNoteEntry(system, activeBody));
+    if (noteText) toast(noteText.trim(), 8);
     setDiscoveryText(activeBody);
     $("logBtn").hidden = false;
     setStage(2);
@@ -518,15 +618,22 @@ const input = setupInput({
             if (mode === "walk") {
                 playerForward.applyAxisAngle(playerNormal, -dx * 0.004 * k);
                 lookPitch = clamp(lookPitch - dy * 0.003 * k, -1.15, 1.1);
+            } else if (mouseSteers()) {
+                steerYaw -= dx * 0.0032 * k;
+                steerPitch -= dy * 0.0032 * k * (invertPitch ? -1 : 1);
+                lastMouseSteer = performance.now();
             } else {
                 orbitYaw -= dx * 0.005 * k;
                 orbitPitch = clamp(orbitPitch + dy * 0.004 * k, -0.25, 1.15);
+                lastFreeLook = performance.now();
+                steerYaw = steerPitch = 0;
             }
         },
         manualControl: () => (autoApproach = false),
         toast,
         pick: (x, y) => pickAt(x, y),
         cycle: () => cycleTarget(),
+        upgrades: () => { if (!$("help").open && !$("discovery").open) upgradeScreen.toggle(); },
     },
 });
 document.addEventListener("visibilitychange", () => (previousTime = performance.now()));
@@ -550,7 +657,13 @@ function refreshWorldLabels() {
         ? `${system.name.toUpperCase()} SYSTEM / OFF-CHART SEED ${system.seed}`
         : `${system.name.toUpperCase()} SYSTEM / ${(Math.hypot(currentStar.x, currentStar.y) / 1000).toFixed(1)}K LY FROM THE CORE`;
 }
+let lastSwitch = -10; // animationTime of the last change of world (see the neighbour check in flight)
 function switchWorld(body, globalPosition) {
+    // The ship keeps its momentum and heading across the change of world, so arriving
+    // (or crossing from a moon to its planet) is seamless rather than a dead stop.
+    const oldUp = mode === "flight" ? shipPosition.clone().normalize() : spaceUp.clone();
+    const velocity = shipForward.clone().multiplyScalar(speed * (mode === "flight" ? Math.cos(flightPitch) : 1)).addScaledVector(oldUp, verticalSpeed);
+    lastSwitch = animationTime;
     const oldOrigin = worldOrigin.clone();
     activeBody = body;
     RADIUS = body.radius;
@@ -573,12 +686,21 @@ function switchWorld(body, globalPosition) {
     if (shipPosition.length() < safeRadius)
         shipPosition.copy(arrivalNormal.multiplyScalar(safeRadius));
     const n = shipPosition.clone().normalize();
-    shipForward = tangent(signalNormal.clone().sub(n), n);
-    if (shipForward.lengthSq() < 0.01) shipForward = tangent(vec(0, 0, -1), n);
-    speed = 0;
-    verticalSpeed = 0;
-    flightPitch = 0;
-    bankAngle = 0;
+    const along = velocity.clone().addScaledVector(n, -velocity.dot(n));
+    if (along.length() > 2) shipForward = along.clone().normalize();
+    else {
+        shipForward = tangent(shipForward.clone(), n);
+        if (shipForward.lengthSq() < 0.01) shipForward = tangent(signalNormal.clone().sub(n), n);
+        if (shipForward.lengthSq() < 0.01) shipForward = tangent(vec(0, 0, -1), n);
+    }
+    // Arriving from space keeps most of your momentum and the angle you came in
+    // at; flight drag then eases you down to flying speed and the nose levels out.
+    speed = Math.min(along.length(), 320);
+    verticalSpeed = clamp(velocity.dot(n), -120, 120);
+    flightPitch = clamp(Math.atan2(velocity.dot(n), Math.max(along.length(), 1)), -0.65, 0.65);
+    aimPitch = flightPitch;
+    lastMouseSteer = Math.min(lastMouseSteer, performance.now() - 1000); // levels out soon
+    exitGlide = 0;
     turnVelocity = 0;
     autoApproach = false;
     mode = "flight";
@@ -590,21 +712,23 @@ function switchWorld(body, globalPosition) {
     setStage(discovered ? 3 : 0);
     $("logBtn").hidden = !discovered;
     visited.add(body.id);
+    const worldNote = record(worldEntry(system, body));
     saveSurvey();
     refreshWorldLabels();
-    orientShip();
+    orientShip(0); // place the ship; its attitude turns to the new "up" smoothly over the next frames
     toast(
-        `Arrived at ${body.name}. Fly down, or use Approach signal to find a landing site.`,
+        `Arrived at ${body.name}. Fly down, or use Find landing site.${worldNote}`,
     );
 }
 function orientSpace(dt) {
-    let right = shipForward.clone().cross(spaceUp);
-    if (right.lengthSq() < 1e-8)
-        right = shipForward
-            .clone()
-            .cross(Math.abs(shipForward.x) < 0.9 ? vec(1, 0, 0) : vec(0, 0, 1));
-    right.normalize();
-    spaceUp.copy(right.clone().cross(shipForward).normalize());
+    // Keep "up" at right angles to the nose by carrying the previous up along with
+    // it. Rebuilding it from a fixed axis flipped the ship whenever the nose pointed
+    // straight up or down (short cruises between a moon and its planet).
+    spaceUp.addScaledVector(shipForward, -spaceUp.dot(shipForward));
+    if (spaceUp.lengthSq() < 1e-6) spaceUp.copy(vec(0, 1, 0).applyQuaternion(ship.quaternion)).addScaledVector(shipForward, -vec(0, 1, 0).applyQuaternion(ship.quaternion).dot(shipForward));
+    if (spaceUp.lengthSq() < 1e-6) spaceUp.copy(Math.abs(shipForward.y) < 0.9 ? Y : vec(1, 0, 0)).addScaledVector(shipForward, -(Math.abs(shipForward.y) < 0.9 ? shipForward.y : shipForward.x));
+    spaceUp.normalize();
+    const right = shipForward.clone().cross(spaceUp).normalize();
     clockBasis.makeBasis(right, spaceUp, shipForward.clone().negate());
     const attitude = new THREE.Quaternion().setFromRotationMatrix(clockBasis);
     attitude.multiply(
@@ -621,13 +745,18 @@ function updateSpace(dt) {
     const aim = target ? positionOf(target).sub(worldOrigin).sub(shipPosition).normalize() : course ? towardStar(course) : null;
     if (aim && !steering()) turnToward(aim, dt);
     const autoThrust = autopilot && course && !target && !keys.has("KeyW") && !keys.has("KeyS") && !keys.has("KeyX");
-    const yaw = (keys.has("KeyA") ? 1 : 0) - (keys.has("KeyD") ? 1 : 0);
-    shipForward.applyAxisAngle(spaceUp, yaw * dt * 0.85);
+    if (holding && ["KeyW", "KeyS", "KeyR", "KeyF", "KeyX"].some((k) => keys.has(k))) holding = null; // flying off
+    // Near worlds A/D slide the ship sideways (handy for lining up a scan or an
+    // approach); the mouse or the arrow keys turn it.
+    const yaw = arrowTurn();
+    const strafe = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
+    const m = takeMouseSteer(dt);
+    shipForward.applyAxisAngle(spaceUp, yaw * dt * 0.85 + m.yaw);
     const right = shipForward.clone().cross(spaceUp).normalize();
     const pitch =
         (keys.has("ArrowUp") ? 1 : 0) - (keys.has("ArrowDown") ? 1 : 0);
-    shipForward.applyAxisAngle(right, pitch * dt * 0.7).normalize();
-    spaceUp.applyAxisAngle(right, pitch * dt * 0.7).normalize();
+    shipForward.applyAxisAngle(right, pitch * dt * 0.7 + m.pitch).normalize();
+    spaceUp.applyAxisAngle(right, pitch * dt * 0.7 + m.pitch).normalize();
     const boost = keys.has("ShiftLeft") || keys.has("ShiftRight"),
         brake = keys.has("KeyX");
     speed = damp(
@@ -641,19 +770,22 @@ function updateSpace(dt) {
         brake ? 4 : 1.4,
         dt,
     );
+    // Just after breaking orbit the climb carries on and fades, unless you steer
+    // it yourself (F, or the brake).
+    exitGlide = Math.max(0, exitGlide - dt / 3);
+    const lift = ((keys.has("KeyR") ? 1 : 0) - (keys.has("KeyF") ? 1 : 0)) * (boost ? 100 : 35);
     verticalSpeed = damp(
         verticalSpeed,
-        brake
-            ? 0
-            : ((keys.has("KeyR") ? 1 : 0) - (keys.has("KeyF") ? 1 : 0)) *
-                  (boost ? 100 : 35),
-        3,
+        brake ? 0 : lift < 0 ? lift : Math.max(lift, exitClimb * smoothstep(exitGlide)),
+        exitGlide > 0 ? 1.2 : 3,
         dt,
     );
-    bankAngle = damp(bankAngle, yaw * 0.25, 4, dt);
+    strafeSpeed = damp(strafeSpeed, brake ? 0 : strafe * (boost ? 100 : 35), 3, dt);
+    bankAngle = damp(bankAngle, clamp(yaw * 0.25 + m.rate * 0.12 - strafe * 0.15, -0.45, 0.45), 4, dt);
     shipPosition
         .addScaledVector(shipForward, speed * dt)
-        .addScaledVector(spaceUp, verticalSpeed * dt);
+        .addScaledVector(spaceUp, verticalSpeed * dt)
+        .addScaledVector(right, strafeSpeed * dt);
     const global = shipPosition.clone().add(worldOrigin);
     // The star's exclusion zone and giants' cloud tops are hard limits. The ship
     // slides along them (no bounce), and slows if it keeps pushing inward.
@@ -666,12 +798,13 @@ function updateSpace(dt) {
         const inward = -shipForward.dot(out);
         if (inward > 0) speed = damp(speed, 0, 6 * inward, dt);
         if (verticalSpeed * spaceUp.dot(out) < 0) verticalSpeed = damp(verticalSpeed, 0, 6, dt);
+        if (strafeSpeed * right.dot(out) < 0) strafeSpeed = damp(strafeSpeed, 0, 6, dt);
         if (toastTime <= 0) toast(message);
     };
     holdOff(vec(), system.star.radius + 140, `Stellar exclusion zone. Turn away from ${system.star.name}.`);
     // Close to a star the hull heats up: the view glows and warnings start well
     // before the hard limit above.
-    heat = clamp(1 - (global.length() - system.star.radius - 140) / (system.star.radius * 4), 0, 1);
+    heat = clamp(1 - (global.length() - system.star.radius - 140) / (system.star.radius * 4), 0, 1) * heatScale(codex.unlocked);
     if (heat > 0.35 && toastTime <= 0)
         toast(heat > 0.75 ? `Hull temperature critical. Turn away from ${system.star.name}!` : `Hull temperature rising near ${system.star.name}.`, 2);
     for (const body of system.bodies)
@@ -694,8 +827,17 @@ function updateSpace(dt) {
             body,
             clearance: global.distanceTo(positionOf(body)) - body.radius,
         }))
-        .filter((item) => item.clearance < 240)
         .sort((a, b) => a.clearance - b.clearance);
+    // Heading in toward a world the ship sheds speed as its sky gets close, so
+    // reaching orbit is a glide rather than a sudden stop.
+    if (nearby.length && nearby[0].clearance < 1500) {
+        const toward = positionOf(nearby[0].body).sub(global).normalize();
+        if (shipForward.dot(toward) * speed > 0) {
+            const cap = 260 + 640 * smoothstep((nearby[0].clearance - 240) / 1260);
+            if (Math.abs(speed) > cap) speed = damp(speed, Math.sign(speed) * cap, 3, dt);
+        }
+    }
+    if (nearby.length && nearby[0].clearance >= 240) nearby.length = 0;
     if (nearby.length) {
         switchWorld(nearby[0].body, global);
         return;
@@ -767,8 +909,15 @@ function updateCruise(dt) {
         shipForward.lerp(delta.normalize(), 1 - Math.exp(-dt * 3)).normalize();
     shipPosition.copy(next);
     bankAngle = damp(bankAngle, 0, 3, dt);
-    spaceUp.lerp(Y, dt * 0.4).normalize();
+    // Ease "up" toward the system's up, but only as far as the nose allows (never toward the nose itself).
+    const level = Y.clone().addScaledVector(shipForward, -Y.dot(shipForward));
+    if (level.lengthSq() > 0.04) spaceUp.lerp(level.normalize(), dt * 0.4 * Math.sqrt(level.lengthSq())).normalize();
     orientSpace(dt);
+    // Build the destination's landing site halfway, not in the frame you arrive.
+    if (!travel.prepared && t > 0.5) {
+        travel.prepared = true;
+        if (!travel.body.giant && !siteCache.has(travel.body.id)) siteCache.set(travel.body.id, makeSite(travel.body));
+    }
     $("transitProgress").style.width = `${t * 100}%`;
     $("transitPercent").textContent = `${Math.round(t * 100)}%`;
     if (t >= 1) {
@@ -875,8 +1024,25 @@ function startIncoming(star) {
         } else view.dispose();
     });
 }
-// Any steering input (keys, joystick sideways).
-const steering = () => keys.has("KeyA") || keys.has("KeyD") || keys.has("ArrowUp") || keys.has("ArrowDown");
+// The mouse (or a drag on touch) steers while flying, unless Q / the Look button
+// is held for looking around, or an automatic approach is flying the ship.
+const mouseSteers = () => (mode === "flight" || mode === "space" || mode === "deep") && !keys.has("KeyQ") && !autoApproach;
+// This frame's share of the queued mouse steering, in radians.
+function takeMouseSteer(dt) {
+    const f = 1 - Math.exp(-dt * 12);
+    const m = { yaw: steerYaw * f, pitch: steerPitch * f, rate: 0 };
+    steerYaw -= m.yaw;
+    steerPitch -= m.pitch;
+    m.rate = m.yaw / Math.max(dt, 1e-3); // turn rate, for banking
+    return m;
+}
+const arrowTurn = () => (keys.has("ArrowLeft") ? 1 : 0) - (keys.has("ArrowRight") ? 1 : 0);
+// Any steering input: keys, joystick, mouse. (Near worlds A/D slide sideways, so
+// they don't count there.)
+const steering = () =>
+    (mode !== "space" && (keys.has("KeyA") || keys.has("KeyD"))) ||
+    keys.has("ArrowUp") || keys.has("ArrowDown") || keys.has("ArrowLeft") || keys.has("ArrowRight") ||
+    performance.now() - lastMouseSteer < 500;
 // Smoothly turns the ship's nose toward a direction, keeping it upright.
 function turnToward(want, dt) {
     shipForward.lerp(want, 1 - Math.exp(-dt * 1.4)).normalize();
@@ -949,13 +1115,16 @@ function showSystemAhead(entry, offset, d) {
 }
 function updateDeep(dt) {
     const steer = steering();
-    const yaw = (keys.has("KeyA") ? 1 : 0) - (keys.has("KeyD") ? 1 : 0);
-    shipForward.applyAxisAngle(spaceUp, yaw * dt * 0.85);
+    // Between stars there is nothing to slide past, so A/D turn here.
+    strafeSpeed = 0;
+    const yaw = clamp((keys.has("KeyA") ? 1 : 0) - (keys.has("KeyD") ? 1 : 0) + arrowTurn(), -1, 1);
+    const m = takeMouseSteer(dt);
+    shipForward.applyAxisAngle(spaceUp, yaw * dt * 0.85 + m.yaw);
     const right = shipForward.clone().cross(spaceUp).normalize();
     const pitch = (keys.has("ArrowUp") ? 1 : 0) - (keys.has("ArrowDown") ? 1 : 0);
-    shipForward.applyAxisAngle(right, pitch * dt * 0.7).normalize();
-    spaceUp.applyAxisAngle(right, pitch * dt * 0.7).normalize();
-    bankAngle = damp(bankAngle, yaw * 0.25, 4, dt);
+    shipForward.applyAxisAngle(right, pitch * dt * 0.7 + m.pitch).normalize();
+    spaceUp.applyAxisAngle(right, pitch * dt * 0.7 + m.pitch).normalize();
+    bankAngle = damp(bankAngle, clamp(yaw * 0.25 + m.rate * 0.12, -0.45, 0.45), 4, dt);
     // With a course set, the ship holds its heading toward it whenever you are
     // not steering; steering takes over until you let go.
     let want = null;
@@ -1026,11 +1195,7 @@ function arriveInSystem(star, offset) {
         try {
             history.replaceState(null, "", `?star=${star.id}`);
         } catch {}
-        if (site) {
-            scene.remove(site.group);
-            disposeSurface(site.group);
-            site = null;
-        }
+        clearSites();
         starMap.setHere(star, system);
         loadSurvey(null);
         if (course?.id === star.id) course = null;
@@ -1125,21 +1290,22 @@ function arriveNear(body) {
     orientSpace(1);
 }
 // Giants are visited from space: hold position facing the planet.
+// The ship then moves with the giant along its orbit until you fly off, and turns
+// to face it smoothly (it used to snap round, then drift away as the giant moved on).
+let holding = null; // { body, last: global position of the body } while holding above a giant
 function arriveAtGiant(body) {
     mode = "space";
     speed = 0;
     verticalSpeed = 0;
-    shipForward = positionOf(body)
-        .sub(worldOrigin)
-        .sub(shipPosition)
-        .normalize();
-    spaceUp.copy(Y);
+    selectedBody = target = body; // the nose turns to it gradually (updateSpace)
+    holding = { body, last: positionOf(body) };
     keys.clear();
     visited.add(body.id);
+    const worldNote = record(worldEntry(system, body));
     saveSurvey();
     const moons = system.bodies.filter((b) => b.parent === body.id);
     toast(
-        `Holding above ${body.name}. No surface to land on${moons.length ? `: chart a course to ${moons.map((m) => m.name).join(" or ")}` : ""}.`,
+        `Holding above ${body.name}. No surface to land on${moons.length ? `: chart a course to ${moons.map((m) => m.name).join(" or ")}` : ""}.${worldNote}`,
         6,
     );
 }
@@ -1191,13 +1357,20 @@ function updateFlight(dt) {
             toast("Approach complete. Press L to land.");
         }
     } else {
-        const turn = (keys.has("KeyA") ? 1 : 0) - (keys.has("KeyD") ? 1 : 0);
+        strafeSpeed = 0;
+        const turn = clamp((keys.has("KeyA") ? 1 : 0) - (keys.has("KeyD") ? 1 : 0) + arrowTurn(), -1, 1);
         turnVelocity = damp(turnVelocity, turn * 1.0, 4, dt);
-        shipForward.applyAxisAngle(up, turnVelocity * dt);
-        bankAngle = damp(bankAngle, turnVelocity * 0.3, 4, dt);
+        const m = takeMouseSteer(dt);
+        shipForward.applyAxisAngle(up, turnVelocity * dt + m.yaw);
+        bankAngle = damp(bankAngle, clamp(turnVelocity * 0.3 + m.rate * 0.15, -0.5, 0.5), 4, dt);
         const pitchInput =
             (keys.has("ArrowUp") ? 1 : 0) - (keys.has("ArrowDown") ? 1 : 0);
-        flightPitch = damp(flightPitch, pitchInput * 0.65, 2.4, dt);
+        // The mouse sets a nose angle that holds while you steer and eases back
+        // to level once you leave it alone; the arrow keys pitch while held.
+        aimPitch = clamp(aimPitch + m.pitch * 1.5, -0.65, 0.65);
+        if (pitchInput) aimPitch = 0;
+        else if (performance.now() - lastMouseSteer > 1500) aimPitch = damp(aimPitch, 0, 0.5, dt);
+        flightPitch = damp(flightPitch, pitchInput ? pitchInput * 0.65 : aimPitch, 2.4, dt);
         const boost = keys.has("ShiftLeft") || keys.has("ShiftRight");
         const braking = keys.has("KeyX");
         let targetSpeed =
@@ -1233,7 +1406,9 @@ function updateFlight(dt) {
             body,
             clearance: global.distanceTo(positionOf(body)) - body.radius,
         }))
-        .filter((item) => item.clearance < 240 && item.clearance < altitude())
+        // Switch only when clearly closer to the other world, and not straight after a
+        // switch: near a moon and its planet the two were otherwise swapped back and forth.
+        .filter((item) => item.clearance < 240 && item.clearance < altitude() * 0.6 && animationTime - lastSwitch > 2)
         .sort((a, b) => a.clearance - b.clearance)[0];
     if (neighbor) {
         switchWorld(neighbor.body, global);
@@ -1248,7 +1423,12 @@ function updateFlight(dt) {
             .normalize();
         spaceUp.copy(up);
         autoApproach = false;
-        toast("Orbit cleared. Fly freely, or press M to chart a course.");
+        // Breaking orbit: the climb carries on for a moment and the camera eases
+        // back so you see the world fall away below.
+        exitClimb = clamp(verticalSpeed, 45, 140);
+        exitGlide = 1;
+        reveal = 1;
+        toast(`Leaving ${activeBody.name}'s orbit. Fly freely, or press M to chart a course.`);
     }
 }
 function updateManeuver(dt) {
@@ -1300,6 +1480,38 @@ function updateManeuver(dt) {
     orientShip(dt);
 }
 
+// The ship's velocity relative to the world it is near (for the camera and the
+// dust rushing past), measured from how far it actually moved.
+function updateFlow(dt) {
+    const flying = started && mode !== "deep" && mode !== "walk" && mode !== "landed";
+    if (!flying || lastBodyId !== activeBody.id || !lastLocal) {
+        if (!flying) flowVel.set(0, 0, 0);
+        lastLocal = flying ? shipPosition.clone() : null;
+        lastBodyId = activeBody.id;
+        spaceDust.hide();
+        return;
+    }
+    // Under your own control, the ship's own motion (worlds drift along their
+    // orbits, which shouldn't read as speed); on autopilot, how far it moved.
+    let v;
+    if (mode === "space") {
+        const right = shipForward.clone().cross(spaceUp).normalize();
+        v = shipForward.clone().multiplyScalar(speed).addScaledVector(spaceUp, verticalSpeed).addScaledVector(right, strafeSpeed);
+    } else if (mode === "flight")
+        v = shipForward.clone().multiplyScalar(speed * Math.cos(flightPitch)).addScaledVector(shipPosition.clone().normalize(), verticalSpeed);
+    else v = shipPosition.clone().sub(lastLocal).divideScalar(Math.max(dt, 1e-3));
+    lastLocal.copy(shipPosition);
+    if (v.length() < 30000) flowVel.lerp(v, 1 - Math.exp(-dt * 8));
+    const s = flowVel.length();
+    const power = clamp((s - 20) / 600, 0, 1);
+    if (power > 0.02)
+        spaceDust.update(camera, flowVel.clone().normalize(), power, dt, {
+            speed: s,
+            len: clamp(s * 0.045, 1.2, 40),
+            opacity: (0.05 + 0.32 * power) * (0.45 + 0.55 * smoothstep(spaceBlend)),
+        });
+    else spaceDust.hide();
+}
 function updateWalk(dt) {
     const turn =
         (keys.has("ArrowLeft") ? 1 : 0) - (keys.has("ArrowRight") ? 1 : 0);
@@ -1335,9 +1547,14 @@ function updateWalk(dt) {
     }
     if (moving) {
         direction.normalize();
+        // Steep uphill slows you down (to a third on the steepest ground); downhill doesn't.
+        const step = walkingSpeed * dt;
+        const ahead = surfacePoint(playerNormal).addScaledVector(direction, Math.max(step, 0.3)).normalize();
+        const rise = (surfaceRadius(ahead) - surfaceRadius(playerNormal)) / Math.max(step, 0.3);
+        const uphill = clamp(1 - Math.max(0, rise - 0.35) * 0.9, 0.33, 1);
         const next = resolveCollisions(
             surfacePoint(playerNormal)
-                .addScaledVector(direction, walkingSpeed * dt)
+                .addScaledVector(direction, step * uphill)
                 .normalize(),
         );
         const wet = terrainFor(activeBody).isLiquid(next);
@@ -1352,10 +1569,20 @@ function updateWalk(dt) {
     playerForward = tangent(playerForward, playerNormal);
             bob += moving && jumpHeight <= 0 ? dt * walkingSpeed * 1.8 : 0;
     speed = moving ? walkingSpeed : 0;
-    checkFlora(dt);
+    updateScan(dt);
 }
 let jumpHeight = 0,
-    jumpVelocity = 0;
+    jumpVelocity = 0,
+    eyeRadius = null; // smoothed eye distance from the world's centre while walking
+// Ground radius averaged over a stride-sized footprint around a point (centre and four
+// points 0.45 m away), so walking follows the lie of the land rather than every pebble.
+function footHeight(n) {
+    const a = tangent(Math.abs(n.y) < 0.9 ? Y.clone() : vec(1, 0, 0), n), b = n.clone().cross(a), e = 0.45 / RADIUS;
+    let sum = surfaceRadius(n) * 2;
+    for (const [da, db] of [[1, 0], [-1, 0], [0, 1], [0, -1]])
+        sum += surfaceRadius(n.clone().addScaledVector(a, da * e).addScaledVector(b, db * e).normalize());
+    return sum / 6;
+}
 const PLAYER_RADIUS = 0.35;
 // Slide around obstacles: push the next step out of anything taller than your feet.
 function resolveCollisions(next) {
@@ -1375,58 +1602,94 @@ function resolveCollisions(next) {
     }
     return p.normalize();
 }
-// Walking close to a plant catalogues its species.
-let floraTimer = 0;
-function checkFlora(dt) {
-    floraTimer += dt;
-        if (floraTimer < 0.25) return;
-        floraTimer = 0;
-    const here = surfacePoint(playerNormal);
-    // Animals: observed from a little way off, so even skittish ones can be recorded.
-    const { flora, fauna } = site;
-    if (fauna && fauna.species.length) {
-        const seen = (bestiary[activeBody.id] ||= []);
-        for (const sp of fauna.species) {
-            if (seen.includes(sp.id)) continue;
-            const reach = 12 + sp.size * 6;
-            if (fauna.positionsOf(sp).some((p) => p.distanceTo(here) < reach)) {
-                seen.push(sp.id);
-                saveSurvey();
-                toast(
-                    `New animal observed (${seen.length} of ${fauna.species.length}): ${sp.name}. ${sp.description}`,
-                    7,
-                );
-                return;
-            }
-        }
+// --- Scanning ----------------------------------------------------------------
+// On foot, the recordable thing nearest the crosshair within reach gets a prompt
+// (scanning.js, scan-ui.js). Hold E, or the Scan button, until the ring fills to scan
+// something new; press E on something already recorded to see its card again.
+const scanUI = createScanUI({ touch: coarsePointer });
+const SCAN_TIME = 1.3; // seconds of holding
+let scanTarget = null, // { kind, id, ref, point, reach, known }
+    scanProgress = 0, // 0..1 while holding
+    scanSearch = 0,
+    scanNeedsRelease = false, // after a scan, let go before the next one starts
+    touchScanHeld = false;
+const scanHeld = () => keys.has("KeyE") || touchScanHeld;
+$("actionBtn").addEventListener("pointerdown", () => {
+    if (mode === "walk" && scanTarget && !scanTarget.known) touchScanHeld = true;
+});
+for (const ev of ["pointerup", "pointercancel", "pointerleave"]) $("actionBtn").addEventListener(ev, () => (touchScanHeld = false));
+const scannedHere = () => ({
+    fauna: (bestiary[activeBody.id] ||= []),
+    flora: (catalogue[activeBody.id] ||= []),
+    formation: (strata[activeBody.id] ||= []),
+});
+function updateScan(dt) {
+    const held = scanHeld();
+    if (!held) scanNeedsRelease = false;
+    const scanning = held && !scanNeedsRelease && scanTarget && !scanTarget.known;
+    if (scanTarget) scanTarget.point = followTarget(site, scanTarget);
+    if ((scanSearch += dt) >= 0.1) {
+        scanSearch = 0;
+        const next = findScanTarget({
+            site,
+            here: surfacePoint(playerNormal),
+            eye: camera.position,
+            forward: camera.getWorldDirection(vec()),
+            known: scannedHere(),
+            keep: scanTarget,
+            holding: !!scanning && scanProgress > 0,
+        });
+        if (scanProgress > 0 && (!next || next.kind !== scanTarget?.kind || next.id !== scanTarget?.id)) scanProgress = 0;
+        scanTarget = next;
     }
-    if (!flora || !flora.placed.length) return;
-    const known = (catalogue[activeBody.id] ||= []);
-    for (const { species, positions } of flora.placed) {
-        if (known.includes(species.id)) continue;
-        const reach = 3 + species.height * 0.5;
-        for (let i = 0; i < positions.length; i += 3) {
-            const dx = positions[i] - here.x,
-                dy = positions[i + 1] - here.y,
-                dz = positions[i + 2] - here.z;
-            if (dx * dx + dy * dy + dz * dz < reach * reach) {
-                known.push(species.id);
-                saveSurvey();
-                toast(
-                    `New species catalogued (${known.length} of ${flora.species.length}): ${species.name}. ${species.description}`,
-                    7,
-                );
-                return;
-            }
-        }
-    }
+    if (scanning && scanTarget && !scanTarget.known) {
+        scanProgress += dt / SCAN_TIME;
+        if (scanProgress >= 1) completeScan();
+    } else scanProgress = Math.max(0, scanProgress - dt * 2.5);
+}
+function completeScan() {
+    const t = scanTarget, list = scannedHere()[t.kind];
+    scanProgress = 0;
+    scanNeedsRelease = true;
+    t.known = true;
+    if (list.includes(t.id)) return;
+    list.push(t.id);
+    saveSurvey();
+    scanUI.flash();
+    const entry = t.kind === "fauna" ? faunaEntry(system, activeBody, t.ref) : t.kind === "flora" ? floraEntry(system, activeBody, t.ref) : formationEntry(system, activeBody, t.ref);
+    showScanCard(t, recordInfo(entry));
+}
+// info: what recording it moved forward (recordInfo), or null to show a recorded thing again.
+function showScanCard(t, info) {
+    const where = `${wordFor(t).toUpperCase()} · ${activeBody.name.toUpperCase()}`;
+    scanUI.card({
+        ...cardFor(t, site, activeBody),
+        eyebrow: info ? `NEW ${where}` : `RECORDED ${where}`,
+        footer: !info
+            ? null
+            : info.ready
+              ? { text: `Upgrade ready: ${info.ready.name}. Press U to install it.`, ready: true }
+              : info.moved
+                ? { text: `Counts toward ${info.moved.name}: ${info.progressText}` }
+                : { text: "Recorded in your codex." },
+    });
+}
+// The prompt at the crosshair, every frame.
+function drawScanMarker() {
+    if (mode !== "walk" || !scanTarget || modalOpen()) return scanUI.prompt(null);
+    scanUI.prompt({ title: scanTarget.known ? scanTarget.ref.name : `Unknown ${wordFor(scanTarget)}`, known: scanTarget.known }, scanProgress);
 }
 function updateCamera(dt) {
     if (mode === "walk") {
-                const eye = surfacePoint(
-            playerNormal,
-            1.75 + jumpHeight + Math.sin(bob) * 0.025,
-        );
+        // The eye glides over the ground: it follows the average height under your
+        // feet (not the exact point), easing up and down, so small bumps and sharp
+        // rocky crests don't jolt the view. It never sinks far below standing height.
+        const ground = footHeight(playerNormal);
+        const want = ground + 1.75;
+        if (eyeRadius === null || Math.abs(eyeRadius - want) > 4) eyeRadius = want;
+        eyeRadius = damp(eyeRadius, want, want > eyeRadius ? 9 : 6, dt);
+        eyeRadius = Math.max(eyeRadius, surfaceRadius(playerNormal) + 1.35);
+        const eye = playerNormal.clone().multiplyScalar(eyeRadius + jumpHeight + Math.sin(bob) * 0.025);
         camera.position.copy(eye);
         camera.up.copy(playerNormal);
         const look = playerForward
@@ -1437,36 +1700,65 @@ function updateCamera(dt) {
         camera.fov = 70;
     } else {
                 // The camera drifts back behind the ship once you stop looking around.
-        if (!input.lookingAround(2500)) {
+        // While the mouse steers, only looking around (Q) moves the camera off the ship.
+        const holdView = mouseSteers()
+            ? performance.now() - lastFreeLook < 1200
+            : keys.has("KeyQ") || input.lookingAround(2500);
+        if (!holdView) {
             orbitYaw = THREE.MathUtils.damp(orbitYaw, 0, 2, dt);
             orbitPitch = THREE.MathUtils.damp(orbitPitch, 0.18, 2, dt);
         }
         const inSpace = mode === "space" || mode === "transit" || mode === "deep";
-        const up = inSpace ? spaceUp.clone() : shipPosition.clone().normalize();
+        // Entering or leaving orbit, the camera eases between its low flying view
+        // and its space view over a couple of seconds instead of jumping.
+        spaceBlend = damp(spaceBlend, inSpace ? 1 : 0, 1.3, dt);
+        const sb = smoothstep(spaceBlend);
+        reveal = Math.max(0, reveal - dt / 3.5);
+        const pull = smoothstep(reveal) * Math.min(1, reveal * 4); // rises fast, fades slowly
+        // How fast you are going, 0..1: wider view, camera dropping back, a faint shake.
+        const boosting = keys.has("ShiftLeft") || keys.has("ShiftRight");
+        const rush = mode === "deep"
+            ? throttle * (boosting ? 1 : 0.75)
+            : clamp(flowVel.length() / (110 + 790 * sb), 0, 1);
+        rushLevel = damp(rushLevel, rush, 2.5, dt);
+        const radial = shipPosition.clone().normalize();
+        const up = radial.clone().lerp(spaceUp, sb);
+        if (up.lengthSq() < 1e-4) up.copy(inSpace ? spaceUp : radial);
+        up.normalize();
         const back = shipForward.clone().negate().applyAxisAngle(up, orbitYaw);
         const framing = Math.max(1, 0.65 / camera.aspect);
+        const distance = 26 * (1 + 0.28 * rushLevel + 0.9 * pull);
         const desired = shipPosition
             .clone()
-            .addScaledVector(back, 26 * framing * Math.cos(orbitPitch))
-            .addScaledVector(up, ((inSpace ? 11 : 21) + 20 * Math.sin(orbitPitch)) * framing);
+            .addScaledVector(back, distance * framing * Math.cos(orbitPitch))
+            .addScaledVector(up, (21 - 10 * sb + 14 * pull + 20 * Math.sin(orbitPitch)) * framing);
         const normal = desired.clone().normalize();
         const floor = surfaceRadius(normal) + 2;
         if (!inSpace && desired.length() < floor)
             desired.copy(normal.multiplyScalar(floor));
+        // Carry the camera along with the ship, so at speed it stays close behind
+        // (a little lag is left in, which reads as speed).
+        if (mode !== "deep") camera.position.addScaledVector(flowVel, dt * 0.85);
         camera.position.lerp(desired, 1 - Math.exp(-dt * 4));
         camera.up.lerp(up, 1 - Math.exp(-dt * 4)).normalize();
-        camera.lookAt(
-            shipPosition
-                .clone()
-                // In space, look far ahead so what you fly toward sits mid-screen.
-                .addScaledVector(shipForward, inSpace ? 32 : 12)
-                // Near the ground the camera looks down a little; this fades out
-                // while climbing, so leaving orbit doesn't jolt the view.
-                .addScaledVector(up, inSpace ? 0 : -7 * (1 - smoothstep((altitude() - 120) / 480))),
-        );
+        const look = shipPosition
+            .clone()
+            // In space, look far ahead so what you fly toward sits mid-screen.
+            .addScaledVector(shipForward, 12 + 20 * sb)
+            // Near the ground the camera looks down a little; this fades out
+            // while climbing, so leaving orbit doesn't jolt the view.
+            .addScaledVector(up, -7 * (1 - smoothstep((altitude() - 120) / 480)) * (1 - sb) - 10 * pull);
+        // A faint shake when really moving (more with boost).
+        const shake = Math.max(0, rushLevel - 0.45) / 0.55;
+        if (shake > 0) {
+            const a = 0.35 * shake * shake * (boosting ? 1.4 : 1) * framing, t = animationTime;
+            look.addScaledVector(up, a * (Math.sin(t * 31) + Math.sin(t * 17.3)) * 0.5);
+            look.addScaledVector(back.clone().cross(up), a * (Math.sin(t * 27.1) + Math.sin(t * 13.7)) * 0.5);
+        }
+        camera.lookAt(look);
         camera.fov = THREE.MathUtils.damp(
             camera.fov,
-            58 + (Math.abs(speed) > 55 ? 7 : 0),
+            58 + 15 * rushLevel + 4 * pull,
             3,
             dt,
         );
@@ -1635,6 +1927,63 @@ function updateHeat(dt) {
     heatGlow.style.opacity = shownHeat < 0.01 ? "0" : shownHeat.toFixed(3);
 }
 
+// --- Danger without combat ---------------------------------------------------
+// Some big hunters stalk you on foot. A lunge knocks you back and damages your suit;
+// the suit recovers once you are left alone for a while. If it fails, the Kestrel's
+// emergency recall brings you back beside the ship. On board you are always safe.
+let suit = 1,
+    sinceHit = 99,
+    lastStalkToast = -Infinity;
+const suitReadout = document.createElement("div");
+suitReadout.style.cssText =
+    "position:fixed;left:50%;top:84px;transform:translateX(-50%);z-index:3;pointer-events:none;font:600 10px 'DM Sans',sans-serif;letter-spacing:2px;color:#ffd0b0;text-shadow:0 1px 6px #000;display:none;text-align:center";
+document.body.append(suitReadout);
+const hitFlash = document.createElement("div");
+hitFlash.style.cssText =
+    "position:fixed;inset:0;pointer-events:none;z-index:1;opacity:0;transition:opacity .5s;background:radial-gradient(ellipse at center,rgba(255,40,30,0) 45%,rgba(255,40,30,.6) 100%)";
+document.body.append(hitFlash);
+function sufferAttacks() {
+    for (const e of site.fauna.events) {
+        if (e.type === "stalk" && mode === "walk" && animationTime - lastStalkToast > 20) {
+            lastStalkToast = animationTime;
+            toast(`A ${e.creature.sp.name} is stalking you. Keep moving, or get back aboard the Kestrel.`, 5);
+        }
+        if (e.type !== "attack" || mode !== "walk") continue;
+        suit = Math.max(0, suit - e.damage * suitDamageScale(codex.unlocked));
+        sinceHit = 0;
+        hitFlash.style.transition = "none";
+        hitFlash.style.opacity = "1";
+        requestAnimationFrame(() => { hitFlash.style.transition = "opacity .9s"; hitFlash.style.opacity = "0"; });
+        // Knocked back, away from the animal.
+        const away = tangent(playerNormal.clone().sub(e.from), playerNormal);
+        if (away.lengthSq() > 0.01) playerNormal.addScaledVector(away, 3.5 / RADIUS).normalize();
+        jumpVelocity = Math.max(jumpVelocity, 2.4);
+        if (jumpHeight <= 0) jumpHeight = 0.01;
+        if (suit <= 0) {
+            suit = 1;
+            recallToShip();
+            toast("Suit integrity failed. Emergency recall: you are back beside the Kestrel.", 6);
+        } else toast(`Struck by a ${e.creature.sp.name}! Suit integrity ${Math.round(suit * 100)}%.`, 4);
+    }
+}
+function updateSuit(dt) {
+    sinceHit += dt;
+    if (sinceHit > 6) suit = Math.min(1, suit + dt * 0.05 * suitRecoveryScale(codex.unlocked));
+    const show = mode === "walk" && suit < 0.999;
+    suitReadout.style.display = show ? "block" : "none";
+    if (show) suitReadout.textContent = `SUIT INTEGRITY ${Math.round(suit * 100)}%${sinceHit > 6 ? " · RECOVERING" : ""}`;
+}
+// Back on foot beside the parked ship, facing away from it.
+function recallToShip() {
+    const up = shipPosition.clone().normalize(),
+        right = shipForward.clone().cross(up).normalize();
+    playerNormal = shipPosition.clone().addScaledVector(right, 5.5).addScaledVector(shipForward, 2).normalize();
+    playerForward = tangent(right, playerNormal);
+    jumpHeight = 0;
+    jumpVelocity = 0;
+    keys.clear();
+}
+
 // Animals hunt each other whether or not you watch; if a catch happens near you, say so.
 const sunDirection = new THREE.Vector3();
 let lastHuntToast = -Infinity;
@@ -1665,6 +2014,7 @@ const hudState = {
     get system() { return system; },
     get deep() { return deepInfo(); },
     get target() { return target; },
+    get scanLabel() { return mode !== "walk" || !scanTarget ? null : scanTarget.known ? "Details" : scanProgress > 0 ? "Scanning…" : "Hold to scan"; },
     clearTarget,
     camera,
     shipShadow,
@@ -1698,9 +2048,12 @@ function frame(now) {
                 updateManeuver(dt);
             else if (mode === "walk") updateWalk(dt);
         } else orientShip();
+        updateFlow(dt);
         updateCamera(dt);
         if (started) updateWaypoint(hudState);
+        if (started) drawScanMarker();
         updateHeat(dt);
+        updateSuit(dt);
         updateAtmosphere();
         if (site) animateSite(dt);
         if (site?.fauna && mode !== "space" && mode !== "transit" && mode !== "deep") {
@@ -1712,6 +2065,7 @@ function frame(now) {
                       : null;
             site.fauna.update(dt, animationTime, watcher, sunDirection.copy(sun.position).normalize());
             witnessHunts(watcher);
+            sufferAttacks();
         }
         updateShipEffects(
             kestrel,
@@ -1738,8 +2092,9 @@ function frame(now) {
     engine.update(
         !paused &&
             started &&
-            (mode === "flight" || mode === "landing" || mode === "takeoff"),
-        speed,
+            (mode === "flight" || mode === "landing" || mode === "takeoff" || mode === "space" || mode === "transit"),
+        // In space the engine note climbs with speed too, scaled to space speeds.
+        mode === "space" || mode === "transit" ? 30 + Math.min(Math.abs(speed), 1500) * 0.12 : speed,
         verticalSpeed,
     );
     if (!starMap.isOpen) {
@@ -1774,9 +2129,36 @@ camera.lookAt(shipPosition);
 refreshWorldLabels();
 setStage(discovered ? 3 : 0);
 refreshHUD();
+// Field scanner (upgrade): the HUD counts what is left to record on this world.
+let tallyTimer = 0;
+function updateTally(now = false, dt = 1 / 60) {
+    if (!now && (tallyTimer += dt) < 0.5) return;
+    tallyTimer = 0;
+    const el = $("worldTally");
+    if (!el) return;
+    const totals = site && !activeBody.giant ? siteTotals() : null;
+    const on = totals && ["walk", "landed", "flight", "landing", "takeoff"].includes(mode);
+    el.hidden = !on;
+    if (!on) return;
+    const got = recordedOn(codex.entries, system.seed, activeBody.id);
+    const rows = [["Plants", got.flora, totals.flora], ["Animals", got.fauna, totals.fauna], ["Geology", got.formation, totals.formations]].filter(([, , t]) => t > 0);
+    const html = rows.map(([w, g, t]) => `<div class="tally-row${g >= t ? " done" : ""}"><span>${w}</span><b>${Math.min(g, t)} / ${t}</b><i style="--f:${Math.min(1, g / t).toFixed(3)}"></i></div>`).join("");
+    if (el.innerHTML !== html) el.innerHTML = html;
+}
+// What the landing site actually holds (a species that found no room is not counted).
+function siteTotals() {
+    return {
+        flora: site.flora?.placed?.filter((p) => p.positions.length).length ?? 0,
+        fauna: site.fauna?.species?.length ?? 0,
+        formations: site.geology?.placed?.filter((p) => p.scales.some((x) => x > 0)).length ?? 0,
+    };
+}
 function animateSite(dt) {
+    upgradeScreen.setMode(mode);
+    updateTally(false, dt);
     if (site.flora) site.flora.update(animationTime);
     if (site.structures) site.structures.update(animationTime);
+    if (site.groundCover) site.groundCover.update(camera.position, animationTime);
     checkTraces(dt);
 }
 // Seeing a settlement (on foot nearby, or flying low over it) records who built it.
@@ -1789,15 +2171,18 @@ function checkTraces(dt) {
     if (!here) return;
     const reach = (mode === "walk" ? 45 : 110) + built.civ.unit * 10;
     if (!built.sites.some((n) => n.clone().multiplyScalar(RADIUS).distanceTo(here) < reach)) return;
-    traces[activeBody.id] = built.civ.level;
+    traces[activeBody.id] = built.civ.tier; // a name, so a longer ladder later keeps old saves meaningful
     saveSurvey();
-    toast(`Signs of intelligence. ${built.civ.description}`, 9);
+    showScanCard({ kind: "settlement", ref: built.civ }, recordInfo(settlementEntry(system, activeBody, civilizationOf(activeBody), built.civ.tier)));
 }
 requestAnimationFrame(frame);
 
 // --- Galaxy travel: jumps reload into the destination system. ---
 let jumping = false;
 const starMap = createStarMap({
+    jumpRange: () => rangeFor(codex.unlocked),
+    // Radio sources heard from here go into the codex quietly (they arrive in the background).
+    onRadio: (sources) => sources.forEach((s) => record(signalEntry(s))),
     here: currentStar,
     system,
     deep: () => (mode === "deep" ? { position: galactic, course } : null),
@@ -1841,6 +2226,7 @@ const starMap = createStarMap({
         flora: catalogue,
         fauna: bestiary,
         traces,
+        geology: strata,
     }),
     selectedBody: () => selectedBody,
     onSelectBody: (body) => {
@@ -1876,7 +2262,7 @@ function openGalaxy() {
     keys.clear();
     starMap.open("local");
 }
-$("galaxyBtn").onclick = openGalaxy;
+// G still opens the map on nearby stars; the one Map button (M) covers both.
 try {
     if (
         sessionStorage.getItem("elsewhere-arrival") === currentStar.id &&

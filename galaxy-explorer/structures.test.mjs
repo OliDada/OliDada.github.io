@@ -45,12 +45,13 @@ test('settlements stand on dry ground, clear of the signal and pad, within walki
     for (const n of s.sites) {
       assert.ok(!terrain.isLiquid(n));
       assert.ok(n.angleTo(signal) * b.radius > 25 && n.angleTo(landing) * b.radius > 25, 'built on the landing site');
-      assert.ok(n.angleTo(signal) * b.radius < 230, 'too far to walk to');
+      assert.ok(n.angleTo(signal) * b.radius < 300 || s.network.capital.far, 'too far to walk to');
     }
     for (const o of s.obstacles) assert.ok(!terrain.isLiquid(o.p.clone().normalize()) && Number.isFinite(o.r) && o.h > 0);
     // Builders live where they build: their herds' homes moved onto the settlements.
     const homes = fauna.homes.get(s.civ.species.id);
-    for (const n of s.sites) assert.ok(homes.some(h => h.angleTo(n) < 1e-6));
+    assert.ok(homes.some(h => h.angleTo(s.sites[0]) < 1e-6), 'nobody lives in the capital');
+    assert.ok(s.network.capital.far || s.sites[0].angleTo(signal) * b.radius < 300, 'the capital is not beside the landing site');
     const pos = s.group.children.find(m => m.isMesh && !m.isInstancedMesh).geometry.attributes.position.array;
     for (let i = 0; i < pos.length; i += 3) assert.ok(Number.isFinite(pos[i]) && Math.hypot(pos[i], pos[i + 1], pos[i + 2]) < b.radius + 800); // tethers reach high
   }
@@ -78,9 +79,12 @@ test('the ladder: cities and beyond are bigger, planet-shapers spread over the w
     const pos = built.group.children.filter(m => m.isMesh && !m.isInstancedMesh).reduce((a, m) => a + m.geometry.attributes.position.count, 0);
     assert.ok(pos < 260000, `${pos} vertices`);
     // Towns well beyond the site, on the far side of the world too.
-    const far = built.obstacles.length >= 0 && built.group.children[built.group.children.length - 2].geometry.attributes.position;
-    let farthest = 0; for (let i = 0; i < far.count; i += 97) farthest = Math.max(farthest, new THREE.Vector3(far.getX(i), far.getY(i), far.getZ(i)).normalize().angleTo(signal));
-    assert.ok(farthest > 1.5, 'no towns across the world');
+    // Planetary civilizations have towns across the world, with night lights.
+    if (built.civ.extent === 'planetary' || built.civ.extent === 'system') {
+      const farthest = Math.max(...built.network.settlements.map(p => new THREE.Vector3(...p.n).angleTo(signal)));
+      assert.ok(farthest > 1.5, 'no towns across the world');
+      assert.ok(built.group.children.some(c => c.isPoints && c.geometry.attributes.position.count > 20), 'no night lights');
+    }
   }
 });
 

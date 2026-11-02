@@ -3,10 +3,18 @@
 // callback into game.js:
 //   on.map(), on.galaxy(), on.cruise(), on.help(), on.act(), on.interact(),
 //   on.look(dx, dy, k), on.manualControl() (any manual input cancels assists), on.toast(text),
-//   on.pick(x, y) (a tap or click on the view: select what is there), on.cycle() (Tab: next target)
+//   on.pick(x, y) (a tap or click on the view: select what is there), on.cycle() (Tab: next target),
+//   on.upgrades() (U: the upgrade screen)
 const $ = (id) => document.getElementById(id);
 
 export function setupInput({ keys, canvas, started, mode, modalOpen, on }) {
+    const toggleButtons = [...document.querySelectorAll("[data-toggle]")];
+    function clearToggles() {
+        for (const b of toggleButtons) {
+            b.classList.remove("on");
+            b.setAttribute("aria-pressed", "false");
+        }
+    }
     // A long press on the controls or the view must not open the system menu.
     document.addEventListener("contextmenu", (e) => {
         if (e.target.closest?.("#touchControls, #world, #hud button")) e.preventDefault();
@@ -25,6 +33,7 @@ export function setupInput({ keys, canvas, started, mode, modalOpen, on }) {
         if (e.code === "KeyG") return on.galaxy();
         if (e.code === "KeyT" && !modalOpen()) return on.cruise();
         if (e.code === "KeyH") return on.help();
+        if (e.code === "KeyU") return on.upgrades?.();
         if (e.code === "KeyC" && started() && !modalOpen()) return on.clear();
         if (e.code === "Tab" && started() && !modalOpen()) {
             e.preventDefault();
@@ -51,6 +60,8 @@ export function setupInput({ keys, canvas, started, mode, modalOpen, on }) {
                 "KeyX",
                 "ArrowUp",
                 "ArrowDown",
+                "ArrowLeft",
+                "ArrowRight",
             ].includes(e.code)
         )
             on.manualControl();
@@ -62,9 +73,13 @@ export function setupInput({ keys, canvas, started, mode, modalOpen, on }) {
     window.addEventListener("keyup", (e) => keys.delete(e.code));
     window.addEventListener("blur", () => {
         keys.clear();
+        clearToggles();
         dragging = false;
     });
-    document.addEventListener("visibilitychange", () => keys.clear());
+    document.addEventListener("visibilitychange", () => {
+        keys.clear();
+        clearToggles();
+    });
     // Mouse look: click the view to capture the mouse, so moving it turns the camera
     // without holding a button (Esc frees the cursor). Touch keeps drag-to-look.
     let lastMouseLook = -1e9,
@@ -82,7 +97,9 @@ export function setupInput({ keys, canvas, started, mode, modalOpen, on }) {
     document.addEventListener("pointerlockchange", () => {
         if (mouseLocked() && !lockHintShown) {
             lockHintShown = true;
-            on.toast("Mouse look on. Press Esc to free the cursor.");
+            on.toast(mode() === "walk"
+                ? "Mouse look on. Press Esc to free the cursor."
+                : "Mouse steering on. Hold Q to look around; Esc frees the cursor.");
         }
     });
     // A short tap or click without dragging selects whatever is under it. With
@@ -172,6 +189,20 @@ export function setupInput({ keys, canvas, started, mode, modalOpen, on }) {
         });
         for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
             button.addEventListener(event, () => keys.delete(key));
+    }
+    // Touch toggles (boost, look around): tap once to switch on, again to switch off.
+    for (const button of toggleButtons) {
+        const key = button.dataset.toggle;
+        button.setAttribute("aria-pressed", "false");
+        button.addEventListener("pointerdown", (e) => {
+            e.preventDefault();
+            if (modalOpen()) return;
+            const active = !keys.has(key);
+            if (active) keys.add(key);
+            else keys.delete(key);
+            button.classList.toggle("on", active);
+            button.setAttribute("aria-pressed", String(active));
+        });
     }
     return {
         mouseLocked,

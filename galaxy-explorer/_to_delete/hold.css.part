@@ -1,0 +1,37 @@
+
+/* The scan prompt around the crosshair (scan-ui.js) */
+.scan-prompt{position:fixed;left:50%;top:50%;width:0;height:0;z-index:2;pointer-events:none;opacity:0;transition:opacity .15s}
+.scan-prompt.visible{opacity:1}
+.scan-prompt .scan-ring{position:absolute;left:-30px;top:-30px;width:60px;height:60px;margin:0}
+.scan-prompt.known .scan-ring{animation:none;border-color:#c9f4cc55;border-style:dashed;box-shadow:none}
+.scan-prompt.known .scan-ring::before{display:none}
+.scan-prompt.done .scan-ring{animation:scanDone .6s ease-out}
+.scan-prompt .scan-ring::after{-webkit-mask:radial-gradient(circle,transparent 26px,#000 27px);mask:radial-gradient(circle,transparent 26px,#000 27px)}
+.scan-text{position:absolute;top:40px;left:0;transform:translateX(-50%);text-align:center;white-space:nowrap}
+.scan-text strong{display:block;font:500 16px 'Space Grotesk',sans-serif;color:#eef7ef;text-shadow:0 1px 8px #000,0 0 2px #000}
+.scan-text span{display:block;margin-top:6px;font-size:10px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:var(--mint);text-shadow:0 1px 6px #000}
+.scan-text kbd{color:#152921;background:var(--mint);border:0;font-weight:700;margin:0 4px;text-shadow:none}
+.scan-prompt.known strong{color:#cfe6dc}
+/* What is left to record on this world: a row per kind */
+#worldTally{margin-top:14px;display:grid;gap:8px;width:210px}#worldTally[hidden]{display:none}
+.tally-row{display:grid;grid-template-columns:1fr auto;gap:5px 10px;align-items:baseline;font-size:11px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:#c9dad4}
+.tally-row b{font-weight:500;font-size:13px;letter-spacing:0;color:var(--ink)}
+.tally-row i{grid-column:1/-1;height:2px;background:#bed5ce25;position:relative;overflow:hidden}
+.tally-row i::after{content:'';position:absolute;inset:0;background:var(--mint);transform:scaleX(var(--f,0));transform-origin:left;transition:transform .5s}
+.tally-row.done span,.tally-row.done b{color:var(--mint)}
+/* Hold-to-install (upgrades-ui.js) */
+.hold{position:relative;overflow:hidden;-webkit-user-select:none;user-select:none;touch-action:none;-webkit-touch-callout:none}
+.hold span{position:relative;z-index:1}
+.hold::before{content:'';position:absolute;inset:0;background:#86d892;transform:scaleX(var(--fill,0));transform-origin:left}
+.hold.holding{box-shadow:0 0 0 3px #c9f4cc44}
+.hold.done{animation:installPulse .7s ease-out}
+@keyframes installPulse{0%{box-shadow:0 0 0 0 #c9f4cc}100%{box-shadow:0 0 0 22px #c9f4cc00}}
+/* Messages sit at the top, clear of the crosshair, the waypoint and the controls */
+#toast{top:92px;bottom:auto}
+@media(pointer:coarse),(max-width:700px){
+ #toast{top:176px}
+ .scan-card{top:200px}
+ .location #worldTally{position:fixed;right:14px;top:58px;width:132px;gap:5px;margin:0}
+ .tally-row{font-size:8px;letter-spacing:1px}.tally-row b{font-size:10px}
+ .scan-text strong{font-size:14px}.scan-text span{font-size:9px}
+}

@@ -73,21 +73,21 @@ function makeShip() {
         wing.scale.x = side;
         group.add(wing);
         const pod = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.48, 0.6, 3.1, 8),
+            new THREE.CylinderGeometry(0.48, 0.6, 3.1, 20),
             orange,
         );
         pod.rotation.x = Math.PI / 2;
         pod.position.set(side * 2.2, 0, 1.35);
         group.add(pod);
         const nozzle = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.42, 0.48, 0.6, 8),
+            new THREE.CylinderGeometry(0.42, 0.48, 0.6, 20),
             dark,
         );
         nozzle.rotation.x = Math.PI / 2;
         nozzle.position.set(side * 2.2, 0, 3);
         group.add(nozzle);
         const engine = new THREE.Mesh(
-            new THREE.ConeGeometry(0.38, 2, 12),
+            new THREE.ConeGeometry(0.38, 2, 20),
             new THREE.MeshBasicMaterial({
                 color: 0x9ef6e1,
                 transparent: true,
@@ -106,7 +106,7 @@ function makeShip() {
         group.userData.gear.push(foot);
         for (const z of [-1.2, 1.6]) {
             const jet = new THREE.Mesh(
-                new THREE.ConeGeometry(0.24, 1.8, 8),
+                new THREE.ConeGeometry(0.24, 1.8, 16),
                 new THREE.MeshBasicMaterial({
                     color: 0xa5f7e1,
                     transparent: true,

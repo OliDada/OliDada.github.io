@@ -1,0 +1,83 @@
+// Geology: rock and ice formations to find and record on any world with a surface,
+// so worlds without life still have something to discover. Pure data; geology-mesh.js
+// builds and places them. Each world gets 2–4 kinds, chosen from its physics:
+// volcanism, temperature, air, water, chemistry and biome. A few (iron meteorites,
+// geodes) are rare anywhere. Draws come from their own key path, so nothing else changes.
+import { rng } from './rng.mjs';
+
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// fit(e) -> weight; shape is drawn by geology-mesh.js; near: 'shore' | 'high' | 'any'.
+export const FORMATIONS = {
+  columns:    { name: 'basalt columns', shape: 'columns', near: 'any', fit: e => e.volc * 1.6 + (e.biome === 'Volcanic' ? 1 : 0),
+                text: e => `Six-sided columns of basalt, split as a lava flow cooled slowly.${e.volc > .5 ? ' This world is still volcanically active.' : ''}` },
+  obsidian:   { name: 'obsidian shards', shape: 'shards', near: 'any', fit: e => e.volc * 1.2 + (e.biome === 'Volcanic' ? .6 : 0),
+                text: () => 'Black volcanic glass, formed where lava cooled too fast to crystallise.' },
+  fumaroles:  { name: 'fumaroles', shape: 'vent', near: 'any', glow: true, fit: e => e.air > .05 ? e.volc * 1.4 : 0,
+                text: e => `Vents breathing hot gas from below; their rims are crusted with ${e.chem === 'sulfur' ? 'sulfur' : 'minerals'}.` },
+  hoodoos:    { name: 'hoodoos', shape: 'hoodoos', near: 'high', fit: e => (e.biome === 'Desert' ? 1.6 : 0) + e.dry * e.windy * .8,
+                text: () => 'Pillars of soft rock under harder caps, carved by wind and grit over ages.' },
+  arch:       { name: 'rock arches', shape: 'arch', near: 'high', fit: e => (e.biome === 'Desert' ? .9 : 0) + e.dry * e.windy * .5,
+                text: () => 'Natural arches, worn through rock fins by wind.' },
+  penitentes: { name: 'penitentes', shape: 'blades', near: 'high', fit: e => (e.ice ? 1.2 : 0) * (e.air < 2 ? 1 : .3) * (e.T < 250 ? 1 : 0),
+                text: () => 'Fields of tall ice blades, sculpted where sunlight turns ice straight to vapour.' },
+  pingo:      { name: 'pingos', shape: 'dome', near: 'any', fit: e => (e.ice ? .6 : 0) + (e.subsurface ? 1.2 : 0),
+                text: e => `Ice-cored hills pushed up from below${e.subsurface ? ' by the ocean hidden under the crust' : ''}.` },
+  cryovolcano:{ name: 'cryovolcanoes', shape: 'vent', near: 'high', glow: true, cold: true, fit: e => (e.ice || e.T < 200) && e.volc > .25 ? 1.6 : 0,
+                text: () => 'Ice volcanoes: instead of lava they erupt water, ammonia or methane, which freezes as it falls.' },
+  crystals:   { name: 'crystal spires', shape: 'crystals', near: 'any', glow: true, fit: e => (e.biome === 'Amethyst' ? 2 : 0) + (e.chem === 'silicon' ? 1.2 : 0),
+                text: () => 'Giant mineral crystals that grew in slowly cooling fluids, now exposed by erosion.' },
+  terraces:   { name: 'mineral terraces', shape: 'terraces', near: 'shore', fit: e => (e.biome === 'Toxic' ? 1.4 : 0) + (e.wet && e.volc > .3 ? .8 : 0),
+                text: () => 'Stepped pools rimmed with minerals left behind by hot, saturated springs.' },
+  chimneys:   { name: 'sulfur chimneys', shape: 'chimneys', near: 'any', glow: true, fit: e => (e.chem === 'sulfur' ? 1.8 : 0) + (e.biome === 'Toxic' ? .9 : 0),
+                text: () => 'Hollow chimneys built up by sulfur-rich vents, still warm inside.' },
+  karst:      { name: 'karst pinnacles', shape: 'pinnacles', near: 'any', fit: e => e.wet && e.T > 260 && e.T < 330 ? 1.1 : 0,
+                text: () => 'Jagged pinnacles of limestone, dissolved into blades by slightly acidic rain.' },
+  seastacks:  { name: 'sea stacks', shape: 'stack', near: 'shore', fit: e => e.seas > .3 ? 1.2 : 0,
+                text: () => 'Pillars of rock left standing offshore as the coast was eaten back by waves.' },
+  boulders:   { name: 'impact boulders', shape: 'boulders', near: 'any', fit: e => (e.air < .05 ? 1.6 : .2) + (e.biome === 'Barren' ? .6 : 0),
+                text: e => `Shattered rock thrown out by impacts${e.air < .05 ? '; with no air, nothing has worn them down' : ''}.` },
+  strata:     { name: 'banded outcrops', shape: 'strata', near: 'high', fit: () => .45,
+                text: e => `Layered rock recording ${e.wet ? 'ancient seas and floods' : 'ages of dust and ash'}, one band at a time.` },
+  geode:      { name: 'geodes', shape: 'geode', near: 'any', glow: true, rare: true, fit: () => .3,
+                text: () => 'Hollow stones lined with crystals that grew inside them over millions of years.' },
+  meteorite:  { name: 'iron meteorite', shape: 'meteorite', near: 'any', rare: true, fit: e => .22 + (e.air < .05 ? .2 : 0),
+                text: () => 'A lump of iron and nickel, the core of a small world shattered long ago.' },
+};
+
+function environment(body) {
+  const p = body.physics || {};
+  return {
+    biome: body.biome, T: p.temperature ?? 280, air: p.pressure ?? 0, volc: clamp(p.volcanism ?? 0, 0, 1),
+    ice: p.waterState === 'ice' || body.biome === 'Frozen', wet: p.waterState === 'liquid' || (p.solventCoverage ?? 0) > .1,
+    seas: p.waterState === 'liquid' ? p.waterCoverage ?? 0 : p.solventCoverage ?? 0, dry: clamp(1 - (p.waterCoverage ?? 0) * 1.6, 0, 1),
+    windy: clamp(Math.log10(Math.max(p.pressure ?? 0, 1e-4)) + 1.5, 0, 2) / 2, subsurface: !!p.subsurfaceOcean,
+    chem: p.biochemistry || p.solvent || 'carbon',
+  };
+}
+
+const cache = new Map();
+export function geologyFor(body) {
+  const key = `${body.seed}:${body.id}`;
+  if (cache.has(key)) return cache.get(key);
+  if (body.giant || !body.physics) { cache.set(key, { formations: [] }); return cache.get(key); }
+  const e = environment(body), r = rng(body.seed, 'geology');
+  const scored = Object.entries(FORMATIONS).map(([k, f]) => ({ k, f, w: f.fit(e) })).filter(x => x.w > .05);
+  const want = 2 + (r() < .55 ? 1 : 0) + (r() < .25 ? 1 : 0), chosen = [];
+  while (chosen.length < want && scored.length) {
+    const total = scored.reduce((a, x) => a + x.w * (x.f.rare ? .5 : 1), 0);
+    let roll = r() * total, i = 0;
+    for (; i < scored.length - 1; i++) { roll -= scored[i].w * (scored[i].f.rare ? .5 : 1); if (roll <= 0) break; }
+    chosen.push(scored.splice(i, 1)[0]);
+  }
+  const formations = chosen.map(({ k, f }) => ({
+    id: `geo-${k}`, key: k, shape: f.shape, near: f.near, glow: !!f.glow, cold: !!f.cold, rare: !!f.rare,
+    name: f.name[0].toUpperCase() + f.name.slice(1), description: f.text(e),
+    count: f.rare ? 2 + Math.floor(r() * 2) : 7 + Math.floor(r() * 8),
+    size: (.8 + r() * .7) * clamp(1 / Math.sqrt(Math.max(body.physics.gravity, .1)), .8, 1.6), // weak gravity, taller rock
+  }));
+  const out = { formations, environment: e };
+  if (cache.size > 2000) cache.clear();
+  cache.set(key, out);
+  return out;
+}

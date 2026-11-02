@@ -1,0 +1,184 @@
+// The upgrade screen (U), and the HUD panel #guide (top right) that shows the next
+// upgrade, or first steps before anything has been scanned. Reads the tree and
+// progress from upgrades.mjs and the codex from codex.mjs; game.js applies effects.
+//
+//   const ui = createUpgradeScreen({ codex, onUnlock(id), onOpen(), touch });
+//   ui.open() · ui.close() · ui.toggle() · ui.refresh() · ui.setMode(mode) · ui.isOpen
+//
+// One list per branch (tabs), so it reads the same on a phone as on a laptop.
+import { BRANCHES, UPGRADES, progress, hint } from './upgrades.mjs';
+
+const $ = (id) => document.getElementById(id);
+// h('p', { class: 'x' }, 'text', child) -> element. Text is always set as text.
+function h(tag, attrs = {}, ...children) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of children.flat()) if (c != null && c !== false) el.append(c instanceof Node ? c : String(c));
+  return el;
+}
+const STATUS = {
+  live: null,
+  partial: (u) => `Partly built: ${u.built}.`,
+  planned: () => 'Effect not built yet: it is on the roadmap.',
+};
+const spreadText = (n) => n.spread.map((s) => `${s.have} of ${s.need} ${s.label}`).join(' · ');
+
+// How close an upgrade is to ready (0..1): each need counts equally.
+const fraction = (p) => p.needs.reduce((a, n) => a + (n.done ? 1 : (n.have / n.count + n.spread.reduce((b, s) => b + s.have / s.need, 0)) / (1 + n.spread.length)), 0) / p.needs.length;
+
+export function createUpgradeScreen({ codex, onUnlock, onOpen, touch = false }) {
+  // --- DOM: header button, dialog, HUD guide -----------------------------------------
+  const button = h('button', { id: 'upgradesBtn', class: 'map-open', title: 'Upgrades (U)', 'aria-label': 'Open upgrades' },
+    '⬡ ', h('span', {}, 'UPGRADES'), h('i', { class: 'up-badge', hidden: true }));
+  $('helpBtn').before(button);
+  const tabs = h('div', { class: 'up-tabs', role: 'tablist' });
+  const body = h('div', { class: 'up-body' });
+  const summary = h('p', { class: 'up-summary' });
+  const dialog = h('dialog', { id: 'upgrades', 'aria-label': 'Upgrades' },
+    h('button', { class: 'close', 'aria-label': 'Close upgrades', onclick: () => dialog.close() }, '×'),
+    h('div', { class: 'eyebrow' }, 'KESTREL / UPGRADES'),
+    h('h2', {}, 'What you document builds the ship.'),
+    summary, tabs, body);
+  document.body.append(dialog);
+  // The HUD panel where the expedition objective used to be: the next upgrade.
+  const guide = $('guide');
+
+  let branch = 'starter', state = {}, mode = 'flight', guideKey = '';
+  button.onclick = () => toggle();
+
+  function card(p) {
+    const u = p.upgrade, locked = !p.available && !p.unlocked;
+    const missing = u.after.filter((id) => !codex.unlocked.has(id)).map((id) => UPGRADES[id].name);
+    const tag = p.unlocked ? 'UNLOCKED' : p.ready ? 'READY' : locked ? `NEEDS ${missing.join(' + ').toUpperCase()}` : `${p.needs.filter((n) => n.done).length} / ${p.needs.length}`;
+    const status = STATUS[u.status]?.(u);
+    const tracked = codex.tracked === u.id;
+    return h('article', { class: `up-node${p.unlocked ? ' unlocked' : ''}${p.ready ? ' ready' : ''}${locked ? ' locked' : ''}`, 'data-id': u.id },
+      h('div', { class: 'up-head' }, h('h3', {}, u.name), h('span', { class: 'up-tag' }, tag)),
+      h('p', { class: 'up-effect' }, u.effect),
+      status && h('p', { class: 'up-status' }, status),
+      !p.unlocked && h('ul', { class: 'up-needs' }, p.needs.map((n, i) => h('li', { class: n.done ? 'done' : '' },
+        h('span', { class: 'up-check', 'aria-hidden': 'true' }, n.done ? '✓' : ''),
+        h('span', { class: 'up-label' }, n.label,
+          n.spread.length ? h('small', {}, spreadText(n)) : null,
+          !n.done ? h('small', { class: 'up-hint' }, n.notYet ? `Not in the game yet: arrives with ${n.notYet}.` : hint(u.needs[i])) : null),
+        h('b', {}, `${n.have} / ${n.count}`)))),
+      !p.unlocked && h('div', { class: 'up-actions' },
+        p.ready && h('button', { class: 'primary', onclick: () => unlock(u.id) }, `Unlock ${u.name}`),
+        !p.ready && h('button', { class: 'secondary', 'aria-pressed': tracked ? 'true' : 'false', onclick: () => { codex.track(u.id); refresh(); } },
+          tracked ? 'Tracking ✓' : 'Track on HUD')));
+  }
+
+  function render() {
+    const readyIn = new Set(Object.values(state).filter((p) => p.ready).map((p) => p.upgrade.branch));
+    tabs.replaceChildren(...BRANCHES.map((b) => h('button', {
+      role: 'tab', 'aria-selected': b.id === branch ? 'true' : 'false', class: readyIn.has(b.id) ? 'has-ready' : '',
+      onclick: () => { branch = b.id; render(); },
+    }, b.name)));
+    const b = BRANCHES.find((x) => x.id === branch);
+    const nodes = Object.values(state).filter((p) => p.upgrade.branch === branch)
+      .sort((x, y) => (y.ready - x.ready) || (x.unlocked - y.unlocked) || (y.available - x.available));
+    body.replaceChildren(h('p', { class: 'up-blurb' }, b.blurb), ...nodes.map(card));
+    const n = codex.entries.filter((e) => e.kind !== 'world' && e.kind !== 'signal').length;
+    summary.textContent = `${n} thing${n === 1 ? '' : 's'} documented · ${installed().length} of ${Object.keys(UPGRADES).length} upgrades unlocked. Every requirement asks about traits, never a particular species.`;
+  }
+
+  // Which upgrade the HUD shows: one that is ready, else the tracked one, else the
+  // nearest to ready among what is available (First steps first, as a tutorial).
+  function nextUpgrade() {
+    const all = Object.values(state);
+    const ready = all.find((p) => p.ready);
+    if (ready) return { p: ready, why: 'ready' };
+    const tracked = state[codex.tracked];
+    if (tracked && !tracked.unlocked) return { p: tracked, why: 'tracked' };
+    const open = all.filter((p) => p.available && !p.unlocked && !p.upgrade.ship && !p.needs.some((n) => n.notYet));
+    const starters = open.filter((p) => p.upgrade.branch === 'starter');
+    const pool = starters.length ? starters : open;
+    return pool.length ? { p: pool.reduce((a, b) => (fraction(b) > fraction(a) ? b : a)), why: 'next' } : null;
+  }
+
+  function renderGuide() {
+    if (!guide) return;
+    const documented = codex.entries.some((e) => !['world', 'signal'].includes(e.kind));
+    const next = nextUpgrade();
+    const firstSteps = !documented && !installed().length;
+    const key = JSON.stringify([firstSteps, mode === 'walk', next?.why, next?.p.id, next?.p.needs.map((n) => [n.have, n.done, n.spread.map((s) => s.have)])]);
+    if (key === guideKey) return;
+    guideKey = key;
+    const act = touch ? 'tap Scan' : 'press E';
+    let eyebrow, count = '', title, detail, needs = [], tip = null, frac = 0, ready = false;
+    if (firstSteps) {
+      eyebrow = 'FIRST STEPS';
+      title = 'Scan what you find';
+      detail = mode === 'walk'
+        ? `Walk up to a plant, an animal or a rock formation. When the ◎ marker appears, ${act} to scan it.`
+        : 'Land and step outside. Everything you scan is recorded, and what you record builds your ship.';
+    } else if (!next) {
+      eyebrow = 'UPGRADES';
+      title = 'Everything available is installed';
+      detail = 'Keep exploring: new upgrades open as you install others.';
+    } else {
+      const { p, why } = next, u = p.upgrade;
+      ready = why === 'ready';
+      eyebrow = ready ? 'UPGRADE READY' : `NEXT UPGRADE${why === 'tracked' ? ' · TRACKED' : u.branch === 'starter' ? ' · FIRST STEPS' : ''}`;
+      count = ready ? '' : `${p.needs.filter((n) => n.done).length} / ${p.needs.length}`;
+      title = u.name;
+      detail = ready ? `${u.effect} Open Upgrades to install it.` : u.effect;
+      needs = ready ? [] : p.needs.map((n) => h('li', { class: n.done ? 'done' : '' },
+        h('span', {}, n.label), h('b', {}, n.spread.length && n.have >= n.count && !n.done ? spreadText(n) : `${n.have}/${n.count}`)));
+      const first = p.needs.findIndex((n) => !n.done);
+      if (!ready && first >= 0) tip = hint(u.needs[first]);
+      frac = ready ? 1 : fraction(p);
+    }
+    guide.classList.toggle('ready', ready);
+    guide.classList.toggle('first', firstSteps);
+    guide.replaceChildren(...[
+      h('div', { class: 'eyebrow' }, eyebrow, count && h('span', {}, count)),
+      h('h2', {}, title),
+      h('p', {}, detail),
+      needs.length ? h('ul', { class: 'guide-needs' }, needs) : null,
+      tip ? h('small', { class: 'guide-tip' }, tip) : null,
+      h('div', { class: 'progress' }, h('i', { style: `width:${Math.round(frac * 100)}%` })),
+      ready ? h('button', { class: 'primary guide-btn', onclick: () => open() }, 'Install ', h('kbd', {}, 'U')) : null].filter(Boolean));
+  }
+  // Unlocked upgrades that still exist in the tree (old saves may name removed ones).
+  const installed = () => [...codex.unlocked].filter((id) => UPGRADES[id]);
+
+  function refresh() {
+    state = progress(codex.entries, codex.unlocked);
+    const ready = Object.values(state).filter((p) => p.ready).length;
+    const badge = button.querySelector('.up-badge');
+    badge.hidden = !ready;
+    badge.textContent = ready || '';
+    button.classList.toggle('has-ready', ready > 0);
+    renderGuide();
+    if (dialog.open) render();
+  }
+  // The guide's wording depends on whether you are on foot.
+  function setMode(m) { if (m !== mode) { mode = m; renderGuide(); } }
+
+  function unlock(id) {
+    if (!state[id]?.ready) return;
+    codex.unlock(id);
+    refresh();
+    onUnlock?.(id);
+  }
+
+  function open() {
+    onOpen?.();
+    state = progress(codex.entries, codex.unlocked);
+    const ready = Object.values(state).find((p) => p.ready);
+    branch = ready?.upgrade.branch || state[codex.tracked]?.upgrade.branch || branch;
+    render();
+    dialog.showModal();
+    body.scrollTop = 0;
+  }
+  const close = () => dialog.close();
+  const toggle = () => (dialog.open ? close() : open());
+
+  refresh();
+  return { open, close, toggle, refresh, setMode, get isOpen() { return dialog.open; } };
+}

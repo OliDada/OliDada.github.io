@@ -8,7 +8,11 @@ import { bodyPosition, orbitClock } from './orbits.mjs';
 import { lifeLabel } from './biomes.mjs';
 import { floraFor } from './flora.mjs';
 import { faunaFor } from './fauna.mjs';
-import { civilizationFor, LEVEL_NAMES } from './structures.mjs';
+import { geologyFor } from './geology.mjs';
+import { civilizationOf, tierAtLeast, colonistOf } from './civilizations.mjs';
+import { networkFor, describeNetwork } from './settlements.mjs';
+import { plural } from './structures.mjs';
+import { terrainFor } from './terrain.mjs';
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -29,13 +33,8 @@ function exoticLife(sys) { return sys.bodies.some(b => b.physics?.life && b.phys
 const EXOTIC_RING = 'rgba(205,160,255,.95)';
 // Planet-shapers and spacefarers broadcast: their radio signals reach the long-range scan.
 const SIGNAL_RING = 'rgba(255,210,120,.95)';
-const civCache = new Map();
-function civOf(b) {
-  const key = `${b.seed}-${b.id}`;
-  if (!civCache.has(key)) civCache.set(key, b.physics?.life === 'complex' ? civilizationFor(b, faunaFor(b).species) : null);
-  return civCache.get(key);
-}
-const radioWorld = (b) => civOf(b)?.level >= 4;
+const civOf = civilizationOf;
+const radioWorld = (b) => tierAtLeast(civOf(b)?.tier, 'planet-shapers');
 const signals = (sys) => sys.bodies.some(radioWorld);
 // How rare each level of life is galaxy-wide: one world in N (from
 // `node galaxy-explorer/inspect.mjs --stats`; starmap.test.mjs checks they still hold).
@@ -75,7 +74,7 @@ function systemOf(star) {
 }
 // Worlds are drawn where they are now on their orbits (orbits.mjs).
 const bodyXY = (star, sys, body) => { const p = bodyPosition(sys, body, orbitClock()); return [star.x + p[0] * sys.chartScale, star.y - p[2] * sys.chartScale]; };
-function readSurvey(seed) { try { const s = JSON.parse(localStorage.getItem(`elsewhere-system-${seed}`) || '{}'); return { records: new Set(s.records || []), visited: new Set(s.visited || []), flora: s.flora || {}, fauna: s.fauna || {}, traces: s.traces || {} }; } catch { return { records: new Set(), visited: new Set(), flora: {}, fauna: {}, traces: {} }; } }
+function readSurvey(seed) { try { const s = JSON.parse(localStorage.getItem(`elsewhere-system-${seed}`) || '{}'); return { records: new Set(s.records || []), visited: new Set(s.visited || []), flora: s.flora || {}, fauna: s.fauna || {}, traces: s.traces || {}, geology: s.geology || {} }; } catch { return { records: new Set(), visited: new Set(), flora: {}, fauna: {}, traces: {}, geology: {} }; } }
 
 export function createStarMap(o) {
   let { here } = o;
@@ -84,7 +83,7 @@ export function createStarMap(o) {
   const $ = (id) => document.getElementById(id);
   const dialog = $('starMap'), canvas = $('starCanvas'), ctx = canvas.getContext('2d');
   systems.set(here.id, o.system); // the system you are actually flying in
-  let { range, targets } = jumpTargets(here);
+  let { range, targets } = jumpTargets(here, o.jumpRange?.());
   let inRange = new Set(targets.map(t => t.star.id));
 
   // --- Radio signals heard from here (signals.mjs) ---------------------------
@@ -95,11 +94,12 @@ export function createStarMap(o) {
     const at = here;
     if (radioFor === at.id) return;
     radioFor = at.id; radio = []; radioDone = false;
-    const key = `elsewhere-signals-v1-${at.id}`, center = { x: at.x, y: at.y, z: at.z };
+    const key = `elsewhere-signals-v2-${at.id}`, center = { x: at.x, y: at.y, z: at.z };
     const done = (list) => {
       if (radioFor !== at.id) return;
       radio = list.map(e => ({ ...e, star: starById(e.id) })).filter(e => e.star); radioDone = true;
-      try { localStorage.setItem(key, JSON.stringify(list.map(({ id, level, distance }) => ({ id, level, distance })))); } catch {}
+      o.onRadio?.(list); // heard sources go into the codex (upgrades)
+      try { localStorage.setItem(key, JSON.stringify(list.map(({ id, tier, civ, distance }) => ({ id, tier, civ, distance })))); } catch {}
       if (dialog.open) { updatePanel(); requestDraw(); }
     };
     try { const cached = JSON.parse(localStorage.getItem(key) || 'null'); if (cached) return void done(cached); } catch {}
@@ -232,8 +232,8 @@ export function createStarMap(o) {
         if (sx < -30 || sy < -30 || sx > w + 30 || sy > h + 30) continue;
         ctx.strokeStyle = SIGNAL_RING; ctx.lineWidth = 1.3;
         for (const k of [6, 10, 14]) { ctx.globalAlpha = 1.1 - k / 16; for (const a of [0, Math.PI]) { ctx.beginPath(); ctx.arc(sx, sy, k, a - .8, a + .8); ctx.stroke(); } }
-        ctx.globalAlpha = 1; ctx.fillStyle = SIGNAL_RING; ctx.beginPath(); ctx.arc(sx, sy, e.level >= 5 ? 2.8 : 2.2, 0, Math.PI * 2); ctx.fill();
-        if (s > .6) ctx.fillText(s >= LOCAL_SCALE * .4 ? `${nameOf(e.star)} · ${e.level >= 5 ? 'SPACEFARERS' : 'SIGNALS'}` : '', sx + 17, sy);
+        ctx.globalAlpha = 1; ctx.fillStyle = SIGNAL_RING; ctx.beginPath(); ctx.arc(sx, sy, e.tier === 'spacefarers' ? 2.8 : 2.2, 0, Math.PI * 2); ctx.fill();
+        if (s > .6) ctx.fillText(s >= LOCAL_SCALE * .4 ? `${nameOf(e.star)} · ${e.tier === 'spacefarers' ? 'SPACEFARERS' : 'SIGNALS'}` : '', sx + 17, sy);
         if (!drawn.some(d => !d.body && d.star.id === e.star.id)) drawn.push({ star: e.star, sx, sy, r: 12 });
       }
       ctx.globalAlpha = 1;
@@ -436,7 +436,11 @@ export function createStarMap(o) {
         const survey = isHere ? o.survey() : readSurvey(sys.seed), status = body.giant ? (survey.visited?.has(body.id) ? 'visited' : 'not yet visited') : survey.records.has(body.id) ? 'signal recorded' : survey.visited?.has(body.id) ? 'visited' : 'unidentified surface signal';
         $('mapKicker').textContent = `${body.type.toUpperCase()}${parent ? ` · MOON OF ${parent.name.toUpperCase()}` : ''}`;
         const civ = civOf(body), seenCiv = civ && survey.traces?.[body.id];
-        const intelligence = seenCiv ? `Intelligence: ${civ.description}` : radioWorld(body) ? 'Artificial radio signals come from this world.' : '';
+        const colonist = !civ && known ? colonistOf(sys, body) : null;
+        const net = seenCiv ? networkFor(body, civ, terrainFor(body)) : null;
+        const intelligence = seenCiv ? `Intelligence: ${civ.description}${net?.capital ? ` Settlements: ${describeNetwork(net)}.` : ''}`
+          : radioWorld(body) ? 'Artificial radio signals come from this world.'
+          : colonist ? `A colony of the ${plural(colonist.species.name)} from ${sys.bodies.find(b => b.id === colonist.home)?.name}.` : '';
         $('mapName').textContent = body.name; $('mapDescription').textContent = [body.description, rarityText(body), intelligence].filter(Boolean).join(' '); $('mapFacts').textContent = `${body.facts} · ${status}`;
         // Plant life: how many species, and the ones you have catalogued on foot.
         const plants = floraFor(body).species, seen = new Set(survey.flora?.[body.id] || []);
@@ -444,6 +448,12 @@ export function createStarMap(o) {
           const names = plants.filter(sp => seen.has(sp.id)).map(sp => sp.name);
           $('mapFacts').textContent += ` · ${seen.size} of ${plants.length} plant species catalogued`;
           if (names.length) $('mapDescription').textContent += ` Catalogued: ${names.join(', ')}.`;
+        }
+        const rocks = geologyFor(body).formations, recorded = new Set(survey.geology?.[body.id] || []);
+        if (rocks.length) {
+          $('mapFacts').textContent += ` · ${recorded.size} of ${rocks.length} rocks and landforms recorded`;
+          const names = rocks.filter(f => recorded.has(f.id)).map(f => f.name.toLowerCase());
+          if (names.length) $('mapDescription').textContent += ` Formations: ${names.join(', ')}.`;
         }
         const animals = faunaFor(body).species, observed = new Set(survey.fauna?.[body.id] || []);
         if (animals.length) {
@@ -469,7 +479,7 @@ export function createStarMap(o) {
       } else if (inRange.has(star.id)) $('mapDescription').textContent = `Long-range scan: ${sys.bodies.length} worlds. ${SCAN[biosignature(sys)].text}${exoticLife(sys) ? ' Some of it is chemistry that does not run on water (violet ring).' : ''}${signals(sys) ? ' Artificial radio signals detected (gold ring): a civilization lives here.' : ''}`;
       else $('mapDescription').textContent = heardFrom(star) ? `${sys.bodies.length} worlds. Beyond scanner range, but someone here is broadcasting.` : `${sys.bodies.length} worlds. Beyond scanner range: jump closer to look for signs of life.`;
       const heard = heardFrom(star);
-      if (heard) $('mapDescription').textContent += ` Radio signals: ${LEVEL_NAMES[heard.level]} live here, ${heard.distance.toFixed(0)} light years from ${nameOf(here)}.${inRange.has(star.id) || isHere ? '' : ' Too far for one jump: set a course and fly, or jump closer star by star.'}`;
+      if (heard) $('mapDescription').textContent += ` Radio signals: ${heard.tier} live here, ${heard.distance.toFixed(0)} light years from ${nameOf(here)}.${inRange.has(star.id) || isHere ? '' : ' Too far for one jump: set a course and fly, or jump closer star by star.'}`;
       const lum = p.luminosity < .01 ? p.luminosity.toFixed(4) : p.luminosity.toFixed(2);
       $('mapFacts').textContent = `${p.temperature} K · ${p.mass.toFixed(2)} M☉ · ${lum} L☉ · ${p.age.toFixed(1)} billion years${isHere ? '' : ` · ${starDistance(star, here).toFixed(1)} ly away${heightWords(heightOf(star)) ? `, ${heightWords(heightOf(star))} you` : ''}`}`;
       const reachable = inRange.has(star.id), ready = o.canJump();
@@ -502,7 +512,7 @@ export function createStarMap(o) {
         const row = document.createElement('button'); row.className = 'world-row' + (body?.id === b.id ? ' selected' : '') + (b.parent ? ' moon' : '');
         const tag = [survey.records.has(b.id) ? 'RECORDED' : isHere && b.id === survey.activeId ? 'HERE' : survey.visited?.has(b.id) ? 'VISITED' : '',
           SCAN[LIFE_RANK[b.physics?.life] || 0].tag, isExotic(b) ? 'EXOTIC' : '',
-          survey.traces?.[b.id] && civOf(b) ? LEVEL_NAMES[civOf(b).level].toUpperCase() : radioWorld(b) ? 'SIGNALS' : ''].filter(Boolean).join(' · ');
+          survey.traces?.[b.id] && civOf(b) ? civOf(b).tier.toUpperCase() : radioWorld(b) ? 'SIGNALS' : colonistOf(sys, b) ? 'COLONY' : ''].filter(Boolean).join(' · ');
         row.innerHTML = `<i style="background:${b.palette[2]}"></i><span><strong></strong><small></small></span><em>${tag}</em>`;
         row.querySelector('strong').textContent = b.name; row.querySelector('small').textContent = `${b.type} · ${lifeLabel(b.physics).toLowerCase()}`;
         row.onclick = () => { select(star, b); flyToBody(star, b); };
@@ -522,11 +532,11 @@ export function createStarMap(o) {
     // Radio sources heard from here, nearest first.
     const rl = $('mapRadio'); rl.replaceChildren();
     $('mapRadioHeading').textContent = !radioDone ? 'RADIO SIGNALS · LISTENING…' : `RADIO SIGNALS · ${radio.length} HEARD WITHIN ${SCAN_RADIUS} LY`;
-    if (radioDone && !radio.length) { const p = document.createElement('p'); p.className = 'map-note'; p.textContent = `No artificial signals. Planet-shapers are heard out to ${HEARD[4]} ly, spacefarers out to ${HEARD[5]} ly.`; rl.append(p); }
+    if (radioDone && !radio.length) { const p = document.createElement('p'); p.className = 'map-note'; p.textContent = `No artificial signals. Planet-shapers are heard out to ${HEARD['planet-shapers']} ly, spacefarers out to ${HEARD.spacefarers} ly.`; rl.append(p); }
     for (const e of radio) {
       const tp = starPhysics(e.star), row = document.createElement('button');
       row.className = 'world-row' + (!body && star.id === e.star.id ? ' selected' : '');
-      row.innerHTML = `<i style="background:${tp.color}"></i><span><strong></strong><small>${LEVEL_NAMES[e.level]} · ${e.distance.toFixed(0)} ly</small></span><em>${[state.visited.has(e.id) ? 'VISITED' : '', inRange.has(e.id) ? 'IN RANGE' : ''].filter(Boolean).join(' · ')}</em>`;
+      row.innerHTML = `<i style="background:${tp.color}"></i><span><strong></strong><small>${e.tier} · ${e.distance.toFixed(0)} ly</small></span><em>${[state.visited.has(e.id) ? 'VISITED' : '', inRange.has(e.id) ? 'IN RANGE' : ''].filter(Boolean).join(' · ')}</em>`;
       row.querySelector('strong').textContent = nameOf(e.star);
       row.onclick = () => { select(e.star); flyTo(e.star.x, e.star.y, Math.max(LOCAL_SCALE * .5, Math.min(view.scale, SYSTEM_FROM * .6))); };
       rl.append(row);
@@ -559,11 +569,27 @@ export function createStarMap(o) {
     get isOpen() { return dialog.open; },
     resize() { if (dialog.open) { resize(); requestDraw(); } },
     refresh() { if (dialog.open) { updatePanel(); requestDraw(); } },
+    // Opens the map on a star, or one of its worlds, selected ("Show on map" in the upgrade screen).
+    focus(star, bodyId) {
+      scanRadio();
+      if (!dialog.open) dialog.showModal();
+      resize();
+      const body = systemOf(star).bodies.find((b) => b.id === bodyId) || null;
+      selected = { star, body };
+      Object.assign(view, focusView(star.x, star.y, body ? systemScale() : LOCAL_SCALE));
+      updatePanel(); draw();
+    },
+    // A jump drive upgrade changes the range (upgrades.mjs).
+    setRange(r) {
+      ({ range, targets } = jumpTargets(here, r));
+      inRange = new Set(targets.map(t => t.star.id));
+      if (dialog.open) { updatePanel(); requestDraw(); }
+    },
     // After flying into another system: it becomes "here" for jumps and the panel.
     setHere(star, sys) {
       here = star;
       systems.set(star.id, sys);
-      ({ range, targets } = jumpTargets(here));
+      ({ range, targets } = jumpTargets(here, o.jumpRange?.()));
       inRange = new Set(targets.map(t => t.star.id));
       selected = { star: targets[0]?.star || here, body: null };
       scanRadio();

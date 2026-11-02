@@ -6,6 +6,9 @@ import { terrainFor } from "./terrain.mjs";
 import { buildFlora, plantFootprint } from "./flora-mesh.js";
 import { buildFauna } from "./fauna-mesh.js";
 import { buildStructures } from "./structures-mesh.js";
+import { buildGeology, footprint as rockFootprint } from "./geology-mesh.js";
+import { createGroundCover } from "./groundcover.js";
+import { addSurfaceDetail } from "./planet-lod.js";
 
 const Y = new THREE.Vector3(0, 1, 0);
 const vec = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -39,7 +42,7 @@ function nearbyIn(obstacleGrid, p) {
 // body: the world; signalNormal/landingNormal: unit vectors of the site and pad;
 // surfacePoint(n, offset): point on the ground. Returns the scene group and the
 // animated parts game.js drives.
-export function buildSurface({ body, radius: RADIUS, signalNormal, landingNormal, surfacePoint, coarse }) {
+export function buildSurface({ body, radius: RADIUS, signalNormal, landingNormal, surfacePoint, coarse, colonist = null }) {
     let randomState = body.seed;
     const random = () => {
         randomState = (1664525 * randomState + 1013904223) >>> 0;
@@ -50,40 +53,64 @@ export function buildSurface({ body, radius: RADIUS, signalNormal, landingNormal
     // Faceted, vertex-coloured terrain; the same height function drives walking and landing.
     const terrainInfo = terrainFor(body);
 
+    // Atmosphere halo, seen from space as a glowing rim around the world. Close to
+    // the ground the sky itself takes on the air's colour (game.js updateAtmosphere),
+    // so the halo fades out as you come down, rather than hanging as a band above the
+    // horizon while you fly. Airless worlds get none.
+    const air = Math.min(1, Math.max(0, (Math.log10(Math.max(body.physics?.pressure ?? 0, 1e-4)) + 1.5) / 2.5));
     const atmosphere = new THREE.Mesh(
         new THREE.SphereGeometry(RADIUS * 1.06, 64, 48),
         new THREE.ShaderMaterial({
             uniforms: {
                 tint: { value: new THREE.Color(body.atmosphere) },
+                strength: { value: 0.2 * (0.5 + 0.7 * air) },
+                fadeFrom: { value: RADIUS + 400 },
+                fadeTo: { value: RADIUS + 1100 },
             },
             vertexShader: `#include <common>
 #include <logdepthbuf_pars_vertex>
-varying vec3 n; varying vec3 v; void main(){vec4 p=modelViewMatrix*vec4(position,1.0); n=normalize(normalMatrix*normal); v=normalize(-p.xyz); gl_Position=projectionMatrix*p;
+uniform float fadeFrom, fadeTo;
+varying vec3 n; varying vec3 v; varying float fade; void main(){vec4 p=modelViewMatrix*vec4(position,1.0); n=normalize(normalMatrix*normal); v=normalize(-p.xyz);
+fade=smoothstep(fadeFrom,fadeTo,distance(cameraPosition,(modelMatrix*vec4(0.0,0.0,0.0,1.0)).xyz));
+gl_Position=projectionMatrix*p;
 #include <logdepthbuf_vertex>
 }`,
             fragmentShader: `#include <logdepthbuf_pars_fragment>
-varying vec3 n; varying vec3 v; uniform vec3 tint; void main(){
+varying vec3 n; varying vec3 v; varying float fade; uniform vec3 tint; uniform float strength; void main(){
 #include <logdepthbuf_fragment>
-float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tint,rim*.2);}`,
+float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tint,rim*strength*fade);}`,
             side: THREE.BackSide,
             transparent: true,
             depthWrite: false,
             blending: THREE.AdditiveBlending,
         }),
     );
+    atmosphere.visible = air > 0;
     group.add(atmosphere);
 
     // Instancing keeps surface detail cheap enough for ordinary browser hardware.
-    // Each rock takes a darker shade of the ground it sits on, so rocks blend in from orbit.
-    const rockTint = new THREE.Color(body.rock);
+    // Rocks are the same stone as the world's cliffs (terrain.mjs rockColor), blended a
+    // little with the ground they sit on, with the same close-up detail as bare ground.
+    const rockTint = new THREE.Color().setRGB(...terrainInfo.rockColor, THREE.SRGBColorSpace);
     const rockMaterial = new THREE.MeshStandardMaterial({
         color: 0xffffff,
         roughness: 1,
         flatShading: true,
     });
+    addSurfaceDetail(rockMaterial, { ground: terrainInfo.ground, airless: terrainInfo.airless, lite: coarse, objects: true });
     const rockCount = coarse ? 500 : 800;
+    // Lumpy rather than round: each corner is pushed in or out by a function of its
+    // position, so faces that share a corner still meet.
+    const rockGeometry = new THREE.IcosahedronGeometry(1, coarse ? 0 : 1);
+    const rp = rockGeometry.attributes.position;
+    for (let i = 0; i < rp.count; i++) {
+        const x = rp.getX(i), y = rp.getY(i), z = rp.getZ(i);
+        const k = 1 + 0.22 * Math.sin(x * 5.1 + y * 3.7) * Math.cos(z * 4.3 - x * 2.2) - 0.18 * Math.max(0, -y);
+        rp.setXYZ(i, x * k, y * k, z * k);
+    }
+    rockGeometry.computeVertexNormals();
     const rocks = new THREE.InstancedMesh(
-        new THREE.IcosahedronGeometry(1, 0),
+        rockGeometry,
         rockMaterial,
         rockCount,
     );
@@ -126,9 +153,9 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         const ground = terrainInfo.color(n, terrainInfo.meshHeight(n));
         rocks.setColorAt(
             i,
-            new THREE.Color(ground[0], ground[1], ground[2])
-                .lerp(rockTint, 0.2)
-                .multiplyScalar(0.86),
+            new THREE.Color().setRGB(ground[0], ground[1], ground[2], THREE.SRGBColorSpace)
+                .lerp(rockTint, 0.7)
+                .multiplyScalar(0.85 + random() * 0.25),
         );
         // Local Y is "up" for the rock, so scale.y is its height.
         obstacles.push({
@@ -141,6 +168,10 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
     group.add(rocks);
     // (The standing stones and crystal ring that used to mark the site are gone;
     // the site is ordinary terrain now.)
+
+    // Geology: rock and ice formations to find and record, chosen from the world's physics.
+    const geology = buildGeology(THREE, { body, terrain: terrainInfo, radius: RADIUS, signalNormal, landingNormal, coarse });
+    group.add(geology.group);
 
     // Plant life: species generated from this world's environment, placed where they would thrive.
     const flora = buildFlora(THREE, {
@@ -165,7 +196,8 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
     });
     group.add(fauna.group);
 
-    // What an intelligent species has built, around its herds' homes (moves those homes onto buildable ground).
+    // What an intelligent species has built: its capital beside the landing site, towns and
+    // roads nearby, the rest of its world as distant towns and night lights (settlements.mjs).
     const structures = buildStructures(THREE, {
         body: body,
         terrain: terrainInfo,
@@ -173,6 +205,7 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         signalNormal,
         landingNormal,
         fauna,
+        colonist, // a spacefaring civilization from elsewhere in this system that has settled here
     });
     group.add(structures.group);
     obstacles.push(...structures.obstacles);
@@ -215,11 +248,36 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         }
     }
     if (rocksCleared) rocks.instanceMatrix.needsUpdate = true;
+    // Formations inside settlements are cleared too; the rest are solid on foot.
+    for (const p of geology.placed) {
+        let cleared = false;
+        for (let i = 0; i < p.scales.length; i++) {
+            n.set(p.positions[i * 3], p.positions[i * 3 + 1], p.positions[i * 3 + 2]).normalize();
+            if (clear.some((c) => c.n.dot(n) > c.cos)) {
+                for (const m of p.meshes) m.setMatrixAt(i, zero);
+                p.scales[i] = 0; // gone: cannot be recorded or bumped into
+                cleared = true;
+                continue;
+            }
+            const f = rockFootprint(p, i);
+            obstacles.push({ p: vec(p.positions[i * 3], p.positions[i * 3 + 1], p.positions[i * 3 + 2]), r: f.r, h: f.h });
+        }
+        if (cleared) for (const m of p.meshes) m.instanceMatrix.needsUpdate = true;
+    }
     const grid = buildGrid(obstacles);
+
+    // Grass tufts, flowers, pebbles and shards in a circle around the player (not inside settlements).
+    const groundCover = createGroundCover(THREE, {
+        body,
+        radius: RADIUS,
+        coarse,
+        blocked: (p) => clear.some((c) => c.n.x * p.x + c.n.y * p.y + c.n.z * p.z > c.cos),
+    });
+    group.add(groundCover.group);
 
     // Rings are drawn once, by system-view.js, for every world (including this one).
     return {
-        group, obstacles, flora, fauna, structures,
+        group, obstacles, flora, fauna, structures, geology, groundCover,
         nearbyObstacles: (p) => nearbyIn(grid, p),
     };
 }

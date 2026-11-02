@@ -109,3 +109,26 @@ test('ecology costs little per frame', () => {
   const ms = (performance.now() - t0) / 600;
   assert.ok(ms < 2, `${ms.toFixed(2)} ms per frame for ${fauna.creatures.length} animals`);
 });
+
+test('danger: big aggressive hunters stalk and lunge at you on foot, but never aboard ship, and intelligent species never do', () => {
+  const b = living.find(b => b.physics.life === 'complex' && faunaFor(b).species.some(s => s.ecology.stalksYou && s.altitude[1] === 0));
+  assert.ok(b, 'no world with a ground stalker');
+  for (const x of living) for (const s of faunaFor(x).species) if (s.ecology.stalksYou) assert.ok(s.traits.diet === 'carnivore' && !s.civilization && s.size > 1.1);
+  const run = (onFoot) => {
+    const { fauna } = world(b);
+    const hunter = fauna.creatures.find(c => c.eco.stalksYou && c.sp.altitude[1] === 0);
+    hunter.cooldown = 0;
+    // Stand 12 m ahead of it, still.
+    const n = hunter.n.clone().applyAxisAngle(hunter.n.clone().cross(hunter.heading).normalize(), 12 / b.radius).normalize();
+    const player = { position: n.multiplyScalar(b.radius + terrainFor(b).surface(n)), onFoot };
+    const events = [];
+    for (let i = 0; i < 20 * 15; i++) { fauna.update(.05, i * .05, player); events.push(...fauna.events.filter(e => e.creature === hunter)); }
+    return events;
+  };
+  const onFoot = run(true);
+  assert.ok(onFoot.some(e => e.type === 'stalk'), 'it never noticed you');
+  const hits = onFoot.filter(e => e.type === 'attack');
+  assert.ok(hits.length >= 1 && hits.length <= 2, `${hits.length} lunges in 15 s`);
+  for (const h of hits) assert.ok(h.damage > .1 && h.damage <= .45);
+  assert.equal(run(false).filter(e => e.type === 'attack').length, 0, 'attacked you aboard the ship');
+});
