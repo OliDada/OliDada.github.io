@@ -40,7 +40,9 @@ test('the signal site is dry, fairly level ground near the generated point', () 
     assert.ok(Math.abs(Math.hypot(s.x, s.y, s.z) - 1) < 1e-9);
     assert.ok(!t.isLiquid(s), `${b.name} site is under ${t.liquid}`);
     const away = Math.acos(Math.min(1, s.x * b.signal[0] + s.y * b.signal[1] + s.z * b.signal[2])) * b.radius;
-    assert.ok(away < 300, `${b.name} site ${away.toFixed(0)} m from the signal point`);
+    // Ocean worlds (seas over 90% of the surface) take the nearest island, wherever it is;
+    // on bigger worlds that can be farther than 300 m.
+    if (!(t.coverage > .9)) assert.ok(away < 300, `${b.name} site ${away.toFixed(0)} m from the signal point`);
     // Level enough to land: the ground rises at most ~1 m per metre around it, on most worlds.
     const e = 4 / b.radius, h = t.height(s);
     const n2 = { x: s.x + e, y: s.y, z: s.z }, l = Math.hypot(n2.x, n2.y, n2.z);

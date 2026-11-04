@@ -84,3 +84,38 @@ export function describeEcology(s, eco, species) {
   const danger = eco.stalksYou ? ' Dangerous: it stalks explorers on foot.' : '';
   return `${when}${hunts}${hunted}${danger}`.trim();
 }
+
+// Behaviour you can watch and record (codex kind 'behaviour'). Which ones a species
+// shows follows from its ecology; what one animal is doing now comes from its state
+// in fauna-mesh.js (behaviourNow).
+export const BEHAVIOURS = {
+  graze: { name: 'Grazing', verb: 'grazing' },
+  drink: { name: 'Drinking', verb: 'drinking' },
+  sleep: { name: 'Asleep', verb: 'asleep' },
+  hunt: { name: 'Hunting', verb: 'hunting' },
+  kill: { name: 'Feeding on a catch', verb: 'feeding on a catch' },
+  defend: { name: 'Standing its ground', verb: 'standing its ground' },
+};
+export function behavioursOf(s, eco = s.ecology) {
+  if (!eco) return [];
+  const flying = s.altitude?.[1] > 0, out = [];
+  if (eco.eatsPlants && !flying) out.push('graze');
+  if (eco.drinks) out.push('drink');
+  if (eco.activity !== 'any') out.push('sleep');
+  if (eco.prey.length) out.push('hunt', 'kill');
+  if (eco.defends && eco.predators.length) out.push('defend');
+  return out;
+}
+// What a creature (fauna-mesh.js) is doing that can be recorded, or null.
+export function behaviourNow(c) {
+  if (!c || c.hidden) return null;
+  switch (c.state) {
+    case 'sleep': return 'sleep';
+    case 'drink': return 'drink';
+    case 'hunt': return 'hunt';
+    case 'defend': return 'defend';
+    case 'feed': return c.meal === 'kill' ? 'kill' : c.eco.eatsPlants ? 'graze' : null;
+    case 'graze': return c.eco.eatsPlants ? 'graze' : null;
+  }
+  return null;
+}

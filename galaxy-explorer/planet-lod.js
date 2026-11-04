@@ -6,6 +6,7 @@
 // main thread by terrain-worker.js when available. THREE is passed in.
 import { buildChunk, chunkIndices, faceDirection } from './chunk-build.mjs';
 import { terrainFor } from './terrain.mjs';
+import { addCloudShadows } from './cloud-mesh.js';
 
 // Close-up surface detail, drawn in the ground's shader so it costs no triangles:
 // cracks and grain on rock, speckled grass, fine sand, pitted crust, ice veins.
@@ -16,20 +17,30 @@ import { terrainFor } from './terrain.mjs';
 // edge where it ends. 'lite' (phones) uses fewer noise layers. Runs after addMorph.
 const STYLE = { rocky: [1, 0, 0, 0], volcanic: [.8, 0, 0, 1], sand: [0, 1, 0, 0], ice: [0, 0, 1, 0], toxic: [.3, 0, 0, 1], soft: [0, 0, 0, 0] };
 // objects: for rocks and formations (instanced meshes, no per-vertex cover): drawn as bare rock.
-export function addSurfaceDetail(material, { ground, airless, lite = false, objects = false }) { addDetail(material, ground, airless, lite, objects); }
+// objects: for anything standing on the ground (rocks, formations, plants, animals,
+// buildings). They all get the same subtle grain and bump, at the same strength as
+// grassy ground, fixed to the object's own shape (so it moves with animals and
+// swaying plants), so the whole scene has one consistent surface. Cracks and pits
+// belong to bare ground only.
+export function addSurfaceDetail(material, { ground, airless, lite = false, objects = false }) {
+  if (material.userData.surfaceDetail) return; // once per material
+  material.userData.surfaceDetail = true;
+  addDetail(material, ground, airless, lite, objects);
+}
 function addDetail(material, ground, airless, lite, objects = false) {
   const style = STYLE[ground] || (airless ? STYLE.rocky : STYLE.soft);
-  const before = material.onBeforeCompile, key = material.customProgramCacheKey;
+  // The existing cache key, taken now: afterwards the default key would describe this
+  // wrapper, and materials with different shaders underneath would share a program.
+  const before = material.onBeforeCompile, baseKey = material.customProgramCacheKey();
   material.onBeforeCompile = (shader, renderer) => {
-    before(shader, renderer);
+    before.call(material, shader, renderer);
     shader.uniforms.uStyle = { value: style };
     shader.vertexShader = (objects ? '' : 'attribute vec3 cover;\n') + 'varying vec3 vCover; varying vec3 vDetailPos;\n' + shader.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
-      vCover = ${objects ? 'vec3(0.0, 1.0, 0.0)' : 'cover'};
+      vCover = ${objects ? 'vec3(0.0)' : 'cover'};
+      ${objects ? `vDetailPos = transformed;
       #ifdef USE_INSTANCING
-        vDetailPos = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
-      #else
-        vDetailPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
-      #endif`);
+        vDetailPos *= length(instanceMatrix[0].xyz); // metres, whatever the instance's size
+      #endif` : 'vDetailPos = (modelMatrix * vec4(transformed, 1.0)).xyz;'}`);
     shader.fragmentShader = `uniform vec4 uStyle; varying vec3 vCover; varying vec3 vDetailPos;
       float dHash(vec3 p) { p = fract(p * .3183099 + .1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
       float dNoise(vec3 x) {
@@ -41,17 +52,24 @@ function addDetail(material, ground, airless, lite, objects = false) {
       .replace('#include <color_fragment>', `#include <color_fragment>
       float detailK = 1.0 - smoothstep(${lite ? '25.0, 50.0' : '40.0, 90.0'}, length(vViewPosition));
       float detailH = 0.0;
+      // Screen-space slopes are taken here, outside any branch: taken inside one, they
+      // are undefined where neighbouring pixels differ, which drew a ring of black
+      // dots where the detail ends.
+      vec3 P = vDetailPos;
+      float px = length(fwidth(P));
       if (detailK > 0.0) {
-        vec3 P = vDetailPos;
         // Each layer fades out once its features get smaller than a pixel, so nothing shimmers.
-        float px = length(fwidth(P));
-        float w2 = 1.0 - smoothstep(.2, .45, 17.0 * px), w3 = 1.0 - smoothstep(.2, .45, 41.0 * px);
+        float w1 = 1.0 - smoothstep(.2, .45, 6.0 * px), w2 = 1.0 - smoothstep(.2, .45, 17.0 * px), w3 = 1.0 - smoothstep(.2, .45, 41.0 * px);
+        float n1 = mix(.5, dNoise(P * 6.0), w1), n2 = mix(.5, dNoise(P * 17.0), w2);
+        float n3 = ${lite ? '.5' : 'mix(.5, dNoise(P * 41.0), w3)'};
+        // The shared grain: the same on every surface.
+        float f = 1.0 + (n1 - .5) * .14 + (n2 - .5) * .12 + (n3 - .5) * .08;
+        detailH = (n1 * .3 + n2 * .4 + n3 * .3) * .015;
+        ${objects ? '' : `// Bare ground adds its own character on top: cracks on rock and ice, pits in crust.
         float grass = vCover.x * (1.0 - vCover.z), snow = vCover.z;
         float rock = clamp(max(vCover.y, uStyle.x) * (1.0 - snow) * (1.0 - grass), 0.0, 1.0);
         float sand = uStyle.y * (1.0 - grass) * (1.0 - snow), ice = max(uStyle.z * (1.0 - grass), snow * .5);
         float crust = uStyle.w * (1.0 - grass) * (1.0 - snow);
-        float n1 = dNoise(P * 6.0), n2 = mix(.5, dNoise(P * 17.0), w2);
-        float n3 = ${lite ? '.5' : 'mix(.5, dNoise(P * 41.0), w3)'};
         float crack = 0.0, crackAvg = 0.0; // crackAvg: its average, subtracted so the cracks don't darken the ground overall
         ${lite ? '' : `if (rock + ice + crust > .05) { // a network of cracks: edges between random cells, about a metre across
           vec3 C = P / 1.15 + (vec3(dNoise(P * .9), dNoise(P * .9 + 5.0), dNoise(P * .9 + 9.0)) - .5) * .6;
@@ -66,27 +84,24 @@ function addDetail(material, ground, airless, lite, objects = false) {
           crack = (1.0 - smoothstep(0.0, width, f2 - f1)) * smoothstep(.35, .55, dNoise(P * .4 + 2.0)) * crackFade;
           crackAvg = .04 * width / .035 * crackFade;
         }`}
-        float w1 = 1.0 - smoothstep(.2, .45, 6.0 * px), pits = smoothstep(.74, .88, n1) * w1;
-        float f = 1.0
-          + grass * ((n1 - .5) * .2 + (n2 - .5) * .16 + (n3 - .5) * .1)
-          + rock * ((n1 - .5) * .1 + (n2 - .5) * .16 + (n3 - .5) * .1 - (crack - crackAvg) * .45)
-          + sand * ((n2 - .5) * .08 + (n3 - .5) * .1)
-          + ice * ((n1 - .5) * .05 + (crack - crackAvg) * .18)
-          + crust * (-(pits - .051 * w1) * .14 + (n3 - .5) * .08 - (crack - crackAvg) * .25);
+        float pits = smoothstep(.74, .88, n1) * w1;
+        f += rock * (-(crack - crackAvg) * .2) + sand * (n3 - .5) * .04 + ice * (crack - crackAvg) * .12
+           + crust * (-(pits - .051 * w1) * .06 - (crack - crackAvg) * .14);
+        detailH += (rock * (n1 * .3 - crack * .08) * .03 + ice * (-crack * .008) + crust * (-crack * .006));`}
         diffuseColor.rgb *= mix(1.0, f, detailK);
-        detailH = (grass * (n1 * .3 + n2 * .4 + n3 * .3) * .02 + rock * (n1 * .3 + n2 * .15 + n3 * .06 - crack * .25) * .06
-                + sand * (n2 * .5 + n3 * .5) * .008 + ice * (n1 * .02 - crack * .015) + crust * (-pits * .015 + n2 * .015 - crack * .02)) * detailK;
+        detailH *= detailK;
       }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-      if (detailK > 0.0) { // bump: tilt the normal by the slope of detailH across the pixel
-        vec3 dpx = dFdx(-vViewPosition), dpy = dFdy(-vViewPosition);
-        float hx = dFdx(detailH), hy = dFdy(detailH);
+      // Bump: tilt the normal by the slope of detailH across the pixel (slopes taken unconditionally, see above).
+      vec3 dpx = dFdx(-vViewPosition), dpy = dFdy(-vViewPosition);
+      float hx = dFdx(detailH), hy = dFdy(detailH);
+      if (detailK > 0.0) {
         vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx);
         float det = dot(dpx, r1);
         normal = normalize(abs(det) * normal - sign(det) * (hx * r1 + hy * r2) * 2.5);
       }`);
   };
-  material.customProgramCacheKey = () => (objects ? 'objects' : key()) + '-detail-' + style.join(',') + (lite ? '-lite' : '');
+  material.customProgramCacheKey = () => baseKey + '-detail-' + style.join(',') + (lite ? '-lite' : '') + (objects ? '-objects' : '');
 }
 
 const SPLIT = 1.8;
@@ -97,13 +112,18 @@ const JUMP = 8;           // metres: a camera move bigger than this in one frame
 // Vertex-shader blend between a tile's own shape (near) and its parent's (far).
 // lodCam: { value: Vector3 }, the camera position detail is measured from (world
 // space); it eases after a sudden camera jump (see update()) so detail never pops.
-function addMorph(material, withColor, lodCam) {
+// lodScale: { value: number }, stretches every blend range by the same factor as
+// the split distances (see FAR_BOOST), so tiles split earlier still show their detail.
+function addMorph(material, withColor, lodCam, lodScale) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uLodCam = lodCam;
-    shader.vertexShader = 'uniform vec3 uLodCam;\nattribute vec3 lodDelta;\nattribute vec2 lodRange;\n' + (withColor ? 'attribute vec3 lodColor;\n' : '') +
-      shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+    shader.uniforms.uLodScale = lodScale;
+    // The blend is worked out where the normal is set up, which comes before the position.
+    shader.vertexShader = 'uniform vec3 uLodCam;\nuniform float uLodScale;\nattribute vec3 lodDelta;\nattribute vec2 lodRange;\n' + (withColor ? 'attribute vec3 lodColor;\nattribute vec3 lodNormal;\n' : '') +
+      shader.vertexShader.replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
         vec4 lodWorld = modelMatrix * vec4(position, 1.0);
-        float lodK = clamp((distance(lodWorld.xyz, uLodCam) - lodRange.x) / max(lodRange.y - lodRange.x, 1e-3), 0.0, 1.0);
+        float lodK = clamp((distance(lodWorld.xyz, uLodCam) / uLodScale - lodRange.x) / max(lodRange.y - lodRange.x, 1e-3), 0.0, 1.0);` + (withColor ? `
+        objectNormal = normalize(objectNormal + lodNormal * lodK);` : '')).replace('#include <begin_vertex>', `#include <begin_vertex>
         transformed += lodDelta * lodK;` + (withColor ? `
         #ifdef USE_COLOR
           vColor.rgb += lodColor * lodK;
@@ -111,7 +131,17 @@ function addMorph(material, withColor, lodCam) {
   };
   material.customProgramCacheKey = () => (withColor ? 'lod-colour' : 'lod');
 }        // split a tile when the camera is closer than SPLIT × its width
-const FINEST = .6;        // target size of the smallest triangles, metres
+const FINEST = .6;
+// Seen from a distance a world is only a few tiles, so it can afford finer ones:
+// tiles split up to (1 + FAR_BOOST) times farther away as the camera climbs from
+// 250 m to 2750 m above the ground (laptops; phones get less). Close to the ground
+// nothing changes. The boost grows slowly with height, so as you descend, a tile
+// keeps getting relatively closer and never merges back.
+const FAR_BOOST = 2.2, FAR_BOOST_LITE = 1.2, FAR_FROM = 250, FAR_SPAN = 2500;
+// A world you are near but not on (a planet seen from its moon, or the other way
+// round) fills the sky, and close-to-the-ground tiles made it look blocky. It always
+// gets at least this boost: about 3.5 times the tiles of the plain setting.
+const AWAY_BOOST = 1, AWAY_BOOST_LITE = .5;        // target size of the smallest triangles, metres
 
 // Shared queue and worker pool for every planet in the scene.
 export function createTerrainStreamer({ maxWorkers = 3 } = {}) {
@@ -166,24 +196,26 @@ export function createTerrainStreamer({ maxWorkers = 3 } = {}) {
   };
 }
 
-export function createPlanet(THREE, streamer, body, { segments = 20, lite = false } = {}) {
+export function createPlanet(THREE, streamer, body, { segments = 20, lite = false, clouds = null } = {}) {
   const terrain = terrainFor(body), R = body.radius;
   const group = new THREE.Group();
-  // Faceted ground; skirts use smooth shading with the ground's own normals so they
-  // are lit exactly like the ground beside them.
-  const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
+  // Smoothly shaded: with triangles a metre or two across, flat facets only read as a
+  // blotchy mosaic of light and dark (most visible from the ship, looking down).
+  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
   const skirtMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
   const lava = terrain.liquid === 'lava', wet = lava || terrain.liquid === 'water';
   const liquidColor = new THREE.Color().setRGB(...terrain.waterColor, THREE.SRGBColorSpace);
   const waterMaterial = wet ? new THREE.MeshStandardMaterial(lava
     ? { color: new THREE.Color('#4a1606'), emissive: liquidColor, emissiveIntensity: .75, roughness: .8 }
     : { color: liquidColor, transparent: true, opacity: .84, roughness: .16, metalness: .08 }) : null;
-  const lodCam = { value: new THREE.Vector3(1e9, 0, 0) };
-  addMorph(material, true, lodCam);
+  const lodCam = { value: new THREE.Vector3(1e9, 0, 0) }, lodScale = { value: 1 };
+  const farBoost = lite ? FAR_BOOST_LITE : FAR_BOOST;
+  addMorph(material, true, lodCam, lodScale);
   addDetail(material, terrain.ground, terrain.airless, lite);
-  addMorph(skirtMaterial, true, lodCam);
+  if (clouds) addCloudShadows(material, clouds, { lite }); // cloud-mesh.js
+  addMorph(skirtMaterial, true, lodCam, lodScale);
   const gridIndexCount = segments * segments * 6;
-  if (waterMaterial) addMorph(waterMaterial, false, lodCam);
+  if (waterMaterial) addMorph(waterMaterial, false, lodCam, lodScale);
   const { indices } = chunkIndices(segments);
   const waterIndices = indices.subarray(0, gridIndexCount);
   const maxLevel = Math.max(2, Math.ceil(Math.log2(R * Math.PI / 2 / segments / FINEST)));
@@ -202,7 +234,7 @@ export function createPlanet(THREE, streamer, body, { segments = 20, lite = fals
     const g = new THREE.BufferGeometry(), n = positions.length / 3;
     g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     g.setAttribute('normal', new THREE.BufferAttribute(withColor ? data.normals : data.waterNormals, 3));
-    if (withColor) { g.setAttribute('color', new THREE.BufferAttribute(data.colors, 3)); g.setAttribute('cover', new THREE.BufferAttribute(data.cover, 3)); g.setAttribute('lodColor', new THREE.BufferAttribute(data.lodColor, 3)); }
+    if (withColor) { g.setAttribute('color', new THREE.BufferAttribute(data.colors, 3)); g.setAttribute('cover', new THREE.BufferAttribute(data.cover, 3)); g.setAttribute('lodColor', new THREE.BufferAttribute(data.lodColor, 3)); g.setAttribute('lodNormal', new THREE.BufferAttribute(data.lodNormal, 3)); }
     g.setAttribute('lodDelta', new THREE.BufferAttribute(withColor ? data.lodDelta : data.waterDelta, 3));
     // Fully blended to the parent's shape by the distance at which the parent would replace this tile.
     const end = node.lodEnd = node.level ? SPLIT * node.arc * 2 * .95 : 1e9, range = new Float32Array(n * 2);
@@ -272,13 +304,19 @@ export function createPlanet(THREE, streamer, body, { segments = 20, lite = fals
   // arriving at a world) it eases over from where the camera was, so the ground
   // refines smoothly instead of snapping to a new level of detail.
   const lagOffset = new THREE.Vector3(), lastCam = new THREE.Vector3(), lagged = new THREE.Vector3();
-  let lastLag = 0, seen = false;
+  let lastLag = 0, seen = false, lastMove = 0;
   // cam: camera position relative to the planet centre (THREE.Vector3).
   // instant: skip the easing after a jump (tests, or when a hard cut is wanted).
-  function update(realCam, { instant = false } = {}) {
+  // away: this is not the world the camera is on (system-view.js decides).
+  function update(realCam, { instant = false, away = false } = {}) {
     const now = performance.now(), dt = Math.min(.1, (now - lastLag) / 1000); lastLag = now;
     if (!seen) { lastCam.copy(realCam); seen = true; }
-    if (realCam.distanceTo(lastCam) > JUMP) lagOffset.add(lastCam).sub(realCam);
+    // A jump is a sudden move, much bigger than the frame before. Flying fast moves
+    // the camera far every frame too, but steadily: that is not a jump, so detail
+    // keeps up with the ship instead of lagging and then catching up all at once.
+    const move = realCam.distanceTo(lastCam);
+    if (move > JUMP && move > lastMove * 3 + 2) lagOffset.add(lastCam).sub(realCam);
+    lastMove = move;
     lagOffset.multiplyScalar(instant ? 0 : Math.exp(-dt / .35));
     if (lagOffset.lengthSq() < 1e-4) lagOffset.set(0, 0, 0);
     lastCam.copy(realCam);
@@ -287,6 +325,8 @@ export function createPlanet(THREE, streamer, body, { segments = 20, lite = fals
     lodCam.value.copy(cam).applyMatrix4(group.matrixWorld);
     fadeTiles();
     const D = cam.length();
+    lodScale.value = 1 + Math.max(farBoost * Math.min(1, Math.max(0, (D - R - FAR_FROM) / FAR_SPAN)), away ? (lite ? AWAY_BOOST_LITE : AWAY_BOOST) : 0);
+    const S = SPLIT * lodScale.value;
     const horizon = D > R ? Math.acos(Math.min(1, R / D)) : Math.PI;
     const visit = (node) => {
       const d = node.dir, px = d[0] * node.ground, py = d[1] * node.ground, pz = d[2] * node.ground;
@@ -295,7 +335,7 @@ export function createPlanet(THREE, streamer, body, { segments = 20, lite = fals
       // Tiles entirely beyond the horizon (allowing for mountains) are not drawn.
       const visible = angle - node.size * .6 < horizon + mountain;
       node.priority = dist / node.arc + (visible ? 0 : 50);
-      const split = node.level < maxLevel && (dist < node.arc * SPLIT || (node.children && dist < node.arc * SPLIT * 1.25));
+      const split = node.level < maxLevel && (dist < node.arc * S || (node.children && dist < node.arc * S * 1.25));
       if (split) {
         if (!node.children) {
           const h = node.size / 2;

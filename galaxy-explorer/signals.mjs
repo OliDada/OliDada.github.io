@@ -1,13 +1,14 @@
-// Radio signals: planet-shapers and spacefarers broadcast, and their signals carry
-// much farther than the jump drive reaches, so the map can show where they are long
-// before you can get there. Planet-shapers are heard out to 80 light years,
-// spacefarers (stronger, and with transmitters in orbit) out to 150.
+// Radio signals: planet-shapers, spacefarers and system-shapers broadcast, and their
+// signals carry much farther than the jump drive reaches, so the map can show where
+// they are long before you can get there. Planet-shapers are heard out to 80 light
+// years, spacefarers (stronger, and with transmitters in orbit) and system-shapers
+// (with transmitters on every world of their system) out to 150.
 // Pure: used by signals-worker.js in the background, or in slices on the main thread.
 import { starsNear } from './galaxy.mjs';
 import { generateSystem } from './system.mjs';
 import { civilizationsIn, TIERS } from './civilizations.mjs';
 
-export const HEARD = { 'planet-shapers': 80, spacefarers: 150 }; // light years, by tier
+export const HEARD = { 'planet-shapers': 80, spacefarers: 150, 'system-shapers': 150 }; // a wider scan would cost too much on phones // light years, by tier
 export const SCAN_RADIUS = Math.max(...Object.values(HEARD));
 
 // The most advanced civilization broadcasting from a star's system, or null.

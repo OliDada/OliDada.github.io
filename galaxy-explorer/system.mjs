@@ -27,13 +27,23 @@ const normalize = (v) => { const d = Math.hypot(...v); return v.map(x => x / d);
 // neighbouring planets can never overlap.
 const FIRST_ORBIT = 3000, ORBIT_STEP = 3100, ORBIT_JITTER = 150, MAX_BODIES = 9;
 // Giants are far bigger and carry wider moon systems, so they get more room.
-// A rocky planet's reach (radius plus moons) fits the normal orbit step, so
-// systems without giants keep exactly the same layout.
-const ROCKY_REACH = 1300, GIANT_MOON_GAP = 1100, GIANT_MOON_STEP = 500, GIANT_MOONS = 4, MAX_WITH_GIANTS = 12;
-const giantRadius = (physics) => Math.round(clamp(420 + 100 * physics.radius, 700, 1700));
+// A rocky planet's reach is its radius plus its moons' orbits (MOON_GAP, MOON_STEP)
+// and the largest moon; small worlds fit the normal orbit step, big ones push it out.
+const ROCKY_REACH = 1300, MOON_GAP = 420, MOON_STEP = 200, GIANT_MOON_GAP = 1100, GIANT_MOON_STEP = 650, GIANT_MOONS = 4, MAX_WITH_GIANTS = 12;
+// Sizes are compressed for play but keep a wide range: small rocks and moons stay
+// small (a minute to fly round), Earth-sized worlds are about twice that and the
+// biggest super-Earths several times larger. physics.radius is in Earth radii.
+export const worldRadius = (physics) => Math.round(160 + 420 * physics.radius ** 1.8);
+export const moonRadius = (physics) => Math.round(80 + 260 * physics.radius ** 1.5);
+const MAX_MOON_RADIUS = 280;
+// Moons orbit farther out around bigger worlds: half a radius more past the surface.
+const moonOrbit = (radius, k) => radius * 1.5 + MOON_GAP + k * MOON_STEP;
+const rockyReach = (physics) => Math.max(ROCKY_REACH, moonOrbit(worldRadius(physics), 1) + MAX_MOON_RADIUS + 60);
+// Giants stay clearly bigger than the largest rocky world (about 1000 m).
+const giantRadius = (physics) => Math.round(clamp(1000 + 100 * physics.radius, 1300, 2300));
 // Giants' moons orbit outside the rings (which reach 2.25 radii; giant-mesh.js).
 const giantMoonStart = (radius) => Math.max(radius + GIANT_MOON_GAP, 2.25 * radius + 400);
-const reachOf = (physics) => physics.giant ? giantMoonStart(giantRadius(physics)) + (GIANT_MOONS - 1) * GIANT_MOON_STEP + 200 : ROCKY_REACH;
+const reachOf = (physics) => physics.giant ? giantMoonStart(giantRadius(physics)) + (GIANT_MOONS - 1) * GIANT_MOON_STEP + 200 : rockyReach(physics);
 
 function buildBody(args) {
   return args.physics.giant ? buildGiant(args) : buildWorld(args);
@@ -64,8 +74,7 @@ function buildWorld({ id, name, physics, star, seed, r, parent, position, orbit,
     facts: factLine(physics),
     note: b.note, title: b.title, message: b.message,
     starTemperature: star.temperature, starAge: star.age,
-    // Sizes are compressed for play but keep a wide range: small rocks stay small, big worlds are several times larger.
-    seed, radius: parent ? Math.round(70 + 160 * physics.radius ** 1.2) : Math.round(110 + 260 * physics.radius ** 1.3),
+    seed, radius: parent ? moonRadius(physics) : worldRadius(physics), // see worldRadius
     orbit, angle, position, ringed, parent: parent ? parent.id : null,
     signal: normalize([r.range(-.25, .25), 1, r.range(-.25, .25)]),
     landmarkCount: 3 + Math.floor(r() * 3),
@@ -126,7 +135,7 @@ export function generateSystem(input = 1408) {
     for (let k = 0; k < count && (bodies.length < maxBodies || (planet.giant && k === 0)); k++) {
       const physics = makeWorld(star, planet.physics.au, mr, planet.physics);
       physics.isMoon = true;
-      const orbit = planet.giant ? giantMoonStart(planet.radius) + k * GIANT_MOON_STEP : planet.radius + 420 + k * 110;
+      const orbit = planet.giant ? giantMoonStart(planet.radius) + k * GIANT_MOON_STEP : moonOrbit(planet.radius, k);
       const angle = baseAngle + k * (Math.PI + mr.range(-.6, .6));
       const position = [planet.position[0] + Math.cos(angle) * orbit, planet.position[1] + 110, planet.position[2] + Math.sin(angle) * orbit];
       bodies.push(buildBody({ id: `moon-${moonIndex}`, name: makeName(r, used), physics, star, seed: hash(seed, 'surface', 'moon', moonIndex), r: mr, parent: planet, position, orbit, angle, ringed: false }));

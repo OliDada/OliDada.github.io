@@ -61,6 +61,11 @@ body.map-panel-collapsed #mapPanel .panel-toggle span::after{content:'Show detai
 .joystick i{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;background:#c9f4cc38;border:1px solid #c9f4cc80;transition:transform .08s}
 .jump-btn{display:none}
 body.walking .jump-btn{display:block}
+.glasses-btn{display:none}
+body.walking.glasses .glasses-btn{display:block}
+/* Field glasses: a dark rim around the zoomed view, faded in with the zoom */
+#glasses{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse 58% 64% at 50% 50%,transparent 80%,#000d 97%)}
+#glasses span{position:absolute;left:50%;bottom:12%;transform:translateX(-50%);font:600 10px/1 ui-monospace,monospace;letter-spacing:.2em;color:#c9f4cc99}
 body.walking .touch-alt button[data-key="KeyR"],body.walking .touch-alt button[data-key="KeyF"]{display:none}
 @media(pointer:coarse),(max-width:700px){
  header{top:12px;left:14px;right:14px}
@@ -162,6 +167,9 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .tally-row i{grid-column:1/-1;height:2px;background:#bed5ce25;position:relative;overflow:hidden}
 .tally-row i::after{content:'';position:absolute;inset:0;background:var(--mint);transform:scaleX(var(--f,0));transform-origin:left;transition:transform .5s}
 .tally-row.done span,.tally-row.done b{color:var(--mint)}
+.tally-sky{margin-top:2px;padding-top:6px;border-top:1px solid #bed5ce25;font-size:11px;font-weight:500;color:#c9dad4}
+.tally-sky span{font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:#f3d27a}
+.tally-sky.done span{color:var(--mint)}
 /* Hold-to-install (upgrades-ui.js) */
 .hold{position:relative;overflow:hidden;-webkit-user-select:none;user-select:none;touch-action:none;-webkit-touch-callout:none}
 .hold span{position:relative;z-index:1}
@@ -176,6 +184,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
  .scan-card{top:200px}
  .location #worldTally{position:fixed;right:14px;top:58px;width:132px;gap:5px;margin:0}
  .tally-row{font-size:8px;letter-spacing:1px}.tally-row b{font-size:10px}
+ .tally-sky{font-size:9px}.tally-sky span{letter-spacing:1px}
  .scan-text strong{font-size:14px}.scan-text span{font-size:9px}
  .scan-text{top:auto;bottom:40px;left:0;transform:translateX(-50%);text-align:center}
 }
@@ -265,3 +274,32 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .touch-alt button.on{background:var(--mint);color:#152921;border-color:var(--mint)}
 .touch-alt .look-btn{font-size:10px!important;letter-spacing:1px;font-weight:600}
 body.walking .touch-alt .fly-btn{display:none}
+/* World panel on the map: a facts table, then titled sections. */
+.map-details{display:grid;gap:14px;margin:12px 0 14px}
+.map-section h4{margin:0 0 6px;font-size:9px;font-weight:600;letter-spacing:1.8px;text-transform:uppercase;color:var(--mint)}
+.map-section p{margin:0 0 6px;font-size:11px;line-height:1.55;color:#b4c4bf}
+.map-facts-table{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0;font-size:11px}
+.map-facts-table dt{color:var(--muted)}
+.map-facts-table dd{margin:0;color:var(--ink);text-align:right}
+.map-status{font-size:10px!important;color:var(--muted)!important}
+.map-progress{display:grid;grid-template-columns:1fr auto;gap:3px 10px;font-size:11px;color:#b4c4bf;margin-bottom:7px}
+.map-progress b{font-weight:500;color:var(--ink)}
+.map-progress i{grid-column:1/-1;height:3px;border-radius:2px;background:linear-gradient(90deg,var(--mint) var(--done),#bed5ce22 var(--done))}
+.map-list-line span{color:var(--muted)}
+.map-more{width:100%;margin-top:4px;padding:8px;border-radius:5px;font-size:10px;background:transparent}
+/* Facts: a plain word, then the measurement. */
+.map-facts-table dd b{font-weight:500}
+.destination .map-facts-table dd small{display:inline;margin:0 0 0 6px;color:var(--muted);font-size:10px}
+/* Rarity: one quiet line, the tier word tinted by how rare. */
+.map-rarity{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;font-size:11px;color:#b4c4bf}
+.map-rarity-odds,.map-rarity-words{display:contents}
+.map-rarity-odds span{display:none}
+.map-rarity-odds strong{order:2;font-weight:500;color:var(--ink)}
+.map-rarity-odds strong::before{content:"1 in "}
+.map-rarity-odds strong::after{content:" worlds ·"}
+.map-rarity-words em{order:1;font-style:normal;font-weight:600;font-size:9px;letter-spacing:1.4px;text-transform:uppercase;color:var(--tier-ink,var(--ink))}
+.map-rarity-words span{order:3}
+.map-rarity.tier-uncommon{--tier-ink:#c4d2cd}
+.map-rarity.tier-rare{--tier-ink:#a8cdff}
+.map-rarity.tier-very-rare{--tier-ink:#d7b9ff}
+.map-rarity.tier-exceptional{--tier-ink:#ffdf95}

@@ -72,7 +72,7 @@ test('traits drive behaviour, and civilizations are rare', () => {
     if (s.altitude[1] === 0 && s.traits.caution > .55) assert.equal(s.behavior, 'skittish');
     if (s.civilization >= 1) assert.ok(s.traits.intelligence > .4, 'civilization without intelligence');
     if (s.arms) assert.equal(s.plan, 'biped');
-    assert.ok(s.civilization >= 0 && s.civilization <= 5 && typeof s.mind === 'string' && s.description.includes(`Mind: ${s.mind}`));
+    assert.ok(s.civilization >= 0 && s.civilization <= 6 && typeof s.mind === 'string' && s.description.includes(`Mind: ${s.mind}`));
     if (s.civilization >= 3) assert.ok(s.manipulators.score >= .45, `${s.plan} city builders with only ${s.manipulators.kind}`);
     builders += s.civilization >= 2; spacefaring += s.civilization >= 5;
   }

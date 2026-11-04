@@ -4,17 +4,26 @@
 //   village builders  a village of dwellings around a gathering place, fields if they farm
 //   city builders   a dense city in rings around a great structure, with paths and outlying towns
 //   planet-shapers  a bigger city, roads running to the horizon and towns with lights all over the world
-//   spacefarers     all that, a launch site of their own kind, satellites and a station in orbit
-// Everything is merged into two meshes (one lit, one glowing): two draw calls however
-// big the city. Footings reach into the ground so nothing floats on a slope. THREE is passed in.
+//   spacefarers     all that, a launch site of their own kind, satellites and a station in orbit,
+//                   and ships that fly real routes: pad to station, town to town, in from deep space
+//   system-shapers  the same, busier (their ring, elevators and habitats are drawn for the whole
+//                   system by megastructures.js)
+// Everything is merged into a few meshes (lit, glowing, blinking beacons, the pools of
+// lamplight on the ground): a handful of draw calls however big the city. Footings reach into the ground so nothing floats on a slope. THREE is passed in.
 import { rng } from './rng.mjs';
 import { civilizationOf } from './civilizations.mjs';
 import { networkFor } from './settlements.mjs';
+import { shipDesign, buildShip, shipSize } from './ships.js';
+import { plural } from './structures.mjs';
 
 const SINK = 1.6; // metres every footing reaches below the lowest ground it stands on
-const BUDGET = 200000; // vertices in all; far-off towns stop here so phones stay smooth
-const NEAR_BUDGET = 170000; // vertices for the places built in full near the site
+const PORT_DROP = 4; // metres the spaceport apron's rim may stand above a round world (see spaceport)
+const BUDGET = 165000; // vertices in all; far-off towns stop here so phones stay smooth
+const NEAR_BUDGET = 140000; // vertices for the places built in full near the site
+const GROUND_BUDGET = 48000; // vertices of streets, roads and plazas
 const WALKERS = ['hands', 'grazers', 'rollers', 'tripods', 'tentacles'];
+// Cultures whose buildings have a solid floor on the ground (levelled on a foundation).
+const SOLID = ['timber', 'terraced', 'tents', 'coral', 'shells', 'rings', 'hive', 'mounds', 'silk', 'trapdoor', 'burrows', 'rookery', 'earthworks', 'domes', 'tracks', 'living'];
 
 // colonist: a spacefaring civilization from another world of this system that has
 // settled this one (civilizations.mjs colonistOf); it builds a colony here.
@@ -23,14 +32,18 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   const group = new THREE.Group(), obstacles = [], sites = [];
   const native = fauna?.species.length ? civilizationOf(body) : null;
   // Colonists live under glass pressure domes, whatever they build at home.
-  const civ = native || (colonist ? { ...colonist, colony: true, material: 'glass', culture: 'domes', hearths: false, fields: false } : null);
+  const civ = native || (colonist ? { ...colonist, colony: true, material: 'glass', culture: 'domes', hearths: false, fields: false,
+    description: `A colony of the ${plural(colonist.species.name)} from ${colonist.homeName || 'another world of this system'}.${colonist.suits ? ' The air here is not theirs: they wear pressure suits outside.' : ''} At home, ${colonist.description.replace(/^The /, 'the ')}` } : null);
+  // Colonies fly their home world's ships, satellites and stations, whatever they build here.
+  const shipCiv = civ?.colony ? colonist : civ;
   const homes = native ? fauna.homes?.get(civ.species.id) || [] : [];
   const none = { group, civ: null, obstacles, sites, clearings: [], pieces: 0, update() {} };
   if (!civ || (native && !homes.length)) return none;
 
   const r = rng(body.seed, 'structures', civ.species.id), u = civ.unit, tall = civ.tall, level = civ.level;
   const C = colours(THREE, body, civ);
-  const lit = merger(THREE), glow = merger(THREE);
+  const lit = merger(THREE), glow = merger(THREE), ground = merger(THREE); // ground: streets, roads and plazas
+  const blink = merger(THREE), pool = merger(THREE), halos = []; // beacons that blink; lamplight on the ground and around lamps
   const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
   const q = new THREE.Quaternion(), e = new THREE.Euler(), world = new THREE.Matrix4();
   const L = (x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => new THREE.Matrix4().compose(V(x, y, z), q.setFromEuler(e.set(rx, ry, rz)).clone(), V(sx, sy, sz));
@@ -43,14 +56,19 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   const sunk = (g) => g.translate(0, -SINK, 0);
   const pick = (...a) => a[Math.floor(r() * a.length)];
   // A pole or line from a to b (local points).
-  const rod = (add, a, b, rad, colour, bright) => {
+  const rod = (add, a, b, rad, colour, bright, seg = 5) => {
     const d = V(...b).sub(V(...a)), len = d.length(), m = new THREE.Matrix4().compose(V(...a), new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), d.normalize()), V(1, 1, 1));
-    add(cyl(rad, rad, len, 5), m, colour, bright);
+    add(cyl(rad, rad, len, seg), m, colour, bright);
   };
-  const lights = level >= 4; // planet-shapers light their buildings
+  const lights = level >= 3, streetLights = level >= 4; // cities glow from their windows; planet-shapers light their streets too
+  // Stilt houses stand in the shallows and drifters' homes float, so both may build over water.
+  const overWater = civ.culture === 'stilts' || civ.family === 'drifters';
 
   // --- Placement -------------------------------------------------------------
-  const placed = [];
+  const glows = []; let currentPlace = null;
+  const nightLights = [], litPlaces = new Set(); // every lit piece's glow, and the places built (city-lights.js draws these from space)
+  const placed = [], landmarks = { lamps: [], dishes: [], masts: [] }; // where they stand (for previews and tests)
+  let relief = 0; // how far the ground under the last wide flat piece falls below its top
   function frameAt(home) {
     const east = V(0, 1, 0).cross(home); if (east.lengthSq() < 1e-6) east.set(1, 0, 0).cross(home);
     east.normalize(); return { home, east, north: home.clone().cross(east).normalize() };
@@ -62,33 +80,197 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   // place(frame, distance, angle, footprint radius, height, build, options): finds the
   // ground, stands the piece upright facing the frame's centre and lets build() add
   // parts in local coordinates. Refuses water, steep ground, crowding, and the signal and pad.
-  function place(f, dist, angle, foot, height, build, { face = true, spacing = 1, aloft = false, road = false, at = null, faceTo = null } = {}) {
+  function place(f, dist, angle, foot, height, build, { face = true, spacing = 1, aloft = false, road = false, at = null, faceTo = null, wet = false, top = false } = {}) {
     const n = at || pointAt(f, dist, angle);
     if (n.angleTo(signalNormal) * radius < 14 + foot || n.angleTo(landingNormal) * radius < 16 + foot) return false;
     for (const p of placed) if ((!road || !p.road) && p.n.angleTo(n) * radius < (p.foot + foot) * (road ? .7 : spacing)) return false;
     if (road) for (const p of placed) if (p.road && p.n.angleTo(n) * radius < foot * 1.2) return false;
     const fr = frameAt(n);
     let lo = Infinity, hi = -Infinity;
-    for (let k = 0; k < 5; k++) {
-      const m = k ? pointAt(fr, aloft ? foot * .3 : foot, k * Math.PI / 2) : n;
-      if (terrain.isLiquid(m)) return false;
+    // Wide flat pieces (a spaceport apron) sample the whole footprint and sit on its highest
+    // ground, so no hill pokes through; the slab reaches down to the lowest. `top` is how
+    // much the ground may fall away under it.
+    // Buildings with a solid floor (build.found) are levelled: they stand on the highest
+    // ground under them, on a stone foundation reaching down to the lowest, so no slope
+    // pokes through the floor.
+    const found = build.found && (build.found === 'always' || SOLID.includes(civ.culture)) && !aloft;
+    const samples = top ? 25 : found ? 17 : 5;
+    for (let k = 0; k < samples; k++) {
+      const m = !k ? n : top || found ? pointAt(fr, foot * (1 + Math.floor((k - 1) / 8)) / (top ? 3 : 2.2), (k - 1) % 8 * Math.PI / 4 + Math.floor((k - 1) / 8) * .4) : pointAt(fr, aloft ? foot * .3 : foot, k * Math.PI / 2);
+      if (terrain.isLiquid(m) && !(overWater && build.found) && !wet) return false; // only dwellings stand in the shallows
       const h = terrain.surface(m); lo = Math.min(lo, h); hi = Math.max(hi, h);
     }
-    if (hi - lo > SINK * .9 + (aloft ? foot : foot * .5)) return false;
+    if (hi - lo > (top ? top : SINK * .9 + (aloft ? foot : foot * .5))) return false;
+    // On steep ground a building's terrace stops at 2 m; above that it is cut into the slope.
+    if (found) hi = Math.min(hi, lo + 2);
+    relief = top || found ? hi - lo : 0;
+    if (top || found) lo = hi;
     const to = (faceTo || f.home).clone().sub(n), up = n;
     const fwd = face && (faceTo || dist > .5) && to.lengthSq() > 1e-14 ? to.addScaledVector(n, -to.dot(n)).normalize() : fr.north;
     const right = up.clone().cross(fwd).normalize();
     const base = new THREE.Matrix4().makeBasis(right, up, fwd).setPosition(n.clone().multiplyScalar(radius + lo));
-    build((g, local, colour, bright = false) => (bright ? glow : lit).add(g, world.multiplyMatrices(base, local), colour));
-    placed.push({ n, foot, road });
+    const groundR = radius + lo;
+    // gy(x, z): ground height at a local point relative to the base, or null over water (for yards).
+    const gy = (x, z) => { const m = n.clone().addScaledVector(right, x / radius).addScaledVector(fwd, z / radius).normalize(); return terrain.isLiquid(m) && !overWater ? null : terrain.surface(m) - lo; };
+    // bright: true glows, 'blink' blinks, 'pool' is lamplight on the ground, 'halo' a soft glow
+    // around a lamp (g is null; the matrix's scale is its size).
+    const addFn = (g, local, colour, bright = false) => {
+      const m = world.multiplyMatrices(base, local);
+      if (bright === 'light') { glows.push(new THREE.Vector3().setFromMatrixPosition(m)); return; }
+      if (bright === true || bright === 'halo') glows.push(new THREE.Vector3().setFromMatrixPosition(m));
+      if (bright === 'halo') return halos.push({ p: new THREE.Vector3().setFromMatrixPosition(m), size: local.getMaxScaleOnAxis(), colour });
+      if (bright === 'pool') return pool.add(g, m, colour);
+      if (bright === 'blink') return blink.add(g, m, colour);
+      return bright ? glow.add(g, m, colour) : lit.add(g, m, colour, groundR, 1.4 * u);
+    };
+    if (found && relief > .1) addFn(new THREE.CylinderGeometry(foot * .86, foot * .86 + relief * .9, relief + SINK + .1, 12, 1).translate(0, -(relief + SINK) / 2 + .05, 0), new THREE.Matrix4(), C.plinth);
+    glows.length = 0;
+    build(addFn, gy);
+    // Where this piece glows at night, for the lights seen from space (city-lights.js):
+    // about one in three of its lit parts, up to eight, so a lit tower shows brighter than a lamp.
+    if (glows.length && currentPlace) { const n = Math.min(8, Math.ceil(glows.length / 3)); for (let i = 0; i < n; i++) nightLights.push(glows[Math.floor((i + .5) * glows.length / n)]); }
+    placed.push({ n, foot, road, base });
+    if (build === common.dish || build === common.mast || build === common.light) (build === common.dish ? landmarks.dishes : build === common.mast ? landmarks.masts : landmarks.lamps).push(n.clone());
     if (height > .35) obstacles.push({ p: n.clone().multiplyScalar(radius + lo), r: (aloft ? .3 : foot * .8), h: aloft ? 1 : height });
     return true;
   }
   const settle = (f, dist, angle, foot, height, build, opts) => { for (let k = 0; k < 7; k++) if (place(f, dist + (k >> 1) * foot * .6, angle + (k % 2 ? 1 : -1) * k * .17, foot, height, build, opts)) return true; return false; };
 
   // --- Shared pieces ---------------------------------------------------------
-  const footing = (add, w, colour) => add(sunk(cyl(w, w * 1.05, SINK, 8)), L(), colour);
-  const windows = (add, w, y, d, n = 2) => { if (lights) for (let i = 0; i < n; i++) add(box(.4 * u, .35 * u, .05), L((i - (n - 1) / 2) * w / n, y, d), C.window, true); };
+  // Footings show as a plinth of darker stone (the colour argument is kept for callers).
+  const footing = (add, w, colour) => { add(sunk(cyl(w * 1.06, w * 1.1, SINK + .25 * u, 8)), L(0, .25 * u, 0), C.stone2); };
+  // Windows: lit for those that light their world; otherwise dark openings with a frame.
+  const windows = (add, w, y, d, n = 2) => {
+    for (let i = 0; i < n; i++) {
+      const x = (i - (n - 1) / 2) * w / n;
+      if (lights) add(box(.4 * u, .35 * u, .05), L(x, y, d), C.window, true);
+      else if (level >= 2) { add(box(.5 * u, .45 * u, .04), L(x, y - .05 * u, d), C.trim); add(box(.36 * u, .32 * u, .06), L(x, y, d + .01), C.door); }
+    }
+  };
+  // A surface draped over the ground (local w by d, a vertex about every metre), raised by lift.
+  const drape = (add, gy, w, d, lift, colour, step = 1) => {
+    const nx = Math.max(2, Math.ceil(w / step)), nz = Math.max(2, Math.ceil(d / step)), pos = [];
+    const P = (i, j) => { const x = -w / 2 + w * i / nx, z = -d / 2 + d * j / nz; return [x, (gy?.(x, z) ?? 0) + lift, z]; };
+    for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) pos.push(...P(i, j), ...P(i, j + 1), ...P(i + 1, j), ...P(i + 1, j), ...P(i, j + 1), ...P(i + 1, j + 1));
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals();
+    add(geo, L(), colour);
+  };
+  // --- Lamps -----------------------------------------------------------------
+  // Street and garden lamps in the builders' own way: cultures that grow their homes grow
+  // glowing bulbs on curled stalks; others hang a lantern from an arm over the street or
+  // crown a post with a frosted orb. Each throws a pool of light on the ground and a soft
+  // halo around itself, both brightening as night falls (update()).
+  const GROWN = ['grown', 'living', 'shell', 'wax', 'silk', 'membrane'];
+  const lampKind = GROWN.includes(civ.material) || civ.species.glow ? 'bulb' : civ.colony || civ.material === 'glass' ? 'orb' : rng(civ.seed ?? 1, 'lamp')() < .55 ? 'lantern' : 'orb';
+  const lampPool = (add, gy, x, z, rad) => {
+    const rings = 3, segs = 10, pos = [], col = [], c = new THREE.Color(C.window), P = (d, a) => { const px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d; return [px, (gy?.(px, pz) ?? 0) + .3, pz]; };
+    for (let i = 0; i < rings; i++) for (let j = 0; j < segs; j++) {
+      const d0 = rad * i / rings, d1 = rad * (i + 1) / rings, a0 = j / segs * 6.283, a1 = (j + 1) / segs * 6.283, k0 = (1 - i / rings) ** 2 * .32, k1 = (1 - (i + 1) / rings) ** 2 * .32;
+      pos.push(...P(d0, a0), ...P(d1, a1), ...P(d1, a0), ...P(d0, a0), ...P(d0, a1), ...P(d1, a1));
+      for (const k of [k0, k1, k1, k0, k0, k1]) col.push(c.r * k, c.g * k, c.b * k);
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.computeVertexNormals();
+    add(g, L(), null, 'pool');
+  };
+  function lamp(add, gy, s = 1) {
+    const k = u * s, h = 2.7 * k;
+    if (lampKind === 'lantern') { // a post with a curled arm, a lantern hanging over the street
+      add(sunk(cyl(.17 * k, .22 * k, .4 * k + SINK, 5)), L(), C.stone2);
+      add(cyl(.055 * k, .085 * k, h, 5), L(0, .4 * k, 0), C.metal);
+      add(box(.05 * k, .05 * k, .75 * k), L(0, h + .32 * k, .36 * k), C.metal);
+      rod(add, [0, h * .82, 0], [0, h + .3 * k, .34 * k], .025 * k, C.metal, false, 3);
+      const y = h - .25 * k, z = .7 * k;
+      add(cyl(.015 * k, .015 * k, .22 * k, 3), L(0, y + .3 * k, z), C.metal);
+      add(cone(.2 * k, .16 * k, 6), L(0, y + .22 * k, z), C.metal);
+      add(cyl(.12 * k, .085 * k, .24 * k, 6), L(0, y - .02 * k, z), C.window, true);
+      add(null, L(0, y + .1 * k, z, 0, 0, 0, 1.9 * k, 1.9 * k, 1.9 * k), C.window, 'halo');
+      lampPool(add, gy, 0, z, 3.6 * k);
+    } else if (lampKind === 'orb') { // a slim post crowned with a frosted orb
+      add(sunk(cyl(.16 * k, .2 * k, .25 * k + SINK, 8)), L(), C.metal);
+      add(cyl(.05 * k, .09 * k, h, 8), L(0, .25 * k, 0), C.metal2);
+      add(cyl(.13 * k, .07 * k, .14 * k, 8), L(0, h + .2 * k, 0), C.metal);
+      add(new THREE.SphereGeometry(.2 * k, 10, 6), L(0, h + .52 * k, 0), C.window, true);
+      add(new THREE.TorusGeometry(.2 * k, .025 * k, 3, 12).rotateX(Math.PI / 2), L(0, h + .52 * k, 0), C.metal);
+      add(null, L(0, h + .52 * k, 0, 0, 0, 0, 2 * k, 2 * k, 2 * k), C.window, 'halo');
+      lampPool(add, gy, 0, 0, 3.4 * k);
+    } else { // a curled stalk bowing under a glowing bulb, capped with a leaf
+      const pts = [];
+      for (let i = 0; i <= 5; i++) { const t = i / 5, a = t * 1.9; pts.push([0, Math.sin(a) * h * .72 + (t < .5 ? t * h * .35 : .17 * h), (1 - Math.cos(a)) * .45 * k]); }
+      add(sunk(cyl(.2 * k, .3 * k, .25 * k + SINK, 6)), L(), C.plinth);
+      for (let i = 0; i < 5; i++) rod(add, pts[i], pts[i + 1], (.09 - i * .012) * k, C.accent2, false, 5);
+      const [bx, by, bz] = pts[5];
+      add(cone(.3 * k, .14 * k, 7).rotateX(Math.PI), L(bx, by + .08 * k, bz + .08 * k), C.leaf);
+      add(new THREE.SphereGeometry(.18 * k, 10, 8).scale(1, 1.3, 1), L(bx, by - .2 * k, bz + .08 * k), C.window, true);
+      add(null, L(bx, by - .2 * k, bz + .08 * k, 0, 0, 0, 1.8 * k, 1.8 * k, 1.8 * k), C.window, 'halo');
+      lampPool(add, gy, bx, bz, 3.2 * k);
+    }
+  }
+  // --- Towers (system-shapers) -------------------------------------------------
+  // The cores of system-shapers' cities rise as towers in their own idiom: stepped
+  // glass spires (most), grown spires of swelling bulbs (cultures that grow their homes)
+  // or clusters of hexagonal shafts (hives, spiders, burrowers), banded with lit floors
+  // and crowned with beacons. A tower is a few simple prisms, so a skyline of them costs
+  // fewer vertices than the dwellings it replaces; the lit bands are what make it a city.
+  const megacity = level >= 6 && !civ.colony;
+  const towerKind = GROWN.includes(civ.material) ? 'grown' : ['hive', 'web', 'burrowers'].includes(civ.family) ? 'comb' : 'spire';
+  const mixC = (a, b, t) => '#' + new THREE.Color(a).lerp(new THREE.Color(b), t).getHexString();
+  const glassC = mixC(C.wall, '#8fc9dc', .55), frameC = mixC(C.wall, '#e8ecef', .35);
+  const bands = (add, w, y0, y1, sides, gap = 4.2 * u) => { for (let y = y0 + gap * .6; y < y1 - gap * .3; y += gap) add(new THREE.CylinderGeometry(w * 1.015, w * 1.015, .32 * u, sides, 1, true).translate(0, .16 * u, 0), L(0, y, 0, 0, Math.PI / sides, 0), C.window, true); };
+  const tower = (k, H) => Object.assign((add) => {
+    if (towerKind === 'spire') {
+      const sides = pick(4, 6, 8), tiers = 2 + Math.floor(r() * 3), w0 = 2.1 * u * k;
+      let y = 0, w = w0;
+      for (let i = 0; i < tiers; i++) {
+        const h = H * (i ? .55 : 1) / (tiers * .78);
+        add(i ? cyl(w * .97, w, h, sides) : sunk(cyl(w * .97, w, h + SINK, sides)), L(0, y, 0, 0, Math.PI / sides, 0), i % 2 ? frameC : glassC);
+        bands(add, w, y + (i ? 0 : SINK * 0), y + h, sides);
+        y += h; add(cyl(w * 1.06, w * 1.06, .35 * u, sides), L(0, y, 0, 0, Math.PI / sides, 0), frameC); w *= .72;
+      }
+      add(cone(w * .9, H * .12, sides), L(0, y + .35 * u, 0, 0, Math.PI / sides, 0), frameC);
+      rod(add, [0, y + H * .1, 0], [0, y + H * .1 + 5 * u, 0], .06 * u, C.metal, false, 4);
+      add(ball(.22 * u, 1), L(0, y + H * .1 + 5.1 * u, 0), C.beacon, 'blink');
+    } else if (towerKind === 'grown') {
+      let y = 0, w = 2.3 * u * k;
+      add(sunk(cyl(w * .8, w * 1.1, SINK + 1.5 * u, 8)), L(), C.wall2);
+      for (let i = 0, n = 3 + Math.floor(H / (9 * u)); i < n; i++) {
+        const h = H / n * 1.05, bw = w * (1 - i / n * .55);
+        add(new THREE.SphereGeometry(bw, 9, 6).scale(1, h / bw * .62, 1), L(0, y + h * .5, 0, 0, i * .7, 0), i % 2 ? C.wall : C.wall2);
+        add(new THREE.TorusGeometry(bw * .92, .14 * u, 3, 12).rotateX(Math.PI / 2), L(0, y + h * .5, 0), C.window, true);
+        add(cone(bw * 1.2, .5 * u, 7).rotateX(Math.PI), L(0, y + h * .98, 0), C.leaf);
+        y += h * .92;
+      }
+      add(new THREE.SphereGeometry(.7 * u * k, 8, 6), L(0, y + .5 * u, 0), C.window, true);
+    } else {
+      const shafts = 3 + Math.floor(r() * 4);
+      for (let i = 0; i < shafts; i++) {
+        const a = i / shafts * 6.283, d = i ? 1.9 * u * k : 0, h = H * (i ? .5 + r() * .4 : 1), w = 1.15 * u * k;
+        add(sunk(cyl(w, w, h + SINK, 6)), L(Math.cos(a) * d, 0, Math.sin(a) * d), i % 2 ? C.wall : C.wall2);
+        add(new THREE.CircleGeometry(w * .8, 6).rotateX(-Math.PI / 2), L(Math.cos(a) * d, h + .02, Math.sin(a) * d), C.window, true);
+        for (let y = 3 * u; y < h - 1.5 * u; y += 3.4 * u) add(new THREE.CylinderGeometry(w * 1.02, w * 1.02, .3 * u, 6, 1, true), L(Math.cos(a) * d, y, Math.sin(a) * d), C.window, true);
+      }
+      add(ball(.2 * u, 1), L(0, H + .3 * u, 0), C.beacon, 'blink');
+    }
+  }, { found: true });
+  // The capital's centrepiece: an arcology, a city in one tower, ringed with lit terraces.
+  const arcology = (k) => Object.assign((add) => {
+    const H = 70 * u * k * Math.min(1.3, tall), w0 = 7.5 * u * k, sides = towerKind === 'comb' ? 6 : 12;
+    if (towerKind === 'grown') { tower(k * 2.4, H)(add); return; }
+    add(sunk(cyl(w0 * 1.25, w0 * 1.35, 2 * u + SINK, sides)), L(), C.plinth);
+    let y = 2 * u, w = w0;
+    for (let i = 0; i < 4; i++) {
+      const h = H * [.34, .27, .2, .13][i];
+      add(cyl(w * .82, w, h, sides), L(0, y, 0), i % 2 ? frameC : glassC);
+      bands(add, w * .92, y, y + h, sides, 3.6 * u);
+      y += h;
+      add(new THREE.CylinderGeometry(w * 1.25, w * 1.1, .7 * u, sides), L(0, y, 0), frameC); // a terrace
+      add(new THREE.TorusGeometry(w * 1.22, .16 * u, 3, sides * 2).rotateX(Math.PI / 2), L(0, y + .45 * u, 0), C.window, true);
+      w *= .74;
+    }
+    add(cone(w * 1.1, H * .14, sides), L(0, y + .7 * u, 0), frameC);
+    rod(add, [0, y + H * .12, 0], [0, y + H * .12 + 9 * u, 0], .12 * u, C.metal, false, 5);
+    add(ball(.4 * u, 1), L(0, y + H * .12 + 9.3 * u, 0), C.beacon, 'blink');
+  }, { found: 'always' });
+  let skyline = 0; // the tallest tower, so traffic in the air flies above it
   const common = {
     cairn(add) {
       let y = 0; const k = 3 + Math.floor(r() * 3);
@@ -100,30 +282,104 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       add(sunk(box(.4 * u, 1.5 * u * tall + SINK, .28 * u)), L(0, 0, 0, (r() - .5) * .1, 0, (r() - .5) * .1), C.stone);
       add(box(.42 * u, .16 * u, .3 * u), L(0, 1.05 * u * tall, 0), C.accent);
     },
-    hearth(add) {
-      for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; add(ball(.22 * u), L(Math.cos(a) * .7 * u, .08 * u, Math.sin(a) * .7 * u, 0, a, 0, 1, .6, 1), C.stone2); }
+    hearth(add, gy) {
+      for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2, x = Math.cos(a) * .7 * u, z = Math.sin(a) * .7 * u; add(ball(.22 * u), L(x, (gy?.(x, z) ?? 0) + .08 * u, z, 0, a, 0, 1, .6, 1), C.stone2); }
       add(cyl(.45 * u, .5 * u, .06 * u, 8), L(0, .02 * u, 0), C.ember, true);
       for (let i = 0; i < 3; i++) add(cone(.12 * u, .5 * u, 4), L((r() - .5) * .3 * u, .05 * u, (r() - .5) * .3 * u, (r() - .5) * .3, 0, (r() - .5) * .3), C.flame, true);
     },
-    field(add) {
-      const w = 6, d = 5;
-      add(sunk(box(w, .1 + SINK, d)), L(), C.soil);
-      for (let z = -d / 2 + .5; z < d / 2; z += .9) for (let x = -w / 2 + .4; x < w / 2; x += .7) add(cone(.17, .5 + r() * .25, 4), L(x + (r() - .5) * .1, .1, z), C.crop);
+    // Fields lie on the ground itself: tilled soil draped over it and every plant and fence
+    // post standing on the ground where it is, so no part of a field sinks into a slope.
+    field(add, gy) {
+      const w = 6, d = 5, g = (x, z) => (gy?.(x, z) ?? 0);
+      drape(add, gy, w, d, .1, C.soil);
+      for (let z = -d / 2 + .5; z < d / 2; z += .9) for (let x = -w / 2 + .4; x < w / 2; x += .7) { const cx = x + (r() - .5) * .1; add(cone(.17, .5 + r() * .25, 3), L(cx, g(cx, z) + .08, z), C.crop); }
     },
     crates(add) { for (let i = 0; i < 3; i++) add(box(.5 * u, .45 * u, .5 * u), L((i - 1) * .55 * u, (i === 1 ? .45 * u : 0), 0, 0, r() * .4), i % 2 ? C.wood : C.wall2); },
-    fencedField(add) {
-      common.field(add);
-      for (const [x, z, w, d] of [[0, 2.7, 6.4, .08], [0, -2.7, 6.4, .08], [3.2, 0, .08, 5.4], [-3.2, 0, .08, 5.4]]) add(box(w, .55, d), L(x, 0, z), C.wood);
-      for (const x of [-3.2, 0, 3.2]) for (const z of [-2.7, 2.7]) add(sunk(box(.12, .8 + SINK, .12)), L(x, 0, z), C.wood);
+    fencedField(add, gy) {
+      common.field(add, gy);
+      const g = (x, z) => (gy?.(x, z) ?? 0), ring_ = [];
+      for (let x = -3.2; x < 3.1; x += 6.4 / 3) ring_.push([x, 2.7]);
+      for (let z = 2.7; z > -2.6; z -= 2.7) ring_.push([3.2, z]);
+      for (let x = 3.2; x > -3.1; x -= 6.4 / 3) ring_.push([x, -2.7]);
+      for (let z = -2.7; z < 2.6; z += 2.7) ring_.push([-3.2, z]);
+      ring_.forEach(([x, z], i) => {
+        const [x2, z2] = ring_[(i + 1) % ring_.length], y = g(x, z), y2 = g(x2, z2);
+        add(sunk(box(.12, .8 + SINK, .12)), L(x, y, z), C.wood);
+        for (const hgt of [.3, .65]) rod(add, [x, y + hgt, z], [x2, y2 + hgt, z2], .04, C.wood, false, 3);
+      });
     },
+    // A tracking dish: a pedestal and turntable, a yoke holding a deep parabolic dish
+    // (with a back, so it reads from every side) tipped toward the sky, and a receiver
+    // on three struts at its focus with a blinking light.
     dish(add) {
-      const h = 2.2 * u;
-      add(sunk(cyl(.7 * u, .75 * u, SINK)), L(), C.metal); add(cyl(.25 * u, .4 * u, h, 6), L(), C.metal);
-      add(new THREE.SphereGeometry(1.6 * u, 12, 4, 0, Math.PI * 2, 0, .7), L(0, h + 1.2 * u, 0, Math.PI - .7, 0, 0), C.metal2);
-      add(ball(.1 * u), L(0, h + 2 * u, .7 * u), C.beacon, true);
+      const h = 2.3 * u, D = 1.9 * u, depth = .5 * u, focal = D * D / (4 * depth), az = r() * 6.28, tilt = .35 + r() * .55;
+      add(sunk(cyl(1 * u, 1.1 * u, .3 * u + SINK, 10)), L(), C.concrete);
+      add(cyl(.3 * u, .45 * u, h, 8), L(0, .3 * u, 0), C.metal);
+      add(cyl(.8 * u, .8 * u, .25 * u, 12), L(0, h + .3 * u, 0), C.metal2);
+      const turn = L(0, 0, 0, 0, az, 0), pivot = h + 1.45 * u, at = (m) => turn.clone().multiply(m);
+      for (const x of [-1, 1]) add(box(.16 * u, 1.05 * u, .34 * u), at(L(x * 1.02 * u, h + .5 * u, 0)), C.metal);
+      add(box(2.2 * u, .14 * u, .14 * u), at(L(0, pivot - .07 * u, 0)), C.metal);
+      const dishM = at(L(0, pivot, 0, -tilt, 0, 0)), addD = (g, m, c, b) => add(g, dishM.clone().multiply(m), c, b);
+      const prof = [];
+      for (let i = 0; i <= 5; i++) { const x = Math.max(.001, D * i / 5); prof.push(new THREE.Vector2(x, depth * (x / D) ** 2 - .08 * u)); }
+      for (let i = 5; i >= 0; i--) { const x = Math.max(.001, D * i / 5); prof.push(new THREE.Vector2(x, depth * (x / D) ** 2)); }
+      addD(new THREE.LatheGeometry(prof, 16), L(0, .05 * u, 0), C.metal2);
+      addD(new THREE.TorusGeometry(D, .05 * u, 3, 20).rotateX(Math.PI / 2), L(0, depth + .03 * u, 0), C.metal);
+      addD(cyl(.28 * u, .42 * u, .4 * u, 8), L(0, -.35 * u, 0), C.metal);
+      for (let i = 0; i < 3; i++) { const a = i * 2.094 + .5; rod(addD, [Math.cos(a) * D * .93, depth * .9, Math.sin(a) * D * .93], [0, focal * .92, 0], .035 * u, C.metal, false, 4); }
+      addD(cyl(.12 * u, .17 * u, .34 * u, 8), L(0, focal * .92 - .1 * u, 0), C.metal2);
+      addD(ball(.08 * u, 1), L(0, focal * .92 + .3 * u, 0), C.beacon, 'blink');
     },
-    slab(add) { add(sunk(box(1.8 * u, .14 + SINK, 1.8 * u)), L(0, 0, 0, 0, r() * .2), C.road); },
-    light(add) { add(ball(.35 * u), L(0, 2.5 * u, 0), C.window, true); add(sunk(cyl(.08 * u, .1 * u, 2.4 * u + SINK, 4)), L(), C.metal); },
+    // A radio mast: a tapering three-legged lattice with braced bays, panel antennas,
+    // a whip on top and blinking warning lights.
+    mast(add) {
+      const H = 13 * u * tall, w0 = 1.2 * u, bay = 1.7 * u, legA = [0, 2.094, 4.189];
+      const at = (i, y) => { const w = w0 * (1 - .75 * y / H); return [Math.cos(legA[i]) * w, y, Math.sin(legA[i]) * w]; };
+      add(sunk(cyl(w0 * 1.5, w0 * 1.6, .35 * u + SINK, 6)), L(), C.concrete);
+      for (let i = 0; i < 3; i++) rod(add, at(i, 0), at(i, H), .08 * u, C.metal, false, 4);
+      for (let y = 0; y < H - bay * .5; y += bay) for (let i = 0; i < 3; i++) {
+        rod(add, at(i, y), at((i + 1) % 3, Math.min(H, y + bay)), .03 * u, C.metal2, false, 3);
+        rod(add, at(i, y + bay), at((i + 1) % 3, y + bay), .03 * u, C.metal2, false, 3);
+      }
+      for (let i = 0; i < 3; i++) { const [x, y, z] = at(i, H * .72), a = legA[i]; add(box(.45 * u, 1.3 * u, .08 * u), L(x * 1.25, y, z * 1.25, 0, Math.PI / 2 - a, 0), C.metal2); }
+      rod(add, [0, H, 0], [0, H + 3 * u, 0], .05 * u, C.metal, false, 4);
+      add(ball(.16 * u, 1), L(0, H + 3.05 * u, 0), C.beacon, 'blink');
+      for (let i = 0; i < 3; i++) { const [x, y, z] = at(i, H * .5); add(ball(.12 * u, 1), L(x, y, z), C.beacon, 'blink'); }
+    },
+    slab(add, gy) { drape(add, gy, 1.8 * u, 1.8 * u, .1, C.road, .9 * u); },
+    light(add, gy) { lamp(add, gy, 1); },
+  };
+
+  // Yards: the small things of daily life around a dwelling (pots, tended plants, wood
+  // stacks, drying racks, stones, a lamp), on its own ground and never across the door.
+  const handy = civ.family === 'hands' || civ.family === 'tentacles', grounded = WALKERS.includes(civ.family) || ['burrowers', 'web', 'hive'].includes(civ.family);
+  const yard = (add, gy, fp, k) => {
+    if (!gy || k > 1.6 || civ.colony) return;
+    const at = (a, d) => { const x = Math.sin(a) * d, z = Math.cos(a) * d, y = gy(x, z); return y === null ? null : [x, y, z]; };
+    if (WALKERS.includes(civ.family) && level >= 2) for (let i = 0; i < 3; i++) { // stepping stones to the door
+      const p = at((r() - .5) * .3, fp * (.95 + i * .3)); if (p) add(sunk(cyl(.3 * u, .34 * u, SINK + .07, 6)), L(p[0], p[1], p[2], 0, r() * 3), level >= 3 ? C.plaza : C.stone);
+    }
+    const n = civ.family === 'burrowers' ? 1 : grounded ? 2 + Math.floor(r() * 3) : 1 + Math.floor(r() * 2);
+    for (let i = 0; i < n; i++) {
+      const a = (r() < .5 ? 1 : -1) * (1 + r() * 1.8), p = at(a, fp * (.78 + r() * .25)); if (!p) continue;
+      const [x, y, z] = p, kind = r(), m = (dx = 0, dy = 0, dz = 0, ry = 0) => L(x, y, z, 0, a, 0).multiply(L(dx, dy, dz, 0, ry, 0));
+      if (kind < .3 && grounded) { // pots, jars or gourds
+        for (let j = 0, c = 1 + Math.floor(r() * 3); j < c; j++) { const sz = (.2 + r() * .14) * u, ox = (j - (c - 1) / 2) * .5 * u; add(sunk(cyl(sz * .85, sz * .6, sz * 1.5 + SINK, 7)), m(ox), j % 2 ? C.accent2 : C.pot); add(cyl(sz * .45, sz * .85, sz * .4, 7), m(ox, sz * 1.5), C.pot); }
+      } else if (kind < .6) { // a tended plant
+        add(ball((.35 + r() * .3) * u, 0), m(0, .25 * u, 0, r() * 6).multiply(L(0, 0, 0, 0, 0, 0, 1, .8, 1)), C.leaf);
+        if (r() < .6) add(ball(.2 * u, 0), m(.35 * u, .45 * u), C.crop);
+        add(sunk(cyl(.4 * u, .45 * u, SINK + .12 * u, 7)), m(), C.stone2);
+      } else if (kind < .78 && handy) { // stacked wood or bundles
+        for (let j = 0; j < 5; j++) add(cyl(.1 * u, .1 * u, 1.1 * u, 5).rotateZ(Math.PI / 2).translate(.55 * u, 0, 0), m(-.55 * u, .1 * u + (j > 2 ? .18 * u : 0), ((j % 3) - 1) * .2 * u + (j > 2 ? .1 * u : 0)), C.wood);
+      } else if (kind < .9 && handy && level >= 2) { // a drying rack hung with cloth
+        for (const sx of [-1, 1]) add(sunk(cyl(.05 * u, .05 * u, 1.4 * u + SINK, 4)), m(sx * .7 * u), C.wood);
+        add(cyl(.03 * u, .03 * u, 1.5 * u, 4).rotateZ(Math.PI / 2), m(0, 1.35 * u), C.wood);
+        for (let j = 0; j < 3; j++) add(box(.35 * u, .55 * u, .02 * u), m((j - 1) * .42 * u, .8 * u), j % 2 ? C.accent : C.accent2);
+      } else { // a few stones
+        for (let j = 0; j < 3; j++) add(ball((.15 + r() * .15) * u, 0), m((r() - .5) * .8 * u, .05 * u, (r() - .5) * .5 * u, r() * 6).multiply(L(0, 0, 0, 0, 0, 0, 1, .6, 1)), j % 2 ? C.stone : C.stone2);
+      }
+    }
+    if (streetLights && grounded && r() < .5) { const p = at(r() < .5 ? .7 : -.7, fp * 1.05); if (p) lamp((g, m, c, b) => add(g, L(p[0], p[1], p[2]).multiply(m), c, b), (x, z) => { const y = gy(p[0] + x, p[2] + z); return y === null ? null : y - p[1]; }, .6); }
   };
 
   // --- Cultures --------------------------------------------------------------
@@ -133,10 +389,22 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   const K = {
     timber: {
       home(add, k) {
-        if (r() < .5) { const rad = 1.25 * u * k, h = 1.6 * u * k * tall; footing(add, rad, C.wall); add(cyl(rad, rad * 1.04, h, 9), L(), C.wall); roofCone(add, rad * 1.3, 1.3 * u * k * tall, h, 9); add(box(.55 * u, h * .62, .14 * u), L(0, 0, rad * .98), C.door); windows(add, rad, h * .55, rad, 2); }
+        if (r() < .5) {
+          const rad = 1.25 * u * k, h = 1.6 * u * k * tall;
+          footing(add, rad, C.wall); add(cyl(rad, rad * 1.04, h, 9), L(), C.wall);
+          for (let i = 0; i < 9; i++) { const a = (i + .5) / 9 * Math.PI * 2; add(box(.14 * u, h, .14 * u), L(Math.cos(a) * rad * 1.01, 0, Math.sin(a) * rad * 1.01, 0, -a), C.wood); }
+          add(cone(rad * 1.42, .35 * u, 9), L(0, h - .05 * u, 0), C.roof); roofCone(add, rad * 1.25, 1.3 * u * k * tall, h + .1 * u, 9);
+          add(cyl(.22 * u, .26 * u, .5 * u, 6), L(0, h + 1.15 * u * k * tall, 0), C.wood);
+          add(box(.75 * u, h * .7, .1 * u), L(0, 0, rad * .99), C.trim); add(box(.55 * u, h * .62, .14 * u), L(0, 0, rad * 1.0), C.door); windows(add, rad, h * .55, rad, 2);
+        }
         else {
           const w = 3.2 * u * k, d = 1.9 * u * k, h = 1.5 * u * k * tall;
-          add(sunk(box(d, h + SINK, w)), L(), C.wall); gable(add, w, d, h); add(box(.6 * u, h * .7, .1), L(0, 0, w / 2 + .02), C.door);
+          add(sunk(box(d * 1.06, SINK + .25 * u, w * 1.04)), L(0, .25 * u, 0), C.stone2);
+          add(sunk(box(d, h + SINK, w)), L(), C.wall); gable(add, w * 1.08, d * 1.15, h);
+          for (const z of [-.5, -.17, .17, .5]) add(box(d * 1.04, .14 * u, .14 * u), L(0, h - .1 * u, z * w), C.wood);
+          for (const x of [-.5, .5]) for (const z of [-.5, .5]) add(box(.18 * u, h, .18 * u), L(x * d, 0, z * w), C.wood);
+          add(box(.4 * u, 1.3 * u, .4 * u), L(d * .25, h + d * .25, -w * .3), C.stone2);
+          add(box(.8 * u, h * .76, .08), L(0, 0, w / 2 + .01), C.trim); add(box(.6 * u, h * .7, .1), L(0, 0, w / 2 + .02), C.door);
           if (k > 1.3) { add(box(d * .8, h * .8, w * .5), L(0, h + d * .4, -w * .1), C.wall2); roofCone(add, d * .75, h * .6, h * 1.8 + d * .4, 4); }
           windows(add, d, h * .5, w / 2 + .03, 2);
         }
@@ -152,21 +420,52 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
     terraced: {
       home(add, k) {
         const n = 1 + Math.floor(r() * (k > 1.2 ? 3 : 2)); let y = 0, w = 2.6 * u * k;
-        for (let i = 0; i < n; i++) { const h = 1.5 * u * tall; add(i ? box(w, h, w * .9) : sunk(box(w, h + SINK, w * .9)), L(i * .25 * w, y, -i * .15 * w), i % 2 ? C.wall2 : C.wall); add(box(.55 * u, .9 * u, .06), L(i * .25 * w, y, w * .45 + .02 - i * .15 * w), C.door); windows(add, w, y + h * .6, w * .45 + .04 - i * .15 * w, 1); y += h; w *= .75; }
-        add(box(.08 * u, 2 * u, .08 * u), L(w * .7, 0, w * .6, -.3), C.wood);
+        for (let i = 0; i < n; i++) {
+          const h = 1.5 * u * tall, x0 = i * .25 * w, z0 = -i * .15 * w;
+          add(i ? box(w, h, w * .9) : sunk(box(w, h + SINK, w * .9)), L(x0, y, z0), i % 2 ? C.wall2 : C.wall);
+          // A parapet round the roof, beam ends (vigas) poking out under it, a framed door.
+          for (const [px, pz, pw, pd] of [[0, w * .43, w, .12 * u], [0, -w * .43, w, .12 * u], [w * .48, 0, .12 * u, w * .9], [-w * .48, 0, .12 * u, w * .9]]) add(box(pw, .3 * u, pd), L(x0 + px, y + h, z0 + pz), C.wall);
+          for (let v = 0; v < 4; v++) add(box(.1 * u, .1 * u, .45 * u), L(x0 + (v / 3 - .5) * w * .8, y + h * .82, z0 + w * .45 + .2 * u), C.wood);
+          add(box(.7 * u, 1.05 * u, .05), L(x0, y, z0 + w * .45 + .01), C.trim); add(box(.55 * u, .9 * u, .06), L(x0, y, z0 + w * .45 + .02), C.door);
+          windows(add, w, y + h * .6, z0 + w * .45 + .04, 1); y += h; w *= .75;
+        }
+        // A ladder leaning up to the roof.
+        for (const x of [-.18, .18]) add(box(.07 * u, 2.2 * u, .07 * u), L(w * .7 + x * u, 0, w * .6, -.25), C.wood);
+        for (let i = 1; i < 6; i++) add(box(.42 * u, .05 * u, .05 * u), L(w * .7, i * .35 * u, w * .6 + i * .35 * u * .25), C.wood);
       },
       great(add, k) { // stepped pyramid with a stair and a shrine
-        let y = 0, w = 9 * u * k; const steps = 4 + Math.round(k * 2), h = 1.4 * u * tall;
-        for (let i = 0; i < steps; i++) { add(i ? box(w, h, w) : sunk(box(w, h + SINK, w)), L(0, y, 0), i % 2 ? C.wall2 : C.wall); y += h; w *= .8; }
-        add(box(1.6 * u, steps * h * 1.12, 9 * u * k * .55), L(0, 0, 9 * u * k * .3, -Math.atan2(steps * h, 9 * u * k * .5) + Math.PI / 2 - Math.PI / 2 + .62), C.stone2);
+        let y = 0, w = 9 * u * k, wPrev = w; const steps = 4 + Math.round(k * 2), h = 1.4 * u * tall;
+        for (let i = 0; i < steps; i++) {
+          add(i ? box(w, h, w) : sunk(box(w, h + SINK, w)), L(0, y, 0), i % 2 ? C.wall2 : C.wall);
+          // A stair up the front of each tier, on the ledge below it, with low side walls.
+          const run = i ? (wPrev - w) / 2 : 1.6 * u, n = 3;
+          for (let j = 0; j < n; j++) add(i ? box(1.6 * u, h * (j + 1) / n, run / n) : sunk(box(1.6 * u, h * (j + 1) / n + SINK, run / n)), L(0, y, w / 2 + run * (n - j - .5) / n), C.stone2);
+          for (const x of [-1, 1]) add(box(.25 * u, h * .6, run), L(x * .92 * u, y, w / 2 + run / 2), C.stone);
+          const w2 = w * .8; wPrev = w;
+          y += h; w = w2;
+        }
         add(box(w, 1.6 * u, w), L(0, y, 0), C.accent); windows(add, w, y + .6 * u, w / 2 + .03, 1);
       },
       small(add) { add(sunk(box(2.4 * u, 1.4 * u + SINK, 2.4 * u)), L(), C.wall); add(box(1.6 * u, 1.2 * u, 1.6 * u), L(.3 * u, 1.4 * u, 0), C.wall2); },
     },
     tents: {
       home(add, k) {
-        if (r() < .55) { const rad = 1.4 * u * k, h = 2.6 * u * k * tall; add(sunk(cyl(rad * .95, rad, SINK, 7)), L(), C.wall); add(cone(rad, h, 7), L(), C.wall); for (let i = 0; i < 4; i++) { const a = i * 1.6; rod(add, [Math.cos(a) * rad * .6, h * .5, Math.sin(a) * rad * .6], [Math.cos(a) * rad * .15, h * 1.15, Math.sin(a) * rad * .15], .04 * u, C.wood); } add(box(.5 * u, .9 * u, .1), L(0, 0, rad * .75, -.4), C.door); }
-        else { const rad = 1.6 * u * k, h = 1.2 * u * k; footing(add, rad, C.wall); add(cyl(rad, rad, h, 10), L(), C.wall); add(cone(rad * 1.08, .9 * u * k, 10), L(0, h, 0), C.roof); add(box(.55 * u, h * .8, .1), L(0, 0, rad), C.door); add(ring(.25 * u, .06 * u, 8), L(0, h + .85 * u * k, 0), C.wood); }
+        if (r() < .55) {
+          const rad = 1.4 * u * k, h = 2.6 * u * k * tall;
+          add(sunk(cyl(rad * .95, rad, SINK, 9)), L(), C.wall); add(cone(rad, h, 9), L(), C.wall);
+          // Painted bands, poles crossing at the smoke hole, a door flap, guy ropes to stakes.
+          for (const t of [.18, .26]) add(new THREE.CylinderGeometry(rad * (1 - t) + .02, rad * (1 - t - .06) + .02, h * .06, 9, 1, true).translate(0, h * t, 0), L(), t < .2 ? C.accent : C.accent2);
+          for (let i = 0; i < 5; i++) { const a = i * 1.26; rod(add, [Math.cos(a) * rad * .7, h * .3, Math.sin(a) * rad * .7], [Math.cos(a + Math.PI) * rad * .12, h * 1.18, Math.sin(a + Math.PI) * rad * .12], .045 * u, C.wood); }
+          add(new THREE.ConeGeometry(.6 * u, 1.1 * u, 3).translate(0, .55 * u, 0), L(0, 0, rad * .62, -.42, 0, 0, 1, 1, .3), C.wall2);
+          for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + .8; rod(add, [Math.cos(a) * rad * .45, h * .55, Math.sin(a) * rad * .45], [Math.cos(a) * rad * 1.7, .05, Math.sin(a) * rad * 1.7], .015 * u, C.line); add(box(.08 * u, .3 * u, .08 * u), L(Math.cos(a) * rad * 1.7, 0, Math.sin(a) * rad * 1.7), C.wood); }
+        } else {
+          const rad = 1.6 * u * k, h = 1.2 * u * k;
+          footing(add, rad, C.wall); add(cyl(rad, rad, h, 12), L(), C.wall);
+          add(new THREE.CylinderGeometry(rad * 1.01, rad * 1.01, h * .22, 12, 1, true).translate(0, h * .7, 0), L(), C.accent);
+          add(cone(rad * 1.08, .9 * u * k, 12), L(0, h, 0), C.roof);
+          for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; rod(add, [Math.cos(a) * rad * 1.05, h + .02, Math.sin(a) * rad * 1.05], [Math.cos(a) * .25 * u, h + .85 * u * k, Math.sin(a) * .25 * u], .03 * u, C.wood); }
+          add(box(.75 * u, h * .9, .08), L(0, 0, rad - .02), C.accent2); add(box(.55 * u, h * .8, .1), L(0, 0, rad), C.door); add(ring(.25 * u, .06 * u, 8), L(0, h + .85 * u * k, 0), C.wood);
+        }
         windows(add, u, .8 * u, 1.3 * u * k, 1);
       },
       great(add, k) { // many-peaked pavilion
@@ -179,33 +478,87 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
     },
     stilts: {
       home(add, k) {
-        const h = 2.2 * u * k, w = 2.4 * u * k, d = 2 * u * k;
-        for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) add(sunk(cyl(.1 * u, .12 * u, h + SINK, 5)), L(x * w * .42, 0, z * d * .42), C.wood);
-        add(box(w * 1.1, .15 * u, d * 1.3), L(0, h, 0), C.wood);
-        add(box(w, 1.4 * u * tall, d), L(0, h + .15 * u, 0), C.wall); gable(add, d, w, h + .15 * u + 1.4 * u * tall);
-        add(box(.8 * u, .1 * u, 3 * u * k), L(0, h, d * .5 + 1.5 * u * k), C.wood); // walkway toward the centre
-        add(box(.5 * u, .9 * u, .08), L(0, h + .15 * u, d / 2 + .02), C.door); windows(add, w, h + .9 * u, d / 2 + .03, 2);
+        const h = 2.1 * u * k, w = 2.6 * u * k, d = 2.1 * u * k, wh = 1.45 * u * k * tall, rh = 1.5 * u * k, dk = .16 * u;
+        // Piles with cross-bracing, a planked deck with a rail, weatherboard walls, a layered
+        // thatched hip roof with deep eaves, shuttered windows, a ladder and a net rack.
+        for (const x of [-1, 0, 1]) for (const z of [-1, 1]) add(sunk(cyl(.09 * u, .12 * u, h + SINK, 5)), L(x * w * .47, 0, z * d * .5, (r() - .5) * .06, 0, (r() - .5) * .06), C.wood);
+        for (const z of [-1, 1]) for (const sx of [-1, 1]) rod(add, [sx * w * .47, h * .12, z * d * .5], [0, h * .85, z * d * .5], .035 * u, C.wood);
+        for (const x of [-1, 1]) rod(add, [x * w * .47, h * .15, -d * .5], [x * w * .47, h * .85, d * .5], .035 * u, C.wood);
+        add(box(w * 1.3, dk, d * 1.55), L(0, h, d * .1), C.wood);
+        for (let i = 0; i < 7; i++) add(box(w * 1.31, .02 * u, .025 * u), L(0, h + dk, (i / 6 - .5) * d * 1.5 + d * .1), C.wall2);
+        const rx = w * .63, rz0 = -d * .67, rz1 = d * .87;
+        for (const [x, z] of [[-rx, rz0], [rx, rz0], [-rx, rz1], [rx, rz1], [-rx, d * .1], [rx, d * .1]]) add(box(.08 * u, .7 * u, .08 * u), L(x, h + dk, z), C.wood);
+        for (const x of [-rx, rx]) rod(add, [x, h + dk + .62 * u, rz0], [x, h + dk + .62 * u, rz1], .03 * u, C.wood);
+        rod(add, [-rx, h + dk + .62 * u, rz0], [rx, h + dk + .62 * u, rz0], .03 * u, C.wood);
+        const y1 = h + dk;
+        add(box(w, wh, d), L(0, y1, 0), C.wall);
+        for (let i = 1; i < 5; i++) add(box(w * 1.015, .04 * u, d * 1.015), L(0, y1 + i * wh / 5, 0), C.wall2);
+        for (const x of [-1, 1]) for (const z of [-1, 1]) add(box(.14 * u, wh, .14 * u), L(x * w * .5, y1, z * d * .5), C.wood);
+        const y2 = y1 + wh, rr = d * 1.45 / Math.SQRT2, sx = w / d;
+        add(box(w * 1.06, .12 * u, d * 1.06), L(0, y2, 0), C.wood);
+        add(cone(rr, rh, 4), L(0, y2 + .1 * u, 0, 0, Math.PI / 4, 0, sx, 1, 1), C.roof);
+        add(cone(rr * .78, rh * .8, 4), L(0, y2 + .1 * u + rh * .32, 0, 0, Math.PI / 4, 0, sx, 1, 1), C.roof2);
+        add(cone(rr * .5, rh * .55, 4), L(0, y2 + .1 * u + rh * .66, 0, 0, Math.PI / 4, 0, sx, 1, 1), C.roof);
+        add(cyl(.05 * u, .05 * u, .7 * u, 4), L(0, y2 + rh * 1.05, 0), C.wood); add(ball(.12 * u, 0), L(0, y2 + rh * 1.05 + .7 * u, 0), C.accent);
+        add(box(.8 * u, 1.15 * u, .06), L(0, y1, d / 2 + .01), C.trim); add(box(.62 * u, 1.05 * u, .08), L(0, y1, d / 2 + .02), C.door);
+        for (const x of [-1, 1]) {
+          const wx = x * w * .3, wy = y1 + wh * .45;
+          if (lights) add(box(.45 * u, .4 * u, .05), L(wx, wy, d / 2 + .02), C.window, true);
+          else add(box(.45 * u, .4 * u, .06), L(wx, wy, d / 2 + .01), C.door);
+          add(box(.22 * u, .46 * u, .04 * u), L(wx + x * .36 * u, wy - .03 * u, d / 2 + .04, 0, -x * .5, 0), C.accent);
+          add(box(.06, .4 * u, .5 * u), L(x * (w / 2 + .01), y1 + wh * .45, 0), C.door);
+        }
+        // A ladder from the deck's front edge down to the ground.
+        const lz0 = d * .87, lz1 = d * .87 + h * .45, lx = -w * .35;
+        for (const o of [-.22, .22]) rod(add, [lx + o * u, -.2 * u, lz1], [lx + o * u, h + dk, lz0], .04 * u, C.wood);
+        for (let i = 1; i < 6; i++) { const t = i / 6; add(box(.48 * u, .05 * u, .06 * u), L(lx, t * h, lz1 + (lz0 - lz1) * t), C.wood); }
+        // A rack of drying nets or cloth on the deck.
+        const nx = w * .45;
+        rod(add, [nx, y1, d * .65], [nx, y1 + 1.1 * u, d * .65], .03 * u, C.wood); rod(add, [nx, y1 + 1.1 * u, d * .65], [nx - .9 * u, y1 + 1.1 * u, d * .65], .025 * u, C.wood);
+        add(box(.7 * u, .7 * u, .02 * u), L(nx - .45 * u, y1 + .35 * u, d * .65), C.accent2);
+        for (let i = 0; i < 2; i++) add(sunk(cyl(.18 * u, .14 * u, .35 * u + SINK, 6)), L(-w * .45 + i * .4 * u, y1 + SINK, d * .72), C.pot);
       },
-      great(add, k) {
-        const h = 2.6 * u, w = 7 * u * k, d = 3.4 * u * k;
-        for (let x = -1; x <= 1; x += .5) for (const z of [-1, 1]) add(sunk(cyl(.14 * u, .16 * u, h + SINK, 5)), L(x * w * .45, 0, z * d * .45), C.wood);
-        add(box(w * 1.1, .2 * u, d * 1.2), L(0, h, 0), C.wood); add(box(w, 2.2 * u * tall, d), L(0, h + .2 * u, 0), C.wall);
-        add(new THREE.CylinderGeometry(d * .65, d * .65, w * 1.05, 3).rotateZ(Math.PI / 2).rotateX(Math.PI / 2), L(0, h + .2 * u + 2.2 * u * tall + d * .3, 0), C.roof);
-        windows(add, w, h + 1.4 * u, d / 2 + .03, 4);
+      great(add, k) { // a long meeting house on piles, with a tall saddle roof and carved gable posts
+        const h = 2.6 * u, w = 7 * u * k, d = 3.6 * u * k, wh = 2.2 * u * tall, y1 = h + .2 * u;
+        for (let x = -1; x <= 1; x += .25) for (const z of [-1, 1]) add(sunk(cyl(.14 * u, .17 * u, h + SINK, 6)), L(x * w * .47, 0, z * d * .5), C.wood);
+        for (let x = -1; x < 1; x += .5) for (const z of [-1, 1]) rod(add, [x * w * .47, h * .15, z * d * .5], [(x + .5) * w * .47, h * .85, z * d * .5], .05 * u, C.wood);
+        add(box(w * 1.12, .2 * u, d * 1.4), L(0, h, 0), C.wood);
+        add(box(w, wh, d), L(0, y1, 0), C.wall);
+        for (let i = 1; i < 5; i++) add(box(w * 1.01, .05 * u, d * 1.01), L(0, y1 + i * wh / 5, 0), C.wall2);
+        for (let x = -1; x <= 1; x += .25) add(box(.16 * u, wh, d * 1.04), L(x * w * .5, y1, 0), C.wood);
+        const ry = y1 + wh;
+        // A saddle roof: a triangular prism along the house, apex up, steep, in two thatch layers.
+        const prism = (rad, len) => new THREE.CylinderGeometry(rad, rad, len, 3, 1).rotateZ(Math.PI / 2).rotateX(-Math.PI / 2);
+        add(prism(d * .82, w * 1.18), L(0, ry + d * .82 * .5 * 1.4, 0, 0, 0, 0, 1, 1.4, 1), C.roof);
+        add(prism(d * .62, w * 1.2), L(0, ry + d * 1.0, 0, 0, 0, 0, 1, 1.4, 1), C.roof2);
+        for (const x of [-1, 1]) { add(box(.3 * u, wh + d * 2, .3 * u), L(x * w * .6, y1, 0), C.accent); add(ball(.35 * u, 0), L(x * w * .6, y1 + wh + d * 2, 0), C.accent2); }
+        add(box(1.4 * u, 1.8 * u, .08), L(0, y1, d / 2 + .02), C.door); windows(add, w, y1 + 1.4 * u, d / 2 + .03, 4);
+        for (let i = 0; i < 2; i++) { const t = i ? .35 : -.35; add(box(1.2 * u, .12 * u, 3 * u), L(t * w, h * .5, d * .7 + 1.4 * u, -.45, 0, 0), C.wood); }
       },
-      small(add) { for (const x of [-1, 1]) add(sunk(cyl(.1 * u, .1 * u, 2 * u + SINK, 4)), L(x * u, 0, 0), C.wood); add(box(2.6 * u, 1.3 * u, 1.8 * u), L(0, 2 * u, 0), C.wall); },
+      small(add) { this.home(add, .85); },
     },
     coral: {
-      home(add, k) {
-        add(sunk(ball(1.3 * u * k, 1)), L(0, .3 * u, 0, 0, 0, 0, 1, .7, 1), C.wall2);
-        const n = 4 + Math.floor(r() * 4);
+      home(add, k) { // a knobbly grown chamber, ribbed with bands, branching arms tipped with polyps
+        const R0 = 1.35 * u * k, cy = .35 * u;
+        add(sunk(cyl(R0 * .95, R0, SINK + .2 * u, 9)), L(), C.wall2);
+        add(ball(R0, 1), L(0, cy + R0 * .45, 0, 0, r() * 6, 0, 1, .78, 1), C.wall);
+        for (const [y, s] of [[.25, 1.02], [.7, .95], [1.05, .75]]) add(new THREE.TorusGeometry(R0 * s, .07 * u, 4, 14).rotateX(Math.PI / 2), L(0, cy + R0 * y * .78 + R0 * .1, 0), C.wall2);
+        for (let i = 0; i < 9; i++) { const a = r() * 6.28, y = .2 + r() * .9; add(ball(.16 * u * k, 0), L(Math.cos(a) * R0 * .97 * Math.sqrt(1 - (y - .5) ** 2), cy + R0 * .45 + (y - .5) * R0 * 1.4, Math.sin(a) * R0 * .97 * Math.sqrt(1 - (y - .5) ** 2)), i % 2 ? C.accent2 : C.wall2); }
+        const n = 4 + Math.floor(r() * 3);
         for (let i = 0; i < n; i++) {
-          const a = r() * 6.28, lean = .2 + r() * .5, h = (1.5 + r() * 2.5) * u * k * tall, rad = (.2 + r() * .2) * u * k;
-          const m = L(Math.cos(a) * .5 * u * k, 0, Math.sin(a) * .5 * u * k, Math.sin(a) * lean, 0, -Math.cos(a) * lean);
-          add(cyl(rad * .6, rad, h, 6), m, i % 2 ? C.wall : C.accent);
-          add(ball(rad * 1.1, 0), m.clone().multiply(L(0, h, 0)), i % 2 ? C.wall : C.accent, lights && i === 0);
+          const a = i / n * Math.PI * 2 + r() * .4, lean = .25 + r() * .35, h = (1.4 + r() * 1.6) * u * k * tall, rad = (.16 + r() * .12) * u * k;
+          const m = L(Math.cos(a) * R0 * .45, cy + R0 * .6, Math.sin(a) * R0 * .45, Math.sin(a) * lean, 0, -Math.cos(a) * lean);
+          add(cyl(rad * .65, rad, h, 6), m, i % 2 ? C.wall : C.accent);
+          for (const f of [-1, 1]) { // a fork near the top
+            const b = m.clone().multiply(L(0, h * .62, 0, 0, a, f * .6));
+            add(cyl(rad * .35, rad * .6, h * .45, 5), b, i % 2 ? C.wall : C.accent);
+            add(ball(rad * .75, 0), b.clone().multiply(L(0, h * .45, 0)), C.accent2, lights && f > 0 && i === 0);
+          }
+          add(ball(rad * 1.05, 0), m.clone().multiply(L(0, h, 0)), C.accent2);
         }
-        add(dome(.55 * u * k, 8), L(0, 0, 1.05 * u * k, Math.PI / 2, 0, 0, 1, 1, .5), C.door);
+        add(new THREE.TorusGeometry(.6 * u * k, .12 * u, 5, 10, Math.PI), L(0, cy * .5, R0 * .9), C.wall2);
+        add(dome(.55 * u * k, 8), L(0, cy * .5, R0 * .86, Math.PI / 2, 0, 0, 1, 1, .45), C.door);
+        for (const x of [-1, 1]) add(dome(.2 * u * k, 6), L(x * R0 * .55, cy + R0 * .55, R0 * .78, Math.PI / 2, 0, 0, 1, 1, .4), lights ? C.window : C.door, lights);
       },
       great(add, k) { // a great fan, ringed with branches
         add(sunk(cyl(.7 * u, 1 * u, 3 * u * tall * k + SINK, 6)), L(), C.wall2);
@@ -215,84 +568,148 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       small(add) { add(sunk(ball(1.2 * u, 1)), L(0, .4 * u, 0), C.wall); add(cyl(.2 * u, .3 * u, 2 * u, 5), L(), C.accent); },
     },
     shells: {
-      home(add, k) {
+      home(add, k) { // a spiral shell, ridged and spined, with a flared lip round the door
         let y = 0, rad = 1.3 * u * k, tube = .55 * u * k;
-        add(sunk(cyl(rad + tube, rad + tube, SINK, 10)), L(), C.wall2);
-        for (let i = 0; i < 4 + Math.round(Math.min(k, 2.6) * 1.5); i++) { add(ring(rad, tube, 10), L(i * .12 * u, y + tube * .7, 0, 0, i * .5), i % 2 ? C.wall : C.wall2); y += tube * 1.15; rad *= .84; tube *= .9; }
-        add(cone(rad + tube, 1.2 * u * k, 10), L(0, y + tube * .5, 0), C.accent);
-        add(dome(.5 * u * k, 8), L(0, 0, 1.6 * u * k, Math.PI / 2, 0, 0, 1, 1.3, .5), C.door);
-        if (lights) add(ball(.25 * u), L(0, y * .6, rad + tube + .1), C.window, true);
+        add(sunk(cyl(rad + tube, rad + tube * 1.1, SINK + .1 * u, 12)), L(), C.wall2);
+        const turns = 4 + Math.round(Math.min(k, 2.6) * 1.5);
+        for (let i = 0; i < turns; i++) {
+          const off = i * .12 * u;
+          add(ring(rad, tube, 12), L(off, y + tube * .7, 0, 0, i * .5), i % 2 ? C.wall : C.wall2);
+          add(new THREE.TorusGeometry(rad + tube * .55, tube * .14, 3, 10).rotateX(Math.PI / 2), L(off, y + tube * 1.25, 0, 0, i * .5), C.trim);
+          for (let j = 0; j < 3; j++) { const a = j / 3 * Math.PI * 2 + i; add(cone(tube * .2, tube * .8, 3), L(off + Math.cos(a) * (rad + tube * .85), y + tube * .7, Math.sin(a) * (rad + tube * .85), Math.sin(a) * 1.3, 0, -Math.cos(a) * 1.3), C.accent2); }
+          y += tube * 1.15; rad *= .84; tube *= .9;
+        }
+        add(cone(rad + tube, 1.2 * u * k, 12), L(0, y + tube * .5, 0), C.accent);
+        add(ball(.18 * u * k, 1), L(0, y + tube * .5 + 1.25 * u * k, 0), C.trim);
+        // The lip: a flared half-ring round the doorway, a dark mouth, two round windows.
+        add(new THREE.TorusGeometry(.75 * u * k, .2 * u * k, 6, 12, Math.PI), L(0, 0, 1.55 * u * k, 0, 0, 0, 1, 1.25, 1), C.trim);
+        add(dome(.62 * u * k, 10), L(0, 0, 1.5 * u * k, Math.PI / 2, 0, 0, 1, 1.3, .5), C.door);
+        for (const x of [-1, 1]) add(dome(.2 * u * k, 6), L(x * .9 * u * k, 1.1 * u * k, 1.25 * u * k, Math.PI / 2, x * .5, 0, 1, 1, .4), lights ? C.window : C.door, lights);
       },
       great(add, k) { this.home(add, k * 2.6); },
       small(add) { add(sunk(cyl(1.6 * u, 1.6 * u, SINK)), L(), C.wall2); for (let i = 0; i < 3; i++) add(ring(1.2 * u * (1 - i * .2), .45 * u, 10), L(0, .4 * u + i * .55 * u, 0), C.wall); },
     },
     stiltpods: {
-      home(add, k) {
+      home(add, k) { // a pod on three braced legs, a banded rim, a rope ladder and a finial
         const h = 2.8 * u * k * tall, rad = 1.3 * u * k;
-        for (let i = 0; i < 3; i++) { const a = i / 3 * Math.PI * 2; rod(add, [Math.cos(a) * rad * 1.2, -SINK, Math.sin(a) * rad * 1.2], [Math.cos(a) * rad * .4, h + .3 * u, Math.sin(a) * rad * .4], .13 * u, C.wood); }
-        add(dome(rad, 10), L(0, h, 0, Math.PI, 0, 0, 1, .5, 1), C.wall2); add(dome(rad, 10), L(0, h, 0, 0, 0, 0, 1, .8, 1), C.wall);
-        add(cyl(.3 * u, .3 * u, .8 * u, 6), L(0, h - .8 * u, 0), C.door);
-        if (lights) add(ring(rad * 1.01, .06 * u, 14), L(0, h + .2 * u, 0), C.window, true);
+        const foot = (i) => [Math.cos(i / 3 * Math.PI * 2) * rad * 1.25, Math.sin(i / 3 * Math.PI * 2) * rad * 1.25];
+        for (let i = 0; i < 3; i++) { const [x, z] = foot(i); rod(add, [x, -SINK, z], [x * .32, h + .3 * u, z * .32], .12 * u, C.wood); add(cyl(.22 * u, .26 * u, .25 * u, 6), L(x, 0, z), C.stone2); }
+        for (let i = 0; i < 3; i++) { const [x0, z0] = foot(i), [x1, z1] = foot(i + 1); rod(add, [x0 * .8, h * .3, z0 * .8], [x1 * .8, h * .3, z1 * .8], .05 * u, C.wood); }
+        add(dome(rad, 12), L(0, h, 0, Math.PI, 0, 0, 1, .5, 1), C.wall2); add(dome(rad, 12), L(0, h, 0, 0, 0, 0, 1, .8, 1), C.wall);
+        add(ring(rad * 1.02, .09 * u, 16), L(0, h, 0), C.trim);
+        for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; add(new THREE.TorusGeometry(rad * 1.005, .035 * u, 3, 10, Math.PI / 2), L(0, h, 0, 0, a, 0, 1, .8, 1), C.wall2); }
+        for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2 + .4; add(dome(.17 * u, 6), L(Math.cos(a) * rad * .92, h + rad * .3, Math.sin(a) * rad * .92, 0, -a, -Math.PI / 2, 1, .4, 1), lights ? C.window : C.door, lights); }
+        add(cyl(.06 * u, .06 * u, .9 * u, 4), L(0, h + rad * .78, 0), C.wood); add(ball(.15 * u, 0), L(0, h + rad * .78 + .9 * u, 0), C.accent);
+        add(cyl(.32 * u, .32 * u, .35 * u, 8), L(0, h - .9 * u, 0), C.door); add(ring(.34 * u, .05 * u, 8), L(0, h - .55 * u, 0), C.trim);
+        for (const x of [-.18, .18]) rod(add, [x * u, h - .9 * u, .1 * u], [x * u, 0, .6 * u], .02 * u, C.line);
+        for (let i = 1; i < 7; i++) { const t = i / 7; add(box(.4 * u, .04 * u, .05 * u), L(0, h - .9 * u - t * (h - .9 * u), .1 * u + t * .5 * u), C.wood); }
+        if (r() < .5) { rod(add, [rad * .7, h - .3 * u, 0], [rad * .7, h - 1.2 * u, 0], .015 * u, C.line); add(ball(.25 * u, 0), L(rad * .7, h - 1.45 * u, 0, 0, 0, 0, 1, 1.3, 1), C.accent2); }
       },
       great(add, k) { this.home(add, k * 2.4); for (let i = 0; i < 3; i++) { const a = i / 3 * Math.PI * 2 + 1; add(dome(1.1 * u, 8), L(Math.cos(a) * 3 * u * k, 4 * u * k * tall, Math.sin(a) * 3 * u * k, Math.PI, 0, 0, 1, .6, 1), C.accent); } },
       small(add) { for (let i = 0; i < 3; i++) { const a = i * 2.09; rod(add, [Math.cos(a) * 1.4 * u, -SINK, Math.sin(a) * 1.4 * u], [0, 2.4 * u, 0], .1 * u, C.wood); } add(dome(1.1 * u, 8), L(0, 2.3 * u, 0), C.wall); },
     },
     rings: {
-      home(add, k) {
-        add(sunk(cyl(2.4 * u * k, 2.4 * u * k, SINK, 14)), L(), C.wall2);
-        add(ring(2 * u * k, .5 * u * k, 16), L(0, .45 * u * k, 0, 0, 0, 0, 1, 1.6, 1), C.wall);
-        add(cyl(.35 * u, .5 * u, 3 * u * k * tall, 6), L(), C.stone); add(ball(.45 * u), L(0, 3 * u * k * tall, 0), C.accent, lights);
+      home(add, k) { // a low round wall under a conical canopy on a carved central pillar
+        const R0 = 2.2 * u * k, wh = .9 * u * k, ph = 3 * u * k * tall;
+        add(sunk(cyl(R0 * 1.08, R0 * 1.1, SINK + .1 * u, 16)), L(), C.wall2);
+        add(ring(R0 * .9, .45 * u * k, 18), L(0, .35 * u * k, 0, 0, 0, 0, 1, 1.6, 1), C.wall);
+        add(ring(R0 * .9, .12 * u, 18), L(0, wh + .15 * u, 0), C.trim);
+        add(sunk(cyl(.32 * u, .45 * u, ph + SINK, 8)), L(), C.stone);
+        for (let i = 1; i < 5; i++) add(cyl(.36 * u, .4 * u, .14 * u, 8), L(0, ph * i / 5, 0), i % 2 ? C.accent : C.stone2);
+        add(cone(R0 * 1.15, ph * .45, 16).translate(0, 0, 0), L(0, ph * .62, 0), C.roof);
+        add(new THREE.CylinderGeometry(R0 * 1.16, R0 * 1.16, .12 * u, 16, 1, true), L(0, ph * .62, 0), C.roof2);
+        for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + .2; add(sunk(cyl(.07 * u, .07 * u, ph * .62 + SINK, 4)), L(Math.cos(a) * R0 * 1.02, 0, Math.sin(a) * R0 * 1.02), C.wood); }
+        add(ball(.45 * u, 1), L(0, ph * 1.08, 0), C.accent, lights);
+        for (const x of [-1, 1]) add(sunk(box(.25 * u, 1.5 * u + SINK, .25 * u)), L(x * .6 * u, 0, R0 * .9), C.stone2);
+        add(box(1.45 * u, .2 * u, .3 * u), L(0, 1.5 * u, R0 * .9), C.stone2);
+        add(cyl(.5 * u, .55 * u, .06 * u, 8), L(0, 0, R0 * .3), C.ember, level <= 3);
       },
       great(add, k) { for (let i = 0; i < 3; i++) add(ring((3 + i * 3) * u * k, .55 * u, 24), L(0, .5 * u, 0, 0, 0, 0, 1, 1.8, 1), i % 2 ? C.wall2 : C.wall); add(sunk(cyl(.9 * u, 1.3 * u, 10 * u * k * tall + SINK, 6)), L(), C.stone); add(ball(1.1 * u), L(0, 10 * u * k * tall, 0), C.accent, lights); },
       small(add) { add(sunk(cyl(1.8 * u, 1.8 * u, SINK, 12)), L(), C.wall2); add(ring(1.5 * u, .4 * u, 12), L(0, .4 * u, 0), C.wall); },
     },
     tethered: { // drifters: platforms held aloft under gas-bags, tethered to anchors
-      home(add, k) {
-        const H = (8 + r() * 6) * u * k * tall;
-        add(sunk(cyl(.6 * u, .8 * u, .5 * u + SINK, 6)), L(), C.stone);
-        rod(add, [0, .4 * u, 0], [0, H, 0], .05 * u, C.line);
-        add(cyl(2 * u * k, 1.4 * u * k, .35 * u, 10), L(0, H, 0), C.wall2);
-        add(dome(1.2 * u * k, 10), L(0, H + .35 * u, 0, 0, 0, 0, 1, .8, 1), C.wall);
-        add(ball(2 * u * k, 1), L(0, H + 3.3 * u * k, 0, 0, 0, 0, 1.25, .75, 1.25), C.bag);
-        for (let i = 0; i < 4; i++) { const a = i * 1.57; rod(add, [Math.cos(a) * 1.6 * u * k, H + .3 * u, Math.sin(a) * 1.6 * u * k], [Math.cos(a) * 1.4 * u * k, H + 2.6 * u * k, Math.sin(a) * 1.4 * u * k], .03 * u, C.line); }
-        for (let i = 0; i < 5; i++) { const a = r() * 6.28, d = r() * 1.3 * u * k; rod(add, [Math.cos(a) * d, H, Math.sin(a) * d], [Math.cos(a) * d, H - (1 + r() * 2) * u, Math.sin(a) * d], .03 * u, C.accent); }
-        if (lights) add(ring(1.95 * u * k, .06 * u, 14), L(0, H + .2 * u, 0), C.window, true);
+      home(add, k) { // a railed platform and gondola under a banded gas-bag, held by guy lines
+        const H0 = (8 + r() * 6) * u * k * tall, P = 2 * u * k;
+        add(sunk(cyl(.6 * u, .8 * u, .5 * u + SINK, 7)), L(), C.stone); add(ring(.5 * u, .08 * u, 8), L(0, .55 * u, 0), C.metal);
+        rod(add, [0, .5 * u, 0], [0, H0, 0], .05 * u, C.line);
+        for (let i = 0; i < 3; i++) { const a = i * 2.09 + .5; add(sunk(cyl(.25 * u, .3 * u, .3 * u + SINK, 6)), L(Math.cos(a) * 4 * u, 0, Math.sin(a) * 4 * u), C.stone2); rod(add, [Math.cos(a) * 4 * u, .3 * u, Math.sin(a) * 4 * u], [Math.cos(a) * P * .9, H0, Math.sin(a) * P * .9], .02 * u, C.line); }
+        add(cyl(P, P * .7, .35 * u, 12), L(0, H0, 0), C.wall2);
+        for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; add(cyl(.03 * u, .03 * u, .55 * u, 3), L(Math.cos(a) * P * .97, H0 + .35 * u, Math.sin(a) * P * .97), C.wood); }
+        add(new THREE.TorusGeometry(P * .97, .03 * u, 3, 10).rotateX(Math.PI / 2), L(0, H0 + .88 * u, 0), C.wood);
+        add(cyl(1.1 * u * k, 1.2 * u * k, .9 * u * k, 10), L(0, H0 + .35 * u, 0), C.wall);
+        add(dome(1.1 * u * k, 10), L(0, H0 + .35 * u + .9 * u * k, 0, 0, 0, 0, 1, .55, 1), C.roof);
+        for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; add(box(.3 * u, .3 * u, .05), L(Math.cos(a) * 1.13 * u * k, H0 + .35 * u + .35 * u * k, Math.sin(a) * 1.13 * u * k, 0, Math.PI / 2 - a, 0), lights ? C.window : C.door, lights); }
+        const by = H0 + 3.4 * u * k;
+        add(ball(2 * u * k, 1), L(0, by, 0, 0, 0, 0, 1.25, .75, 1.25), C.bag);
+        for (let i = 0; i < 2; i++) add(new THREE.TorusGeometry(2.5 * u * k, .06 * u, 3, 12), L(0, by, 0, 0, i * Math.PI / 2, 0, 1, .6, 1), C.accent);
+        add(new THREE.TorusGeometry(2.45 * u * k, .07 * u, 3, 12).rotateX(Math.PI / 2), L(0, by, 0), C.accent);
+        for (let i = 0; i < 4; i++) { const a = i * 1.57; rod(add, [Math.cos(a) * P * .9, H0 + .3 * u, Math.sin(a) * P * .9], [Math.cos(a) * 2 * u * k, by - .9 * u * k, Math.sin(a) * 2 * u * k], .025 * u, C.line); }
+        add(cone(.4 * u, .8 * u, 6).rotateX(Math.PI), L(0, by + 1.7 * u * k, 0), C.accent2);
+        for (let i = 0; i < 4; i++) { const a = r() * 6.28, d = P * (.6 + r() * .3), L0 = (1 + r() * 2) * u; rod(add, [Math.cos(a) * d, H0, Math.sin(a) * d], [Math.cos(a) * d, H0 - L0, Math.sin(a) * d], .02 * u, C.line); add(ball(.22 * u, 0), L(Math.cos(a) * d, H0 - L0 - .2 * u, Math.sin(a) * d, 0, 0, 0, 1, 1.4, 1), C.accent2); }
       },
       great(add, k) { this.home(add, k * 2.3); },
       small(add) { rod(add, [0, -SINK, 0], [0, 7 * u, 0], .06 * u, C.line); add(ball(1.4 * u, 1), L(0, 8 * u, 0, 0, 0, 0, 1.2, .8, 1.2), C.bag); },
     },
     reef: { // drifters: tall frond-stalks hung with bulb dwellings
-      home(add, k) {
-        const H = (9 + r() * 5) * u * k * tall;
-        add(sunk(cyl(.35 * u, .7 * u, H + SINK, 6)), L(), C.wall2);
-        for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; add(box(.1 * u, 3.5 * u * k, .7 * u), L(Math.cos(a) * .4 * u, H * .82, Math.sin(a) * .4 * u, Math.sin(a) * .7, 0, -Math.cos(a) * .7), C.accent); }
-        for (let i = 0; i < 3 + Math.round(k * 2); i++) { const a = r() * 6.28, y = H * (.3 + .45 * r()); rod(add, [0, y, 0], [Math.cos(a) * 1.2 * u, y - .6 * u, Math.sin(a) * 1.2 * u], .05 * u, C.wall2); add(ball(.8 * u * k, 1), L(Math.cos(a) * 1.3 * u, y - 1.4 * u, Math.sin(a) * 1.3 * u, 0, 0, 0, 1, 1.3, 1), C.wall, lights && i % 2 === 0); }
+      home(add, k) { // a ringed frond-stalk crowned with curling fronds, hung with lit bulb dwellings
+        const H0 = (9 + r() * 5) * u * k * tall;
+        add(sunk(cyl(.35 * u, .75 * u, H0 + SINK, 7)), L(), C.wall2);
+        for (let y = 1.2 * u; y < H0 * .9; y += 1.3 * u) add(cyl(.42 * u * (1 - y / H0 * .45), .5 * u * (1 - y / H0 * .45), .18 * u, 7), L(0, y, 0), C.wall);
+        for (let i = 0; i < 4; i++) { const a = i * 1.57 + .4; rod(add, [Math.cos(a) * 1.4 * u, -SINK, Math.sin(a) * 1.4 * u], [0, 1.6 * u, 0], .12 * u, C.wall2); }
+        for (let i = 0; i < 9; i++) {
+          const a = i / 9 * Math.PI * 2, base = L(0, H0 * .95, 0, 0, a, 0);
+          add(box(.08 * u, 2.4 * u * k, .55 * u), base.clone().multiply(L(0, 0, 0, 0, 0, .55)), i % 2 ? C.accent : C.accent2);
+          add(box(.06 * u, 1.5 * u * k, .4 * u), base.clone().multiply(L(-Math.sin(.55) * 2.4 * u * k, Math.cos(.55) * 2.4 * u * k, 0, 0, 0, 1.4)), i % 2 ? C.accent : C.accent2);
+        }
+        add(ball(.5 * u, 1), L(0, H0 * .97, 0), C.trim);
+        for (let i = 0; i < 3 + Math.round(k * 2); i++) {
+          const a = r() * 6.28, y = H0 * (.3 + .45 * r()), bx = Math.cos(a) * 1.4 * u, bz = Math.sin(a) * 1.4 * u, br = .8 * u * k;
+          rod(add, [0, y, 0], [bx, y - .6 * u, bz], .06 * u, C.wall2);
+          add(ball(br, 1), L(bx, y - 1.4 * u, bz, 0, 0, 0, 1, 1.3, 1), C.wall);
+          add(new THREE.TorusGeometry(br * .98, .05 * u, 3, 12).rotateX(Math.PI / 2), L(bx, y - 1.4 * u, bz), C.trim);
+          add(dome(.22 * u, 6), L(bx + Math.cos(a) * br * .9, y - 1.3 * u, bz + Math.sin(a) * br * .9, 0, -a, -Math.PI / 2, 1, .4, 1), lights ? C.window : C.door, lights);
+          for (let j = 0; j < 3; j++) rod(add, [bx + (j - 1) * .25 * u, y - 1.4 * u - br * 1.2, bz], [bx + (j - 1) * .3 * u, y - 2.6 * u - br, bz], .025 * u, C.accent2);
+        }
       },
       great(add, k) { this.home(add, k * 2.2); },
       small(add) { add(sunk(cyl(.25 * u, .5 * u, 7 * u + SINK, 5)), L(), C.wall2); add(ball(.9 * u, 1), L(0, 5 * u, .9 * u), C.wall); },
     },
     masts: {
-      home(add, k) {
+      home(add, k) { // a rigged mast with spars, hung with banded pods
         const h = (6 + r() * 3) * u * tall * k;
-        add(sunk(cyl(.12 * u, .22 * u, h + SINK, 6)), L(), C.wood);
+        add(sunk(cyl(.12 * u, .24 * u, h + SINK, 6)), L(), C.wood);
+        add(sunk(cyl(.5 * u, .6 * u, .3 * u + SINK, 7)), L(), C.stone2);
+        for (let i = 0; i < 3; i++) { const a = i * 2.09 + .3, gx = Math.cos(a) * h * .45, gz = Math.sin(a) * h * .45; rod(add, [0, h * .95, 0], [gx, .1 * u, gz], .018 * u, C.line); add(sunk(box(.25 * u, .4 * u + SINK, .25 * u)), L(gx, 0, gz), C.wood); }
+        for (const y of [.5, .78]) add(cyl(.035 * u, .035 * u, 2.4 * u, 4).rotateZ(Math.PI / 2).translate(0, 0, 0), L(0, h * y, 0, 0, r() * 3, 0), C.wood);
+        add(cyl(.5 * u, .4 * u, .15 * u, 8), L(0, h, 0), C.wood); add(ring(.5 * u, .04 * u, 8), L(0, h + .35 * u, 0), C.wood);
+        for (let i = 0; i < 4; i++) { const a = i * 1.57; add(cyl(.03 * u, .03 * u, .35 * u, 3), L(Math.cos(a) * .48 * u, h + .1 * u, Math.sin(a) * .48 * u), C.wood); }
+        add(cone(.08 * u, .8 * u, 4), L(0, h + .15 * u, 0), C.wood); add(box(.6 * u, .35 * u, .02 * u).translate(.3 * u, 0, 0), L(0, h + .75 * u, 0, 0, r() * 6, 0), C.accent);
         const pods = 3 + Math.floor(r() * 3);
         for (let i = 0; i < pods; i++) {
-          const a = i / pods * Math.PI * 2 + r(), y = h * (.45 + .5 * i / pods), arm = .9 * u;
-          rod(add, [0, y, 0], [Math.cos(a) * arm, y, Math.sin(a) * arm], .04 * u, C.wood);
-          add(ball(.55 * u * k, 1), L(Math.cos(a) * arm, y - .7 * u, Math.sin(a) * arm, 0, 0, 0, 1, 1.35, 1), i % 2 ? C.wall : C.accent, lights && i === 0);
+          const a = i / pods * Math.PI * 2 + r(), y = h * (.4 + .45 * i / pods), arm = 1 * u, px = Math.cos(a) * arm, pz = Math.sin(a) * arm, pr = .55 * u * k;
+          rod(add, [0, y, 0], [px, y, pz], .045 * u, C.wood); rod(add, [0, y - .6 * u, 0], [px * .8, y, pz * .8], .03 * u, C.wood);
+          add(ball(pr, 1), L(px, y - .75 * u, pz, 0, 0, 0, 1, 1.35, 1), i % 2 ? C.wall : C.accent);
+          for (const t of [-.35, .35]) add(new THREE.TorusGeometry(pr * .94, .035 * u, 3, 10).rotateX(Math.PI / 2), L(px, y - .75 * u + t * pr * 1.35, pz), C.trim);
+          add(cyl(.12 * u, .12 * u, .08 * u, 6), L(px, y - .75 * u - pr * 1.4, pz), C.trim);
+          add(dome(.16 * u, 6), L(px + Math.cos(a) * pr * .95, y - .75 * u, pz + Math.sin(a) * pr * .95, 0, -a, -Math.PI / 2, 1, .4, 1), lights && i === 0 ? C.window : C.door, lights && i === 0);
         }
       },
       great(add, k) { this.home(add, k * 2.2); },
       small(add) { add(sunk(cyl(.1 * u, .15 * u, 5 * u + SINK, 5)), L(), C.wood); add(ball(.6 * u, 1), L(.6 * u, 3.6 * u, 0), C.wall); },
     },
     hive: {
-      home(add, k) {
-        const cell = .6 * u * k, cells = k > 1.2 ? 7 : 4 + Math.floor(r() * 3), dirs = [[0, 0], ...Array.from({ length: 6 }, (_, i) => [Math.cos(i * Math.PI / 3), Math.sin(i * Math.PI / 3)])];
+      home(add, k) { // a cluster of hexagonal cells: bevelled rims, wax caps, doors on the faces
+        const cell = .6 * u * k, cells = k > 1.2 ? 7 : 4 + Math.floor(r() * 3), dirs = [[0, 0], ...Array.from({ length: 6 }, (_, i) => [Math.cos(i * Math.PI / 3 + Math.PI / 6), Math.sin(i * Math.PI / 3 + Math.PI / 6)])];
         for (let i = 0; i < cells; i++) {
-          const [x, z] = dirs[i], h = (1.2 + r() * 1.6) * u * k * tall * (i ? 1 : 1.4);
-          add(sunk(cyl(cell, cell, h + SINK, 6)), L(x * cell * 1.75, 0, z * cell * 1.75, 0, Math.PI / 6), i % 2 ? C.wall : C.wall2);
-          add(cyl(cell * .7, cell * .7, .05, 6), L(x * cell * 1.75, h + .01, z * cell * 1.75, 0, Math.PI / 6), C.door, false);
-          if (lights && i % 3 === 0) add(cyl(cell * .5, cell * .5, .06, 6), L(x * cell * 1.75, h + .03, z * cell * 1.75, 0, Math.PI / 6), C.window, true);
+          const [dx, dz] = dirs[i], x = dx * cell * 1.75, z = dz * cell * 1.75, h = (1.2 + r() * 1.6) * u * k * tall * (i ? 1 : 1.4);
+          add(sunk(cyl(cell, cell, h + SINK, 6)), L(x, 0, z, 0, Math.PI / 6), i % 2 ? C.wall : C.wall2);
+          for (let y = .5 * u; y < h - .2 * u; y += .7 * u) add(cyl(cell * 1.03, cell * 1.03, .06 * u, 6), L(x, y, z, 0, Math.PI / 6), C.wall2);
+          add(cyl(cell * 1.06, cell * 1.06, .14 * u, 6), L(x, h - .14 * u, z, 0, Math.PI / 6), C.trim);
+          if (r() < .5) { add(cyl(cell * .92, cell * .92, .1 * u, 6), L(x, h, z, 0, Math.PI / 6), C.accent2); add(cone(cell * .9, cell * .45, 6), L(x, h + .1 * u, z, 0, Math.PI / 6), C.accent2); }
+          else add(cyl(cell * .72, cell * .72, .05, 6), L(x, h + .01, z, 0, Math.PI / 6), C.door, false);
+          if (lights && i % 3 === 0) add(cyl(cell * .5, cell * .5, .06, 6), L(x, h + .2 * u, z, 0, Math.PI / 6), C.window, true);
+          if (i < 3) { const fa = Math.atan2(dx || .01, dz || 1); add(dome(.28 * u * k, 6), L(x + Math.sin(fa) * cell * .86, .05 * u, z + Math.cos(fa) * cell * .86, Math.PI / 2, fa, 0, 1, 1.3, .4), C.door); }
+          if (r() < .4) add(cone(.06 * u, .35 * u, 4).rotateX(Math.PI), L(x + cell * .7, h - .1 * u, z), C.accent2);
         }
       },
       great(add, k) {
@@ -307,29 +724,45 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
     },
     mounds: {
       home(add, k) {
-        if (k > 1.2 || r() < .4) { // banded spire
+        if (k > 1.2 || r() < .4) { // banded spire on a buttressed base, vents up its sides
           let y = 0, rad = 1.8 * u * Math.min(k, 1.4);
           footing(add, rad, C.wall); add(cyl(rad * 1.25, rad * 1.45, .9 * u, 7), L(), C.wall2);
-          for (let i = 0; i < 4; i++) { const h = (2.9 - i * .35) * u * tall * k; add(cyl(rad * .74, rad, h, 7), L(0, y, 0, 0, i * .4), i % 2 ? C.wall2 : C.wall); add(cyl(rad * .76, rad * .78, .18 * u, 7), L(0, y + h * .92, 0, 0, i * .4), C.accent); if (lights) add(dome(.25 * u, 6), L(rad * .85, y + h * .5, 0, 0, 0, -Math.PI / 2, 1, .4, 1), C.window, true); y += h; rad *= .74; }
+          for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2; add(sunk(cone(rad * .5, 1.4 * u * tall + SINK, 5)), L(Math.cos(a) * rad * 1.15, 0, Math.sin(a) * rad * 1.15, 0, -a, 0, .7, 1, 1), C.wall2); }
+          for (let i = 0; i < 4; i++) {
+            const h = (2.9 - i * .35) * u * tall * k;
+            add(cyl(rad * .74, rad, h, 7), L(0, y, 0, 0, i * .4), i % 2 ? C.wall2 : C.wall);
+            add(cyl(rad * .76, rad * .78, .18 * u, 7), L(0, y + h * .92, 0, 0, i * .4), C.accent);
+            for (let j = 0; j < 3; j++) { const a = j * 2.1 + i, rr = rad * .86; add(dome(.22 * u, 6), L(Math.cos(a) * rr, y + h * .5, Math.sin(a) * rr, 0, -a, -Math.PI / 2, 1, .4, 1), lights && j === 0 ? C.window : C.door, lights && j === 0); }
+            y += h; rad *= .74;
+          }
           add(cone(rad, 1.2 * u * tall, 7), L(0, y, 0), C.accent);
-        } else {
+          for (let i = 0; i < 3; i++) add(cyl(.1 * u, .16 * u, .9 * u, 5), L((i - 1) * rad * .5, y + .2 * u, 0, 0, 0, (i - 1) * .3), C.wall2);
+        } else { // a ridged earth mound with chimneys and a framed mouth
           const h = 3.4 * u * tall * k, rad = 2 * u * k;
-          add(sunk(cone(rad, h + SINK, 7)), L(0, 0, 0, 0, r() * 6), C.wall);
-          for (let i = 0; i < 3; i++) { const a = r() * 6.28, s = .4 + r() * .35; add(sunk(cone(rad * s, h * s + SINK, 6)), L(Math.cos(a) * rad * .7, 0, Math.sin(a) * rad * .7), C.wall2); }
+          add(sunk(cone(rad, h + SINK, 9)), L(0, 0, 0, 0, r() * 6), C.wall);
+          for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2 + .2; add(sunk(cone(rad * .28, h * .8 + SINK, 4)), L(Math.cos(a) * rad * .62, 0, Math.sin(a) * rad * .62, 0, -a, 0, .45, 1, 1), C.wall2); }
+          for (let i = 0; i < 3; i++) { const a = r() * 6.28, s = .4 + r() * .35; add(sunk(cone(rad * s, h * s + SINK, 7)), L(Math.cos(a) * rad * .75, 0, Math.sin(a) * rad * .75), C.wall2); add(cyl(.12 * u, .16 * u, .5 * u, 5), L(Math.cos(a) * rad * .75, h * s * .95, Math.sin(a) * rad * .75), C.door); }
+          add(new THREE.TorusGeometry(.62 * u * k, .14 * u, 5, 10, Math.PI), L(0, 0, rad * .74), C.accent);
           add(dome(.55 * u * k, 8), L(0, 0, rad * .72, Math.PI / 2, 0, 0, 1, 1, .5), C.door);
           add(cyl(rad * .32, rad * .36, .25 * u, 7), L(0, h * .55, 0), C.accent);
+          for (let i = 0; i < 4; i++) { const a = i * 1.57 + .8; add(dome(.15 * u, 6), L(Math.cos(a) * rad * .45, h * .45, Math.sin(a) * rad * .45, 0, -a, -Math.PI / 2 + .5, 1, .4, 1), lights ? C.window : C.door, lights); }
         }
       },
       great(add, k) { this.home(add, k * 2.2); },
       small(add) { add(sunk(cone(1.6 * u, 3 * u + SINK, 6)), L(), C.wall); },
     },
     silk: {
-      home(add, k) {
+      home(add, k) { // a two-layer silk cone on poles, spiral threads, a funnel mouth, egg-sacs
         const rad = 1.6 * u * k, h = 2.8 * u * k * tall;
-        for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + .4; rod(add, [Math.cos(a) * rad, -SINK, Math.sin(a) * rad], [Math.cos(a) * rad * .2, h * 1.2, Math.sin(a) * rad * .2], .05 * u, C.wood); rod(add, [Math.cos(a) * rad * .3, h * 1.1, Math.sin(a) * rad * .3], [Math.cos(a) * rad * 2, 0, Math.sin(a) * rad * 2], .015 * u, C.wall); }
-        add(sunk(cyl(rad * .9, rad * .9, SINK, 8)), L(), C.wall2);
-        add(cone(rad, h, 8), L(), C.wall, lights);
-        add(box(.5 * u, .7 * u, .05), L(0, 0, rad * .62, -.5), C.door);
+        for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + .4; rod(add, [Math.cos(a) * rad, -SINK, Math.sin(a) * rad], [Math.cos(a) * rad * .2, h * 1.25, Math.sin(a) * rad * .2], .05 * u, C.wood); }
+        for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + .1; rod(add, [Math.cos(a) * rad * .35, h * 1.05, Math.sin(a) * rad * .35], [Math.cos(a) * rad * 2.1, 0, Math.sin(a) * rad * 2.1], .012 * u, C.wall); add(cone(.06 * u, .2 * u, 3), L(Math.cos(a) * rad * 2.1, 0, Math.sin(a) * rad * 2.1), C.wood); }
+        add(sunk(cyl(rad * .9, rad * .9, SINK, 10)), L(), C.wall2);
+        add(cone(rad, h, 10), L(), C.wall, lights);
+        add(cone(rad * .7, h * .62, 10), L(0, h * .45, 0), C.trim);
+        for (let i = 1; i < 6; i++) { const f = i / 6; add(ring(rad * (1 - f) + .02, .015 * u, 12), L(0, h * f, 0), C.wall2); }
+        add(cone(.55 * u, 1.1 * u, 8).rotateX(Math.PI / 2), L(0, .55 * u, rad * .75), C.wall);
+        add(cyl(.4 * u, .4 * u, .05, 8).rotateX(Math.PI / 2), L(0, .55 * u, rad * .78), C.door);
+        for (let i = 0; i < 3; i++) { const a = r() * 6.28; rod(add, [Math.cos(a) * rad * .5, h * .5, Math.sin(a) * rad * .5], [Math.cos(a) * rad * .75, h * .25, Math.sin(a) * rad * .75], .01 * u, C.wall); add(ball(.2 * u, 0), L(Math.cos(a) * rad * .75, h * .2, Math.sin(a) * rad * .75, 0, 0, 0, 1, 1.3, 1), C.bag); }
       },
       great(add, k) { // a funnel web on poles above a canopy
         const rad = 4 * u * k, h = 5 * u * k * tall;
@@ -340,12 +773,18 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       small(add) { add(sunk(cyl(1.1 * u, 1.1 * u, SINK, 7)), L(), C.wall2); add(cone(1.2 * u, 2 * u, 7), L(), C.wall); },
     },
     trapdoor: {
-      home(add, k) {
+      home(add, k) { // a silk-rimmed burrow with a hinged lid, signal threads and a lookout
         const rad = 1.1 * u * k;
-        add(sunk(cyl(rad * 1.6, rad * 1.8, .25 * u + SINK, 10)), L(), C.wall2); add(ring(rad * 1.3, .3 * u * k, 12), L(0, .25 * u, 0), C.wall);
+        add(sunk(cyl(rad * 1.6, rad * 1.8, .25 * u + SINK, 12)), L(), C.wall2); add(ring(rad * 1.3, .3 * u * k, 14), L(0, .25 * u, 0), C.wall);
+        add(ring(rad * 1.05, .08 * u, 14), L(0, .3 * u, 0), C.trim);
         add(cyl(rad, rad, .04, 12), L(0, .27 * u, 0), C.door, false);
-        add(cyl(rad * 1.05, rad * 1.05, .1 * u, 12), L(0, .3 * u, -rad, -1.1, 0, 0).multiply(L(0, 0, rad)), C.wall);
-        add(cone(.3 * u, 1.6 * u * k, 6), L(rad * 1.3, 0, -rad), C.wall2);
+        const lid = L(0, .3 * u, -rad, -1.1, 0, 0).multiply(L(0, 0, rad));
+        add(cyl(rad * 1.05, rad * 1.05, .12 * u, 12), lid, C.wall);
+        for (let i = 0; i < 5; i++) add(ball((.12 + r() * .1) * u, 0), lid.clone().multiply(L((r() - .5) * rad, .1 * u, (r() - .5) * rad, 0, 0, 0, 1, .6, 1)), i % 2 ? C.stone : C.leaf);
+        add(cyl(.1 * u, .1 * u, .3 * u, 4).rotateZ(Math.PI / 2), L(0, .3 * u, -rad), C.wood);
+        for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2 + .3, l = (2.5 + r() * 2) * u; rod(add, [Math.cos(a) * rad * 1.5, .1 * u, Math.sin(a) * rad * 1.5], [Math.cos(a) * (rad * 1.5 + l), .03 * u, Math.sin(a) * (rad * 1.5 + l)], .012 * u, C.trim); }
+        add(cone(.3 * u, 1.6 * u * k, 6), L(rad * 1.3, 0, -rad), C.wall2); add(ring(.22 * u, .05 * u, 6), L(rad * 1.3, 1 * u * k, -rad), C.trim);
+        add(ball(.2 * u, 0), L(rad * 1.3, 1.6 * u * k, -rad), C.accent);
         if (lights) add(cyl(rad * .6, rad * .6, .06, 10), L(0, .29 * u, 0), C.window, true);
       },
       great(add, k) { add(sunk(cyl(6 * u * k, 6.5 * u * k, .4 * u + SINK, 20)), L(), C.wall2); add(ring(5 * u * k, .8 * u, 22), L(0, .5 * u, 0), C.wall); add(ring(3 * u * k, .5 * u, 18), L(0, .4 * u, 0), C.wall); add(sunk(cyl(.8 * u, 1.2 * u, 9 * u * k * tall + SINK, 7)), L(), C.wall2); for (let y = 2; y < 9 * k * tall; y += 1.8) add(ring(.95 * u, .12 * u, 8), L(0, y * u, 0), lights ? C.window : C.door, lights); },
@@ -353,31 +792,46 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
     },
     burrows: {
       home(add, k) {
-        const rad = 1.8 * u * k;
-        add(sunk(dome(rad, 10).scale(1, .55, 1)), L(0, SINK * .4, 0), C.wall);
-        add(box(1 * u * k, .1 * u, 2.4 * u * k), L(0, .25 * u, rad * .9, .35, 0, 0), C.wall2);
-        add(dome(.6 * u * k, 8), L(0, .1 * u, rad * .7, Math.PI / 2, 0, 0, 1, 1, .4), C.door);
-        add(cyl(.35 * u * k, .35 * u * k, .1, 8), L(0, rad * .55, 0), lights ? C.window : C.wall2, lights);
-        add(cone(.25 * u, 1 * u * k, 6), L(-rad * .5, rad * .3, -rad * .3), C.wall2);
+        const rad = 2.3 * u * k;
+        const y0 = -.1 * u; // the mound's base, just into the ground, with a skirt reaching down
+        add(dome(rad, 12).scale(1, .7, 1), L(0, y0, 0), C.wall); add(sunk(cyl(rad, rad * 1.03, SINK, 12)), L(0, y0 + .02, 0), C.wall);
+        add(dome(rad * .8, 10).scale(1, .78, 1), L(0, y0 + rad * .1, 0), C.turf);
+        // A dug ramp to a doorway framed with stones and a lintel, tufts on the mound, a vent.
+        add(box(1.1 * u * k, .1 * u, 2.4 * u * k), L(0, .2 * u, rad * .9, .35, 0, 0), C.soil);
+        add(dome(.62 * u * k, 10), L(0, .1 * u, rad * .7, Math.PI / 2, 0, 0, 1, 1, .4), C.door);
+        for (let i = 0; i < 7; i++) { const a = Math.PI * (i / 6); add(ball(.2 * u * k, 0), L(Math.cos(a) * .72 * u * k, .1 * u + Math.sin(a) * .72 * u * k, rad * .72, 0, i, 0, 1, .8, 1), i % 2 ? C.stone : C.stone2); }
+        add(box(1.7 * u * k, .2 * u, .35 * u), L(0, .85 * u * k, rad * .7), C.stone2);
+        for (let i = 0; i < 8; i++) { const a = r() * 6.28, d = rad * (.25 + r() * .55); add(cone(.12 * u, (.4 + r() * .4) * u, 3), L(Math.cos(a) * d, y0 + rad * .7 * Math.sqrt(1 - (d / rad) ** 2) - .05, Math.sin(a) * d, (r() - .5) * .4, 0, (r() - .5) * .4), C.leaf); }
+        add(cyl(.35 * u * k, .35 * u * k, .1, 8), L(0, y0 + rad * .72, 0), lights ? C.window : C.wall2, lights);
+        const vy = y0 + rad * .55; add(cyl(.18 * u, .24 * u, 1 * u * k, 6), L(-rad * .5, vy, -rad * .3), C.stone2); add(cyl(.22 * u, .22 * u, .1 * u, 6), L(-rad * .5, vy + 1 * u * k, -rad * .3), C.stone);
+        if (r() < .5) add(sunk(dome(rad * .45, 8).scale(1, .6, 1)), L(rad * 1.05, SINK * .3, -rad * .2), C.wall2);
       },
       great(add, k) { // terraced amphitheatre bowl
         for (let i = 0; i < 4; i++) add(ring((2.5 + i * 1.8) * u * k, .8 * u, 22), L(0, i * .9 * u * tall, 0, 0, 0, 0, 1, 1.2, 1), i % 2 ? C.wall2 : C.wall);
         add(sunk(cyl(9.5 * u * k, 9.5 * u * k, SINK, 22)), L(), C.wall2); add(cyl(2 * u * k, 2 * u * k, .1, 14), L(0, .05, 0), C.door);
         if (lights) for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; add(ball(.3 * u), L(Math.cos(a) * 8.6 * u * k, 3.2 * u, Math.sin(a) * 8.6 * u * k), C.window, true); }
       },
-      small(add) { add(sunk(dome(1.5 * u, 8).scale(1, .5, 1)), L(0, SINK * .4, 0), C.wall); },
+      small(add) { this.home(add, .8); },
     },
     perches: {
-      home(add, k) {
-        const h = (4.5 + r() * 3) * u * tall * k, nests = k > 1.2 ? 3 : 1;
+      home(add, k) { // a ringed pole with leafy side branches and woven nests under a canopy
+        const h = (4.5 + r() * 3) * u * tall * k, nests = k > 1.2 ? 3 : 1 + (r() < .5 ? 1 : 0);
         add(sunk(cyl(.16 * u * k, .3 * u * k, h + SINK, 6)), L(0, 0, 0, (r() - .5) * .08, 0, (r() - .5) * .08), C.wood);
+        for (let i = 0; i < 3; i++) { const a = i * 2.09; rod(add, [Math.cos(a) * .7 * u, -SINK, Math.sin(a) * .7 * u], [0, .9 * u, 0], .1 * u, C.wood); }
+        for (let y = .8 * u; y < h * .9; y += .9 * u) add(cyl(.2 * u * k, .22 * u * k, .08 * u, 6), L(0, y, 0), C.roof2);
+        for (let i = 0; i < 2; i++) { const a = i * 3.1 + 1, y = h * (.45 + i * .15); rod(add, [0, y, 0], [Math.cos(a) * 1.3 * u, y + .6 * u, Math.sin(a) * 1.3 * u], .05 * u, C.wood); add(ball(.45 * u, 0), L(Math.cos(a) * 1.4 * u, y + .7 * u, Math.sin(a) * 1.4 * u, 0, r() * 6, 0, 1, .7, 1), C.leaf); }
         for (let i = 0; i < nests; i++) {
-          const y = h * (1 - i * .28), a = i * 2.2, off = i ? 1.1 * u : 0;
-          if (i) rod(add, [0, y - .5 * u, 0], [Math.cos(a) * off, y, Math.sin(a) * off], .06 * u, C.wood);
-          add(ring(.75 * u, .22 * u, 10), L(Math.cos(a) * off, y, Math.sin(a) * off), C.roof);
-          add(cyl(.7 * u, .6 * u, .12 * u, 8), L(Math.cos(a) * off, y - .15 * u, Math.sin(a) * off), C.wood);
-          if (lights) add(ball(.2 * u), L(Math.cos(a) * off, y + .2 * u, Math.sin(a) * off), C.window, true);
+          const y = h * (1 - i * .28), a = i * 2.2, off = i ? 1.1 * u : 0, x = Math.cos(a) * off, z = Math.sin(a) * off;
+          if (i) rod(add, [0, y - .5 * u, 0], [x, y, z], .06 * u, C.wood);
+          add(cyl(.7 * u, .55 * u, .25 * u, 9), L(x, y - .2 * u, z), C.wood);
+          add(ring(.75 * u, .22 * u, 10), L(x, y, z), C.roof);
+          add(ring(.8 * u, .06 * u, 10), L(x, y + .12 * u, z, .15, 0, 0), C.roof2);
+          add(cyl(.55 * u, .55 * u, .04, 9), L(x, y + .05 * u, z), C.accent2);
+          for (let j = 0; j < 4; j++) { const b = j * 1.57 + .5; add(cone(.05 * u, .45 * u, 3), L(x + Math.cos(b) * .85 * u, y - .1 * u, z + Math.sin(b) * .85 * u, Math.sin(b) * .8, 0, -Math.cos(b) * .8), C.roof2); }
+          if (lights) add(ball(.2 * u), L(x, y + .2 * u, z), C.window, true);
         }
+        add(cone(1.1 * u, .8 * u, 7), L(0, h + .9 * u, 0), C.roof); for (let i = 0; i < 3; i++) rod(add, [Math.cos(i * 2.09) * .7 * u, h + .1 * u, Math.sin(i * 2.09) * .7 * u], [0, h + 1 * u, 0], .04 * u, C.wood);
+        add(box(.08 * u, .6 * u, .02 * u), L(0, h + 1.6 * u, 0), C.accent); add(cyl(.02 * u, .02 * u, .9 * u, 3), L(0, h + 1.5 * u, 0), C.wood);
       },
       great(add, k) { // a perch-tree: thick trunk, nests at every height
         const h = 14 * u * k * tall;
@@ -387,33 +841,64 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       small(add) { add(sunk(cyl(.12 * u, .2 * u, 4 * u + SINK, 5)), L(), C.wood); add(ring(.6 * u, .2 * u, 8), L(0, 4 * u, 0), C.roof); },
     },
     rookery: {
-      home(add, k) {
+      home(add, k) { // a stone tower ringed with spiral ledges, framed holes and a capped roof
         const h = (5 + r() * 3) * u * tall * k, rad = 1.3 * u * k;
-        add(sunk(cyl(rad * .7, rad, h + SINK, 7)), L(0, 0, 0, 0, r() * 6), C.wall);
-        for (let y = 1.2 * u; y < h - .5 * u; y += 1.1 * u) { const a = r() * 6.28, rr = rad * (1 - y / h * .3); add(box(1.1 * u, .12 * u, .6 * u), L(Math.cos(a) * rr, y, Math.sin(a) * rr, 0, -a + Math.PI / 2), C.wall2); add(dome(.28 * u, 6), L(Math.cos(a + .5) * rr * .98, y + .4 * u, Math.sin(a + .5) * rr * .98, 0, -a - .5, -Math.PI / 2, 1, .5, 1), lights ? C.window : C.door, lights); }
-        add(ring(rad * .7, .2 * u, 10), L(0, h, 0), C.roof);
+        add(sunk(cyl(rad * .7, rad, h + SINK, 8)), L(0, 0, 0, 0, r() * 6), C.wall);
+        for (let y = .9 * u; y < h; y += 1.4 * u) add(cyl(rad * (1 - y / h * .3) * 1.02, rad * (1 - y / h * .3) * 1.04, .12 * u, 8), L(0, y, 0), C.wall2);
+        let a = r() * 6.28;
+        for (let y = 1.2 * u; y < h - .5 * u; y += .9 * u) {
+          a += 1.1; const rr = rad * (1 - y / h * .3);
+          add(box(1.2 * u, .12 * u, .65 * u), L(Math.cos(a) * rr, y, Math.sin(a) * rr, 0, -a + Math.PI / 2), C.wall2);
+          for (const s of [-1, 1]) add(box(.08 * u, .2 * u, .3 * u), L(Math.cos(a) * rr + Math.cos(a + s * .4) * .05, y - .2 * u, Math.sin(a) * rr, 0, -a + Math.PI / 2), C.wood);
+          const ha = a + .5;
+          add(box(.75 * u, .1 * u, .25 * u), L(Math.cos(ha) * rr, y + .72 * u, Math.sin(ha) * rr, 0, -ha + Math.PI / 2), C.trim);
+          add(dome(.25 * u, 6), L(Math.cos(ha) * rr * 1.02, y + .42 * u, Math.sin(ha) * rr * 1.02, 0, -ha, -Math.PI / 2, 1, .4, 1), lights ? C.window : C.door, lights);
+          add(box(.06 * u, .5 * u, .02 * u), L(Math.cos(a) * rr * 1.01, y - .5 * u, Math.sin(a) * rr * 1.01, 0, -a + Math.PI / 2), C.trim);
+        }
+        const tr = rad * .7;
+        add(cyl(tr * 1.15, tr * 1.1, .2 * u, 8), L(0, h, 0), C.wall2);
+        add(cone(tr * 1.2, 1.4 * u * k, 8), L(0, h + .2 * u, 0), C.roof);
+        add(cyl(.04 * u, .04 * u, .8 * u, 3), L(0, h + .2 * u + 1.4 * u * k, 0), C.wood); add(ball(.12 * u, 0), L(0, h + 1.4 * u * k + 1 * u, 0), C.accent);
+        add(dome(.5 * u * k, 8), L(0, 0, rad * .95, Math.PI / 2, 0, 0, 1, 1.2, .4), C.door);
       },
       great(add, k) { this.home(add, k * 2.4); },
       small(add) { add(sunk(cyl(.8 * u, 1 * u, 4 * u + SINK, 6)), L(), C.wall); },
     },
     hanging: {
-      home(add, k) {
+      home(add, k) { // a braced frame with a thatched beam, woven pods hung on ropes
         const w = 2.4 * u * k, h = 4.5 * u * k * tall;
-        for (const x of [-1, 1]) add(sunk(cyl(.14 * u, .2 * u, h + SINK, 5)), L(x * w, 0, 0, 0, 0, x * .06), C.wood);
+        for (const x of [-1, 1]) { add(sunk(cyl(.14 * u, .2 * u, h + SINK, 6)), L(x * w, 0, 0, 0, 0, x * .06), C.wood); for (const z of [-1, 1]) rod(add, [x * w, -SINK * .5, z * 1.1 * u], [x * w * .97, h * .55, 0], .06 * u, C.wood); }
         add(box(w * 2.3, .22 * u, .3 * u), L(0, h, 0), C.wood);
-        for (let i = 0; i < 3; i++) { const x = (i - 1) * w * .65, drop = (1.2 + r()) * u; rod(add, [x, h, 0], [x, h - drop, 0], .03 * u, C.line); add(ball(.55 * u * k, 1), L(x, h - drop - .8 * u * k, 0, 0, 0, 0, 1, 1.5, 1), i % 2 ? C.roof : C.wall); add(dome(.15 * u, 6), L(x, h - drop - 1.3 * u * k, .45 * u * k, Math.PI / 2, 0, 0, 1, 1, .4), lights ? C.window : C.door, lights); }
+        rod(add, [-w, h * .6, 0], [-w * .4, h, 0], .05 * u, C.wood); rod(add, [w, h * .6, 0], [w * .4, h, 0], .05 * u, C.wood);
+        add(new THREE.CylinderGeometry(.75 * u, .75 * u, w * 2.4, 3).rotateZ(Math.PI / 2).rotateX(-Math.PI / 2), L(0, h + .55 * u, 0, 0, 0, 0, 1, .8, 1), C.roof);
+        for (let i = 0; i < 3; i++) {
+          const x = (i - 1) * w * .65, drop = (1.2 + r()) * u, py = h - drop - .8 * u * k, pr = .55 * u * k;
+          rod(add, [x, h, 0], [x, h - drop, 0], .03 * u, C.line);
+          add(cone(.2 * u, .3 * u, 6).rotateX(Math.PI), L(x, h - drop + .1 * u, 0), C.roof2);
+          add(ball(pr, 1), L(x, py, 0, 0, 0, 0, 1, 1.5, 1), i % 2 ? C.roof : C.wall);
+          for (const t of [-.5, 0, .5]) add(new THREE.TorusGeometry(pr * Math.sqrt(1 - t * t) * .99, .03 * u, 3, 10).rotateX(Math.PI / 2), L(x, py + t * pr * 1.5, 0), C.roof2);
+          add(new THREE.TorusGeometry(.17 * u, .04 * u, 3, 8), L(x, py - .2 * u, pr * .9), C.trim);
+          add(dome(.15 * u, 6), L(x, py - .2 * u, pr * .92, Math.PI / 2, 0, 0, 1, 1, .4), lights ? C.window : C.door, lights);
+          add(cone(.12 * u, .35 * u, 5).rotateX(Math.PI), L(x, py - pr * 1.5 - .1 * u, 0), C.roof2);
+        }
       },
       great(add, k) { this.home(add, k * 2.3); },
       small(add) { add(sunk(cyl(.12 * u, .15 * u, 3.5 * u + SINK, 5)), L(), C.wood); add(ball(.6 * u, 1), L(.5 * u, 2.4 * u, 0, 0, 0, 0, 1, 1.5, 1), C.roof); },
     },
     earthworks: {
-      home(add, k) { // turf-roofed barrow with a stone doorway
+      home(add, k) { // a turf barrow on a stone kerb, framed doorway, smoke hole, grass on top
         const len = 4 * u * k, rad = 1.4 * u * k;
-        add(new THREE.CylinderGeometry(rad, rad, len, 10, 1, false, -Math.PI / 2, Math.PI).rotateX(Math.PI / 2).translate(0, 0, 0), L(0, -.1 * u, 0, 0, 0, 0, 1, .85 * tall, 1), C.turf);
+        add(new THREE.CylinderGeometry(rad, rad, len, 12, 1, false, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2), L(0, -.1 * u, 0, 0, 0, 0, 1, .85 * tall, 1), C.turf);
         add(sunk(box(rad * 2, SINK, len)), L(), C.turf);
+        add(box(rad * 1.9, rad * .8 * tall, .15 * u), L(0, 0, -len / 2), C.wood);
+        for (let i = 0; i < 14; i++) { const z = (i / 13 - .5) * len * .98; for (const x of [-1, 1]) add(ball(.2 * u, 0), L(x * rad * .98, .05 * u, z, 0, i, 0, 1, .7, 1.3), (i + x) % 2 ? C.stone : C.stone2); }
+        for (let i = 0; i < 10; i++) { const z = (r() - .5) * len * .85, a = (r() - .5) * 2; add(cone(.1 * u, (.3 + r() * .3) * u, 3), L(Math.sin(a) * rad * .85 * .98, Math.cos(a) * rad * .85 * tall * .98 - .1 * u, z, 0, 0, -a * .6), C.leaf); }
+        add(cyl(.25 * u, .3 * u, .5 * u, 6), L(0, rad * .85 * tall - .2 * u, -len * .2), C.stone2);
         add(box(1 * u, 1.3 * u * k, .3 * u), L(0, 0, len / 2), C.stone); add(box(.6 * u, .9 * u * k, .06), L(0, 0, len / 2 + .16 * u), C.door);
-        for (const x of [-1, 1]) add(box(.4 * u, .8 * u, .4 * u), L(x * .75 * u, 0, len / 2 + .15 * u), C.stone2);
+        add(box(1.5 * u, .25 * u, .45 * u), L(0, 1.3 * u * k, len / 2 + .05 * u), C.stone2);
+        for (const x of [-1, 1]) { add(box(.4 * u, .8 * u, .4 * u), L(x * .75 * u, 0, len / 2 + .15 * u), C.stone2); add(box(.12 * u, .9 * u * k, .12 * u), L(x * .38 * u, 0, len / 2 + .2 * u), C.wood); }
         windows(add, u, .7 * u, len / 2 + .2 * u, 1);
+        if (r() < .5) add(sunk(box(.4 * u, 1.6 * u * tall + SINK, .3 * u)), L(rad * 1.6, 0, len * .4, 0, .3, .05), C.stone);
       },
       great(add, k) { // a henge of standing stones with lintels
         const rad = 5 * u * k, n = 10;
@@ -424,11 +909,17 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       small(add) { add(sunk(dome(1.6 * u, 8).scale(1, .55, 1)), L(0, SINK * .4, 0), C.turf); },
     },
     living: {
-      home(add, k) {
+      home(add, k) { // a shaped-tree dwelling: arching root-ribs woven with walls, a layered canopy, lanterns
         const rad = 1.6 * u * k, h = 2.6 * u * k * tall;
-        for (let i = 0; i < 7; i++) { if (i === 0) continue; const a = i / 7 * Math.PI * 2 + Math.PI / 2; rod(add, [Math.cos(a) * rad, -SINK, Math.sin(a) * rad], [Math.cos(a) * rad * .2, h, Math.sin(a) * rad * .2], .16 * u * k, C.wood); }
-        for (let i = 0; i < 5; i++) add(ball((.9 + r() * .5) * u * k, 1), L((r() - .5) * rad, h + (r() - .2) * .8 * u, (r() - .5) * rad), C.leaf);
-        if (lights) add(ball(.3 * u), L(0, h * .4, 0), C.window, true);
+        for (let i = 1; i < 7; i++) { const a = i / 7 * Math.PI * 2 + Math.PI / 2; rod(add, [Math.cos(a) * rad * 1.15, -SINK, Math.sin(a) * rad * 1.15], [Math.cos(a) * rad * .2, h, Math.sin(a) * rad * .2], .16 * u * k, C.wood); }
+        add(cyl(rad * .78, rad * .95, h * .75, 7, 1), L(0, 0, 0), C.wall2);
+        for (let y = .3; y < .75; y += .15) add(cyl(rad * (.95 - y * .2) * 1.02, rad * (.95 - y * .2) * 1.02, .05 * u, 7), L(0, h * y, 0), C.wood);
+        add(box(.75 * u, 1.3 * u, .1 * u), L(0, 0, rad * .85), C.door);
+        add(new THREE.TorusGeometry(.42 * u, .07 * u, 3, 8, Math.PI), L(0, 1.3 * u, rad * .87), C.wood);
+        for (const x of [-1, 1]) add(dome(.18 * u, 6), L(x * rad * .55, h * .45, rad * .68, Math.PI / 2, x * .6, 0, 1, 1, .4), lights ? C.window : C.door, lights);
+        for (let i = 0; i < 6; i++) add(ball((.9 + r() * .5) * u * k, 1), L((r() - .5) * rad * 1.1, h + (r() - .2) * .7 * u, (r() - .5) * rad * 1.1, 0, r() * 6, 0, 1, .75, 1), i % 2 ? C.leaf : C.roof);
+        for (let i = 0; i < 2; i++) add(ball((.6 + r() * .3) * u * k, 1), L((r() - .5) * rad * .6, h + 1 * u * k + r() * .4 * u, (r() - .5) * rad * .6, 0, r() * 6, 0, 1, .8, 1), C.leaf);
+        for (let i = 0; i < 4; i++) { const a = i * 1.57 + .7; rod(add, [Math.cos(a) * rad, h * .9, Math.sin(a) * rad], [Math.cos(a) * rad, h * .6, Math.sin(a) * rad], .015 * u, C.line); add(ball(.15 * u, 0), L(Math.cos(a) * rad, h * .57, Math.sin(a) * rad, 0, 0, 0, 1, 1.4, 1), lights ? C.window : C.accent, lights); }
       },
       great(add, k) { // a giant shaped tree with arching roots
         const h = 9 * u * k * tall;
@@ -440,22 +931,38 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
     },
     domes: {
       home(add, k) {
-        const rad = 1.5 * u * k;
-        footing(add, rad, C.wall); add(cyl(rad, rad, .35 * u, 12), L(), C.wall2);
-        add(dome(rad, 12), L(0, .35 * u, 0, 0, 0, 0, 1, tall, 1), C.wall);
-        add(box(.65 * u * k, .95 * u * k, .5 * u), L(0, 0, rad * .85), C.door);
-        if (lights) add(ring(rad * .5, .05 * u, 12), L(0, .35 * u + rad * tall * .85, 0), C.window, true);
+        const rad = 1.5 * u * k, base = .35 * u, top = base + rad * tall;
+        footing(add, rad, C.wall); add(cyl(rad, rad * 1.03, base, 14), L(), C.wall2);
+        add(dome(rad, 14), L(0, base, 0, 0, 0, 0, 1, tall, 1), C.wall);
+        // Ribs over the dome, an arched entry tunnel with a door, a skylight cap, vents.
+        for (let i = 0; i < 4; i++) add(new THREE.TorusGeometry(rad * 1.01, .05 * u, 4, 14, Math.PI), L(0, base, 0, 0, i * Math.PI / 4, 0, 1, tall, 1), C.trim);
+        add(new THREE.TorusGeometry(rad * 1.01, .06 * u, 4, 18).rotateX(Math.PI / 2), L(0, base + rad * tall * .45, 0, 0, 0, 0, .9, 1, .9), C.trim);
+        const tr = .55 * u * Math.max(1, k * .8), tl = rad * .7;
+        add(new THREE.CylinderGeometry(tr, tr, tl, 10, 1, false, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2), L(0, 0, rad * .75 + tl * .3), C.wall2);
+        add(box(tr * 2.1, tr * 1.1, .08 * u), L(0, 0, rad * .75 + tl * .8), C.trim); add(box(tr * 1.2, tr * .95, .1 * u), L(0, 0, rad * .75 + tl * .8 + .02), C.door);
+        add(cyl(rad * .22, rad * .26, .2 * u, 10), L(0, top - .05 * u, 0), C.accent);
+        if (lights) add(cyl(rad * .17, rad * .17, .05 * u, 10), L(0, top + .15 * u, 0), C.window, true);
+        add(cyl(.07 * u, .07 * u, .8 * u, 5), L(rad * .45, base + rad * tall * .7, -rad * .3), C.metal);
+        if (r() < .55) { const a = r() < .5 ? 1.6 : -1.6, ar = rad * .55; add(dome(ar, 10), L(Math.sin(a) * rad * .95, base * .5, Math.cos(a) * rad * .95, 0, 0, 0, 1, tall, 1), C.wall2); add(cyl(ar, ar, base * .5, 10), L(Math.sin(a) * rad * .95, 0, Math.cos(a) * rad * .95), C.wall2); }
+        if (lights) add(new THREE.TorusGeometry(rad * 1.02, .05 * u, 4, 20).rotateX(Math.PI / 2), L(0, base * .6, 0), C.window, true);
       },
-      great(add, k) { this.home(add, k * 2.5); for (let i = 0; i < 4; i++) { const a = i * 1.57 + .7, d = 3.6 * u * k; add(dome(1.4 * u * k, 10), L(Math.cos(a) * d, 0, Math.sin(a) * d), C.wall2); } },
-      small(add) { add(sunk(cyl(1.3 * u, 1.3 * u, SINK, 10)), L(), C.wall2); add(dome(1.3 * u, 10), L(), C.wall); },
+      great(add, k) { this.home(add, k * 2.5); for (let i = 0; i < 4; i++) { const a = i * 1.57 + .7, d = 3.6 * u * k; add(dome(1.4 * u * k, 12), L(Math.cos(a) * d, 0, Math.sin(a) * d), C.wall2); add(new THREE.TorusGeometry(1.42 * u * k, .06 * u, 4, 12, Math.PI), L(Math.cos(a) * d, 0, Math.sin(a) * d, 0, a, 0), C.trim); } },
+      small(add) { this.home(add, .85); },
     },
     tracks: { // rollers: wheel-shaped houses
-      home(add, k) {
-        const rad = 1.7 * u * k;
-        add(sunk(box(rad * 1.4, .4 * u + SINK, 1.2 * u * k)), L(), C.wall2);
-        add(new THREE.TorusGeometry(rad, .5 * u * k, 6, 16), L(0, rad + .3 * u, 0), C.wall);
-        add(cyl(.6 * u * k, .6 * u * k, 1.1 * u * k, 10).rotateX(Math.PI / 2).translate(0, 0, -.55 * u * k), L(0, rad + .3 * u, 0), lights ? C.window : C.wall2, lights);
-        for (let i = 0; i < 6; i++) rod(add, [0, rad + .3 * u, 0], [Math.cos(i * 1.05) * rad, rad + .3 * u + Math.sin(i * 1.05) * rad, 0], .08 * u, C.wall2);
+      home(add, k) { // a wheel-shaped house: treaded rim, spokes, a hub with door and window, a cradle
+        const rad = 1.7 * u * k, cy = rad + .3 * u;
+        add(sunk(box(rad * 1.4, .4 * u + SINK, 1.4 * u * k)), L(), C.wall2);
+        for (const s of [-1, 1]) add(box(.18 * u, rad * .7, 1.3 * u * k), L(s * rad * .55, .4 * u, 0, 0, 0, s * .45), C.wall2);
+        add(new THREE.TorusGeometry(rad, .5 * u * k, 7, 20), L(0, cy, 0), C.wall);
+        for (let i = 0; i < 20; i++) { const a = i / 20 * Math.PI * 2; add(box(.18 * u, .14 * u, 1.06 * u * k), L(Math.cos(a) * (rad + .48 * u * k), cy + Math.sin(a) * (rad + .48 * u * k), 0, 0, 0, a), C.wall2); }
+        for (const z of [-1, 1]) add(new THREE.TorusGeometry(rad - .35 * u * k, .06 * u, 3, 18), L(0, cy, z * .32 * u * k), C.trim);
+        add(cyl(.65 * u * k, .65 * u * k, 1.2 * u * k, 12).rotateX(Math.PI / 2).translate(0, 0, -.6 * u * k), L(0, cy, 0), C.wall2);
+        add(cyl(.5 * u * k, .5 * u * k, .05, 10).rotateX(Math.PI / 2), L(0, cy, .62 * u * k), lights ? C.window : C.door, lights);
+        add(ring(.62 * u * k, .06 * u, 12).rotateX(Math.PI / 2), L(0, cy, .6 * u * k), C.trim);
+        for (let i = 0; i < 8; i++) rod(add, [0, cy, 0], [Math.cos(i * .785) * rad, cy + Math.sin(i * .785) * rad, 0], .08 * u, C.wall2);
+        add(box(.6 * u, .9 * u, .08), L(0, .4 * u, .6 * u * k + .04), C.door);
+        for (let i = 1; i < 4; i++) add(box(.7 * u, .08 * u, .3 * u), L(0, i * .14 * u, .7 * u * k + (4 - i) * .25 * u), C.stone2);
       },
       great(add, k) { // a great loop above a banked ring track
         add(sunk(cyl(7 * u * k, 7 * u * k, SINK, 24)), L(), C.wall2);
@@ -503,23 +1010,75 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       add(cyl(1 * u, 1 * u, 4 * u, 12), L(0, .6 * u, 0), C.hull); add(cone(1 * u, 2.4 * u, 12), L(0, 4.6 * u, 0), C.accent);
       add(ring(4.2 * u, .12 * u, 18), L(0, 1.1 * u, 0), C.window, true);
     },
-    rail(add) { // a launch rail climbing a tall tower
+    rail(add, gy) { // a launch rail climbing a tall tower
       const h = 26 * u * tall, run = 26 * u;
-      add(sunk(cyl(1.5 * u, 2.2 * u, h + SINK, 7)), L(-run, 0, 0), C.wall);
+      const gt = gy?.(-run, 0) ?? 0; add(sunk(cyl(1.5 * u, 2.2 * u, h - gt + SINK, 7)), L(-run, gt, 0), C.wall);
       const ang = Math.atan2(h, run), len = Math.hypot(h, run);
       add(box(.6 * u, .5 * u, len).translate(0, 0, len / 2), L(0, .3 * u, 0, -ang, -Math.PI / 2, 0), C.metal);
-      for (let i = 1; i < 6; i++) add(sunk(cyl(.2 * u, .3 * u, h * i / 6 + SINK, 5)), L(-run * i / 6, 0, 0), C.metal2);
+      for (let i = 1; i < 6; i++) { const gy0 = gy?.(-run * i / 6, 0) ?? 0; add(sunk(cyl(.2 * u, .3 * u, Math.max(.2, h * i / 6 - gy0) + SINK, 5)), L(-run * i / 6, gy0, 0), C.metal2); }
       add(cone(.8 * u, 3 * u, 8), L(-run * .3, h * .3 + 1.2 * u, 0, 0, 0, Math.PI / 2 - ang), C.hull);
       add(ball(.5 * u), L(-run, h + .6 * u, 0), C.beacon, true);
     },
-    track(add) { // a long ramp that throws craft upward
+    track(add, gy) { // a long ramp that throws craft upward
       const run = 60 * u, h = 16 * u * tall, ang = Math.atan2(h, run), len = Math.hypot(run, h);
       add(box(2.2 * u, .7 * u, len).translate(0, 0, len / 2), L(0, .2 * u, 0, -ang, 0, 0), C.metal);
-      for (let i = 1; i < 8; i++) add(sunk(box(.6 * u, h * i / 8 + SINK, .6 * u)), L(0, 0, run * i / 8), C.metal2);
+      for (let i = 1; i < 8; i++) { const gy0 = gy?.(0, run * i / 8) ?? 0; add(sunk(box(.6 * u, Math.max(.2, h * i / 8 - gy0) + SINK, .6 * u)), L(0, gy0, run * i / 8), C.metal2); }
       add(box(1.6 * u, 1.2 * u, 4 * u), L(0, .9 * u, 4 * u, -ang, 0, 0), C.hull);
       for (let i = 0; i < 12; i++) add(box(2.4 * u, .1 * u, .3 * u), L(0, .95 * u + (len * i / 12) * Math.sin(ang), (len * i / 12) * Math.cos(ang)), C.window, true);
     },
-  }[{ hands: 'rocket', tentacles: 'grown', tripods: 'cradle', drifters: 'tether', hive: 'silo', web: 'silo', burrowers: 'silo', nests: 'rail', grazers: 'track', rollers: 'track' }[civ.family]];
+  }[{ hands: 'none', tentacles: 'grown', tripods: 'cradle', drifters: 'tether', hive: 'silo', web: 'silo', burrowers: 'silo', nests: 'rail', grazers: 'track', rollers: 'track' }[civ.family]];
+
+  // --- The spaceport ---------------------------------------------------------
+  // Each civilization's own ship design (ships.js) on a paved apron: the main ship stands
+  // in a launch tower (hulls that launch upright) or rests level beside a hangar; smaller
+  // shuttles on marked pads; a control tower. Other families also keep their own
+  // launcher (a tether, a silo, a rail, a ramp, a grown tower) beside it.
+  const ship = level >= 5 ? shipDesign(shipCiv) : null, shipScale = u * (ship && !ship.stands ? 1.5 : .9); // level hulls are low, so build them bigger
+  // The apron is flat but the world is round: its rim stands R0² / 2R above the ground.
+  // On small worlds the whole spaceport (apron, ships, towers) is built smaller so the
+  // rim never lifts more than PORT_DROP metres, and the apron's skirt reaches down to it.
+  const portR0 = ship ? Math.max(16 * u, shipSize(ship).radius * shipScale * 4) : 0;
+  const portK = ship ? Math.min(1, Math.sqrt(2 * radius * PORT_DROP) / portR0) : 1;
+  // Pads [x, z, size]: the main ship stands on the first; shuttles fly from FLYING_PADS.
+  const PADS = [[0, 0, 1], [portR0 * .58, portR0 * .3, .55], [-portR0 * .5, portR0 * .42, .55], [portR0 * .1, -portR0 * .62, .55]], FLYING_PADS = [1, 2, 3];
+  const spaceport = (rawAdd) => {
+    const k = portK, S = new THREE.Matrix4().makeScale(k, k, k);
+    const add = (g, m, ...rest) => rawAdd(g, S.clone().multiply(m), ...rest);
+    const sz = shipSize(ship), R0 = portR0, drop = (R0 * k) ** 2 / (2 * radius);
+    rawAdd(sunk(cyl(R0 * k, R0 * k * 1.02, .3 * k + SINK + relief + drop, 28)).translate(0, -relief - drop, 0), L(), C.concrete);
+    PADS.forEach(([x, z, k], i) => {
+      const pr = Math.max(3.2 * u, sz.radius * shipScale * k * 1.6);
+      add(cyl(pr, pr, .32, 20), L(x, 0, z), C.pad);
+      add(new THREE.TorusGeometry(pr * .82, .08 * u, 3, 24).rotateX(Math.PI / 2), L(x, .36, z), C.window, true);
+      if (k < 1 && !FLYING_PADS.includes(i)) buildShip(THREE, ship, add, L(x, .32, z, 0, (x + z) % 6, 0), shipScale * k); // the others are out flying (see flights)
+    });
+    // The main ship and what holds it.
+    buildShip(THREE, ship, add, L(0, .32, 0, 0, .4, 0), shipScale);
+    const H = sz.height * shipScale;
+    if (ship.stands) { // a lattice launch tower with access arms
+      const tx = sz.radius * shipScale * 1.4 + 1.2 * u;
+      for (const [dx, dz] of [[-.5, -.5], [.5, -.5], [-.5, .5], [.5, .5]]) add(sunk(box(.22 * u, H * 1.05 + SINK, .22 * u)), L(tx + dx * 1.6 * u, 0, dz * 1.6 * u), C.metal);
+      for (let y = 1.2 * u; y < H; y += 1.6 * u) add(box(1.9 * u, .12 * u, 1.9 * u), L(tx, y, 0), C.metal2);
+      for (const y of [H * .45, H * .8]) add(box(tx - sz.radius * shipScale * .8, .2 * u, .5 * u), L(tx / 2 + sz.radius * shipScale * .4, y, 0), C.metal);
+      add(ball(.25 * u), L(tx, H * 1.08, 0), C.beacon, true);
+    } else { // an arched hangar beside the ship, open at one end and lit inside
+      const hw = Math.max(5 * u, sz.radius * shipScale * 1.1), hl = hw * 2.2, hx = -R0 * .55, hz = -R0 * .25;
+      add(new THREE.CylinderGeometry(hw, hw, hl, 16, 1, true, 0, Math.PI).rotateZ(Math.PI / 2), L(hx, 0, hz, 0, .5, 0), C.wall);
+      add(new THREE.CylinderGeometry(hw * .985, hw * .985, hl, 16, 1, true, 0, Math.PI).rotateZ(Math.PI / 2).scale(-1, 1, 1), L(hx, 0, hz, 0, .5, 0), C.wall2); // its inside
+      add(new THREE.CircleGeometry(hw * .98, 16, 0, Math.PI).rotateY(-Math.PI / 2), L(hx, 0, hz, 0, .5, 0).multiply(L(-hl / 2, 0, 0)), C.wall2);
+      for (let i = 0; i < 5; i++) add(new THREE.TorusGeometry(hw * 1.01, .12 * u, 4, 16, Math.PI).rotateY(Math.PI / 2), L(hx, 0, hz, 0, .5, 0).multiply(L((i / 4 - .5) * hl, 0, 0)), C.metal);
+      add(new THREE.CircleGeometry(hw * .9, 16, 0, Math.PI).rotateY(-Math.PI / 2), L(hx, 0, hz, 0, .5, 0).multiply(L(-hl / 2 + .3 * u, 0, 0)), C.window, true);
+    }
+    // Control tower: a stalk with a lit, glazed cab.
+    const ct = [R0 * .75, 0, -R0 * .55], th = 11 * u * tall;
+    add(sunk(cyl(.6 * u, .9 * u, th + SINK, 8)), L(ct[0], 0, ct[2]), C.wall2);
+    add(cyl(1.6 * u, 1.2 * u, 1.4 * u, 10), L(ct[0], th, ct[2]), C.window, true);
+    add(cyl(1.8 * u, 1.8 * u, .25 * u, 10), L(ct[0], th + 1.4 * u, ct[2]), C.wall);
+    add(ball(.2 * u), L(ct[0], th + 2 * u, ct[2]), C.beacon, true);
+  };
+  let spaceportAt = null, spaceportBase = null;
+  const fieldsAt = []; // where the fields are (for previews and tests)
+  const spaceportFoot = ship ? Math.max(17 * u, shipSize(ship).radius * shipScale * 4.2) * portK : 0;
   const launchFoot = { rocket: 5.5, grown: 3.5, cradle: 7.5, tether: 5.5, silo: 6.5, rail: 4, track: 4 }[{ hands: 'rocket', tentacles: 'grown', tripods: 'cradle', drifters: 'tether', hive: 'silo', web: 'silo', burrowers: 'silo', nests: 'rail', grazers: 'track', rollers: 'track' }[civ.family]] * u;
 
   // --- The settlement network (settlements.mjs) -------------------------------
@@ -534,37 +1093,48 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   const places = net.settlements.map(s => ({ ...s, v: V(...s.n) }));
   // The capital and up to three more places near the site are built in full.
   const near = [places[0], ...places.slice(1).filter(s => s.v.angleTo(siteV) * radius - s.radius < DETAIL).slice(0, 3)], far = places.filter(s => !near.includes(s));
-  near.forEach((s, i) => { if (homes[i]) homes[i].copy(s.v); });
+  // Builders' herds move into the places within walking range (never out to a distant capital).
+  near.filter(s => s.v.angleTo(siteV) * radius < 220).forEach((s, i) => { if (homes[i]) homes[i].copy(s.v); });
   for (const s of near) sites.push(s.v.clone());
-  const SIZE = { camp: .45, village: .7, colony: .8, town: .95, city: 1.2, metropolis: 1.55, capital: 1.75 };
+  const SIZE = { camp: .45, village: .7, colony: .8, town: .95, city: 1.2, metropolis: 1.55, capital: 1.75, megacity: 2.1 };
 
   // Ground laid along the terrain: streets, roads and plazas are strips and discs whose
   // every vertex sits on the ground (a little above it), so they follow every slope.
   const groundPoint = (n, lift) => { if (terrain.isLiquid(n)) return null; return n.clone().multiplyScalar(radius + terrain.surface(n) + lift); };
-  const strip = (points, width, colour, lift = .14) => {
-    const pos = [];
+  // Streets, roads and plazas: resampled about every metre along and in three lanes
+  // across, every vertex on the ground plus a lift, so the land never shows through.
+  const resample = (points, step) => {
+    const out = [];
+    for (let i = 0; i < points.length - 1; i++) { const a = points[i], b = points[i + 1], n = Math.max(1, Math.ceil(a.angleTo(b) * radius / step)); for (let k = 0; k < n; k++) out.push(a.clone().lerp(b, k / n).normalize()); }
+    if (points.length) out.push(points.at(-1).clone());
+    return out;
+  };
+  const LANES = [-1, -1 / 3, 1 / 3, 1];
+  const strip = (points0, width, colour, lift = .2) => {
+    if (ground.count() > GROUND_BUDGET) return;
+    const points = resample(points0, 1.4), pos = [], lanes = width > 2.2 ? LANES : [-1, 0, 1];
     let prev = null;
     for (let i = 0; i < points.length; i++) {
       const n = points[i], nxt = points[Math.min(i + 1, points.length - 1)], prv = points[Math.max(i - 1, 0)];
       const along = nxt.clone().sub(prv); along.addScaledVector(n, -along.dot(n));
       if (along.lengthSq() < 1e-14) { prev = null; continue; }
       const side = n.clone().cross(along.normalize()).multiplyScalar(width / 2 / radius);
-      const a = groundPoint(n.clone().add(side).normalize(), lift), b = groundPoint(n.clone().sub(side).normalize(), lift);
-      const cur = a && b ? [a, b] : null;
-      if (cur && prev) pos.push(...prev[0].toArray(), ...prev[1].toArray(), ...cur[0].toArray(), ...prev[1].toArray(), ...cur[1].toArray(), ...cur[0].toArray());
+      const row = lanes.map(t => groundPoint(n.clone().addScaledVector(side, t).normalize(), lift));
+      const cur = row.every(Boolean) ? row : null;
+      if (cur && prev) for (let j = 0; j < lanes.length - 1; j++) pos.push(...prev[j].toArray(), ...prev[j + 1].toArray(), ...cur[j].toArray(), ...prev[j + 1].toArray(), ...cur[j + 1].toArray(), ...cur[j].toArray());
       prev = cur;
     }
-    if (pos.length) lit.add(flatGeometry(pos), new THREE.Matrix4(), colour);
+    if (pos.length) ground.add(flatGeometry(pos), new THREE.Matrix4(), colour);
   };
-  const disc = (centre, rad, colour, lift = .12) => {
-    const f = frameAt(centre), pos = [], rings = 4, segs = 18, pt = (d, a) => groundPoint(pointAt(f, d, a), lift);
+  const disc = (centre, rad, colour, lift = .18) => {
+    const f = frameAt(centre), pos = [], rings = Math.max(4, Math.ceil(rad / 1.2)), segs = Math.max(18, Math.ceil(rad * Math.PI * 2 / 1.4)), pt = (d, a) => groundPoint(pointAt(f, d, a), lift);
     for (let i = 0; i < rings; i++) for (let j = 0; j < segs; j++) {
       const d0 = rad * i / rings, d1 = rad * (i + 1) / rings, a0 = j / segs * Math.PI * 2, a1 = (j + 1) / segs * Math.PI * 2;
       const p00 = pt(d0, a0), p01 = pt(d0, a1), p10 = pt(d1, a0), p11 = pt(d1, a1);
       if (!p00 || !p01 || !p10 || !p11) continue;
       pos.push(...p00.toArray(), ...p11.toArray(), ...p10.toArray(), ...p00.toArray(), ...p01.toArray(), ...p11.toArray());
     }
-    if (pos.length) lit.add(flatGeometry(pos), new THREE.Matrix4(), colour);
+    if (pos.length) ground.add(flatGeometry(pos), new THREE.Matrix4(), colour);
   };
   const paved = level >= 3, walkers = WALKERS.includes(civ.family);
   const streetColour = paved ? C.road : C.path, streetWidth = (paved ? 2.4 : 1.5) * Math.min(u, 1.6);
@@ -574,8 +1144,9 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   // them that are bigger and taller toward the core, landmarks in the core of cities,
   // a ring road in big cities, fields beyond the edge, and a spaceport for capitals.
   const foot = (k) => 2 * u * k * (civ.culture === 'terraced' ? 1.2 : 1);
-  const home = (k) => (add) => style.home(add, k), great = (k) => (add) => style.great(add, k);
+  const home = (k) => Object.assign((add, gy) => { style.home(add, k); yard(add, gy, foot(k), k); }, { found: true }), great = (k) => Object.assign((add) => style.great(add, k), { found: true });
   function grow(s) {
+    currentPlace = s; litPlaces.add(s.id);
     const f = frameAt(s.v), big = SIZE[s.kind], Rm = s.radius, isCapital = s === places[0];
     if (level === 1 || s.kind === 'camp') { // a camp: a hearth, shelters, cairns
       if (civ.hearths) settle(f, 1.5 * u, r() * 6, 1.1 * u, .3, common.hearth);
@@ -585,7 +1156,8 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
     }
     const plaza = Math.min(Rm * .2, 9 * u);
     if (walkers) disc(s.v, plaza + 1.5 * u, paved ? C.plaza : C.path);
-    settle(f, 0, 0, Math.max(2, 4.2 * u * big * (isCapital ? 1 : .7)), 6 * u, great(big * (isCapital ? .95 : .65)), { face: false, aloft });
+    if (megacity && isCapital) { settle(f, 0, 0, 9.5 * u, 80 * u, arcology(big * .5), { face: false }); skyline = Math.max(skyline, 70 * u * big * .5 * Math.min(1.3, tall) * 1.3 + 10 * u); }
+    else settle(f, 0, 0, Math.max(2, 4.2 * u * big * (isCapital ? 1 : .7)), 6 * u, great(big * (isCapital ? .95 : .65)), { face: false, aloft });
     if (civ.hearths && level <= 3) settle(f, plaza * .8, r() * 6, 1.1 * u, .3, common.hearth);
     // Streets: from the plaza edge outward, wandering a little.
     const streets = Math.max(3, Math.min(8, Math.round(2.5 + civ.cohesion * 2 + big * 1.6)));
@@ -617,18 +1189,46 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       const sideV = p.n.clone().cross(along.normalize()).multiplyScalar(p.side * off / radius);
       const n = p.n.clone().add(sideV).normalize();
       if (r() < .12 && !landmark && !core) continue; // gaps: gardens and yards
+      // System-shapers: the core is a skyline, tallest at the centre.
+      if (megacity && t < (isCapital ? .66 : big >= 1.1 ? .42 : 0)) {
+        const kt = .8 + r() * .45, H = Math.min(95 * u, (isCapital ? 52 : 30) * u * (1.05 - t) * (.55 + r() * .65) * (landmark ? 1.45 : 1)), tf = 2.35 * u * kt;
+        const on = p.n.clone().add(sideV.clone().multiplyScalar((streetWidth / 2 + tf + .6 * u) / off)).normalize();
+        if (place(f, 0, 0, tf, H, tower(kt, H), { at: on, faceTo: p.n })) skyline = Math.max(skyline, H * 1.25 + 6 * u);
+        if (t < .5) { const H2 = H * (.45 + r() * .3), back = p.n.clone().add(sideV.clone().multiplyScalar((streetWidth / 2 + tf * 3.3 + 1.4 * u) / off)).normalize(); if (place(f, 0, 0, tf, H2, tower(kt * .9, H2), { at: back, faceTo: p.n })) skyline = Math.max(skyline, H2 * 1.25 + 6 * u); }
+        continue;
+      }
       if (place(f, 0, 0, fp, (landmark ? 8 : 4) * u, landmark ? great(k) : home(k * (lights && core ? 1.2 : 1)), { aloft, at: n, faceTo: p.n }) && landmark) landmarks++;
+      // Cities fill their blocks: a second row of buildings behind the first.
+      if (big >= 1.1 && !landmark && t < .85) {
+        const k2 = k * .85, fp2 = foot(k2), back = p.n.clone().add(sideV.clone().multiplyScalar((off + fp + fp2 + .8 * u) / off)).normalize();
+        place(f, 0, 0, fp2, 4 * u, home(k2), { aloft, at: back, faceTo: p.n });
+      }
     }
     // Street lamps for those that light their world; small props for those with hands.
-    if (walkers && lights) for (const pts of lines) for (let i = 2; i < pts.length; i += 3) place({ ...frameAt(pts[i].n), home: pts[i].n }, streetWidth / 2 + .4 * u, pts[i].a + Math.PI / 2, .3 * u, 2.4 * u, common.light, { face: false, spacing: .3 });
-    if (civ.family === 'hands') for (let i = 0; i < Math.round(big * 8); i++) settle(f, (plaza + r() * (Rm - plaza)), r() * 6.28, .6 * u, .8 * u, common.crates, { spacing: .6 });
+    if (walkers && streetLights) for (const pts of lines) for (let i = 2; i < pts.length - 1 && lit.count() < NEAR_BUDGET * 1.08; i += 3) {
+      const p = pts[i], along = pts[i + 1].n.clone().sub(pts[i - 1].n); along.addScaledVector(p.n, -along.dot(p.n));
+      if (along.lengthSq() < 1e-14) continue;
+      const side = (i / 3) % 2 ? 1 : -1, n = p.n.clone().add(p.n.clone().cross(along.normalize()).multiplyScalar(side * (streetWidth / 2 + .45 * u) / radius)).normalize();
+      place(f, 0, 0, .3 * u, 2.7 * u, common.light, { at: n, faceTo: p.n, spacing: .3 });
+    }
+    if (civ.family === 'hands') for (let i = 0; i < Math.round(big * 8) && lit.count() < NEAR_BUDGET * 1.1; i++) settle(f, (plaza + r() * (Rm - plaza)), r() * 6.28, .6 * u, .8 * u, common.crates, { spacing: .6 });
     // Fields beyond the edge, fenced by those with hands.
-    if (civ.fields) for (let i = 0, n = Math.round(2 + big * 4); i < n; i++) settle(f, Rm + (4 + r() * 10) * u, r() * 6.28, 4, .2, civ.family === 'hands' ? common.fencedField : common.field, { spacing: .9 });
+    if (civ.fields) for (let i = 0, n = Math.round(2 + big * 4); i < n && lit.count() < NEAR_BUDGET * 1.1; i++) if (settle(f, Rm + (4 + r() * 10) * u, r() * 6.28, 4, .2, civ.family === 'hands' ? common.fencedField : common.field, { spacing: .9 })) fieldsAt.push(placed.at(-1).n.clone());
     // The capital's spaceport; radio dishes and beacons for spacefarers.
-    if (isCapital && level >= 5 && launch) settle(f, Rm + 16 * u, r() * 6.28, launchFoot, 12 * u, launch, { face: false });
-    if (level >= 5) for (let i = 0; i < Math.round(big * 2); i++) settle(f, Rm * (.6 + r() * .4), r() * 6.28, 1.8 * u, 4 * u, common.dish, { spacing: .8 });
+    if (isCapital && level >= 5) {
+      // The spaceport needs a big, fairly flat, dry apron: search all round the capital, then farther out.
+      const a0 = r() * 6.28;
+      search: for (const [wet, top] of [[false, SINK * 2.5], [false, SINK + spaceportFoot * .5], [true, SINK * 2.5]]) for (const extra of [4, 14, 28, 46]) for (let j = 0; j < 14; j++) {
+        // Last resort on ocean worlds: an offshore platform.
+        if (ship && place(f, Rm + spaceportFoot + extra * u, a0 + j / 14 * Math.PI * 2, spaceportFoot, 10 * u, spaceport, { face: true, wet, top })) { spaceportAt = placed.at(-1).n.clone(); spaceportBase = placed.at(-1).base; break search; }
+      }
+      if (launch) settle(f, Rm + spaceportFoot * 2 + 14 * u, r() * 6.28, launchFoot, 12 * u, Object.assign((add, gy) => launch(add, gy), { found: civ.family === 'nests' || civ.family === 'grazers' || civ.family === 'rollers' ? false : 'always' }), { face: false });
+    }
+    if (level >= 5) for (let i = 0; i < Math.round(big * 2); i++) settle(f, Rm * (.6 + r() * .4), r() * 6.28, 2 * u, 5 * u, common.dish, { spacing: .8 });
+    if (level >= 4 && (isCapital || big >= 1.1)) settle(f, Rm * (.7 + r() * .3), r() * 6.28, 1.9 * u, 14 * u, common.mast, { face: false, spacing: .8 });
   }
   for (const s of near) grow(s);
+  currentPlace = null;
 
   // Roads between places: laid along the ground near the site (walkers pave theirs once
   // they build cities; before that they are earth tracks). Tool users mark trails with stones.
@@ -646,72 +1246,310 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
     if (pts.length > 1) strip(pts, streetWidth * 1.2, streetColour);
   }
 
-  // The rest of the world: towns as simple clusters, joined by nothing you can see
-  // from here, and lit at night for those that light their world (seen from orbit).
-  const lightPos = [];
-  const cluster = { camp: 2, village: 4, colony: 5, town: 7, city: 12, metropolis: 18, capital: 18 };
-  for (const s of far) {
-    const f = frameAt(s.v);
+  // The rest of the world: towns as simple clusters (their night lights are drawn
+  // from space for every world by city-lights.js).
+  const cluster = { camp: 2, village: 4, colony: 5, town: 7, city: 12, metropolis: 18, capital: 18, megacity: 24 };
+  // Towns you can walk or fly to get full dwellings with yards; distant ones the simple form.
+  const farBy = far.map(s => ({ s, dist: s.v.angleTo(siteV) * radius })).sort((a, b) => a.dist - b.dist);
+  for (const { s, dist } of farBy) {
+    const f = frameAt(s.v), full = dist < 900;
+    if (lit.count() >= BUDGET) break;
+    currentPlace = s; litPlaces.add(s.id);
     for (let i = 0, n = cluster[s.kind] || 4; i < n && lit.count() < BUDGET; i++) {
-      const d = i ? Math.sqrt(r()) * s.radius * .75 : 0;
-      place(f, d, r() * 6.28, 2.2 * u, 0, (add) => style.small(add), { face: true, spacing: .45, aloft });
-    }
-    if (level >= 3) for (let i = 0, n = Math.round((cluster[s.kind] || 4) * (lights ? 2.2 : .8)); i < n; i++) {
-      const m = pointAt(f, Math.sqrt(r()) * s.radius, r() * 6.28);
-      if (!terrain.isLiquid(m)) lightPos.push(...m.clone().multiplyScalar(radius + terrain.surface(m) + 1.5).toArray());
+      const d = i ? Math.sqrt(r()) * s.radius * .75 : 0, k = .8 + r() * .3;
+      if (full && lit.count() < BUDGET * .88) place(f, d, r() * 6.28, foot(k), 4 * u, home(k), { face: true, spacing: .7, aloft });
+      else place(f, d, r() * 6.28, 2.2 * u, 0, Object.assign((add) => { style.small(add); if (lights) add(null, L(0, 1.2 * u, 0, 0, 0, 0, u, u, u), C.window, 'light'); }, { found: true }), { face: true, spacing: .45, aloft });
     }
   }
-  if (lightPos.length) {
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(lightPos, 3));
-    const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: C.window, size: lights ? 2.6 : 1.8, sizeAttenuation: false, transparent: true, opacity: lights ? .95 : .7, depthWrite: false }));
-    pts.frustumCulled = false; pts.name = 'night-lights'; group.add(pts);
+  currentPlace = null;
+  // Night lights for the whole world are drawn from space by city-lights.js (system-view.js).
+
+  // --- Above the world --------------------------------------------------------
+  // Satellites in tidy constellations, a station, and ships with somewhere to go. All in
+  // the builders' own colours and, at a colony, the home world's own designs (shipCiv).
+  const tint = (a, b, t) => '#' + new THREE.Color(a).lerp(new THREE.Color(b), t).getHexString();
+  const hullC = ship?.hullColour || C.hull, trimC = ship?.trim || C.accent, glowC = ship?.glow || '#7fd4ff', panelC = tint('#1b2a52', trimC, .05);
+  const organic = GROWN.includes(shipCiv.material);
+  const M0 = new THREE.Matrix4(), solid = (geo, opts = {}) => new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .55, metalness: .12, ...opts });
+  let sats = null, station = null;
+  const flights = [];
+  if (level >= 5) {
+    // Satellites: a body with a dish facing the world, and solar wings that turn to the
+    // star (grown cultures: a pod with leaf-sails). Three instanced meshes in all.
+    const bus = merger(THREE), wing = merger(THREE), beacon = merger(THREE);
+    if (organic) {
+      bus.add(new THREE.SphereGeometry(.85, 10, 8).scale(1, 1, 1.7), M0, hullC);
+      for (let i = 0; i < 3; i++) bus.add(new THREE.TorusGeometry(.86, .09, 4, 12), L(0, 0, (i - 1) * .55, 0, 0, 0, 1, 1, .6), trimC);
+      bus.add(cone(.12, 1.4, 5).rotateX(Math.PI / 2), L(0, 0, 1.2), C.accent2);
+      for (const sx of [-1, 1]) wing.add(new THREE.SphereGeometry(1, 10, 6).scale(1.7, .05, .75).translate(sx * 2.5, 0, 0), M0, tint(trimC, '#10202a', .35));
+      beacon.add(ball(.3, 1), L(0, 0, -1.35), glowC);
+    } else {
+      bus.add(new THREE.BoxGeometry(1.3, 1.3, 1.8), M0, hullC);
+      bus.add(new THREE.BoxGeometry(1.36, .28, 1.86), M0, trimC);
+      const prof = []; for (let i = 0; i <= 5; i++) { const x = Math.max(.001, .65 * i / 5); prof.push(new THREE.Vector2(x, .25 * (x / .65) ** 2)); }
+      bus.add(new THREE.LatheGeometry(prof, 12).rotateX(Math.PI / 2), L(0, 0, .95), C.metal2);
+      bus.add(new THREE.CylinderGeometry(.03, .03, 1.6, 4), L(.45, .9, -.4), C.metal);
+      for (const sx of [-1, 1]) {
+        wing.add(new THREE.CylinderGeometry(.05, .05, 1, 4).rotateZ(Math.PI / 2), L(sx * 1.15, 0, 0), C.metal);
+        for (let i = 0; i < 3; i++) wing.add(new THREE.BoxGeometry(1.1, .05, 1.3), L(sx * (2.25 + i * 1.18), 0, 0), panelC);
+        wing.add(new THREE.BoxGeometry(3.6, .07, .06), L(sx * 3.4, 0, 0), C.metal2);
+      }
+      beacon.add(ball(.13, 1), L(.68, .68, -.92), '#ff5a5a'); beacon.add(ball(.13, 1), L(-.68, .68, -.92), '#7dff8a');
+    }
+    // Constellations: a few orbital planes with satellites evenly spaced around each, and
+    // a few on higher orbits of their own. Lower orbits go round faster.
+    const orbits = [], planes = level >= 6 ? 4 : 3, per = level >= 6 ? 7 : 5;
+    const plane = (rad) => { const axis = V(r() - .5, r() - .5, r() - .5).normalize(), start = V(r() - .5, r() - .5, r() - .5); start.addScaledVector(axis, -start.dot(axis)).normalize(); return { axis, start, rad, speed: .06 * (radius / rad) ** 1.5 * (r() < .25 ? -1 : 1) }; };
+    for (let k = 0; k < planes; k++) { const pl = plane(radius * (1.3 + k * .11)); for (let i = 0; i < per; i++) orbits.push({ ...pl, phase: i / per * 6.283 + k * .7, blink: r() }); }
+    for (let i = 0; i < 3; i++) orbits.push({ ...plane(radius * (1.62 + r() * .2)), phase: r() * 6.283, blink: r() });
+    const inst = (g, mat) => { const m = new THREE.InstancedMesh(g.geometry(), mat, orbits.length); m.frustumCulled = false; group.add(m); return m; };
+    sats = inst(bus, solid()); sats.orbits = orbits;
+    sats.wings = inst(wing, solid(null, { roughness: .35, metalness: .25, emissive: new THREE.Color(panelC).multiplyScalar(.25) }));
+    sats.lights = inst(beacon, new THREE.MeshBasicMaterial({ vertexColors: true }));
+    for (let i = 0; i < orbits.length; i++) sats.lights.setColorAt(i, new THREE.Color(1, 1, 1));
+
+    // The station: a spinning habitat ring on spokes around a hub with a docking port at
+    // each end (shuttles from the ground dock at one, ships from deep space at the other),
+    // solar wings, and lit windows all round.
+    const RS = level >= 6 ? 17 : 12, sg = merger(THREE), sgl = merger(THREE);
+    sg.add(new THREE.TorusGeometry(RS, 1.7, 8, 32), M0, hullC);
+    sg.add(new THREE.TorusGeometry(RS, 1.75, 3, 32, Math.PI * 2).scale(1, 1, .25), M0, trimC);
+    for (let i = 0; i < 4; i++) sg.add(new THREE.CylinderGeometry(.45, .45, RS * 2, 6), new THREE.Matrix4().makeRotationZ(i * Math.PI / 4), C.metal);
+    sg.add(new THREE.CylinderGeometry(2.6, 2.6, 7, 12).rotateX(Math.PI / 2), M0, trimC);
+    for (const z of [-1, 1]) {
+      sg.add(new THREE.CylinderGeometry(1.3, 1.6, 1.6, 10).rotateX(Math.PI / 2), L(0, 0, z * 4.3), C.metal2);
+      sgl.add(new THREE.TorusGeometry(1.35, .16, 4, 14), L(0, 0, z * 5.15), glowC);
+    }
+    for (const x of [-1, 1]) {
+      sg.add(new THREE.BoxGeometry(5, .35, .35), L(x * (RS + 3.6), 0, 0), C.metal);
+      sg.add(new THREE.BoxGeometry(7, .1, 4.5), L(x * (RS + 8.5), 0, 0), panelC);
+    }
+    sgl.add(new THREE.TorusGeometry(RS + 1.62, .2, 3, 48), M0, C.window);
+    sgl.add(new THREE.TorusGeometry(RS - 1.62, .2, 3, 48), M0, C.window);
+    station = new THREE.Mesh(sg.geometry(), solid(null, { metalness: .2 }));
+    station.add(new THREE.Mesh(sgl.geometry(), new THREE.MeshBasicMaterial({ vertexColors: true })));
+    station.orbit = { axis: V(r() - .5, 1, r() - .5).normalize(), start: V(1, 0, 0), rad: radius * 1.7, speed: .012 };
+    station.orbit.start.addScaledVector(station.orbit.axis, -station.orbit.start.dot(station.orbit.axis)).normalize();
+    station.traverse(c => c.frustumCulled = false); group.add(station);
+  }
+  const stationAt = (t, out = V()) => { const o = station.orbit; return out.copy(o.start).applyAxisAngle(o.axis, t * o.speed).multiplyScalar(o.rad); };
+
+  // --- Flights ------------------------------------------------------------------
+  // Every ship in the air is on its way somewhere. A flight is a loop of legs, each a
+  // duration and a path (position as a function of progress and time, so it can follow
+  // a moving station). Shuttles lift off their pads, climb to the station, dock, and come
+  // back down; a liner hops between the capital and the towns, setting down beside each;
+  // freighters come in from deep space to the station and leave again.
+  if (ship && station) {
+    const g = merger(THREE), gl = merger(THREE);
+    buildShip(THREE, ship, (geo, m, col, bright) => (bright ? gl : g).add(geo, m, col), new THREE.Matrix4(), shipScale);
+    const shipGeo = g.geometry(), glowGeo = gl.geometry(); shipGeo.computeBoundingBox();
+    const bb = shipGeo.boundingBox, hover = ['saucer', 'ring', 'wheel'].includes(ship.hull), gas = ['bladder', 'lantern'].includes(ship.hull);
+    const shipMat = solid(null, { roughness: .45, metalness: .2 }), shipGlow = new THREE.MeshBasicMaterial({ vertexColors: true });
+    const plumeMat = new THREE.MeshBasicMaterial({ color: glowC, transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false });
+    // The exhaust: a cone out of the engines (down from the hull for those that hover).
+    const plumeGeo = new THREE.ConeGeometry(.5, 1, 10, 1, true).rotateX(Math.PI).translate(0, -.5, 0); // apex at -1
+    const make = (scale) => {
+      const o = new THREE.Group();
+      o.add(new THREE.Mesh(shipGeo, shipMat), new THREE.Mesh(glowGeo, shipGlow));
+      const plume = new THREE.Mesh(plumeGeo, plumeMat), w = ship.length * ship.girth * shipScale, sx = bb.max.x - bb.min.x;
+      if (ship.stands || hover) plume.position.set(0, bb.min.y + (hover ? w * .1 : 0), 0);
+      else { plume.rotation.x = -Math.PI / 2; plume.position.set(0, (bb.min.y + bb.max.y) / 2, bb.min.z); }
+      plume.userData.width = hover ? sx * .45 : w * (ship.stands ? .9 : 1.1); plume.userData.length = hover ? w * 1.2 : ship.length * shipScale * .9;
+      plume.visible = !gas; o.add(plume); o.plume = plume;
+      o.scale.setScalar(scale); o.traverse(c => c.frustumCulled = false); group.add(o); return o;
+    };
+    const ease = (x) => x * x * (3 - 2 * x), easeIn = (x) => x * x, easeOut = (x) => 1 - (1 - x) ** 2;
+    const bez = (a, b, c, d, t, out) => { const v = 1 - t; return out.copy(a).multiplyScalar(v * v * v).addScaledVector(b, 3 * v * v * t).addScaledVector(c, 3 * v * t * t).addScaledVector(d, t * t * t); };
+    const axis = station.orbit.axis, PORT = 5.2;
+    // Where a ship of this scale rests: its lowest point on the ground, its nose at the port.
+    const restLift = (k) => -bb.min.y * k + .05, noseOut = (k) => (ship.stands ? bb.max.y : bb.max.z) * k;
+    const dockAt = (t, side, k, d, out) => stationAt(t, out).addScaledVector(axis, side * (PORT + noseOut(k) + d));
+    const flight = (o, k, legs, offset = 0) => { const total = legs.reduce((a, l) => a + l.dur, 0); flights.push({ o, k, legs, total, offset, lift: restLift(k), q: null, last: null, yAxis: V(0, 0, 1), heading: null }); };
+    const padPoint = (i, k) => { const [x, , z] = PADS[i]; return V(x * portK, .32 * portK, z * portK).applyMatrix4(spaceportBase).addScaledVector(V().setFromMatrixColumn(spaceportBase, 1).normalize(), restLift(k)); };
+    const up = (p) => p.clone().normalize();
+    // Pad -> station -> pad. The climb goes straight up, then sweeps round the world at
+    // the station's height to meet it, so it never cuts through the planet whatever side
+    // the station is on.
+    const slerpDir = (a, b, x, out) => { const d = Math.min(1, Math.max(-1, a.dot(b))), th = Math.acos(d); if (th < 1e-4) return out.copy(a); const s0 = Math.sin(th); return out.copy(a).multiplyScalar(Math.sin((1 - x) * th) / s0).addScaledVector(b, Math.sin(x * th) / s0); };
+    const climb = (P, D, x, out) => {
+      const rp = P.length(), rd = D.length(), dirB = tmpDir.copy(D).divideScalar(rd), alt = Math.sin(Math.PI / 2 * Math.min(1, x * 1.7));
+      return slerpDir(tmpUp.copy(P).divideScalar(rp), dirB, ease(Math.max(0, (x - .12) / .88)), out).multiplyScalar(rp + (rd - rp) * alt);
+    };
+    const tmpDir = V(), tmpUp = V();
+    const stationRun = (P, k, side, wait) => {
+      const tmp = V(), face = (t) => axis.clone().multiplyScalar(-side);
+      return [
+        { dur: wait, pos: (x, t, out) => out.copy(P), state: 'rest' },
+        { dur: 36, thrust: 1, pos: (x, t, out) => climb(P, dockAt(t, side, k, 9, tmp), x, out) },
+        { dur: 7, thrust: .35, face, pos: (x, t, out) => dockAt(t, side, k, 9 * (1 - ease(x)), out) },
+        { dur: 18, face, pos: (x, t, out) => dockAt(t, side, k, 0, out), state: 'docked' },
+        { dur: 7, thrust: .35, face, pos: (x, t, out) => dockAt(t, side, k, 9 * ease(x), out) },
+        { dur: 36, thrust: .7, pos: (x, t, out) => climb(P, dockAt(t, side, k, 9, tmp), 1 - x, out) },
+      ];
+    };
+    // From deep space to the station's far port, and away again.
+    const freightRun = (k, side, dir) => {
+      const far = (t, out) => dockAt(t, side, k, 0, out).addScaledVector(dir, radius * 9), tmp = V(), tmp2 = V(), tmp3 = V(), tmp4 = V(), face = () => axis.clone().multiplyScalar(-side);
+      return [
+        { dur: 30, pos: (x, t, out) => far(t, out), state: 'away' },
+        { dur: 42, thrust: .6, pos: (x, t, out) => bez(far(t, tmp), dockAt(t, side, k, 0, tmp2).addScaledVector(dir, radius * 2), dockAt(t, side, k, 120, tmp3), dockAt(t, side, k, 12, tmp4), easeOut(x), out) },
+        { dur: 8, thrust: .3, face, pos: (x, t, out) => dockAt(t, side, k, 12 * (1 - ease(x)), out) },
+        { dur: 24, face, pos: (x, t, out) => dockAt(t, side, k, 0, out), state: 'docked' },
+        { dur: 8, thrust: .3, face, pos: (x, t, out) => dockAt(t, side, k, 12 * ease(x), out) },
+        { dur: 36, thrust: 1, pos: (x, t, out) => bez(dockAt(t, side, k, 12, tmp), dockAt(t, side, k, 120, tmp2), dockAt(t, side, k, 0, tmp3).addScaledVector(dir, radius * 2), far(t, tmp4), easeIn(x), out) },
+      ];
+    };
+    // A hop over the land from a to b (points where the ship rests): it rises almost
+    // straight up, cruises high enough to clear the hills and settles straight down.
+    const hop = (A, B) => {
+      const nA = up(A), nB = up(B), hA = A.length(), hB = B.length(), dist = nA.angleTo(nB) * radius, n = V();
+      return { dur: 9 + dist / 20, thrust: .8, pos: (x, t, out) => {
+        // Progress over the ground is eased but the climb is not, so it leaves and arrives near vertically.
+        const e = ease(x), base = hA + (hB - hA) * e, away = Math.min(1, 6 * Math.min(x, 1 - x));
+        n.copy(nA).lerp(nB, e).normalize();
+        const clear = radius + terrain.surface(n) + restLift(1) + 6;
+        return out.copy(n).multiplyScalar(Math.max(base + Math.sin(Math.PI * x) * (35 + dist * .12), base + (clear - base) * away));
+      } };
+    };
+    const rest = (P, dur) => ({ dur, pos: (x, t, out) => out.copy(P), state: 'rest' });
+    // Somewhere flat and clear beside a town to set down.
+    const spotBeside = (s, k) => {
+      const fr = frameAt(s.v);
+      for (let j = 0; j < 12; j++) {
+        const n = pointAt(fr, s.radius + (4 + j * 2.5) * u, j * 2.4 + s.radius);
+        if (terrain.isLiquid(n) || placed.some(p => p.n.angleTo(n) * radius < p.foot + 4 * u)) continue;
+        const h = terrain.surface(n), side = frameAt(n);
+        if ([0, 1, 2, 3].some(a => Math.abs(terrain.surface(pointAt(side, 3 * u, a * 1.57)) - h) > 1.2)) continue;
+        return n.multiplyScalar(radius + h + restLift(k));
+      }
+      return null;
+    };
+    const k = .55, dir = (side) => { const d = V(r() - .5, r() - .5, r() - .5).normalize(); return d.addScaledVector(axis, -d.dot(axis)).addScaledVector(axis, side * .5).normalize(); };
+    if (spaceportBase) {
+      const shuttle = (i, offset) => flight(make(k), k, stationRun(padPoint(i, k), k, 1, 20), offset);
+      shuttle(1, 0); shuttle(2, 62);
+      // The liner: capital to each of the nearest towns in turn and home again.
+      const P = padPoint(3, k), stops = places.slice(1).map(s => ({ s, d: s.v.angleTo(places[0].v) })).filter(x => x.d * radius < 1400).sort((a, b) => a.d - b.d).slice(0, 3).map(x => spotBeside(x.s, k)).filter(Boolean);
+      const legs = [];
+      for (const S of stops) legs.push(rest(P, 14), hop(P, S), rest(S, 12), hop(S, P));
+      if (!stops.length) { // nowhere to go but round the capital and back
+        const f = frameAt(places[0].v), loop = [0, 1, 2].map(j => pointAt(f, places[0].radius * .9, j * 2.1 + .5)).map(n => n.multiplyScalar(radius + terrain.surface(n) + 40));
+        legs.push(rest(P, 16), hop(P, loop[0]), hop(loop[0], loop[1]), hop(loop[1], loop[2]), hop(loop[2], P));
+      }
+      flight(make(k), k, legs, 7);
+    }
+    flight(make(1.25), 1.25, freightRun(1.25, -1, dir(-1)), 0);
+    if (level >= 6) flight(make(1.25), 1.25, freightRun(1.25, -1, dir(-1)), 74); // system-shapers: busier
   }
 
-  // Spacefarers: satellites and a station in orbit.
-  let sats = null, station = null;
-  if (level >= 5) {
-    const g = merger(THREE);
-    g.add(new THREE.BoxGeometry(1.2, 1.2, 2), new THREE.Matrix4(), C.metal2);
-    g.add(new THREE.BoxGeometry(5, .08, 1.4), new THREE.Matrix4(), '#2a3f6b');
-    const count = 12;
-    sats = new THREE.InstancedMesh(g.geometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .4, metalness: .5, flatShading: true }), count);
-    sats.orbits = Array.from({ length: count }, () => ({ axis: V(r() - .5, r() - .5, r() - .5).normalize(), start: V(r() - .5, r() - .5, r() - .5).normalize(), rad: radius * (1.25 + r() * .6), speed: (.02 + r() * .03) * (r() < .5 ? -1 : 1) }));
-    for (const o of sats.orbits) o.start.addScaledVector(o.axis, -o.start.dot(o.axis)).normalize();
-    sats.frustumCulled = false; group.add(sats);
-    const sg = merger(THREE);
-    sg.add(new THREE.TorusGeometry(12, 1.6, 6, 24), new THREE.Matrix4(), C.metal2);
-    for (let i = 0; i < 4; i++) sg.add(new THREE.CylinderGeometry(.4, .4, 12, 5), new THREE.Matrix4().makeRotationZ(i * Math.PI / 4 + Math.PI / 2).multiply(new THREE.Matrix4().makeTranslation(0, 0, 0)), C.metal);
-    sg.add(new THREE.CylinderGeometry(2.4, 2.4, 5, 10).rotateX(Math.PI / 2), new THREE.Matrix4(), C.hull);
-    sg.add(new THREE.TorusGeometry(12, .3, 4, 24), new THREE.Matrix4().makeTranslation(0, 0, 1.7), C.window);
-    station = new THREE.Mesh(sg.geometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .5, metalness: .4, flatShading: true, emissive: 0x332200 }));
-    station.orbit = { axis: V(r() - .5, 1, r() - .5).normalize(), start: V(1, 0, 0), rad: radius * 1.7 };
-    station.orbit.start.addScaledVector(station.orbit.axis, -station.orbit.start.dot(station.orbit.axis)).normalize();
-    station.frustumCulled = false; group.add(station);
+  // Air traffic over a megacity: cars in lanes stacked above the skyline, weaving a
+  // little as they go round, headlights on. Two instanced meshes, whatever the count.
+  let cars = null;
+  if (megacity && places[0]) {
+    const body_ = merger(THREE), lights_ = merger(THREE), cu = Math.max(1, u * .8);
+    body_.add(new THREE.SphereGeometry(.7 * cu, 8, 5).scale(1, .45, 1.8), M0, hullC);
+    body_.add(new THREE.BoxGeometry(2.2 * cu, .08 * cu, .5 * cu), L(0, 0, -.4 * cu), trimC);
+    lights_.add(new THREE.BoxGeometry(.9 * cu, .18 * cu, .1 * cu), L(0, 0, -1.28 * cu), glowC);
+    lights_.add(new THREE.BoxGeometry(.7 * cu, .12 * cu, .1 * cu), L(0, .05 * cu, 1.27 * cu), '#fff6dc');
+    const capF = frameAt(places[0].v), base = radius + terrain.surface(places[0].v), Rm = places[0].radius, lanes = [];
+    for (let k = 0; k < 4; k++) for (let i = 0, n = 9 + k * 2; i < n; i++) lanes.push({ rad: Rm * (.3 + k * .22), alt: Math.max(skyline, 30 * u) + (4 + k * 7) * u, speed: (.05 + r() * .02) / (1 + k * .4) * (k % 2 ? -1 : 1), phase: i / n * 6.283 + r() * .3, weave: r() * 6.283 });
+    cars = { lanes, base, capF, hull: new THREE.InstancedMesh(body_.geometry(), solid(null, { metalness: .25 }), lanes.length), glow: new THREE.InstancedMesh(lights_.geometry(), new THREE.MeshBasicMaterial({ vertexColors: true }), lanes.length) };
+    for (const m of [cars.hull, cars.glow]) { m.frustumCulled = false; group.add(m); }
   }
-  const m = new THREE.Matrix4(), p = new THREE.Vector3();
-  function update(t) {
-    if (sats) {
-      sats.orbits.forEach((o, i) => { p.copy(o.start).applyAxisAngle(o.axis, t * o.speed).multiplyScalar(o.rad); m.makeRotationAxis(o.axis, t * o.speed).setPosition(p); sats.setMatrixAt(i, m); });
-      sats.instanceMatrix.needsUpdate = true;
+
+  // Night at the site, for lamps, pools of light and halos (0 by day, 1 at night).
+  let night = 1;
+  const m = new THREE.Matrix4(), p = new THREE.Vector3(), q2 = new THREE.Quaternion(), basis = new THREE.Matrix4(), rot = new THREE.Matrix4();
+  const nadir = V(), xa = V(), ya = V(), sp = V(), vel = V(), pA = V(), pB = V(), fwd = V(), nose = V(), rgt = V(), upv = V(), white = new THREE.Color(1, 1, 1), dim = new THREE.Color(.15, .15, .15);
+  const legAt = (f, t) => { let x = ((t + f.offset) % f.total + f.total) % f.total; for (const l of f.legs) { if (x < l.dur) return [l, x / l.dur]; x -= l.dur; } return [f.legs.at(-1), 1]; };
+  function fly(f, t) {
+    const [leg, x] = legAt(f, t), dt = f.last === null ? 0 : Math.max(0, Math.min(.2, t - f.last)); f.last = t;
+    leg.pos(x, t, pA); leg.pos(Math.min(1, x + .05 / leg.dur), t + .05, pB);
+    if (!leg.state) for (const q of [pA, pB]) { const g = radius + terrain.surface(upv.copy(q).normalize()) + f.lift; if (q.length() < g) q.setLength(g); } // never through the ground
+    f.o.visible = leg.state !== 'away';
+    f.o.position.copy(pA);
+    vel.copy(pB).sub(pA).divideScalar(.05);
+    // Which way it points: docked and docking, at the port; otherwise along its motion,
+    // upright hulls nose first once moving, level hulls level with the ground below.
+    upv.copy(pA).normalize();
+    const dir = leg.face ? leg.face(t) : null, speed = vel.length();
+    if (ship.stands) {
+      if (dir) nose.copy(dir); else nose.copy(upv).lerp(speed > .5 ? fwd.copy(vel).normalize() : upv, Math.min(1, Math.max(0, (speed - 2) / 10))).normalize();
+      f.yAxis.addScaledVector(nose, -f.yAxis.dot(nose)); if (f.yAxis.lengthSq() < 1e-6) f.yAxis.set(1, 0, 0).addScaledVector(nose, -nose.x); f.yAxis.normalize();
+      rgt.crossVectors(nose, f.yAxis); basis.makeBasis(rgt, nose, f.yAxis);
+    } else {
+      if (dir) fwd.copy(dir); else { fwd.copy(vel).addScaledVector(upv, -vel.dot(upv)); if (fwd.length() > 1.5) f.heading = fwd.normalize().clone(); fwd.copy(f.heading || V(1, 0, 0).cross(upv)); }
+      fwd.addScaledVector(upv, -fwd.dot(upv)).normalize();
+      rgt.crossVectors(upv, fwd); basis.makeBasis(rgt, upv, fwd);
     }
-    if (station) { const o = station.orbit; station.position.copy(o.start).applyAxisAngle(o.axis, t * .012).multiplyScalar(o.rad); station.quaternion.setFromUnitVectors(V(0, 0, 1), o.axis); station.rotateZ(t * .1); }
+    q2.setFromRotationMatrix(basis);
+    if (!f.q || !dt || leg.state === 'rest') f.o.quaternion.copy(q2); else f.o.quaternion.slerp(q2, 1 - Math.exp(-dt * 2.5));
+    f.q = true;
+    // Exhaust: full while climbing or leaving, gentler on approach, off at rest.
+    const pl = f.o.plume, thrust = leg.state ? 0 : (leg.thrust ?? .5) * (.45 + .55 * Math.min(1, speed / 25));
+    pl.visible = thrust > .02 && !(['bladder', 'lantern'].includes(ship.hull));
+    if (pl.visible) { const w = pl.userData.width * (.6 + .4 * thrust); pl.scale.set(w, pl.userData.length * thrust * (.9 + .1 * Math.sin(t * 37 + f.offset)), w); }
   }
-  update(0);
+  function update(t, sunDir) {
+    if (sunDir) night = Math.min(1, Math.max(0, (.12 - signalNormal.dot(sunDir)) / .24));
+    if (glowMeshRef) glowMeshRef.material.color.setScalar(.7 + .3 * night);
+    if (poolMeshRef) { poolMeshRef.visible = night > .02; poolMeshRef.material.opacity = night; }
+    if (haloRef) { haloRef.visible = night > .02; haloRef.material.uniforms.night.value = night; }
+    if (blinkRef) blinkRef.material.color.setScalar((t * .8) % 1 < .14 ? 1 : .18);
+    if (sats) {
+      sats.orbits.forEach((o, i) => {
+        p.copy(o.start).applyAxisAngle(o.axis, t * o.speed + o.phase);
+        nadir.copy(p).negate(); xa.copy(o.axis); ya.crossVectors(nadir, xa);
+        basis.makeBasis(xa, ya, nadir).setPosition(p.multiplyScalar(o.rad));
+        sats.setMatrixAt(i, basis); sats.lights.setMatrixAt(i, basis);
+        // Wings turn about their boom to face the star.
+        let ang = 0;
+        if (sunDir) { sp.copy(sunDir).addScaledVector(xa, -sunDir.dot(xa)); ang = Math.atan2(sp.dot(nadir), sp.dot(ya)); }
+        sats.wings.setMatrixAt(i, m.multiplyMatrices(basis, rot.makeRotationX(ang)));
+        sats.lights.setColorAt(i, (t * .7 + o.blink) % 1 < .12 ? white : dim);
+      });
+      for (const x of [sats, sats.wings, sats.lights]) x.instanceMatrix.needsUpdate = true;
+      sats.lights.instanceColor.needsUpdate = true;
+    }
+    if (station) { const o = station.orbit; stationAt(t, station.position); station.quaternion.setFromUnitVectors(V(0, 0, 1), o.axis); station.rotateZ(t * .1); }
+    for (const f of flights) fly(f, t);
+    if (cars) {
+      cars.lanes.forEach((c, i) => {
+        const a = t * c.speed + c.phase, wob = (x) => c.rad * (1 + .12 * Math.sin(x * 3 + c.weave));
+        const n = pointAt(cars.capF, wob(a), a), n2 = pointAt(cars.capF, wob(a + .01 * Math.sign(c.speed)), a + .01 * Math.sign(c.speed));
+        const h = cars.base + c.alt + Math.sin(a * 2 + c.weave) * 1.5 * u;
+        pA.copy(n).multiplyScalar(h); fwd.copy(n2).multiplyScalar(h).sub(pA).normalize();
+        rgt.crossVectors(n, fwd).normalize(); basis.makeBasis(rgt, n, fwd).setPosition(pA);
+        cars.hull.setMatrixAt(i, basis); cars.glow.setMatrixAt(i, basis);
+      });
+      cars.hull.instanceMatrix.needsUpdate = cars.glow.instanceMatrix.needsUpdate = true;
+    }
+  }
+  let glowMeshRef = null, poolMeshRef = null, haloRef = null, blinkRef = null;
 
   if (!placed.length) return none;
   const litMesh = new THREE.Mesh(lit.geometry(), new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .9 }));
   const glowMesh = new THREE.Mesh(glow.geometry(), new THREE.MeshBasicMaterial({ vertexColors: true }));
-  for (const mesh of [litMesh, glowMesh]) { mesh.frustumCulled = false; group.add(mesh); }
+  const groundMesh = new THREE.Mesh(ground.geometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }));
+  const extra = [];
+  glowMeshRef = glowMesh;
+  if (blink.count()) extra.push(blinkRef = new THREE.Mesh(blink.geometry(), new THREE.MeshBasicMaterial({ vertexColors: true })));
+  if (pool.count()) extra.push(poolMeshRef = new THREE.Mesh(pool.geometry(), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })));
+  if (halos.length) extra.push(haloRef = haloPoints(THREE, halos));
+  for (const mesh of [litMesh, glowMesh, groundMesh, ...extra]) { mesh.frustumCulled = false; group.add(mesh); }
+  update(0);
   // Ground the builders have cleared: their places near the site and each piece's footprint.
   const clearings = [...placed.filter(p => !p.road).map(p => ({ n: p.n, r: p.foot + 1.5 })), ...near.map(s => ({ n: s.v, r: s.radius + 2 * u }))];
-  return { group, civ, obstacles, sites, clearings, pieces: placed.length, network: net, update };
+  return { group, civ, obstacles, sites, clearings, pieces: placed.length, network: net, ship, spaceportAt, spaceportScale: portK, fieldsAt, landmarks, nightLights: { points: nightLights, places: litPlaces, colour: C.window }, flights, station, update };
 }
 
 // Colours from the world and the builders: stone from its rock, walls from the
 // culture's material, accents from the species' own colours.
 function colours(THREE, body, civ) {
   const c = (hex) => new THREE.Color(hex), mix = (a, b, t) => '#' + c(a).lerp(c(b), t).getHexString();
-  const rock = body.rock, sp = civ.species.colors || {}, prim = sp.primary || '#c0503a', sec = sp.secondary || sp.accent || '#d8c07a';
+  // The species' own colours (fauna.mjs: base, belly, accent, shimmer) for paint and trim.
+  const rock = body.rock, sp = civ.species.colors || {}, prim = sp.accent || sp.base || '#c0503a', sec = sp.shimmer || sp.belly || '#d8c07a';
   const wall = {
     wood: mix('#7b5a3c', rock, .25), ice: mix('#cfe6f2', body.atmosphere, .15), adobe: mix('#c99a6b', body.palette[3], .3), glass: mix('#9fe3e6', prim, .3), stone: mix(rock, '#b9b2a6', .35),
     grown: mix(prim, '#f0b8a0', .35), shell: mix('#efe3d0', prim, .2), silk: mix('#f2f0ea', body.atmosphere, .1), wax: mix('#d9a441', prim, .2), living: mix('#6b4a2f', rock, .2), membrane: mix(prim, '#ffffff', .45),
@@ -719,13 +1557,46 @@ function colours(THREE, body, civ) {
   const leaf = mix(body.palette[1] || '#4f7a3a', '#4fa83a', .4);
   return {
     stone: mix(rock, '#8d8a85', .3), stone2: mix(rock, '#5c5a58', .4), wall, wall2: mix(wall, '#000', .18),
-    wood: mix('#6b4a2f', rock, .2), roof: civ.material === 'ice' ? mix(wall, '#ffffff', .3) : mix(body.palette[1] || '#8a7a4a', '#6b5a33', .5),
-    door: '#1a1410', accent: prim, accent2: sec, soil: mix(body.palette[2] || '#5a4630', '#3a2a1a', .6), crop: mix(body.palette[1] || '#4f7a3a', '#6bd44f', .35),
+    wood: mix('#6b4a2f', rock, .2), roof2: mix(civ.material === 'ice' ? wall : (body.palette[1] || '#8a7a4a'), '#3b3020', .55), roof: civ.material === 'ice' ? mix(wall, '#ffffff', .3) : mix(body.palette[1] || '#8a7a4a', '#6b5a33', .5),
+    pot: mix('#a8643f', rock, .3), plinth: ['grown', 'shell', 'wax', 'living', 'silk', 'membrane'].includes(civ.material) ? mix(wall, '#2a2420', .35) : mix(rock, '#5c5a58', .3), door: '#1a1410', trim: mix(wall, '#f2ede4', .3), accent: prim, accent2: sec, soil: mix(body.palette[2] || '#5a4630', '#3a2a1a', .6), crop: mix(body.palette[1] || '#4f7a3a', '#6bd44f', .35),
     turf: mix(body.palette[1] || '#6b8a4a', '#55703a', .4), leaf, bag: mix(sec, '#ffffff', .35), line: '#3a3330', road: mix(rock, '#6f6b66', .55),
-    path: mix(body.palette[2] || '#7a6648', '#8a7356', .45), plaza: mix(rock, '#a39d93', .45),
+    path: mix(body.palette[2] || '#7a6648', '#8a7356', .45), plaza: mix(rock, '#a39d93', .45), pad: '#5d6266',
     ember: '#ff7a2a', flame: '#ffc46b', window: civ.species.glow ? mix('#ffd98a', sp.glow || prim, .4) : '#ffd98a', beacon: '#ff4a4a',
     metal: '#9aa5ad', metal2: '#d7dde1', concrete: '#8b8f91', scorch: '#2b2b2b', hull: '#eef1f2',
   };
+}
+
+// Soft halos around lamps: one Points object, sized in metres, fading in with night.
+function haloPoints(THREE, halos) {
+  const pos = [], col = [], size = [], c = new THREE.Color();
+  for (const h of halos) { pos.push(h.p.x, h.p.y, h.p.z); c.set(h.colour); col.push(c.r, c.g, c.b); size.push(h.size); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('colour', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('size', new THREE.Float32BufferAttribute(size, 1));
+  const material = new THREE.ShaderMaterial({
+    uniforms: { night: { value: 1 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `#include <common>
+#include <logdepthbuf_pars_vertex>
+attribute vec3 colour; attribute float size; varying vec3 vColour;
+void main() {
+  vColour = colour;
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * mv;
+  gl_PointSize = clamp(size * projectionMatrix[1][1] * 450.0 / -mv.z, 0.0, 96.0);
+  #include <logdepthbuf_vertex>
+}`,
+    fragmentShader: `#include <logdepthbuf_pars_fragment>
+uniform float night; varying vec3 vColour;
+void main() {
+  #include <logdepthbuf_fragment>
+  vec2 c = gl_PointCoord - 0.5; float d = dot(c, c) * 4.0;
+  gl_FragColor = vec4(vColour * exp(-d * 4.5) * 0.55 * night, 1.0);
+}`,
+  });
+  const points = new THREE.Points(g, material);
+  points.name = 'lamp-halos';
+  return points;
 }
 
 // Triangles given as world positions (for ground strips and discs), with normals.
@@ -741,11 +1612,27 @@ let THREE_REF = null;
 function merger(THREE) {
   const pos = [], nor = [], col = [], tmp = new THREE.Color();
   return {
-    add(g, matrix, colour) {
+    // ground: distance from the planet's centre to the ground this piece stands on, and
+    // shade: the height over which it darkens toward the ground (ambient shadow). Glowing
+    // pieces pass no ground and stay flat. Each face also varies a little in tone, so
+    // walls and roofs read as material rather than flat colour.
+    add(g, matrix, colour, ground = 0, shade = 1) {
       const geo = (g.index ? g.toNonIndexed() : g).applyMatrix4(matrix);
       const P = geo.attributes.position, N = geo.attributes.normal;
-      tmp.set(colour);
-      for (let i = 0; i < P.count; i++) { pos.push(P.getX(i), P.getY(i), P.getZ(i)); nor.push(N.getX(i), N.getY(i), N.getZ(i)); col.push(tmp.r, tmp.g, tmp.b); }
+      const own = colour === null ? geo.attributes.color : null; // null: the geometry carries its own colours
+      if (!own) tmp.set(colour);
+      for (let i = 0; i < P.count; i++) {
+        const x = P.getX(i), y = P.getY(i), z = P.getZ(i);
+        let k = 1;
+        if (ground) {
+          const face = Math.floor((pos.length / 3) / 3);
+          k = 1 + ((((face * 2654435761) >>> 0) % 1000) / 1000 - .5) * .14;
+          const h = Math.hypot(x, y, z) - ground;
+          k *= .7 + .3 * Math.min(1, Math.max(0, h / shade));
+        }
+        if (own) tmp.setRGB(own.getX(i), own.getY(i), own.getZ(i));
+        pos.push(x, y, z); nor.push(N.getX(i), N.getY(i), N.getZ(i)); col.push(tmp.r * k, tmp.g * k, tmp.b * k);
+      }
       geo.dispose(); if (g !== geo) g.dispose();
     },
     count: () => pos.length / 3,

@@ -37,7 +37,7 @@ test('formations are placed on dry ground all over the world, a few near the sit
   let placed = 0, far = 0, kinds = 0, nearKinds = 0;
   for (const body of worlds.slice(0, 60)) {
     const terrain = terrainFor(body), R = body.radius, signal = new THREE.Vector3(...terrain.site);
-    const landing = new THREE.Vector3(0, 1, 30 / R).normalize().applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), signal));
+    const landing = new THREE.Vector3(...terrain.landing);
     const g = buildGeology(THREE, { body, terrain, radius: R, signalNormal: signal, landingNormal: landing });
     for (const p of g.placed) {
       let near = false;

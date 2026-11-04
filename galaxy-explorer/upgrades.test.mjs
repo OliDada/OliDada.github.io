@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { UPGRADES, MAIN, SIDE, GEAR, CHAPTERS, progress, activeResearch, advanced, matches, hint, completedWorlds, recordedOn, jumpRange, prerequisite } from './upgrades.mjs';
+import { UPGRADES, MAIN, SIDE, GEAR, CHAPTERS, progress, activeResearch, advanced, matches, hint, completedWorlds, recordedOn, jumpRange, prerequisite, radioHearing, decodesSignals, exposureOf, exposureScale, landsBesideLava, hasFieldGlasses } from './upgrades.mjs';
 import { nearestPlace, worldEntries, placeless } from './objectives.mjs';
 import * as C from './codex.mjs';
 import { generateSystem } from './system.mjs';
@@ -24,7 +24,7 @@ test('one main line in order, chapters, gear, and side upgrades hanging off it',
     assert.ok(GEAR[u.gear], `${u.id}: gear`);
     assert.ok(['live', 'partial', 'planned'].includes(u.status), `${u.id}: status`);
     assert.ok(u.name && u.effect && u.needs.length, `${u.id}: name, effect and tasks`);
-    for (const n of u.needs) assert.match(n.label, /^(Scan|Find|Fully|Visit|Befriend|Earn)\b/, `${u.id}: tasks read as things to do`);
+    for (const n of u.needs) assert.match(n.label, /^(Scan|Find|Fully|Visit|Befriend|Earn|Watch|Record|Investigate)\b/, `${u.id}: tasks read as things to do`);
     for (const n of u.needs) assert.ok((n.count ?? 1) <= 6, `${u.id}: counts stay small`);
   }
   for (const s of SIDE) assert.equal(UPGRADES[s.opensAt]?.line, 'main', `${s.id} opens at a main upgrade`);
@@ -178,4 +178,15 @@ test('the main line can be followed from the home star', () => {
   for (const u of MAIN) assert.ok(first[u.id] <= limit[u.chapter], `${u.name} within ${limit[u.chapter]} jumps (first met at ${first[u.id] ?? 'never'})`);
   for (const u of SIDE) assert.ok(first[u.id] <= 4, `${u.name} within 4 jumps (first met at ${first[u.id] ?? 'never'})`);
   assert.equal(first.suitPlating, 0, 'the first step is finished in the home system');
+});
+
+test('effects are read from what is installed, wherever an upgrade sits in the line', () => {
+  const none = new Set(), all = new Set(Object.keys(UPGRADES));
+  assert.ok(radioHearing(none) < 1 && radioHearing(all) === 1, 'the receiver hears farther');
+  assert.ok(!decodesSignals(none) && decodesSignals(all));
+  assert.ok(!hasFieldGlasses(none) && hasFieldGlasses(all));
+  assert.ok(!landsBesideLava(none) && landsBesideLava(all));
+  assert.equal(exposureOf(288), 0, 'a mild world is no danger');
+  assert.ok(exposureOf(150) > 0 && exposureOf(450) > 0 && exposureOf(20) <= 1);
+  assert.ok(exposureScale(all) < exposureScale(none), 'thermal lining slows it');
 });

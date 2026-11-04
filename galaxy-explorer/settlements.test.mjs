@@ -15,7 +15,8 @@ test('civilizations have a temperament and an extent that grows with tier and am
     for (const k of ['ambition', 'cohesion', 'harmony']) assert.ok(c[k] >= 0 && c[k] <= 1, k);
     assert.ok(EXTENT.includes(c.extent));
     if (c.tier === 'tool users') assert.equal(c.extent, 'local');
-    if (c.extent === 'system') assert.equal(c.tier, 'spacefarers');
+    if (c.extent === 'system') assert.ok(['spacefarers', 'system-shapers'].includes(c.tier));
+    if (c.tier === 'system-shapers') assert.equal(c.extent, 'system');
     if (c.extent === 'planetary') assert.ok(['planet-shapers', 'spacefarers'].includes(c.tier));
   }
   assert.ok(new Set(civs.map(x => x.c.extent)).size >= 4);
@@ -27,7 +28,7 @@ test('every civilization has a capital beside the landing site, on dry ground, a
     const t = terrainFor(body), net = networkFor(body, c, t), site = t.site, R = body.radius;
     if (!net.capital) { missing++; continue; }
     assert.deepEqual(networkFor(body, c, t), net);
-    const landing = landingOf(site, R);
+    const landing = t.landing;
     for (const s of net.settlements) {
       assert.ok(!t.isLiquid(P(s.n)), `${s.kind} in the sea`);
       assert.ok(ang(s.n, site) * R > 30 && ang(s.n, landing) * R > 25, `${s.kind} on the landing site`);

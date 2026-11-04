@@ -166,7 +166,8 @@ function buildTerrain(body) {
       const along = (x * duneDir[0] + y * duneDir[1] + z * duneDir[2]) * 70 + 4 * fbm(nC, x * 3, y * 3, z * 3, 2);
       h += bw(TAU * RM / 70, s) * shape.dunes * amp * (1 - Math.abs(Math.sin(along))) * smooth(.25, -.1, cont);
     }
-    if (shape.cracks) h -= bw(TAU * RM / 70, s) * shape.cracks * amp * (1 - smooth(0, .06, Math.abs(nC(x * 7, y * 7, z * 7))));
+    // Frozen worlds: broad, gentle grooves (narrow trenches came out as sawtooth steps on the mesh).
+    if (shape.cracks) h -= bw(TAU * RM / 70, s) * shape.cracks * amp * .7 * (1 - smooth(0, .22, Math.abs(nC(x * 7, y * 7, z * 7))));
     // Craters and volcanoes keep believable proportions on any size of world: a crater
     // is at most a quarter as deep as it is wide in radius, a volcano at most half as
     // tall as its radius (small moons otherwise got deep shafts ringed with spikes).
@@ -224,12 +225,11 @@ function buildTerrain(body) {
       return h + ripple * .16 + drift + outcrop;
     }
     if (ground === 'ice') {
-      // Pressure ridges, a network of cracks, soft snow drifts and wind-cut grooves.
+      // Pressure ridges, soft snow drifts and wind-cut grooves.
       const ridge = bw(22, s) * ridged(nD, X / 22, Y / 22, Z / 22, 2, 2.5) * cap(.9, 22 / 2.5) * smooth(0, .5, nD(X / 80 + 3, Y / 80, Z / 80));
-      const cw = bw(8, s), crack = cw > 0 ? cw * Math.max(1 - smooth(0, .14, Math.abs(nD(X / 9 + 20, Y / 9, Z / 9))), 1 - smooth(0, .12, Math.abs(nD(X / 6, Y / 6 + 40, Z / 6)))) : 0;
       const drift = bfbm(X, Y, Z, 12, 2, s, -6, .4);
       const groove = bfbm(X, Y, Z, 1.8, 2, s, 3, .06);
-      return h + ridge - crack * .25 + drift + groove;
+      return h + ridge + drift + groove; // cracks are drawn by the ground shader, not carved
     }
     if (ground === 'toxic') {
       // A cracked crust with blisters and the occasional vent mound.
@@ -421,8 +421,52 @@ function buildTerrain(body) {
       if (score < bestScore) { bestScore = score; best = p; }
       if (best && i > 40 && bestScore < .9) break;
     }
+    // Ocean worlds: if there is no dry ground nearby, keep searching farther out, to the
+    // nearest land of any size (otherwise the site, the pad and every herd would be at sea).
+    for (let i = 0; !best && i < 5000; i++) {
+      const ang = i * 2.39996, dist = (280 + Math.sqrt(i) * 30) / R;
+      if (dist > Math.PI * .9) break;
+      const c = Math.cos(dist), sn = Math.sin(dist);
+      const p = { x: s0.x * c + (ux * Math.cos(ang) + vx * Math.sin(ang)) * sn, y: s0.y * c + (uy * Math.cos(ang) + vy * Math.sin(ang)) * sn, z: s0.z * c + (uz * Math.cos(ang) + vz * Math.sin(ang)) * sn };
+      const l = Math.hypot(p.x, p.y, p.z); p.x /= l; p.y /= l; p.z /= l;
+      if (!liquidAt(p) && slope(p) < .5) best = p;
+    }
     if (best) site = [best.x, best.y, best.z];
   }
+  // The landing pad: about 30 m from the site, where the game has always put it (the
+  // site's "up" turned to point (0, 1, 30/R)), unless that is in water, lava or on a
+  // steep slope; then the nearest dry, level ground beside the site. Never at sea.
+  let landing;
+  {
+    const n0 = site.map(v => v / Math.hypot(...site)), c = n0[1], sx = { x: n0[0], y: n0[1], z: n0[2] };
+    const unit = (v) => { const l = Math.hypot(v.x, v.y, v.z); return { x: v.x / l, y: v.y / l, z: v.z / l }; };
+    const v = unit({ x: 0, y: 1, z: 30 / R });
+    let pad;
+    if (c > 1 - 1e-9) pad = v;
+    else if (c < -1 + 1e-9) pad = { x: v.x, y: -v.y, z: -v.z };
+    else {
+      const kl = Math.hypot(n0[2], n0[0]), k = { x: n0[2] / kl, y: 0, z: -n0[0] / kl }, sn = Math.sqrt(1 - c * c);
+      const kv = { x: k.y * v.z - k.z * v.y, y: k.z * v.x - k.x * v.z, z: k.x * v.y - k.y * v.x }, kd = k.x * v.x + k.y * v.y + k.z * v.z;
+      pad = unit({ x: v.x * c + kv.x * sn + k.x * kd * (1 - c), y: v.y * c + kv.y * sn + k.y * kd * (1 - c), z: v.z * c + kv.z * sn + k.z * kd * (1 - c) });
+    }
+    const good = (p) => !liquidAt(p) && slope(p) < .35;
+    if (!good(pad)) {
+      const helper = Math.abs(sx.y) < .9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
+      let ax = sx.y * helper.z - sx.z * helper.y, ay = sx.z * helper.x - sx.x * helper.z, az = sx.x * helper.y - sx.y * helper.x;
+      const al = Math.hypot(ax, ay, az); ax /= al; ay /= al; az /= al;
+      const bx = sx.y * az - sx.z * ay, by = sx.z * ax - sx.x * az, bz = sx.x * ay - sx.y * ax;
+      let best = null, bestScore = Infinity;
+      for (let d = 18; d <= 90; d += 6) for (let j = 0; j < 16; j++) {
+        const a = j / 16 * Math.PI * 2, t = d / R, cc = Math.cos(t), ss = Math.sin(t);
+        const p = unit({ x: sx.x * cc + (ax * Math.cos(a) + bx * Math.sin(a)) * ss, y: sx.y * cc + (ay * Math.cos(a) + by * Math.sin(a)) * ss, z: sx.z * cc + (az * Math.cos(a) + bz * Math.sin(a)) * ss });
+        if (liquidAt(p)) continue;
+        const score = slope(p) * 4 + Math.abs(d - 30) * .02;
+        if (score < bestScore) { bestScore = score; best = p; }
+      }
+      pad = best || sx;
+    }
+    landing = [pad.x, pad.y, pad.z];
+  }
   // rockColor: bare rock as it shows on cliffs (sRGB), for rocks and formations to match.
-  return { raw, height, surface, meshHeight, isLiquid, color, climate, sea, liquid, solvent, coverage, minH, maxH, waterColor, site, lush, ground, airless, rockColor: cliff };
+  return { raw, height, surface, meshHeight, isLiquid, color, climate, sea, liquid, solvent, coverage, minH, maxH, waterColor, site, landing, lush, ground, airless, rockColor: cliff };
 }

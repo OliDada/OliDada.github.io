@@ -35,9 +35,9 @@ export function landingOf(site, R) {
 // Size of each kind of place, in building units (scaled by the builders' size).
 export const KINDS = {
   camp: { radius: 8 }, village: { radius: 13 }, town: { radius: 18 }, city: { radius: 28 },
-  metropolis: { radius: 40 }, capital: { radius: 46 }, colony: { radius: 14 },
+  metropolis: { radius: 40 }, capital: { radius: 46 }, megacity: { radius: 66 }, colony: { radius: 14 },
 };
-const CAPITAL = { 'tool users': 'camp', 'village builders': 'village', 'city builders': 'city', 'planet-shapers': 'metropolis', spacefarers: 'capital' };
+const CAPITAL = { 'tool users': 'camp', 'village builders': 'village', 'city builders': 'city', 'planet-shapers': 'metropolis', spacefarers: 'capital', 'system-shapers': 'megacity' };
 // How many of each kind of place, by extent (before cohesion), and how far they reach (radians).
 const SPREAD = {
   local: { reach: null, city: [0, 0], town: [0, 0], village: [1, 2] },
@@ -49,7 +49,7 @@ const SPREAD = {
 // The best kind a tier can build below its capital.
 const ALLOWED = {
   'tool users': ['camp'], 'village builders': ['village'], 'city builders': ['town', 'village'],
-  'planet-shapers': ['city', 'town', 'village'], spacefarers: ['city', 'town', 'village'],
+  'planet-shapers': ['city', 'town', 'village'], spacefarers: ['city', 'town', 'village'], 'system-shapers': ['city', 'town', 'village'],
 };
 export const MAX_RADIUS = 115; // metres: even giant builders' capitals fit beside the landing site
 
@@ -60,8 +60,8 @@ export function networkFor(body, civ, terrain, { colony = false } = {}) {
   const key = `${body.seed}:${body.id}:${civ.id}:${colony}`;
   if (cache.has(key)) return cache.get(key);
   const R = body.radius, u = civ.unit, r = rng(body.seed, 'settlements', civ.id, colony ? 'colony' : 'home');
-  const site = norm(terrain.site), landing = landingOf(site, R);
-  const metres = (kind) => Math.min(MAX_RADIUS, KINDS[kind].radius * u * (kind === 'capital' || kind === 'metropolis' || kind === 'city' ? .85 + .35 * civ.cohesion : 1));
+  const site = norm(terrain.site), landing = terrain.landing ? norm(terrain.landing) : landingOf(site, R);
+  const metres = (kind) => Math.min(MAX_RADIUS, KINDS[kind].radius * u * (kind === 'megacity' || kind === 'capital' || kind === 'metropolis' || kind === 'city' ? .85 + .35 * civ.cohesion : 1));
   // How wet and how rough the ground is over a disc (0 = dry and level).
   const ground = (n, rad) => {
     let wet = 0, lo = Infinity, hi = -Infinity, k = 0;
@@ -146,7 +146,7 @@ export function networkFor(body, civ, terrain, { colony = false } = {}) {
 // "a capital, 7 cities, 22 towns and 31 villages", for the star map.
 export function describeNetwork(net) {
   const count = {}; for (const s of net.settlements.slice(1)) count[s.kind] = (count[s.kind] || 0) + 1;
-  const k = net.capital?.kind, parts = [k === 'capital' || k === 'metropolis' ? 'a capital' : k === 'city' ? 'a city' : k === 'colony' ? 'a colony' : `a main ${k || 'home'}`];
+  const k = net.capital?.kind, parts = [k === 'megacity' ? 'a towering capital' : k === 'capital' || k === 'metropolis' ? 'a capital' : k === 'city' ? 'a city' : k === 'colony' ? 'a colony' : `a main ${k || 'home'}`];
   for (const k of ['city', 'town', 'village', 'camp']) if (count[k]) parts.push(`${count[k]} ${k === 'city' && count[k] > 1 ? 'cities' : k + (count[k] > 1 ? 's' : '')}`);
   return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : parts[0];
 }

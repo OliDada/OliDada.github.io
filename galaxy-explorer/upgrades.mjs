@@ -11,7 +11,8 @@
 //
 // A task ("need") is a question about traits, never a named species:
 //   { label, count = 1,
-//     kind:     'flora' | 'fauna' | 'formation' | 'settlement' | 'field-note' | 'world' | 'signal' | [...] | 'any',
+//     kind:     'flora' | 'fauna' | 'formation' | 'settlement' | 'field-note' | 'world' | 'signal'
+//               | 'behaviour' | 'phenomenon' | [...] | 'any',
 //     world:    { biome: [...], waterState: 'liquid', giant: true, gravity: { max: .5 }, … },
 //     traits:   { plan: [...], glow: { min: .45 }, habitat: { shore: true }, tier: { atLeast: 'city builders' }, … },
 //     anyOf:    [query, query]      matches if any query matches (instead of kind/world/traits)
@@ -44,6 +45,7 @@ export const CHAPTERS = [
 const ROCK = (formation) => ({ kind: 'formation', traits: { formation } });
 const DRIFTER = { kind: 'fauna', traits: { plan: 'floater' } };
 const LIVING = ['flora', 'fauna'];
+const WATCH = (behaviour) => ({ kind: 'behaviour', traits: { behaviour } });
 export const UPGRADES = {
   // ===== Main line: chapter Kestrel =====
   suitPlating: {
@@ -52,9 +54,8 @@ export const UPGRADES = {
     needs: [{ label: 'Scan 3 things on one world', kind: 'any', sameWorld: true, count: 3 }],
   },
   orbitalSurvey: {
-    line: 'main', order: 2, chapter: 'kestrel', gear: 'ship', name: 'Orbital survey', status: 'partial',
-    effect: "See a world's biome, chemistry and life before landing.",
-    built: 'the long-range scan already shows life at stars in jump range',
+    line: 'main', order: 2, chapter: 'kestrel', gear: 'ship', name: 'Orbital survey', status: 'live',
+    effect: "The star map shows the worlds of every system in jump range: biome, chemistry and life, before you go.",
     needs: [{ label: 'Scan 5 things, on 2 different worlds', kind: 'any', count: 5, spread: { world: 2 } }],
   },
   jumpDrive2: {
@@ -66,25 +67,25 @@ export const UPGRADES = {
     ],
   },
   thermalLining: {
-    line: 'main', order: 4, chapter: 'kestrel', gear: 'suit', name: 'Thermal lining', status: 'planned',
-    effect: 'Stay out longer on very hot and very cold worlds.',
+    line: 'main', order: 4, chapter: 'kestrel', gear: 'suit', name: 'Thermal lining', status: 'live',
+    effect: 'On worlds colder than −80 °C or hotter than 80 °C, your suit holds its heat four times longer.',
     needs: [
       { label: 'Scan something on a world colder than −80 °C', kind: 'any', world: { temperature: { max: 193 } } },
       { label: 'Scan something on a world hotter than 80 °C', kind: 'any', world: { temperature: { min: 353 } } },
     ],
   },
   heatPlating: {
-    line: 'main', order: 5, chapter: 'kestrel', gear: 'ship', name: 'Heat plating', status: 'partial',
+    line: 'main', order: 5, chapter: 'kestrel', gear: 'ship', name: 'Heat plating', status: 'live',
     effect: 'The hull heats up more slowly near stars, and you can land right beside lava.',
-    built: 'slower hull heating works; landing beside lava comes later',
     needs: [
       { label: 'Scan volcanic rock or a volcanic landform', ...ROCK(['basalt', 'obsidian', 'columns', 'fumaroles']) },
-      { label: 'Scan 2 animals', kind: 'fauna', count: 2 },
+      { label: 'Watch animals do 2 different things (graze, drink, sleep, hunt…)', kind: 'behaviour', distinct: 'traits.behaviour', count: 2 },
     ],
   },
   petrel: {
-    line: 'main', order: 6, chapter: 'kestrel', gear: 'ship', ship: true, name: 'Petrel', status: 'planned',
-    effect: 'A new ship for seas and storms. Opens the Petrel chapter.',
+    line: 'main', order: 6, chapter: 'kestrel', gear: 'ship', ship: true, name: 'Petrel', status: 'partial',
+    effect: 'A new ship for seas and storms: it can set down and float on water. Opens the Petrel chapter.',
+    built: 'landing and floating on water seas; its own model, name in the HUD and handling come later',
     needs: [{ label: 'Fully document 2 worlds with life: every plant, animal and rock', special: 'complete', count: 2, world: { life: ['microbial', 'simple', 'complex'] } }],
   },
   // ===== Main line: chapter Petrel =====
@@ -92,7 +93,7 @@ export const UPGRADES = {
     line: 'main', order: 7, chapter: 'petrel', gear: 'ship', name: 'Pressure hull I', status: 'planned',
     effect: 'Dive into liquid seas, down to the shallows.',
     needs: [
-      { label: 'Scan 3 animals on worlds with seas', kind: 'fauna', world: { waterState: 'liquid' }, count: 3 },
+      { label: 'Watch 2 kinds of animal drink at the shore', ...WATCH('drink'), count: 2 },
       { label: 'Scan a coil or a creeper', kind: 'fauna', traits: { plan: ['serpent', 'slug'] } },
       { label: 'Scan sea stacks or a shoreline plant', anyOf: [ROCK('seastacks'), { kind: 'flora', traits: { habitat: { shore: true } } }] },
     ],
@@ -113,11 +114,14 @@ export const UPGRADES = {
   jumpDrive3: {
     line: 'main', order: 10, chapter: 'petrel', gear: 'ship', name: 'Jump drive III', status: 'live',
     effect: 'Jump range 16 → 24 light years.',
-    needs: [{ label: 'Scan animals of 4 different body plans', kind: 'fauna', distinct: 'traits.plan', count: 4 }],
+    needs: [
+      { label: 'Scan animals of 4 different body plans', kind: 'fauna', distinct: 'traits.plan', count: 4 },
+      { label: 'Record 2 kinds of sky event (eclipse, aurora, meteor shower)', kind: 'phenomenon', distinct: 'traits.type', count: 2 },
+    ],
   },
   signalDecoder: {
-    line: 'main', order: 11, chapter: 'petrel', gear: 'knowledge', name: 'Signal decoder', status: 'planned',
-    effect: 'Radio sources on the map say who they are and what they want.',
+    line: 'main', order: 11, chapter: 'petrel', gear: 'knowledge', name: 'Signal decoder', status: 'live',
+    effect: 'Radio sources on the map say who is broadcasting: the species, how far along they are, their world and what they are sending.',
     needs: [{ label: 'Find a settlement of village builders or higher', kind: 'settlement', traits: { tier: { atLeast: 'village builders' } } }],
   },
   albatross: {
@@ -156,9 +160,22 @@ export const UPGRADES = {
     needs: [{ label: 'Find a settlement of city builders or higher', kind: 'settlement', traits: { tier: { atLeast: 'city builders' } } }],
   },
   // ===== Side upgrades: optional gear, one researched at a time =====
+  fieldGlasses: {
+    line: 'side', opensAt: 'suitPlating', gear: 'scanner', name: 'Field glasses', status: 'live',
+    effect: 'Hold Z (or the glasses button) to zoom in on foot: examine anything you can see, and scan from four times as far.',
+    needs: [
+      { label: 'Scan 2 animals', kind: 'fauna', count: 2 },
+      { label: 'Scan a flier or a drifter', kind: 'fauna', traits: { plan: ['flyer', 'floater'] } },
+    ],
+  },
+  longRangeReceiver: {
+    line: 'side', opensAt: 'jumpDrive2', gear: 'ship', name: 'Long-range receiver', status: 'live',
+    effect: 'Hear radio from much farther: planet-shapers out to 80 light years, spacefarers and system-shapers out to 150.',
+    needs: [{ label: 'Investigate 2 surface signals', kind: 'field-note', count: 2 }],
+  },
   lifeSonar: {
-    line: 'side', opensAt: 'orbitalSurvey', gear: 'scanner', name: 'Life sonar', status: 'planned',
-    effect: 'A HUD arrow points to the nearest species you have not recorded.',
+    line: 'side', opensAt: 'orbitalSurvey', gear: 'scanner', name: 'Life sonar', status: 'live',
+    effect: 'On foot, an arrow points to the nearest plant or animal species you have not recorded (within 600 m).',
     needs: [
       { label: 'Scan 4 animals', kind: 'fauna', count: 4 },
       { label: 'Scan a nocturnal animal', kind: 'fauna', traits: { activity: 'nocturnal' } },
@@ -170,18 +187,21 @@ export const UPGRADES = {
     needs: [{ label: 'Scan 2 fliers', kind: 'fauna', traits: { plan: 'flyer' }, count: 2 }],
   },
   nightFilter: {
-    line: 'side', opensAt: 'thermalLining', gear: 'suit', name: 'Night filter', status: 'planned',
-    effect: 'See clearly at night; glowing species stand out.',
-    needs: [{ label: 'Scan 2 glowing species', kind: LIVING, traits: { glow: { min: 0.45 } }, count: 2 }],
+    line: 'side', opensAt: 'thermalLining', gear: 'suit', name: 'Night filter', status: 'live',
+    effect: 'On foot at night your visor brightens the view, and glowing species shine out.',
+    needs: [
+      { label: 'Scan 2 glowing species', kind: LIVING, traits: { glow: { min: 0.45 } }, count: 2 },
+      { label: 'Record an aurora or a meteor shower', kind: 'phenomenon', traits: { type: ['aurora', 'meteors'] } },
+    ],
   },
   deepCoreSampler: {
-    line: 'side', opensAt: 'heatPlating', gear: 'scanner', name: 'Deep core sampler', status: 'planned',
-    effect: 'Rocks and landforms give a second, deeper entry: their age and origin.',
+    line: 'side', opensAt: 'heatPlating', gear: 'scanner', name: 'Deep core sampler', status: 'live',
+    effect: 'Hold E on a rock or landform you have recorded to drill a core sample: a second entry with its age and origin.',
     needs: [{ label: 'Scan 6 kinds of rock or landform', kind: 'formation', distinct: 'traits.formation', count: 6 }],
   },
   returnBeacons: {
-    line: 'side', opensAt: 'heatPlating', gear: 'ship', name: 'Return beacons', status: 'planned',
-    effect: 'Fast-travel to any system you have fully documented.',
+    line: 'side', opensAt: 'heatPlating', gear: 'ship', name: 'Return beacons', status: 'live',
+    effect: 'Jump straight back to any system where you have fully documented a world, however far (blue diamonds on the map).',
     needs: [{ label: 'Fully document a world: every plant, animal and rock', special: 'complete' }],
   },
   rover: {
@@ -190,9 +210,12 @@ export const UPGRADES = {
     needs: [{ label: 'Scan 4 walking animals on 2 kinds of world', kind: 'fauna', traits: { legs: { min: 1 } }, count: 4, spread: { 'world.biome': 2 } }],
   },
   behaviourLogger: {
-    line: 'side', opensAt: 'petrel', gear: 'scanner', name: 'Behaviour logger', status: 'planned',
-    effect: 'Record behaviour: a hunt, a herd drinking, an animal asleep.',
-    needs: [{ label: 'Scan a hunter and an animal it hunts, on one world', special: 'hunt' }],
+    line: 'side', opensAt: 'petrel', gear: 'scanner', name: 'Behaviour logger', status: 'live',
+    effect: 'Observing takes half as long, and the HUD tells you when an animal nearby is doing something you have not recorded.',
+    needs: [
+      { label: 'Scan a hunter and an animal it hunts, on one world', special: 'hunt' },
+      { label: 'Watch a hunter feeding on its catch', ...WATCH('kill') },
+    ],
   },
   decoyBeacon: {
     line: 'side', opensAt: 'pressureHull1', gear: 'suit', name: 'Decoy beacon', status: 'planned',
@@ -224,6 +247,23 @@ export const jumpRange = (unlocked) => unlocked.has('jumpDrive3') ? 24 : unlocke
 export const suitDamageScale = (unlocked) => unlocked.has('suitPlating') ? 0.7 : 1;
 export const suitRecoveryScale = (unlocked) => unlocked.has('suitPlating') ? 2 : 1;
 export const heatScale = (unlocked) => unlocked.has('heatPlating') ? 0.6 : 1;
+export const observeTime = (unlocked) => unlocked.has('behaviourLogger') ? 1 : 2; // seconds of watching
+export const behaviourAlerts = (unlocked) => unlocked.has('behaviourLogger');
+// Field glasses: zooming in on foot multiplies scan reach (and lets you examine what you see).
+// Heat plating: the Kestrel may set down right beside lava (otherwise it keeps ~25 m clear).
+export const landsBesideLava = (unlocked) => unlocked.has('heatPlating');
+// Thermal lining: on very cold or very hot worlds the suit's heat reserve runs down this much slower.
+export const exposureScale = (unlocked) => unlocked.has('thermalLining') ? 0.25 : 1;
+// How hard a world's climate is on a suit, 0 (fine) .. 1 (brutal): below −80 °C or above 80 °C.
+export const EXPOSURE_COLD = 193, EXPOSURE_HOT = 353; // kelvin
+export const exposureOf = (temperature) => temperature < EXPOSURE_COLD ? Math.min(1, (EXPOSURE_COLD - temperature) / 80)
+  : temperature > EXPOSURE_HOT ? Math.min(1, (temperature - EXPOSURE_HOT) / 120) : 0;
+export const hasFieldGlasses = (unlocked) => unlocked.has('fieldGlasses');
+export const ZOOM_REACH = 4;
+// Radio: the Kestrel's receiver hears only part of signals.mjs HEARD; the Long-range receiver hears all of it.
+export const radioHearing = (unlocked) => unlocked.has('longRangeReceiver') ? 1 : 0.3;
+// Signal decoder: radio sources say who is broadcasting instead of "unidentified signal".
+export const decodesSignals = (unlocked) => unlocked.has('signalDecoder');
 
 // --- Matching ------------------------------------------------------------------------
 const get = (e, path) => path === 'world' ? (e.world ? `${e.seed}:${e.bodyId}` : undefined)
@@ -248,7 +288,7 @@ export function matches(e, q) {
 }
 const distinct = (list, path) => new Set(list.map((e) => get(e, path)).filter((v) => v != null)).size;
 
-const SPREAD_WORDS = { world: 'worlds', 'world.biome': 'kinds of world', 'traits.plan': 'body plans', 'world.biochemistry': 'chemistries', 'world.clouds': 'cloud types' };
+const SPREAD_WORDS = { 'traits.behaviour': 'behaviours', 'traits.type': 'kinds of sky event', world: 'worlds', 'world.biome': 'kinds of world', 'traits.plan': 'body plans', 'world.biochemistry': 'chemistries', 'world.clouds': 'cloud types' };
 function measure(need, list) {
   const count = need.count ?? 1;
   const raw = need.distinct ? distinct(list, need.distinct) : list.length;
@@ -378,9 +418,17 @@ function hintFor(q) {
   if (t.activity === 'nocturnal') out.push('worlds with day and night, after dark');
   if (t.stalksYou) out.push('complex-life worlds with big hunters; keep your distance');
   if (t.tier) out.push('worlds with intelligent life (SIGNALS on the map)');
+  if (t.behaviour) out.push(...asList(t.behaviour).map((b) => BEHAVIOUR_HINTS[b]));
   return out.filter(Boolean);
 }
+const BEHAVIOUR_HINTS = {
+  graze: 'worlds with plant-eaters', drink: 'worlds with seas, near the shore where animals come to drink',
+  sleep: 'worlds with day and night: day animals sleep after dark, night animals by day', hunt: 'complex-life worlds with hunters',
+  kill: 'complex-life worlds with hunters: wait near a herd of what they hunt', defend: 'complex-life worlds with big grazers and hunters',
+};
 export function hint(need) {
+  if (need.kind === 'phenomenon') return 'Eclipses come to moons and worlds with moons, by day; aurorae and meteor showers to worlds with air, at night. On a world, the panel under the tally says what the sky will do next.';
+  if (need.kind === 'behaviour' && !need.traits) return 'Watch an animal you have scanned while it eats, drinks, sleeps or hunts: aim at it and hold E.';
   if (need.special === 'hunt') return "Complex-life worlds: an animal's card says what it hunts.";
   if (need.special === 'complete') return 'The HUD counts what is left on the world you are on.';
   if (need.special === 'relationship') return 'Arrives with Contact (not in the game yet).';

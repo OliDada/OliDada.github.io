@@ -9,7 +9,9 @@ import { floraFor } from './flora.mjs';
 import { faunaFor } from './fauna.mjs';
 import { geologyFor } from './geology.mjs';
 import { civilizationOf } from './civilizations.mjs';
-import { worldEntry, floraEntry, faunaEntry, formationEntry, settlementEntry, keyOf } from './codex.mjs';
+import { worldEntry, fieldNoteEntry, floraEntry, faunaEntry, formationEntry, settlementEntry, behaviourEntry, phenomenonEntry, keyOf } from './codex.mjs';
+import { behavioursOf } from './ecology.mjs';
+import { phenomenaOf } from './phenomena.mjs';
 import { wouldAdvance } from './upgrades.mjs';
 
 // Everything there is to record on a world, as codex entries.
@@ -21,6 +23,9 @@ export function worldEntries(system, body) {
     ...faunaFor(body).species.map((s) => faunaEntry(system, body, s)),
     ...geologyFor(body).formations.map((f) => formationEntry(system, body, f)),
     ...(civ ? [settlementEntry(system, body, civ)] : []),
+    ...(body.giant ? [] : [fieldNoteEntry(system, body)]), // every world with a surface has a signal to investigate
+    ...faunaFor(body).species.flatMap((s) => behavioursOf(s).map((b) => behaviourEntry(system, body, s, b))),
+    ...phenomenaOf(system, body).map((type) => phenomenonEntry(system, body, type)),
   ];
 }
 

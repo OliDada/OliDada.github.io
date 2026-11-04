@@ -36,6 +36,10 @@ const SIGNAL_RING = 'rgba(255,210,120,.95)';
 const civOf = civilizationOf;
 const radioWorld = (b) => tierAtLeast(civOf(b)?.tier, 'planet-shapers');
 const signals = (sys) => sys.bodies.some(radioWorld);
+// Colonists from another world of the system: animals live here, even where nothing native does.
+const colonyOf = (sys, b) => !b.giant && !civOf(b) ? colonistOf(sys, b) : null;
+const COLONY_RING = 'rgba(255,200,120,.95)';
+const lifeWords = (sys, b) => { const c = colonyOf(sys, b), native = lifeLabel(b.physics).toLowerCase(); return c ? (b.physics?.life === 'none' ? `${plural(c.species.name)} (colonists)` : `${native}, ${plural(c.species.name)} (colonists)`) : native; };
 // How rare each level of life is galaxy-wide: one world in N (from
 // `node galaxy-explorer/inspect.mjs --stats`; starmap.test.mjs checks they still hold).
 export const LIFE_RARITY = {
@@ -44,6 +48,34 @@ export const LIFE_RARITY = {
 };
 const isExotic = (b) => !!b.physics?.life && b.physics.life !== 'none' && !!b.physics.biochemistry && b.physics.biochemistry !== 'carbon';
 const rarityWord = (n) => n >= 200 ? 'exceptionally rare' : n >= 50 ? 'very rare' : n >= 25 ? 'rare' : 'uncommon';
+// How rare a world's life is: { n: one world in n, tier, what } or null for lifeless worlds.
+export function rarityOf(b) {
+  const life = b.physics?.life;
+  if (!LIFE_RANK[life]) return null;
+  const n = LIFE_RARITY[isExotic(b) ? 'exotic' : 'carbon'][life];
+  const what = { microbial: 'Microbial life', simple: 'Plant life', complex: 'Complex life with animals' }[life] + (isExotic(b) ? ` on ${b.physics.biochemistry}` : '');
+  return { n, what, tier: n >= 200 ? 'Exceptional' : n >= 50 ? 'Very rare' : n >= 25 ? 'Rare' : 'Uncommon' };
+}
+// Plain words first, then the measurement: easier to read than bar or g alone.
+const tempWord = (c) => c < -150 ? 'Deep frozen' : c < -60 ? 'Frigid' : c < -10 ? 'Freezing' : c < 8 ? 'Cold' : c < 24 ? 'Mild' : c < 38 ? 'Warm' : c < 80 ? 'Hot' : c < 400 ? 'Scorching' : 'Molten';
+const gravityWord = (g) => g < 0.2 ? 'Very light' : g < 0.6 ? 'Light' : g < 0.85 ? 'A little light' : g < 1.2 ? 'Earth-like' : g < 1.8 ? 'Heavy' : g < 3 ? 'Very heavy' : 'Crushing';
+const airWord = (p) => p <= 0 ? 'None' : p < 0.01 ? 'Almost none' : p < 0.1 ? 'Very thin' : p < 0.5 ? 'Thin' : p < 2 ? 'Earth-like' : p < 10 ? 'Thick' : p < 90 ? 'Very thick' : 'Crushing';
+const fmtNum = (v, d) => (Math.abs(v) < 0.1 && v !== 0 ? v.toFixed(3) : v.toFixed(d));
+function factRows(body, sys = null) {
+  const p = body.physics, c = Math.round(p.temperature - 273.15), parts = body.facts.split(' · ');
+  if (body.giant) return [
+    ['Cloud tops', tempWord(c), `${c} °C`], ['Gravity', gravityWord(p.gravity), `${p.gravity.toFixed(2)} g`],
+    ['Size', p.kind === 'ice' ? 'Ice giant' : 'Gas giant', parts[2] || ''], ['Surface', 'None', 'gas all the way down'], ['Life', cap(parts[4] || 'none'), ''],
+  ];
+  return [
+    ['Temperature', tempWord(c), `${c} °C`],
+    ['Gravity', gravityWord(p.gravity), `${p.gravity.toFixed(2)} g`],
+    ['Air', airWord(p.pressure), p.pressure > 0 ? `${fmtNum(p.pressure, 2)} bar` : ''],
+    ['Water', cap(parts[3] || ''), ''],
+    ['Life', cap(parts[4] || ''), ''],
+    ...(sys && colonyOf(sys, body) ? [['Inhabitants', `${cap(plural(colonyOf(sys, body).species.name))}`, `colonists from ${sys.bodies.find(b => b.id === colonyOf(sys, body).home)?.name}`]] : []),
+  ];
+}
 // "Complex life (methane-based): very rare, about 1 world in 350." or '' for lifeless worlds.
 export function rarityText(b) {
   const life = b.physics?.life;
@@ -60,6 +92,7 @@ const MAX_SCALE = 9000;
 const SYSTEM_RADIUS = .3;       // light years the outermost orbit occupies on the chart (systems are compressed)
 
 const names = new Map();
+const cap = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
 const nameOf = (star) => { let n = names.get(star.id); if (!n) { n = starName(star.seed); names.set(star.id, n); } return n; };
 const systems = new Map();
 function systemOf(star) {
@@ -84,21 +117,39 @@ export function createStarMap(o) {
   const dialog = $('starMap'), canvas = $('starCanvas'), ctx = canvas.getContext('2d');
   systems.set(here.id, o.system); // the system you are actually flying in
   let { range, targets } = jumpTargets(here, o.jumpRange?.());
+  // With a long jump range many stars are in reach: list the nearest few.
+  const TARGETS_SHOWN = 8;
+  let showAllTargets = false;
   let inRange = new Set(targets.map(t => t.star.id));
 
   // --- Radio signals heard from here (signals.mjs) ---------------------------
   // Scanned once per star in a background thread (or in small slices if workers are
   // unavailable) and cached, so the map shows broadcasting civilizations far beyond jump range.
-  let radio = [], radioFor = null, radioDone = false;
+  // allRadio: everything out to signals.mjs SCAN_RADIUS (what the scan caches); radio: what your
+  // receiver actually hears (o.radioHearing() scales HEARD: short at first, full with the Long-range receiver).
+  let allRadio = [], radio = [], radioFor = null, radioDone = false, recorded = 0;
+  const hearing = () => o.radioHearing?.() ?? 1;
+  const reachOfTier = (tier) => HEARD[tier] * hearing();
+  function refreshHeard() {
+    radio = allRadio.filter(e => e.distance <= reachOfTier(e.tier));
+    if (radioDone && radio.length !== recorded) { recorded = radio.length; o.onRadio?.(radio.map(({ star, ...e }) => e)); } // heard sources go into the codex (upgrades)
+  }
+  // Signal decoder: who is broadcasting. Before it, every source is just "an unidentified signal".
+  const decoded = () => o.decodes?.() ?? true;
+  function whoIs(e) {
+    const sys = systemOf(e.star), civ = sys.bodies.map(civilizationOf).find(c => c?.id === e.civ), world = civ && sys.bodies.find(b => b.id === civ.home);
+    const intent = e.tier === 'system-shapers' ? 'A chorus from every world and moon of their system, ship traffic between them, and a call repeated outward: they are looking for others.' : e.tier === 'spacefarers' ? 'Ship traffic and orbital beacons, and a call repeated outward: they are listening for others.' : 'Weather control and beacons across their world; nothing aimed at the stars.';
+    return `${civ?.species?.name ? `${civ.species.name} ${e.tier}` : cap(e.tier)}${world ? ` on ${world.name}` : ''}. ${intent}`;
+  }
   function scanRadio() {
     const at = here;
     if (radioFor === at.id) return;
-    radioFor = at.id; radio = []; radioDone = false;
+    radioFor = at.id; allRadio = radio = []; radioDone = false; recorded = 0;
     const key = `elsewhere-signals-v2-${at.id}`, center = { x: at.x, y: at.y, z: at.z };
     const done = (list) => {
       if (radioFor !== at.id) return;
-      radio = list.map(e => ({ ...e, star: starById(e.id) })).filter(e => e.star); radioDone = true;
-      o.onRadio?.(list); // heard sources go into the codex (upgrades)
+      allRadio = list.map(e => ({ ...e, star: starById(e.id) })).filter(e => e.star); radioDone = true;
+      refreshHeard();
       try { localStorage.setItem(key, JSON.stringify(list.map(({ id, tier, civ, distance }) => ({ id, tier, civ, distance })))); } catch {}
       if (dialog.open) { updatePanel(); requestDraw(); }
     };
@@ -119,6 +170,10 @@ export function createStarMap(o) {
   let w = 0, h = 0, dpr = 1, pending = false, drawn = [], haze = null, anim = null;
   let selected = { star: targets[0]?.star || here, body: null };
   const isVisited = (star) => star.id === here.id || state.visited.has(star.id);
+  // Orbital survey: every system within jump range shows its worlds (biome, chemistry, life) as if visited.
+  // Return beacons: a fully documented system can be jumped to from anywhere (o.beacons(): its seeds).
+  const beaconAt = (star) => { const b = o.beacons?.(); return !!b?.size && star.id !== here.id && isVisited(star) && b.has(String(systemOf(star).seed)); };
+  const isSurveyed = (star) => isVisited(star) || (!!o.orbitalSurvey?.() && inRange.has(star.id));
   // Height of a star above (+) or below (-) you, in light years: the one dimension the map cannot show.
   const heightOf = (star) => star.z - (o.deep() ? o.deep().position[2] : here.z);
   const heightWords = (dz) => Math.abs(dz) < 1.5 ? '' : `${Math.round(Math.abs(dz))} ly ${dz > 0 ? 'above' : 'below'}`;
@@ -212,6 +267,7 @@ export function createStarMap(o) {
         ctx.fillStyle = p.color;
         if (r < 1.3) ctx.fillRect(sx - r / 2, sy - r / 2, r, r); else { ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill(); }
         if (isVisited(st) && st.id !== here.id && s < SYSTEM_FROM) { ctx.strokeStyle = 'rgba(201,244,204,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(sx, sy, r + 3, 0, Math.PI * 2); ctx.stroke(); }
+        if (s < SYSTEM_FROM && beaconAt(st)) { const k = r + 8; ctx.strokeStyle = 'rgba(140,220,255,.9)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(sx, sy - k); ctx.lineTo(sx + k, sy); ctx.lineTo(sx, sy + k); ctx.lineTo(sx - k, sy); ctx.closePath(); ctx.stroke(); }
         if (inRange.has(st.id) && s < SYSTEM_FROM) {
           const level = biosignature(systemOf(st));
           if (level) { ctx.strokeStyle = exoticLife(systemOf(st)) ? EXOTIC_RING : SCAN[level].color; ctx.lineWidth = level === 3 ? 2 : 1.2; ctx.setLineDash(level === 1 ? [2, 3] : []); ctx.beginPath(); ctx.arc(sx, sy, r + 6, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
@@ -232,8 +288,8 @@ export function createStarMap(o) {
         if (sx < -30 || sy < -30 || sx > w + 30 || sy > h + 30) continue;
         ctx.strokeStyle = SIGNAL_RING; ctx.lineWidth = 1.3;
         for (const k of [6, 10, 14]) { ctx.globalAlpha = 1.1 - k / 16; for (const a of [0, Math.PI]) { ctx.beginPath(); ctx.arc(sx, sy, k, a - .8, a + .8); ctx.stroke(); } }
-        ctx.globalAlpha = 1; ctx.fillStyle = SIGNAL_RING; ctx.beginPath(); ctx.arc(sx, sy, e.tier === 'spacefarers' ? 2.8 : 2.2, 0, Math.PI * 2); ctx.fill();
-        if (s > .6) ctx.fillText(s >= LOCAL_SCALE * .4 ? `${nameOf(e.star)} · ${e.tier === 'spacefarers' ? 'SPACEFARERS' : 'SIGNALS'}` : '', sx + 17, sy);
+        ctx.globalAlpha = 1; ctx.fillStyle = SIGNAL_RING; ctx.beginPath(); ctx.arc(sx, sy, decoded() && tierAtLeast(e.tier, 'spacefarers') ? (e.tier === 'system-shapers' ? 3.4 : 2.8) : 2.2, 0, Math.PI * 2); ctx.fill();
+        if (s > .6) ctx.fillText(s >= LOCAL_SCALE * .4 ? `${nameOf(e.star)} · ${!decoded() ? 'UNIDENTIFIED SIGNAL' : e.tier.toUpperCase()}` : '', sx + 17, sy);
         if (!drawn.some(d => !d.body && d.star.id === e.star.id)) drawn.push({ star: e.star, sx, sy, r: 12 });
       }
       ctx.globalAlpha = 1;
@@ -250,7 +306,7 @@ export function createStarMap(o) {
   }
 
   function drawSystem(st, alpha) {
-    const sys = systemOf(st), known = isVisited(st), s = view.scale, k = sys.chartScale;
+    const sys = systemOf(st), known = isSurveyed(st), s = view.scale, k = sys.chartScale;
     const [cx, cy] = toScreen(st.x, st.y);
     if (cx < -SYSTEM_RADIUS * s * 1.2 || cx > w + SYSTEM_RADIUS * s * 1.2 || cy < -SYSTEM_RADIUS * s * 1.2 || cy > h + SYSTEM_RADIUS * s * 1.2) return;
     const survey = st.id === here.id ? o.survey() : null;
@@ -270,7 +326,8 @@ export function createStarMap(o) {
       ctx.globalAlpha = alpha;
       if (b.ringed && known) { ctx.strokeStyle = b.atmosphere; ctx.beginPath(); ctx.ellipse(sx, sy, r * 2, r * .7, -.35, 0, Math.PI * 2); ctx.stroke(); }
       // Life, marked as on the galaxy chart: dashed for microbes, bolder for animals, violet if exotic.
-      const level = known ? LIFE_RANK[b.physics?.life] || 0 : 0;
+      const level = known ? LIFE_RANK[b.physics?.life] || 0 : 0, colonised = known && !level && colonyOf(sys, b);
+      if (colonised) { ctx.strokeStyle = COLONY_RING; ctx.lineWidth = 2; ctx.setLineDash([5, 2]); ctx.beginPath(); ctx.arc(sx, sy, r + 3.5, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
       if (level) { ctx.strokeStyle = isExotic(b) ? EXOTIC_RING : SCAN[level].color; ctx.lineWidth = level === 3 ? 2 : 1.2; ctx.setLineDash(level === 1 ? [2, 3] : []); ctx.beginPath(); ctx.arc(sx, sy, r + 3.5, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1; }
       ctx.fillStyle = known ? b.palette[2] : '#7d8a90';
       ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill();
@@ -294,15 +351,13 @@ export function createStarMap(o) {
         if (d.body || d.star.id === here.id || (selected.star.id === d.star.id && !selected.body)) continue;
         const important = inRange.has(d.star.id) || isVisited(d.star) || s > 20;
         if (!important || ++count > 90) continue;
-        const height = s < SYSTEM_FROM ? heightWords(heightOf(d.star)) : '';
         ctx.fillStyle = 'rgba(200,215,210,.75)'; ctx.fillText(nameOf(d.star), d.sx + d.r * .6 + 6, d.sy);
-        if (height) { const w = ctx.measureText(nameOf(d.star)).width; ctx.fillStyle = 'rgba(160,180,175,.55)'; ctx.fillText(` · ${height}`, d.sx + d.r * .6 + 6 + w, d.sy); }
       }
     }
     // Planet names in known systems.
     if (sysA > .5 && s > 180) {
       ctx.font = '500 11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-      for (const d of drawn) if (d.body && isVisited(d.star) && (!d.body.parent || s > 1400)) {
+      for (const d of drawn) if (d.body && isSurveyed(d.star) && (!d.body.parent || s > 1400)) {
         ctx.fillStyle = selected.body?.id === d.body.id && selected.star.id === d.star.id ? '#edf5ee' : 'rgba(200,215,210,.8)';
         ctx.fillText(d.body.name, d.sx, d.sy + d.r + 2);
       }
@@ -350,7 +405,7 @@ export function createStarMap(o) {
   function updateChrome() {
     const s = view.scale;
     let title = 'THE GALAXY', sub = `${Math.max(1, state.visited.size)} star${state.visited.size > 1 ? 's' : ''} visited · ${state.jumps} jump${state.jumps === 1 ? '' : 's'}`;
-    if (s >= SYSTEM_FROM) { const c = centreStar(); if (c) { title = `${nameOf(c).toUpperCase()} SYSTEM`; sub = isVisited(c) ? `${systemOf(c).bodies.length} worlds · ${starPhysics(c).spectralClass} star` : `Unsurveyed · ${systemOf(c).bodies.length} worlds detected`; } }
+    if (s >= SYSTEM_FROM) { const c = centreStar(); if (c) { title = `${nameOf(c).toUpperCase()} SYSTEM`; sub = isSurveyed(c) ? `${systemOf(c).bodies.length} worlds · ${starPhysics(c).spectralClass} star` : `Unsurveyed · ${systemOf(c).bodies.length} worlds detected`; } }
     else if (s >= REAL_FROM) { const alive = targets.filter(t => biosignature(systemOf(t.star))).length; title = 'STELLAR NEIGHBOURHOOD'; sub = `${targets.length} stars within jump range (${range.toFixed(1)} ly; faint stars lie far above or below you) · ${alive ? `signs of life at ${alive} (green rings; violet where the chemistry is not water-based)` : 'no signs of life in range'}${radio.length ? ` · radio signals from ${radio.length} civilization${radio.length > 1 ? 's' : ''} (gold)` : ''}`; }
     $('mapTitle').textContent = title; $('mapSubtitle').textContent = sub;
     $('mapScale').textContent = `${fmtLy(w / s)} across · drag to pan · scroll or pinch to zoom · double-tap a star to open its system`;
@@ -427,8 +482,47 @@ export function createStarMap(o) {
   $('mapPanelToggle').onclick = () => document.body.classList.toggle('map-panel-collapsed');
 
   // --- Side panel ---
+  // The world panel: a facts table, then titled sections.
+  // section: { title, text, rows: [[label, value]], status, progress: [[label, done, total]], lists: [[label, [names]]] }
+  function renderDetails(sections) {
+    let box = $('mapDetails');
+    if (!box) { box = document.createElement('div'); box.id = 'mapDetails'; box.className = 'map-details'; $('mapFacts').after(box); }
+    box.replaceChildren();
+    const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+    for (const sec of sections) {
+      const part = el('section', 'map-section');
+      if (sec.title) part.append(el('h4', null, sec.title));
+      if (sec.text) part.append(el('p', null, sec.text));
+      if (sec.rows) {
+        const dl = el('dl', 'map-facts-table');
+        for (const [k, word, value] of sec.rows) {
+          const dd = el('dd'); dd.append(el('b', null, word)); if (value) dd.append(el('small', null, value));
+          dl.append(el('dt', null, k), dd);
+        }
+        part.append(dl);
+      }
+      if (sec.rarity) {
+        // A find worth noticing: how many worlds you would search to find one like it.
+        const r = sec.rarity, badge = el('div', `map-rarity tier-${r.tier.toLowerCase().replace(' ', '-')}`);
+        const odds = el('div', 'map-rarity-odds'); odds.append(el('span', null, '1 in'), el('strong', null, String(r.n)), el('span', null, 'worlds'));
+        const words = el('div', 'map-rarity-words'); words.append(el('em', null, r.tier), el('span', null, r.what));
+        badge.append(odds, words); part.append(badge);
+      }
+      if (sec.settlements) { const p = el('p', 'map-list-line'); p.append(el('span', null, 'Settlements: '), document.createTextNode(sec.settlements)); part.append(p); }
+      if (sec.status) part.append(el('p', 'map-status', sec.status));
+      for (const [label, done, total] of sec.progress || []) {
+        const row = el('div', 'map-progress'); row.append(el('span', null, label), el('b', null, `${done} / ${total}`));
+        const bar = el('i'); bar.style.setProperty('--done', `${Math.round((done / total) * 100)}%`); row.append(bar); part.append(row);
+      }
+      for (const [label, names] of sec.lists || []) {
+        const p = el('p', 'map-list-line'); p.append(el('span', null, `${label}: `), document.createTextNode(names.join(', '))); part.append(p);
+      }
+      box.append(part);
+    }
+  }
+  const firstSentence = (text) => { const m = /^(.*?[.!?])(\s|$)/.exec(text || ''); return m ? m[1] : text; };
   function updatePanel() {
-    const { star, body } = selected, sys = systemOf(star), known = isVisited(star), isHere = star.id === here.id, p = starPhysics(star);
+    const { star, body } = selected, sys = systemOf(star), known = isSurveyed(star), isHere = star.id === here.id, p = starPhysics(star);
     const btn = $('mapAction'); let note = '';
     if (body) {
       const parent = body.parent && sys.bodies.find(b => b.id === body.parent);
@@ -441,37 +535,41 @@ export function createStarMap(o) {
         const intelligence = seenCiv ? `Intelligence: ${civ.description}${net?.capital ? ` Settlements: ${describeNetwork(net)}.` : ''}`
           : radioWorld(body) ? 'Artificial radio signals come from this world.'
           : colonist ? `A colony of the ${plural(colonist.species.name)} from ${sys.bodies.find(b => b.id === colonist.home)?.name}.` : '';
-        $('mapName').textContent = body.name; $('mapDescription').textContent = [body.description, rarityText(body), intelligence].filter(Boolean).join(' '); $('mapFacts').textContent = `${body.facts} · ${status}`;
-        // Plant life: how many species, and the ones you have catalogued on foot.
+        $('mapName').textContent = body.name;
+        // A one-line summary, then the details in sections the player can scan.
+        $('mapDescription').textContent = firstSentence(body.description);
+        $('mapFacts').textContent = '';
         const plants = floraFor(body).species, seen = new Set(survey.flora?.[body.id] || []);
-        if (plants.length) {
-          const names = plants.filter(sp => seen.has(sp.id)).map(sp => sp.name);
-          $('mapFacts').textContent += ` · ${seen.size} of ${plants.length} plant species catalogued`;
-          if (names.length) $('mapDescription').textContent += ` Catalogued: ${names.join(', ')}.`;
-        }
         const rocks = geologyFor(body).formations, recorded = new Set(survey.geology?.[body.id] || []);
-        if (rocks.length) {
-          $('mapFacts').textContent += ` · ${recorded.size} of ${rocks.length} rocks and landforms recorded`;
-          const names = rocks.filter(f => recorded.has(f.id)).map(f => f.name.toLowerCase());
-          if (names.length) $('mapDescription').textContent += ` Formations: ${names.join(', ')}.`;
-        }
         const animals = faunaFor(body).species, observed = new Set(survey.fauna?.[body.id] || []);
-        if (animals.length) {
-          const names = animals.filter(sp => observed.has(sp.id)).map(sp => `${sp.name} (${sp.mind})`);
-          $('mapFacts').textContent += ` · ${observed.size} of ${animals.length} animal species observed`;
-          if (names.length) $('mapDescription').textContent += ` Observed: ${names.join(', ')}.`;
-        }
+        const rarity = rarityOf(body);
+        const sections = [
+          { rows: factRows(body, sys) },
+          rarity && { rarity },
+          intelligence && { title: seenCiv ? 'Civilisation' : 'Signals', text: seenCiv ? civ.description : intelligence,
+            settlements: net?.capital ? describeNetwork(net) : null },
+          { title: 'Survey', status: status[0].toUpperCase() + status.slice(1), progress: [
+            plants.length && ['Plants', seen.size, plants.length],
+            rocks.length && ['Rocks & landforms', recorded.size, rocks.length],
+            animals.length && ['Animals', observed.size, animals.length]].filter(Boolean) },
+          (plants.some(sp => seen.has(sp.id)) || animals.some(sp => observed.has(sp.id)) || rocks.some(f => recorded.has(f.id))) && { title: 'Found here', lists: [
+            ['Plants', plants.filter(sp => seen.has(sp.id)).map(sp => sp.name)],
+            ['Animals', animals.filter(sp => observed.has(sp.id)).map(sp => `${sp.name} · ${sp.mind}`)],
+            ['Formations', rocks.filter(f => recorded.has(f.id)).map(f => f.name)]].filter(l => l[1].length) },
+        ].filter(Boolean);
+        renderDetails(sections);
       } else {
         $('mapKicker').textContent = `UNKNOWN ${parent ? 'MOON' : 'WORLD'} · ${nameOf(star).toUpperCase()}`;
-        $('mapName').textContent = 'Unsurveyed world'; $('mapDescription').textContent = 'Long-range sensors only show its orbit. Jump to this system to learn what it is.'; $('mapFacts').textContent = '';
+        $('mapName').textContent = 'Unsurveyed world'; $('mapDescription').textContent = 'Long-range sensors only show its orbit. Jump to this system to learn what it is.'; $('mapFacts').textContent = ''; renderDetails([]);
       }
       if (isHere) {
         const c = o.cruise(body); btn.disabled = !c.enabled; btn.textContent = c.label; note = c.note || '';
         btn.onclick = () => { if (!btn.disabled) o.onCruise(body); };
       } else { btn.disabled = true; btn.textContent = 'Jump to this system first'; btn.onclick = null; note = inRange.has(star.id) ? 'It is within jump range: select the star to jump.' : ''; }
     } else {
-      $('mapKicker').textContent = `${p.spectralClass} STAR · ${isHere ? (o.deep() ? 'LAST SYSTEM' : 'YOU ARE HERE') : known ? 'VISITED' : 'UNVISITED'}`;
+      $('mapKicker').textContent = `${p.spectralClass} STAR · ${isHere ? (o.deep() ? 'LAST SYSTEM' : 'YOU ARE HERE') : isVisited(star) ? 'VISITED' : known ? 'SURVEYED FROM ORBIT' : 'UNVISITED'}`;
       $('mapName').textContent = nameOf(star);
+      renderDetails([]);
       if (known) {
         const best = sys.bodies.slice().sort((a, b) => LIFE_RANK[b.physics.life] - LIFE_RANK[a.physics.life] || b.physics.habitability - a.physics.habitability)[0];
         const living = sys.bodies.filter(b => LIFE_RANK[b.physics?.life]).length;
@@ -479,12 +577,12 @@ export function createStarMap(o) {
       } else if (inRange.has(star.id)) $('mapDescription').textContent = `Long-range scan: ${sys.bodies.length} worlds. ${SCAN[biosignature(sys)].text}${exoticLife(sys) ? ' Some of it is chemistry that does not run on water (violet ring).' : ''}${signals(sys) ? ' Artificial radio signals detected (gold ring): a civilization lives here.' : ''}`;
       else $('mapDescription').textContent = heardFrom(star) ? `${sys.bodies.length} worlds. Beyond scanner range, but someone here is broadcasting.` : `${sys.bodies.length} worlds. Beyond scanner range: jump closer to look for signs of life.`;
       const heard = heardFrom(star);
-      if (heard) $('mapDescription').textContent += ` Radio signals: ${heard.tier} live here, ${heard.distance.toFixed(0)} light years from ${nameOf(here)}.${inRange.has(star.id) || isHere ? '' : ' Too far for one jump: set a course and fly, or jump closer star by star.'}`;
+      if (heard) $('mapDescription').textContent += `${decoded() ? ` Radio signals: ${whoIs(heard)}` : ' An unidentified radio signal. A Signal decoder would tell who is sending it.'} ${heard.distance.toFixed(0)} light years from ${nameOf(here)}.${inRange.has(star.id) || isHere ? '' : ' Too far for one jump: set a course and fly, or jump closer star by star.'}`;
       const lum = p.luminosity < .01 ? p.luminosity.toFixed(4) : p.luminosity.toFixed(2);
       $('mapFacts').textContent = `${p.temperature} K · ${p.mass.toFixed(2)} M☉ · ${lum} L☉ · ${p.age.toFixed(1)} billion years${isHere ? '' : ` · ${starDistance(star, here).toFixed(1)} ly away${heightWords(heightOf(star)) ? `, ${heightWords(heightOf(star))} you` : ''}`}`;
-      const reachable = inRange.has(star.id), ready = o.canJump();
+      const beacon = !inRange.has(star.id) && beaconAt(star), reachable = inRange.has(star.id) || beacon, ready = o.canJump();
       btn.disabled = isHere || !reachable || !ready;
-      btn.textContent = isHere ? 'You are here' : !reachable ? `Beyond jump range (${range.toFixed(1)} ly)` : ready ? `Jump to ${nameOf(star)} ↗` : 'Jump drive not ready';
+      btn.textContent = isHere ? 'You are here' : !reachable ? `Beyond jump range (${range.toFixed(1)} ly)` : ready ? `${beacon ? 'Return by beacon' : 'Jump'} to ${nameOf(star)} ↗` : 'Jump drive not ready';
       btn.onclick = () => { if (!btn.disabled) o.onJump(star, nameOf(star)); };
       // Any star can also be flown to: set a course and leave the system.
       const courseBtn = $('mapCourse'), deep = o.deep(), coursed = deep?.course?.id === star.id || o.course?.()?.id === star.id;
@@ -511,17 +609,18 @@ export function createStarMap(o) {
       for (const b of ordered) {
         const row = document.createElement('button'); row.className = 'world-row' + (body?.id === b.id ? ' selected' : '') + (b.parent ? ' moon' : '');
         const tag = [survey.records.has(b.id) ? 'RECORDED' : isHere && b.id === survey.activeId ? 'HERE' : survey.visited?.has(b.id) ? 'VISITED' : '',
-          SCAN[LIFE_RANK[b.physics?.life] || 0].tag, isExotic(b) ? 'EXOTIC' : '',
+          SCAN[LIFE_RANK[b.physics?.life] || 0].tag || (colonyOf(sys, b) ? 'COLONISTS' : ''), isExotic(b) ? 'EXOTIC' : '',
           survey.traces?.[b.id] && civOf(b) ? civOf(b).tier.toUpperCase() : radioWorld(b) ? 'SIGNALS' : colonistOf(sys, b) ? 'COLONY' : ''].filter(Boolean).join(' · ');
         row.innerHTML = `<i style="background:${b.palette[2]}"></i><span><strong></strong><small></small></span><em>${tag}</em>`;
-        row.querySelector('strong').textContent = b.name; row.querySelector('small').textContent = `${b.type} · ${lifeLabel(b.physics).toLowerCase()}`;
+        row.querySelector('strong').textContent = b.name; row.querySelector('small').textContent = `${b.type} · ${lifeWords(sys, b)}`;
         row.onclick = () => { select(star, b); flyToBody(star, b); };
         list.append(row);
       }
     }
     // Jump targets.
     const jl = $('mapJumps'); jl.replaceChildren();
-    for (const t of targets) {
+    const shown = showAllTargets ? targets : targets.slice(0, TARGETS_SHOWN);
+    for (const t of shown) {
       const tp = starPhysics(t.star), row = document.createElement('button');
       row.className = 'world-row' + (!body && star.id === t.star.id ? ' selected' : '');
       row.innerHTML = `<i style="background:${tp.color}"></i><span><strong></strong><small>${tp.spectralClass} star · ${t.distance.toFixed(1)} ly${heightWords(heightOf(t.star)) ? ` · ${heightWords(heightOf(t.star))}` : ''}</small></span><em>${[state.visited.has(t.star.id) ? 'VISITED' : '', SCAN[biosignature(systemOf(t.star))].tag, exoticLife(systemOf(t.star)) ? 'EXOTIC' : '', signals(systemOf(t.star)) ? 'SIGNALS' : ''].filter(Boolean).join(' · ')}</em>`;
@@ -529,14 +628,21 @@ export function createStarMap(o) {
       row.onclick = () => { select(t.star); flyTo(t.star.x, t.star.y, Math.max(LOCAL_SCALE, Math.min(view.scale, SYSTEM_FROM * .6))); };
       jl.append(row);
     }
+    if (targets.length > TARGETS_SHOWN) {
+      const more = document.createElement('button'); more.className = 'map-more';
+      more.textContent = showAllTargets ? 'Show fewer' : `Show all ${targets.length} stars in range`;
+      more.onclick = () => { showAllTargets = !showAllTargets; updatePanel(); };
+      jl.append(more);
+    }
     // Radio sources heard from here, nearest first.
     const rl = $('mapRadio'); rl.replaceChildren();
-    $('mapRadioHeading').textContent = !radioDone ? 'RADIO SIGNALS · LISTENING…' : `RADIO SIGNALS · ${radio.length} HEARD WITHIN ${SCAN_RADIUS} LY`;
-    if (radioDone && !radio.length) { const p = document.createElement('p'); p.className = 'map-note'; p.textContent = `No artificial signals. Planet-shapers are heard out to ${HEARD['planet-shapers']} ly, spacefarers out to ${HEARD.spacefarers} ly.`; rl.append(p); }
+    refreshHeard();
+    $('mapRadioHeading').textContent = !radioDone ? 'RADIO SIGNALS · LISTENING…' : `RADIO SIGNALS · ${radio.length} HEARD WITHIN ${Math.round(reachOfTier('system-shapers'))} LY`;
+    if (radioDone && !radio.length) { const p = document.createElement('p'); p.className = 'map-note'; p.textContent = `No artificial signals. Your receiver hears planet-shapers out to ${Math.round(reachOfTier('planet-shapers'))} ly, spacefarers and system-shapers out to ${Math.round(reachOfTier('spacefarers'))} ly.${hearing() < 1 ? ' A Long-range receiver hears much farther.' : ''}`; rl.append(p); }
     for (const e of radio) {
       const tp = starPhysics(e.star), row = document.createElement('button');
       row.className = 'world-row' + (!body && star.id === e.star.id ? ' selected' : '');
-      row.innerHTML = `<i style="background:${tp.color}"></i><span><strong></strong><small>${e.tier} · ${e.distance.toFixed(0)} ly</small></span><em>${[state.visited.has(e.id) ? 'VISITED' : '', inRange.has(e.id) ? 'IN RANGE' : ''].filter(Boolean).join(' · ')}</em>`;
+      row.innerHTML = `<i style="background:${tp.color}"></i><span><strong></strong><small>${decoded() ? e.tier : 'unidentified'} · ${e.distance.toFixed(0)} ly</small></span><em>${[state.visited.has(e.id) ? 'VISITED' : '', inRange.has(e.id) ? 'IN RANGE' : ''].filter(Boolean).join(' · ')}</em>`;
       row.querySelector('strong').textContent = nameOf(e.star);
       row.onclick = () => { select(e.star); flyTo(e.star.x, e.star.y, Math.max(LOCAL_SCALE * .5, Math.min(view.scale, SYSTEM_FROM * .6))); };
       rl.append(row);

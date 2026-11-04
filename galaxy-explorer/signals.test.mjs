@@ -32,7 +32,7 @@ test('civilizations are entities with names, not numbers', () => {
   for (let s = 0; s < 1500; s++) for (const c of civilizationsIn(generateSystem(s))) {
     n++;
     assert.ok(TIERS.includes(c.tier) && typeof c.id === 'string' && c.id.startsWith(`${generateSystem(s).bodies.find(b => b.id === c.home).seed}:${c.home}:`));
-    assert.equal(c.reach, c.tier === 'spacefarers' ? 'orbit' : c.tier === 'planet-shapers' ? 'world' : 'local');
+    assert.equal(c.reach, c.tier === 'system-shapers' ? 'system' : c.tier === 'spacefarers' ? 'orbit' : c.tier === 'planet-shapers' ? 'world' : 'local');
   }
   assert.ok(n > 20);
   assert.ok(tierAtLeast('city builders', 'village builders') && !tierAtLeast('tool users', 'city builders') && !tierAtLeast('unknown', 'tool users'));

@@ -3,7 +3,7 @@
 // game.js decides what is aimed at, when a scan runs and what it counted toward.
 //
 //   const ui = createScanUI({ touch });
-//   ui.prompt({ title, known } | null, progress)   every frame
+//   ui.prompt({ title, known, verb } | null, progress)   every frame (verb: scan, observe or record)
 //   ui.card({ eyebrow, title, lede, facts, tags, footer: { text, ready } })
 //   ui.flash()                                      a scan completed
 //   ui.hideCard()
@@ -20,12 +20,13 @@ export function createScanUI({ touch = false } = {}) {
     card.hidden = true;
     document.getElementById("hud").append(prompt, card);
     let hideTimer = 0, shown = { key: null, p: null };
-    const actionText = (known, scanning) => known
+    const ING = { scan: "Scanning…", observe: "Observing…", record: "Recording…", sample: "Drilling…" };
+    const actionText = (known, scanning, verb = "scan") => known
         ? (touch ? "Recorded · tap Details" : "Recorded · E for details")
-        : scanning ? "Scanning…" : touch ? "Hold Scan to scan" : "Hold E to scan";
-    const setAction = (known, scanning) => {
+        : scanning ? ING[verb] : touch ? `Hold Scan to ${verb}` : `Hold E to ${verb}`;
+    const setAction = (known, scanning, verb) => {
         action.replaceChildren();
-        const words = actionText(known, scanning);
+        const words = actionText(known, scanning, verb);
         const m = !touch && /^(.*?)\bE\b(.*)$/.exec(words);
         if (m) action.append(m[1], el("kbd", null, "E"), m[2]); else action.append(words);
     };
@@ -37,11 +38,11 @@ export function createScanUI({ touch = false } = {}) {
                 return;
             }
             const scanning = progress > 0.001;
-            const key = `${target.title}|${target.known}|${scanning}`;
+            const key = `${target.title}|${target.known}|${scanning}|${target.verb}`;
             if (key !== shown.key) {
                 shown.key = key;
                 title.textContent = target.title;
-                setAction(target.known, scanning);
+                setAction(target.known, scanning, target.verb);
                 prompt.classList.toggle("known", !!target.known);
                 prompt.classList.add("visible");
             }

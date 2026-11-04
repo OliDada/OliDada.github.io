@@ -10,6 +10,7 @@
 import { rng } from './rng.mjs';
 import { environment, CHEM_COLORS, CHEM_TEXT } from './flora.mjs';
 import { ecologyFor, describeEcology } from './ecology.mjs';
+import { cultureOf, MANIP_WORDS } from './fauna-culture.mjs';
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const bell = (v, c, w) => Math.exp(-(((v - c) / w) ** 2));
@@ -70,8 +71,9 @@ const FORM_NOUNS = { tank: 'shellback', browser: 'browser', hopper: 'hopper', be
   eel: 'eel', snail: 'snail', insect: 'flitter', bird: 'wing', bell: 'bell', balloon: 'balloon', manta: 'manta', cluster: 'cluster', waddler: 'waddler', tripod: 'tripod', star: 'starwalker', octo: 'tentacler', wheel: 'wheel', ball: 'tumbler' };
 // Civilization ladder. Each step needs more intelligence, cooperation and the means to
 // shape things, and an older biosphere; roughly 1 system in 17 has tool users, 39
-// villages, 96 cities, 211 a species that has reshaped its world, and 471 spacefarers.
-export const CIVILIZATION = ['none', 'tool users', 'village builders', 'city builders', 'planet-shapers', 'spacefarers'];
+// villages, 96 cities, 211 a species that has reshaped its world, 600 spacefarers, and about
+// 2200 system-shapers, who have spread through their whole solar system.
+export const CIVILIZATION = ['none', 'tool users', 'village builders', 'city builders', 'planet-shapers', 'spacefarers', 'system-shapers'];
 // How well a body can shape things (0..1): hands best, then tentacles, raptorial
 // forelegs, mandibles and pedipalps, beaks and feet, coils; rollers barely at all.
 const MANIPULATORS = {
@@ -184,6 +186,9 @@ export function faunaFor(body) {
   // Ecology (activity cycle, food web, hunger) reads the finished species list.
   const eco = ecologyFor(species, body, e);
   for (const s of species) {
+    // A species that reached civilization evolved the means to build: say what it uses (fauna-culture.mjs draws it).
+    const culture = cultureOf(s);
+    if (culture) s.manipulators = { ...s.manipulators, kind: MANIP_WORDS[culture.manip] || s.manipulators.kind };
     s.ecology = eco[s.id];
     const life = describeEcology(s, s.ecology, species);
     s.mind = mindOf(s);
@@ -257,7 +262,7 @@ function behaviorOf(s) {
 // Civilization potential: intelligence matters most, then cooperation and
 // hands to build with; the biosphere's age gates the higher levels.
 // manip: manipulatorsOf(...).score. Older biospheres gate the higher steps.
-const LADDER = [[.75, 0], [.845, 2.5], [.905, 3.5], [.945, 4.5], [.972, 5.5]];
+const LADDER = [[.75, 0], [.845, 2.5], [.905, 3.5], [.945, 4.5], [.972, 5.5], [.995, 8]];
 export function civilizationLevel(t, manip, star) {
   const potential = t.intelligence * .62 + t.sociality * .18 + manip * .2, age = star?.age ?? 4;
   let level = 0;

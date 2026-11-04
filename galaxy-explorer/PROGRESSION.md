@@ -1,6 +1,6 @@
 # Progression: knowledge and contact
 
-Status: **Phase 1 built**: the codex, the upgrade tree and the upgrade screen (U) are in the game, along with a few upgrade effects. Most effects are still to-do; the roadmap ticks off what has landed.
+Status: **Phase 1 built**: the codex, the upgrade tree and the upgrade screen (U) are in the game. Every Kestrel-chapter upgrade works, plus most side upgrades that open in it; the rest of the effects are to-do, and the roadmap ticks off what has landed. **The line is not final**: upgrades will be added, moved and given new tasks. Each effect only asks whether its upgrade is installed (`codex.unlocked.has(id)`, via the readers in `upgrades.mjs`), never where it sits in the line, so rearranging is a data change.
 
 ## Identity
 
@@ -71,24 +71,26 @@ This gives two benefits:
 | Animal | form | runner, tank, raptor, mantis, spider, eel, bat, bell, manta, tripod, wheel, … |
 | Animal | diet | herbivore, omnivore, carnivore, filter |
 | Animal (`ecology.mjs`) | activity, stalksYou | diurnal, nocturnal, crepuscular, any; dangerous to explorers or not |
-| Animal | mind, manipulators | instinctive, simple, cunning, clever; tool users … spacefarers; hands, tentacles, mandibles, … |
-| Civilization (`civilizations.mjs`) | tier, reach, family, culture | tool users … spacefarers; local, world, orbit; hands, hive, drifters, …; timber, hive, tethered, silk, … |
+| Animal | mind, manipulators | instinctive, simple, cunning, clever; tool users … system-shapers; hands, tentacles, mandibles, … |
+| Civilization (`civilizations.mjs`) | tier, reach, family, culture | tool users … system-shapers; local, world, orbit, system; hands, hive, drifters, …; timber, hive, tethered, silk, … |
 | Settlement (`traces`) | tier | the tier you recorded (a name) |
-| Radio signal (`signals.mjs`) | tier | planet-shapers, spacefarers |
+| Radio signal (`signals.mjs`) | tier | planet-shapers, spacefarers, system-shapers |
 
 ### Things to scan
 
 | Category | Today | Later |
 |---|---|---|
 | **Flora** | ✅ scanned (aim, hold E) within a few metres (`catalogue`) | partial scans, rare variants |
-| **Fauna** | ✅ scanned from a distance (`bestiary`) | behaviour observations (hunting, sleeping, drinking) |
+| **Fauna** | ✅ scanned from a distance (`bestiary`) | |
+| **Behaviour** | ✅ watched (`behaviour` in the codex): grazing, drinking, asleep, hunting, feeding on a catch, standing its ground; hold E on a scanned animal while it does it | courtship, migration, nesting |
+| **Sky events** | ✅ recorded on foot (`phenomenon`): eclipses, aurorae, meteor showers, with a forecast in the HUD (`phenomena.mjs`) | flares, comets, ring shadows, planetary alignments |
 | **Geology** | ✅ scanned (`geology`): 2–3 natural rock types on every world with a surface, plus a landform (columns, hoodoos, sea stacks…) on about 2 worlds in 5; spread over the whole world, with a few near the landing site | rare variants, samples from deep formations |
 
 **How a scan feels** (`scanning.js`, `scan-ui.js`): aim the crosshair at a plant, an animal or a rock within reach. A ring appears around the crosshair, with "Unknown animal" (or its name, if already recorded) below. Hold E until the ring fills (about 1.3 s); look away or let go and it drains. Then the ring pulses and a card slides in: the name, a one-line description, labelled facts (diet, body, when it is active, temper, mind, what it hunts and what hunts it, chemistry; for plants form, height and where they grow; for rocks what kind of rock), tags such as *Dangerous* or *Glows*, and what the scan counted toward. Pressing E on something already recorded shows its card again. Upgrades are installed the same way: hold the button until its bar fills. Settlements still record themselves when you come near, and they get the same card.
 | **Settlements** | ✅ recorded within ~45 m (`traces`) | scanning individual building cultures |
 | **Signals / field notes** | ✅ investigated on foot (`records`) | the Senders' trail (see Mystery) |
-| **Radio sources** | ✅ heard on the star map up to 150 ly (`signals.mjs`) | decoding them (Contact) |
-| **Worlds from orbit** | partly (long-range biosignature scan on the map) | an orbital survey that records a world's biome, chemistry and life |
+| **Radio sources** | ✅ heard on the star map (`signals.mjs`): the Kestrel hears planet-shapers out to 24 ly and spacefarers out to 45; the Long-range receiver 80 and 150. Until the Signal decoder they are unidentified | what they say, through Contact |
+| **Worlds from orbit** | ✅ long-range biosignature scan on the map; with Orbital survey, every system in jump range shows its worlds as if visited | recording a world from orbit into the codex |
 | **Giant atmospheres** | ❌ | cloud samples with an atmospheric probe |
 | **Space structures** | ❌ | stations, satellites, megastructures, derelicts (see Future-proofing) |
 
@@ -115,11 +117,11 @@ Your first ship. Learn to scan, then reach farther.
 | Step | Upgrade | Gear | Effect | Tasks | Effect status |
 |---|---|---|---|---|---|
 | 1 | **Suit plating** | Suit | Your suit takes 30% less damage and recovers twice as fast. | Scan 3 things on one world | Works |
-| 2 | **Orbital survey** | Ship | See a world's biome, chemistry and life before landing. | Scan 5 things, on 2 different worlds | Partly built |
+| 2 | **Orbital survey** | Ship | The star map shows the worlds of every system in jump range: biome, chemistry and life, before you go. | Scan 5 things, on 2 different worlds | Works |
 | 3 | **Jump drive II** | Ship | Jump range 12 → 16 light years. | Scan 3 plants · Scan things on 3 kinds of world | Works |
-| 4 | **Thermal lining** | Suit | Stay out longer on very hot and very cold worlds. | Scan something on a world colder than −80 °C · Scan something on a world hotter than 80 °C | To build |
-| 5 | **Heat plating** | Ship | The hull heats up more slowly near stars, and you can land right beside lava. | Scan volcanic rock or a volcanic landform · Scan 2 animals | Partly built |
-| 6 | **Petrel** | Ship | A new ship for seas and storms. Opens the Petrel chapter. | Fully document 2 worlds with life: every plant, animal and rock | To build |
+| 4 | **Thermal lining** | Suit | On worlds colder than −80 °C or hotter than 80 °C, the suit's heat reserve lasts four times longer. | Scan something on a world colder than −80 °C · Scan something on a world hotter than 80 °C | Works |
+| 5 | **Heat plating** | Ship | The hull heats up more slowly near stars, and you can land right beside lava (without it, the Kestrel keeps ~25 m clear, except on the world's own landing pad). | Scan volcanic rock or a volcanic landform · Watch animals do 2 different things | Works |
+| 6 | **Petrel** | Ship | A new ship for seas and storms: it can set down and float on water. Opens the Petrel chapter. | Fully document 2 worlds with life: every plant, animal and rock | Partly built (floats on water; model and handling later) |
 
 ### Chapter: Petrel
 
@@ -127,11 +129,11 @@ A sea and storm ship: under water, and the first contact with other minds.
 
 | Step | Upgrade | Gear | Effect | Tasks | Effect status |
 |---|---|---|---|---|---|
-| 7 | **Pressure hull I** | Ship | Dive into liquid seas, down to the shallows. | Scan 3 animals on worlds with seas · Scan a coil or a creeper · Scan sea stacks or a shoreline plant | To build |
+| 7 | **Pressure hull I** | Ship | Dive into liquid seas, down to the shallows. | Watch 2 kinds of animal drink at the shore · Scan a coil or a creeper · Scan sea stacks or a shoreline plant | To build |
 | 8 | **Xenolinguistics** | Knowledge | Settlements give longer field notes; attempt contact with tool users and village builders. | Find a settlement | To build |
 | 9 | **Pressure hull II** | Ship | Deep dives, and the oceans hidden under the ice of frozen moons. | Scan a drifter · Scan water ice, pingos or a cryovolcano | To build |
-| 10 | **Jump drive III** | Ship | Jump range 16 → 24 light years. | Scan animals of 4 different body plans | Works |
-| 11 | **Signal decoder** | Knowledge | Radio sources on the map say who they are and what they want. | Find a settlement of village builders or higher | To build |
+| 10 | **Jump drive III** | Ship | Jump range 16 → 24 light years. | Scan animals of 4 different body plans · Record 2 kinds of sky event | Works |
+| 11 | **Signal decoder** | Knowledge | Radio sources on the map say who is broadcasting: the species, their tier, their world and what they are sending. | Find a settlement of village builders or higher | Works |
 | 12 | **Albatross** | Ship | The deep-range ship. Opens the Albatross chapter. | Scan life built on 3 different chemistries · Befriend a spacefaring civilization | To build |
 
 ### Chapter: Albatross
@@ -149,13 +151,15 @@ The deep-range ship: into giants and across the galaxy.
 
 | Upgrade | Gear | Opens at | Effect | Tasks | Effect status |
 |---|---|---|---|---|---|
-| **Life sonar** | Scanner | Orbital survey | A HUD arrow points to the nearest species you have not recorded. | Scan 4 animals · Scan a nocturnal animal | To build |
+| **Field glasses** | Scanner | Suit plating | Hold Z (or the ◎ button) on foot to zoom in: examine anything you can see, and scan from four times as far. | Scan 2 animals · Scan a flier or a drifter | Works |
+| **Long-range receiver** | Ship | Jump drive II | Hear radio from much farther: planet-shapers out to 80 ly, spacefarers out to 150 (the Kestrel's own receiver hears 24 and 45). | Investigate 2 surface signals | Works |
+| **Life sonar** | Scanner | Orbital survey | On foot, an arrow points to the nearest plant or animal species you have not recorded (within 600 m). | Scan 4 animals · Scan a nocturnal animal | Works |
 | **Survey drone** | Vehicle | Jump drive II | Scan from a distance: cliffs, skittish herds, high nests, stalkers you would rather not approach. | Scan 2 fliers | To build |
-| **Night filter** | Suit | Thermal lining | See clearly at night; glowing species stand out. | Scan 2 glowing species | To build |
-| **Deep core sampler** | Scanner | Heat plating | Rocks and landforms give a second, deeper entry: their age and origin. | Scan 6 kinds of rock or landform | To build |
-| **Return beacons** | Ship | Heat plating | Fast-travel to any system you have fully documented. | Fully document a world: every plant, animal and rock | To build |
+| **Night filter** | Suit | Thermal lining | On foot at night your visor brightens the view, and glowing species shine out. | Scan 2 glowing species · Record an aurora or a meteor shower | Works |
+| **Deep core sampler** | Scanner | Heat plating | Hold E on a rock or landform you have recorded to drill a core sample: a second entry with its age and origin. | Scan 6 kinds of rock or landform | Works |
+| **Return beacons** | Ship | Heat plating | Jump straight back to any system where you have fully documented a world, however far (blue diamonds on the map). | Fully document a world: every plant, animal and rock | Works |
 | **Rover** | Vehicle | Petrel | Fast surface travel without taking off; a refuge on wheels from stalkers. | Scan 4 walking animals on 2 kinds of world | To build |
-| **Behaviour logger** | Scanner | Petrel | Record behaviour: a hunt, a herd drinking, an animal asleep. | Scan a hunter and an animal it hunts, on one world | To build |
+| **Behaviour logger** | Scanner | Petrel | Observing takes half as long, and the HUD tells you when an animal nearby is doing something you have not recorded. | Scan a hunter and an animal it hunts, on one world · Watch a hunter feeding on its catch | Works |
 | **Decoy beacon** | Suit | Pressure hull I | Distracts a stalker for a while. Never a weapon. | Scan 2 species that stalk explorers | To build |
 | **Jump jets** | Suit | Pressure hull II | Much higher jumps on foot: climb ridges and cross gullies. | Scan 3 things on worlds with gravity under 0.5 g | To build |
 | **Atmospheric probe** | Vehicle | Jump drive III | Scan the cloud layers of giants from orbit. | Scan a drifter · Visit a gas or ice giant | To build |
@@ -175,7 +179,7 @@ A civilization's starting attitude to you comes from its species' traits, so it 
 | high sociality, low caution | **welcoming**: comes to meet you |
 | high caution | **wary**: watches from a distance, needs patience (staying near, not intruding) |
 | high aggression, low sociality | **guarded**: warns you off its settlements; never attacks, but contact is slow |
-| spacefarers | **curious**: they already know you are there |
+| spacefarers, system-shapers | **curious**: they already know you are there |
 
 ### The relationship ladder
 
@@ -219,7 +223,7 @@ The field-note signals on worlds (`body.signal`, `records`) become a thread that
 | **Star heat** | ✅ hull heats near the star's exclusion zone | Heat plating |
 | **Weather** | ❌ | dust storms, methane rain, blizzards that hide the ship marker |
 | **Ground** | ❌ | thin ice, geysers and fumaroles that erupt |
-| **Cold and heat on foot** | ❌ | a time limit on extreme worlds without suit upgrades |
+| **Cold and heat on foot** | ✅ below −80 °C or above 80 °C the suit's heat reserve runs down on foot (1.5–2.5 min), refills aboard or within 9 m of the Kestrel; empty means emergency recall | Thermal lining (×4) |
 
 Failure is never a loss of progress: at worst you are recalled to the ship.
 
@@ -227,8 +231,9 @@ Failure is never a loss of progress: at worst you are recalled to the ship.
 
 New kinds of civilization or place should be additions, not rewrites. This plan assumes:
 
-- **Civilizations are entities** (`civilizations.mjs`): `{ id, tier, reach, family, culture, home, species }`. Today `reach` is `local`, `world` or `orbit`. Later kinds extend it:
+- **Civilizations are entities** (`civilizations.mjs`): `{ id, tier, reach, family, culture, home, species }`. Today `reach` is `local`, `world`, `orbit` or `system`. Later kinds extend it:
   - **system-spanning** ✅: ambitious spacefarers (extent `system`) settle the nearest rocky worlds and moons of their system (`colonistOf`), which get domed colonies. Still to come: radio heard from farther away, and colonies counted in the network summary.
+  - **system-shapers** ✅ (the sixth step, `system-shapers`, reach `system`): settle every rocky world and moon, with an orbital ring and elevators at home, habitats around the giants and mirrors around the star (`megastructures.js`), and ship traffic between the worlds. A new codex kind (`megastructure`) could record the ring, habitats and swarm.
   - **Temperament** ✅ (ambition, cohesion, harmony) decides each civilization's extent (local → system) and how it builds; contact dispositions can read it too.
   - **space-living**: no surface settlement at all. Habitats in orbit or between worlds become a new codex kind (`station`); contact happens in space.
   - **interstellar**: several systems. One entity, several homes across stars; its radio sources share an id.
@@ -260,7 +265,7 @@ The **codex** (`elsewhere-codex-v1` in `localStorage`) holds one entry per scann
 
 **Names, never numbers.** Everything saved or matched is a name: `tier: 'city builders'`, `plan: 'floater'`, `formation: 'geo-columns'`. Indices change meaning when a list grows. (This already happened once: settlement records stored the level number from a 3-step ladder, which meant something else after the ladder grew to 5. Saves now store tier names, and `tierName()` in `civilizations.mjs` reads the old numbers.) Requirements compare tiers with `tierAtLeast(tier, 'planet-shapers')`, never `level >= 4`.
 
-Codex `kind` is open-ended: `flora`, `fauna`, `formation`, `settlement`, `signal`, `field-note`, `world`, and later `station`, `megastructure`, `derelict`, `behaviour`, `contact`. A new kind needs a scanner and an entry shape, not a new system.
+Codex `kind` is open-ended: `flora`, `fauna`, `formation`, `settlement`, `signal`, `field-note`, `world`, `behaviour`, `phenomenon`, and later `station`, `megastructure`, `derelict`, `contact`. A new kind needs a scanner and an entry shape, not a new system.
 
 ## Reachability
 
@@ -308,27 +313,36 @@ A player must never get stuck because nothing nearby matches the next requiremen
 - [x] Natural rock types on every world; landforms only on some (geology rework)
 - [x] The HUD panel shows first steps, then the next upgrade (replacing the expedition objective)
 - [x] Suit plating
-- [ ] Orbital survey (world tags before landing; map filter for the tracked upgrade)
+- [x] Orbital survey: worlds of every system in jump range on the map
+- [ ] Map filter for the tracked upgrade
 - [x] Jump drive II / III (the star map reads `jumpRange()` from unlocked upgrades)
 - [x] Heat plating: the hull heats more slowly near stars
-- [ ] Heat plating: allow landing beside lava
+- [x] Heat plating: land beside lava (without it the Kestrel keeps ~25 m clear of lava, except on the landing pad)
+- [x] Thermal lining, with the cold and heat hazard on foot
+- [x] Field glasses: zoom on foot (Z), examine and scan from four times as far
+- [x] Radio: a short receiver at the start, the Long-range receiver, and the Signal decoder naming who broadcasts
+- [x] Petrel, first part: sets down and floats on water seas
 
 ### Phase 3: new places and tools
 - [ ] **Underwater**: ship below the sea surface, underwater fog and light, sea floor collision, depth limit per hull level (Pressure hull I / II)
 - [ ] Aquatic life to find down there (new plant forms and swimming animals in `flora.mjs` / `fauna.mjs`)
+- [ ] **Ocean worlds** as their own world type: today "Oceanic" means more than 70% liquid (median 92%, capped at 97%), so most have only scattered islands. Split them into *Oceanic* (70–90%: continents and archipelagos, life on land as now) and *Ocean world* (over 90%, some with no land at all). Ocean worlds keep most of their life underwater: swimmers, reef builders, kelp forests, and civilizations of their own.
+- [ ] **Underwater civilizations** on ocean worlds: reef and coral cities on the sea floor, lit from below, found with the Pressure hull. They cannot use fire, so they climb the tier ladder differently (grown structures, bioluminescent light, sound for radio). Spacefaring is rare and late for them, and their ships are water-filled.
+- [ ] Colonists in the network summary, and their home world's map entry naming their colonies
 - [ ] Subsurface oceans under ice (Pressure hull II)
 - [ ] Methane and ammonia seas (Cryo seals)
 - [ ] Gas giant descent below 250 m (Cloud diver)
-- [ ] Return beacons (fast travel to fully documented systems)
+- [x] Return beacons (jump to systems with a fully documented world, any distance)
 - [ ] Signal drive (jump to a radio source)
-- [ ] Life sonar, Night filter, Decoy beacon
+- [x] Life sonar, Night filter, Deep core sampler
+- [ ] Decoy beacon
 - [ ] Rover, Survey drone, Atmospheric probe
 
 ### Phase 4: contact
 - [ ] Disposition from traits; relationship ladder saved per civilization id
 - [ ] Contact exchange (symbols and gestures) with tool users and village builders
 - [ ] Trade screen: offer codex entries, receive charts, hints and ship knowledge
-- [ ] Signal decoder: radio sources say who they are
+- [x] Signal decoder: radio sources say who they are
 - [ ] Spacefarer friendship and the Albatross
 - [ ] Consequences: taking things, signals going dark, word spreading
 
@@ -338,7 +352,8 @@ A player must never get stuck because nothing nearby matches the next requiremen
 - [ ] The last fragment, read through Contact
 
 ### Phase 6: deeper scanning and danger
-- [ ] Behaviour observations (hunt, graze, drink, sleep), using what `ecology.mjs` already does
+- [x] Behaviour observations (graze, drink, sleep, hunt, feed on a catch, stand ground), using what `ecology.mjs` already does
+- [x] Sky events: eclipses from the orbits, aurorae and meteor showers in storms, a forecast in the HUD; total eclipses send day animals to sleep
 - [ ] Partial scans: several individuals to finish an entry
 - [ ] Rare variants (albino, giant) worth bonus progress
 - [ ] Weather and unstable ground

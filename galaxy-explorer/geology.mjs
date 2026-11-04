@@ -129,3 +129,24 @@ export function geologyFor(body) {
   cache.set(key, out);
   return out;
 }
+
+// Deep core sampler: a second, deeper reading of a rock or landform you have recorded.
+// coreSample(body, formation) -> { age (billion years), ageText, depth (m), origin }
+// Ages are bounded by the star's: lava, ice, crusts and active vents are young; the rest is old crust.
+const YOUNG = new Set(['columns', 'fumaroles', 'cryovolcano', 'chimneys', 'terraces', 'penitentes', 'pingo']);
+const ORIGIN = {
+  Igneous: 'Interlocking crystals in the core show it cooled from molten rock',
+  Sedimentary: 'The core is layer on layer of fine grains, each a season or an age of settling',
+  'Impact rock': 'Shocked grains and melted glass in the core record the collision that made it',
+  'Mineral crust': 'Banded deposits in the core show it grew a film at a time from evaporating fluids',
+  Ice: 'Bubbles trapped in the ice keep samples of the air and vapour from when it froze',
+};
+export function coreSample(body, f) {
+  const r = rng(body.seed, 'core', f.id), starAge = body.starAge ?? 4.5;
+  const young = f.type === 'rock' ? /volcanic|Ice|crust/.test(f.rockKind || '') : YOUNG.has(f.key);
+  const age = young ? starAge * (0.0004 + r() * 0.02) : f.key === 'meteorite' ? starAge * (0.97 + r() * 0.03) : starAge * (0.3 + r() * 0.6);
+  const ageText = age < 0.001 ? `about ${Math.max(1, Math.round(age * 1e6))} thousand years` : age < 1 ? `about ${Math.round(age * 1000)} million years` : `about ${age.toFixed(1)} billion years`;
+  const cat = f.type === 'rock' ? Object.keys(ORIGIN).find((k) => (f.rockKind || '').startsWith(k)) : null;
+  const how = cat ? ORIGIN[cat] : f.key === 'meteorite' ? 'Its metal crystals grew over millions of years as a small world\'s core cooled, before it shattered' : 'Layers in the core trace how it formed';
+  return { age, ageText, depth: Math.round(4 + r() * (f.type === 'rock' ? 30 : 60)), origin: `${how}, ${ageText} ago.` };
+}

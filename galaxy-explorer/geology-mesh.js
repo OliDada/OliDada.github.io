@@ -121,7 +121,7 @@ function shapeOf(THREE, f, C, r) {
       const k = 2 + Math.floor(r() * 3);
       for (let i = 0; i < k; i++) {
         const s = i ? .45 + r() * .45 : 1 + r() * .35, a = r() * 6.28, d = i ? .9 + r() * .9 : 0;
-        add(lump(s, 1, r() * 10), M(Math.cos(a) * d, s * .3, Math.sin(a) * d, r() * .5, r() * 6, r() * .5, 1, .65 + r() * .2, 1 + r() * .25), i % 2 ? dark : main);
+        add(lump(s, 2, r() * 10), M(Math.cos(a) * d, s * .3, Math.sin(a) * d, r() * .5, r() * 6, r() * .5, 1, .65 + r() * .2, 1 + r() * .25), i % 2 ? dark : main);
       }
       foot = 1.9; height = 1.5; break;
     }
@@ -129,7 +129,7 @@ function shapeOf(THREE, f, C, r) {
       const k = f.low ? 2 : 3 + Math.floor(r() * 2), tilt = (r() - .5) * .25;
       for (let i = 0; i < k; i++) {
         const w = (f.low ? 1.9 : 1.7) - i * .28;
-        add(lump(w, 1, r() * 10, .14), M((r() - .5) * .4, .15 + i * (f.low ? .22 : .36), (r() - .5) * .4, tilt, r() * .4, tilt * .6, 1, f.low ? .16 : .26, .75), i % 2 ? dark : main);
+        add(lump(w, 2, r() * 10, .14), M((r() - .5) * .4, .15 + i * (f.low ? .22 : .36), (r() - .5) * .4, tilt, r() * .4, tilt * .6, 1, f.low ? .16 : .26, .75), i % 2 ? dark : main);
       }
       foot = 2.1; height = f.low ? .7 : 1.6; break;
     }
@@ -137,7 +137,7 @@ function shapeOf(THREE, f, C, r) {
       const k = 8 + Math.floor(r() * 4);
       for (let i = 0; i < k; i++) {
         const s = (f.low ? .2 : .25) + r() * (f.low ? .3 : .45), a = r() * 6.28, d = Math.sqrt(r()) * 2;
-        add(lump(s, 0, r() * 10, .3), M(Math.cos(a) * d, s * .3, Math.sin(a) * d, r() * 3, r() * 6, r() * 3, 1, .7, 1.1), i % 3 ? main : dark);
+        add(lump(s, 1, r() * 10, .3), M(Math.cos(a) * d, s * .3, Math.sin(a) * d, r() * 3, r() * 6, r() * 3, 1, .7, 1.1), i % 3 ? main : dark);
       }
       foot = 2.2; height = f.low ? .5 : .8; break;
     }
@@ -145,7 +145,7 @@ function shapeOf(THREE, f, C, r) {
       const k = 3 + Math.floor(r() * 3);
       for (let i = 0; i < k; i++) {
         const s = .45 + r() * .5, a = r() * 6.28, d = i ? .6 + r() * 1.1 : 0;
-        add(lump(s, 0, r() * 10, .25), M(Math.cos(a) * d, s * .5, Math.sin(a) * d, (r() - .5) * .6, r() * 6, (r() - .5) * .6, 1, 1.3 + r() * 1.1, 1), i % 2 ? dark : main);
+        add(lump(s, 1, r() * 10, .25), M(Math.cos(a) * d, s * .5, Math.sin(a) * d, (r() - .5) * .6, r() * 6, (r() - .5) * .6, 1, 1.3 + r() * 1.1, 1), i % 2 ? dark : main);
       }
       foot = 1.8; height = 2.2; break;
     }
@@ -208,7 +208,7 @@ function shapeOf(THREE, f, C, r) {
       for (let i = 0; i < 4; i++) add(new THREE.IcosahedronGeometry(.6 + r() * .4, 0), M((r() - .5) * 4, .3, (r() - .5) * 4), C.dark);
       foot = 1.9; height = 7.5; break;
     case 'boulders':
-      for (let i = 0; i < 4; i++) { const s = .7 + r() * 1.1; add(new THREE.IcosahedronGeometry(s, 0), M((r() - .5) * 4, s * .4, (r() - .5) * 4, r(), r() * 6, r(), 1, .75, 1.15), i % 2 ? C.rock : C.dark); }
+      for (let i = 0; i < 4; i++) { const s = .7 + r() * 1.1; add(lump(s, 1, r() * 10, .18), M((r() - .5) * 4, s * .4, (r() - .5) * 4, r(), r() * 6, r(), 1, .75, 1.15), i % 2 ? C.rock : C.dark); }
       foot = 2.4; height = 1.6; break;
     case 'strata':
       for (let i = 0; i < 6; i++) add(i ? new THREE.BoxGeometry(4 - i * .35, .45, 2.4 - i * .2).translate(0, .225, 0) : sunk(new THREE.BoxGeometry(4, .45 + SINK, 2.4).translate(0, (.45 + SINK) / 2, 0)), M((r() - .5) * .3, i * .45, (r() - .5) * .3, 0, 0, .06), [C.sand, C.rock, C.orange, C.pale, C.sand2, C.dark][i]);

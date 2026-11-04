@@ -8,12 +8,14 @@
 //           grow (a new step between two others, or above spacefarers) without
 //           changing what old saves mean
 //   reach   how far it extends: 'local' (tool users to city builders), 'world'
-//           (planet-shapers), 'orbit' (spacefarers). Future kinds extend this list:
-//           'system' (a whole solar system), 'interstellar', and civilizations that
-//           live only in space would have reach but no home settlement.
+//           (planet-shapers), 'orbit' (spacefarers), 'system' (system-shapers, who
+//           have made a whole solar system theirs). Future kinds extend this list:
+//           'interstellar', and civilizations that live only in space would have
+//           reach but no home settlement.
 import { faunaFor, CIVILIZATION } from './fauna.mjs';
-import { civilizationFor } from './structures.mjs';
+import { civilizationFor, SYSTEM_TEXT } from './structures.mjs';
 import { rng } from './rng.mjs';
+import { shipDesign, HULL_WORDS } from './ships.js';
 
 // Temperament: what a civilization does with what it can build. Tier says what it
 // *can* build; temperament says how far it spreads and how it treats its land.
@@ -45,13 +47,14 @@ function extentOf(tier, ambition) {
     case 'city builders': return ambition > .75 ? 'continental' : ambition > .35 ? 'regional' : 'local';
     case 'planet-shapers': return ambition > .4 ? 'planetary' : 'continental';
     case 'spacefarers': return ambition > .55 ? 'system' : 'planetary';
+    case 'system-shapers': return 'system';
   }
   return 'local';
 }
 
-export const TIERS = CIVILIZATION.slice(1); // 'tool users' … 'spacefarers'
-export const REACH = ['local', 'world', 'orbit']; // future: 'system', 'interstellar'
-const reachOf = (tier) => tier === 'spacefarers' ? 'orbit' : tier === 'planet-shapers' ? 'world' : 'local';
+export const TIERS = CIVILIZATION.slice(1); // 'tool users' … 'system-shapers'
+export const REACH = ['local', 'world', 'orbit', 'system']; // future: 'interstellar'
+const reachOf = (tier) => tier === 'system-shapers' ? 'system' : tier === 'spacefarers' ? 'orbit' : tier === 'planet-shapers' ? 'world' : 'local';
 
 // tierAtLeast('city builders', 'village builders') -> true. Unknown names count as none.
 export const tierAtLeast = (tier, min) => TIERS.includes(tier) && TIERS.indexOf(tier) >= TIERS.indexOf(min);
@@ -70,7 +73,13 @@ export function civilizationOf(body) {
       const extent = extentOf(tier, temperament.ambition);
       civ = { ...c, id: `${body.seed}:${body.id}:${c.species.id}`, home: body.id, tier, reach: reachOf(tier), ...temperament, extent };
       civ.temperamentText = describeTemperament(civ);
-      civ.description = `${c.description} ${civ.temperamentText}`;
+      let text = c.description;
+      if (tierAtLeast(tier, 'spacefarers')) {
+        civ.ship = shipDesign(civ).hull;
+        const space = tier === 'spacefarers' ? 'satellites and a station circle the world.' : `${SYSTEM_TEXT.replace(/^They have made/, 'they have made')}`;
+        text = text.replace(/They have reached space: .*$/, `They have reached space: their ${HULL_WORDS[civ.ship]} rise from a spaceport beside their capital, and ${space}`);
+      }
+      civ.description = `${text} ${civ.temperamentText}`;
     }
   }
   if (cache.size > 2000) cache.clear();
@@ -79,9 +88,18 @@ export function civilizationOf(body) {
 }
 export const civilizationsIn = (system) => system.bodies.map(civilizationOf).filter(Boolean);
 
+// Colonists wear pressure suits where the air, warmth or chemistry is too different
+// from their home world (which, on lifeless worlds, is nearly always).
+export function needsSuit(home, world) {
+  const a = home.physics, b = world.physics;
+  if (!a || !b) return true;
+  const ratio = (b.pressure + 1e-3) / (a.pressure + 1e-3);
+  return ratio < .5 || ratio > 2 || Math.abs(b.temperature - a.temperature) > 35 || (b.biochemistry || 'carbon') !== (a.biochemistry || 'carbon') || b.waterState !== a.waterState;
+}
+
 // Spacefarers whose extent is the whole system settle other worlds and moons: the
-// nearest rocky ones (by orbit), more the more ambitious they are. Returns the
-// colonising civilization for a body, or null.
+// nearest rocky ones (by orbit), more the more ambitious they are; system-shapers
+// settle every one. Returns the colonising civilization for a body, or null.
 export function colonistOf(system, body) {
   if (body.giant || civilizationOf(body)) return null;
   for (const civ of civilizationsIn(system)) {
@@ -90,8 +108,8 @@ export function colonistOf(system, body) {
     const orbitOf = (b) => b.parent ? system.bodies.find(p => p.id === b.parent).orbit : b.orbit;
     const targets = system.bodies.filter(b => !b.giant && b.id !== home.id && !civilizationOf(b))
       .sort((a, b) => Math.abs(orbitOf(a) - homeOrbit) - Math.abs(orbitOf(b) - homeOrbit))
-      .slice(0, 1 + Math.floor(civ.ambition * 4));
-    if (targets.some(b => b.id === body.id)) return civ;
+      .slice(0, civ.tier === 'system-shapers' ? Infinity : 1 + Math.floor(civ.ambition * 4));
+    if (targets.some(b => b.id === body.id)) return { ...civ, homeName: home.name, homeBody: home.id, suits: needsSuit(home, body) };
   }
   return null;
 }

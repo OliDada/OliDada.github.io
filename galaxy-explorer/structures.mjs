@@ -114,6 +114,8 @@ const WORDS = {
   domes: { village: 'domed dwellings with arched doorways', city: 'clusters of great domes', launch: 'a launch track that sweeps up a long ramp' },
   tracks: { village: 'wheel-shaped houses linked by smooth tracks', city: 'banked tracks looping between wheel-houses', launch: 'a launch track that sweeps up a long ramp' },
 };
+// System-shapers (level 6): what they have built beyond their world (civilizations.mjs fills in the ships).
+export const SYSTEM_TEXT = 'They have made the whole system theirs: a ring circles their world, joined to the ground by elevators, their colonies reach every rocky world and moon, habitats circle the giants and mirrors gather the starlight.';
 function describeCivilization(s, level, culture) {
   const who = `The ${plural(s.name)}`, w = WORDS[culture];
   const tier = CIVILIZATION[level];
@@ -123,5 +125,6 @@ function describeCivilization(s, level, culture) {
   if (level === 3) return `${city}.`;
   const spread = `${city}, and their roads and towns now reach across the world; from orbit, their lights cover the night side`;
   if (level === 4) return `${spread}. Their radio chatter can be heard from the next star.`;
-  return `${spread}. They have reached space: ${w.launch}, and satellites and a station circle the world.`;
+  if (level === 5) return `${spread}. They have reached space: ${w.launch}, and satellites and a station circle the world.`;
+  return `${spread}. They have reached space: ${w.launch}. ${SYSTEM_TEXT}`;
 }

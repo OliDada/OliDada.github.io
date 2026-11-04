@@ -6,7 +6,8 @@
 //   { kind, seed, bodyId, id, traits: {…}, world: {…} | null }
 //
 //   kind: 'flora' | 'fauna' | 'formation' | 'settlement' | 'field-note' | 'world' | 'signal'
-//   Later kinds ('station', 'megastructure', 'derelict', 'behaviour', 'contact') only need
+//         | 'behaviour' (an animal seen doing something) | 'phenomenon' (a sky event)
+//   Later kinds ('station', 'megastructure', 'derelict', 'contact') only need
 //   an entry function here and a scanner in the game; requirements can ask for them at once.
 //
 // Pure apart from the storage passed in (localStorage in the browser, a stub in tests).
@@ -14,7 +15,7 @@ import { generateSystem } from './system.mjs';
 import { floraFor } from './flora.mjs';
 import { faunaFor } from './fauna.mjs';
 import { geologyFor } from './geology.mjs';
-import { civilizationOf, tierName } from './civilizations.mjs';
+import { civilizationOf, colonistOf, tierName } from './civilizations.mjs';
 
 export const STORE = 'elsewhere-codex-v1';
 // What counts as "a thing you documented" when a requirement asks for any kind.
@@ -32,6 +33,7 @@ export function worldTraits(system, body) {
     gravity: round(p.gravity), pressure: round(p.pressure), temperature: round(p.temperature), volcanism: round(p.volcanism),
     clouds: body.giant ? p.clouds ?? null : null, ringed: !!body.ringed,
     star: system.star?.spectralClass?.[0] ?? null, // O, B, A, F, G, K or M
+    colonists: !body.giant && !civilizationOf(body) && !!colonistOf(system, body), // settled from another world of the system
   };
 }
 
@@ -51,6 +53,16 @@ export const faunaEntry = (system, body, s) => entry('fauna', system, body, s.id
 export const formationEntry = (system, body, f) => entry('formation', system, body, f.id, {
   name: f.name, formation: f.key, type: f.type ?? 'formation', rare: !!f.rare,
 });
+// A species seen doing something (ecology.mjs BEHAVIOURS): one entry per species and behaviour.
+export const behaviourEntry = (system, body, s, behaviour) => entry('behaviour', system, body, `${s.id}:${behaviour}`, {
+  name: s.name, species: s.id, behaviour, plan: s.plan, diet: s.traits?.diet ?? s.diet, activity: s.ecology?.activity ?? 'any',
+});
+// A deep core sample of a recorded rock or landform (Deep core sampler; geology.mjs coreSample).
+export const coreEntry = (system, body, f, sample) => entry('core', system, body, f.id, {
+  name: f.name, formation: f.key, type: f.type ?? 'formation', ageGy: round(sample.age),
+});
+// A sky event seen from a world (phenomena.mjs): one entry per world and type.
+export const phenomenonEntry = (system, body, type, { total = false } = {}) => entry('phenomenon', system, body, type, { type, total: !!total });
 // civ: from civilizationOf(body); tier is a name (tierName reads old numeric saves).
 export const settlementEntry = (system, body, civ, tier = civ?.tier) => entry('settlement', system, body, civ?.id ?? `${system.seed}:${body.id}`, {
   name: civ?.species?.name ?? null, tier: tierName(tier), family: civ?.family ?? null, culture: civ?.culture ?? null, reach: civ?.reach ?? null,
@@ -114,6 +126,9 @@ export function createCodex(storage = globalThis.localStorage) {
       if (data.research?.side === id) data.research = { ...data.research, side: null };
       save();
     },
+    // Test mode (dev-panel.js): take an upgrade out again, or set the whole installed list.
+    lock(id) { data.unlocked = data.unlocked.filter((x) => x !== id); save(); },
+    setUnlocked(ids) { data.unlocked = [...ids]; save(); },
     setSide(id) { data.research = { ...(data.research || {}), side: id }; save(); },
     markBackfilled() { data.backfilled = true; save(); },
     save,

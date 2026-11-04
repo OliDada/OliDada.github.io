@@ -202,11 +202,11 @@ export function createDriveStreaks(scene, count = 220, { R = 260, L = 900, min =
         update(camera, forward, power, dt, flow = null) {
             lines.visible = power > 0.02;
             if (!lines.visible) return;
-            travel += dt * (flow ? flow.speed : 300 + 2600 * power);
+            travel += dt * (flow ? flow.speed : 400 + 4200 * power);
             side.crossVectors(forward, Math.abs(forward.y) < 0.95 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)).normalize();
             up.crossVectors(side, forward);
             basis.makeBasis(side, up, forward);
-            const len = flow ? flow.len : 20 + 260 * power;
+            const len = flow ? flow.len : 30 + 420 * power;
             for (let i = 0; i < count; i++) {
                 const z = ((((seeds[i * 3 + 2] - travel) % (2 * L)) + 3 * L) % (2 * L)) - L;
                 p.set(seeds[i * 3], seeds[i * 3 + 1], z).applyMatrix4(basis);
@@ -216,7 +216,7 @@ export function createDriveStreaks(scene, count = 220, { R = 260, L = 900, min =
             }
             geo.attributes.position.needsUpdate = true;
             lines.position.copy(camera.position);
-            material.opacity = flow ? flow.opacity : 0.06 + 0.22 * power;
+            material.opacity = flow ? flow.opacity : 0.1 + 0.4 * power;
         },
     };
 }

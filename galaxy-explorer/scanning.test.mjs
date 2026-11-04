@@ -50,3 +50,29 @@ test('cards are clean: a title, a one-sentence lede and labelled facts', () => {
   const animal = cards[0];
   assert.ok(animal.facts.some(([k]) => k === 'Diet') && animal.facts.some(([k]) => k === 'Active'));
 });
+
+test('field glasses reach farther, and the deep core sampler turns a recorded rock into a core target', () => {
+  const body = world((b) => b.physics), terrain = terrainFor(body), signal = new THREE.Vector3(...terrain.site);
+  const geology = buildGeology(THREE, { body, terrain, radius: body.radius, signalNormal: signal, landingNormal: signal });
+  const p = geology.placed.find((x) => x.scales.some((s) => s > 0));
+  const i = [...p.scales].findIndex((s) => s > 0);
+  const at = new THREE.Vector3(p.positions[i * 3], p.positions[i * 3 + 1], p.positions[i * 3 + 2]);
+  const point = at.clone().addScaledVector(at.clone().normalize(), p.height * p.scales[i] * .45);
+  const site = { geology, fauna: null, flora: null };
+  const from = (metres) => {
+    const here = at.clone().addScaledVector(new THREE.Vector3(1, 0, 0).cross(at).normalize(), metres);
+    const eye = here.clone().addScaledVector(here.clone().normalize(), 1.7);
+    return { here, eye, forward: point.clone().sub(eye).normalize() };
+  };
+  const far = from(p.foot * p.scales[i] + 7 + 12); // beyond plain reach
+  const t = (extra) => findScanTarget({ site, ...far, known: none, ...extra });
+  assert.ok(!t() || t().id !== p.formation.id, 'out of reach without the glasses');
+  assert.equal(t({ reachScale: 4, aimScale: .2 })?.id, p.formation.id, 'in reach zoomed in');
+  const near = from(3), known = { ...none, formation: [p.formation.id], core: [] };
+  const core = findScanTarget({ site, ...near, known, cores: true });
+  assert.equal(core?.kind, 'core');
+  assert.equal(core.known, false);
+  const done = findScanTarget({ site, ...near, known: { ...known, core: [p.formation.id] }, cores: true });
+  assert.equal(done?.kind, 'formation', 'sampled once, it is a recorded rock again');
+  assert.ok(cardFor({ ...core, sample: { origin: 'It formed.', ageText: 'about 2.0 billion years', depth: 12 } }, site, body).title.includes('deep core'));
+});

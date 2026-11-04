@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from './vendor/three.module.js';
-import { floraFor, suitability, FORMS } from './flora.mjs';
+import { floraFor, suitability, FORMS, plantBiome, PLANT_BIOMES, biomeAffinity } from './flora.mjs';
+import { rng } from './rng.mjs';
 import { buildFlora } from './flora-mesh.js';
 import { generateSystem } from './system.mjs';
 import { terrainFor } from './terrain.mjs';
@@ -49,19 +50,23 @@ test('suitability is 0 underwater and peaks in the preferred climate', () => {
   assert.ok(best > .3 && worse < best * .1);
 });
 
-test('plants are built and placed on dry land, away from the site and landing pad', () => {
+test('plants near the landing pad are built at once, on dry land, away from the site and pad', () => {
   for (const body of living.filter(b => b.physics.life !== 'microbial').slice(0, 6)) {
     const terrain = terrainFor(body), signal = new THREE.Vector3(...terrain.site); // the dry site the game uses
-    const landing = new THREE.Vector3(0, 1, 30 / body.radius).normalize().applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), signal));
+    const landing = new THREE.Vector3(...terrain.landing);
     const t0 = performance.now();
     const flora = buildFlora(THREE, { body, terrain, radius: body.radius, signalNormal: signal, landingNormal: landing, budget: 900 });
     assert.ok(performance.now() - t0 < 1500, 'flora took too long to build');
     let total = 0;
-    for (const { positions, mesh } of flora.placed) {
-      assert.equal(mesh.count, positions.length / 3);
-      assert.equal(mesh.geometry.groups.length, 2);
-      const m = new THREE.Matrix4(), at = new THREE.Vector3();
-      for (let k = 0; k < mesh.count; k++) { mesh.getMatrixAt(k, m); at.setFromMatrixPosition(m); assert.ok(at.distanceTo(new THREE.Vector3(positions[k * 3], positions[k * 3 + 1], positions[k * 3 + 2])) < 1e-4, 'instance matrix does not match its position'); }
+    for (const { positions, meshes } of flora.placed) {
+      // Every plant drawn is listed, at the position its instance is drawn at.
+      const drawn = [], m = new THREE.Matrix4(), at = new THREE.Vector3();
+      for (const mesh of meshes) {
+        assert.equal(mesh.geometry.groups.length, 2);
+        for (let k = 0; k < mesh.count; k++) { mesh.getMatrixAt(k, m); drawn.push(at.setFromMatrixPosition(m).clone()); }
+      }
+      assert.equal(drawn.length, positions.length / 3);
+      for (const d of drawn) assert.ok(drawn.length && [...Array(positions.length / 3).keys()].some(k => d.distanceTo(new THREE.Vector3(positions[k * 3], positions[k * 3 + 1], positions[k * 3 + 2])) < 1e-3), 'instance matrix does not match a position');
       for (let i = 0; i < positions.length; i += 3) {
         const p = new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]), n = p.clone().normalize();
         assert.ok(!terrain.climate(n).submerged, `${body.name}: plant under water`);
@@ -70,8 +75,68 @@ test('plants are built and placed on dry land, away from the site and landing pa
       }
       total += positions.length / 3;
     }
-    // Ocean worlds have little dry land near the site, so fewer plants fit there.
-    const expected = terrain.liquid === 'water' && terrain.coverage > .6 ? 100 : 300;
+    // Ocean worlds have little dry land near the site, so fewer plants fit there;
+    // dry scrub and barren ground are sparse.
+    const expected = terrain.liquid === 'water' && terrain.coverage > .6 ? 30 : 100;
     assert.ok(total > expected, `${body.name}: only ${total} plants placed`);
   }
+});
+
+// Walks to random dry spots and lets the plants fill in around each one.
+function plantsAround(flora, terrain, body, n, within = 150) {
+  const cam = n.clone().multiplyScalar(body.radius + terrain.surface(n) + 1.7);
+  for (let k = 0; k < 4000 && (k < 3 || flora.busy); k++) flora.update(k / 60, cam);
+  flora.update(99, cam);
+  let count = 0;
+  for (const { positions } of flora.placed) for (let i = 0; i < positions.length; i += 3)
+    if (Math.hypot(positions[i] - cam.x, positions[i + 1] - cam.y, positions[i + 2] - cam.z) < within) count++;
+  return count;
+}
+
+test('plants grow all over the world, not just around the landing site', () => {
+  let worldsChecked = 0;
+  for (const body of living.filter(b => b.physics.life === 'complex').slice(0, 5)) {
+    const terrain = terrainFor(body), signal = new THREE.Vector3(...terrain.site), landing = new THREE.Vector3(...terrain.landing);
+    const flora = buildFlora(THREE, { body, terrain, radius: body.radius, signalNormal: signal, landingNormal: landing, budget: 1600 });
+    const r = rng(body.seed, 'flora-test'), counts = [];
+    for (let k = 0; k < 400 && counts.length < 8; k++) {
+      const y = r() * 2 - 1, a = r() * 6.283, q = Math.sqrt(1 - y * y), n = new THREE.Vector3(q * Math.cos(a), y, q * Math.sin(a));
+      if (terrain.isLiquid(n) || n.angleTo(landing) * body.radius < 600) continue;
+      const biome = flora.biomeAt(n);
+      if (biome === 'barren' || biome === 'dryland' || biome === 'highland') continue; // sparse by nature
+      counts.push(plantsAround(flora, terrain, body, n));
+    }
+    if (counts.length < 4) continue;
+    worldsChecked++;
+    const atSite = plantsAround(flora, terrain, body, landing), mean = counts.reduce((a, b) => a + b, 0) / counts.length;
+    assert.ok(counts.filter(c => c > 20).length >= counts.length * .75, `${body.name}: plants missing far from the site: ${counts}`);
+    assert.ok(atSite < mean * 3 + 60, `${body.name}: the site (${atSite}) is far denser than elsewhere (${mean.toFixed(0)})`);
+  }
+  assert.ok(worldsChecked >= 3, `only ${worldsChecked} worlds checked`);
+});
+
+test('the same plants are in the same places when you come back', () => {
+  const body = living.find(b => b.physics.life === 'complex'), terrain = terrainFor(body);
+  const landing = new THREE.Vector3(...terrain.landing), signal = new THREE.Vector3(...terrain.site);
+  const flora = buildFlora(THREE, { body, terrain, radius: body.radius, signalNormal: signal, landingNormal: landing, budget: 1600 });
+  const snapshot = () => { plantsAround(flora, terrain, body, landing); return flora.placed.map(p => Array.from(p.positions).map(v => v.toFixed(3)).sort().join()).join('|'); };
+  const before = snapshot();
+  plantsAround(flora, terrain, body, landing.clone().negate()); // the far side of the world
+  assert.equal(snapshot(), before);
+});
+
+test('plant biomes: several on a world, forests thick and dry scrub sparse', () => {
+  let forest = 0, dry = 0, kinds = new Set();
+  for (const body of living.filter(b => b.physics.life === 'complex').slice(0, 8)) {
+    const terrain = terrainFor(body), e = floraFor(body).environment, seen = new Set();
+    for (let k = 0; k < 400; k++) { const n = new THREE.Vector3().randomDirection(), b = plantBiome(terrain.climate(n), e); if (b) seen.add(b); }
+    assert.ok(seen.size >= 3, `${body.name}: only ${[...seen]}`);
+    for (const b of seen) kinds.add(b);
+  }
+  assert.ok(kinds.size >= 5, `only ${[...kinds]} across worlds`);
+  assert.ok(PLANT_BIOMES.forest.density > 3 * PLANT_BIOMES.dryland.density && PLANT_BIOMES.barren.density < .1);
+  // Each biome favours its own forms.
+  assert.ok(biomeAffinity('forest', 'tree') > biomeAffinity('dryland', 'tree') * 5);
+  assert.ok(biomeAffinity('dryland', 'succulent') > biomeAffinity('forest', 'succulent'));
+  assert.ok(biomeAffinity('wetland', 'mat') > biomeAffinity('highland', 'mat'));
 });

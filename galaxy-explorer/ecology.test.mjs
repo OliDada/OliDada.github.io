@@ -132,3 +132,72 @@ test('danger: big aggressive hunters stalk and lunge at you on foot, but never a
   for (const h of hits) assert.ok(h.damage > .1 && h.damage <= .45);
   assert.equal(run(false).filter(e => e.type === 'attack').length, 0, 'attacked you aboard the ship');
 });
+
+test('behaviours to watch follow the ecology, and what an animal is doing maps onto them', async () => {
+  const { behavioursOf, behaviourNow } = await import('./ecology.mjs');
+  const { faunaFor } = await import('./fauna.mjs');
+  const { generateSystem } = await import('./system.mjs');
+  let hunters = 0, drinkers = 0;
+  for (let s = 1; s < 120; s++) for (const b of generateSystem(s).bodies) {
+    if (b.giant) continue;
+    for (const sp of faunaFor(b).species) {
+      const list = behavioursOf(sp);
+      if (sp.ecology.prey.length) { hunters++; assert.ok(list.includes('hunt') && list.includes('kill')); }
+      if (sp.ecology.drinks) { drinkers++; assert.ok(list.includes('drink')); }
+      if (sp.ecology.activity === 'any') assert.ok(!list.includes('sleep'), 'awake at all hours: never seen asleep');
+    }
+  }
+  assert.ok(hunters > 5 && drinkers > 5);
+  const eco = { eatsPlants: true };
+  assert.equal(behaviourNow({ state: 'sleep', eco }), 'sleep');
+  assert.equal(behaviourNow({ state: 'feed', meal: 'kill', eco }), 'kill');
+  assert.equal(behaviourNow({ state: 'feed', eco }), 'graze');
+  assert.equal(behaviourNow({ state: 'feed', eco: { eatsPlants: false } }), null);
+  assert.equal(behaviourNow({ state: 'wander', eco }), null);
+  assert.equal(behaviourNow({ state: 'drink', eco, hidden: 30 }), null);
+});
+
+test('watching: a scanned animal busy with something new becomes a behaviour target, and a catch is a kill', async () => {
+  const { findScanTarget } = await import('./scanning.js');
+  const { behaviourNow } = await import('./ecology.mjs');
+  const webs = living.filter(b => b.physics.life === 'complex' && faunaFor(b).species.some(s => s.ecology.prey.length)).slice(0, 4);
+  let targets = 0, kills = 0;
+  for (const b of webs) {
+    const { fauna } = world(b);
+    for (const c of fauna.creatures) c.hunger = 1;
+    for (let i = 0; i < 20 * 120; i++) {
+      fauna.update(.05, i * .05, null);
+      kills += fauna.creatures.filter(c => behaviourNow(c) === 'kill').length > 0;
+    }
+    const busy = fauna.creatures.find(c => behaviourNow(c));
+    if (!busy) continue;
+    const b0 = behaviourNow(busy), spot = fauna.individualsOf(busy.sp).find(x => x.creature === busy).position;
+    const up = spot.clone().normalize(), side = new THREE.Vector3(1, 0, 0).cross(up).normalize();
+    const here = spot.clone().addScaledVector(side, 5), eye = here.clone().addScaledVector(here.clone().normalize(), 1.7);
+    const forward = spot.clone().addScaledVector(up, busy.sp.altitude[1] > 0 ? 0 : busy.sp.size * .5 + .2).sub(eye).normalize();
+    const site = { fauna, flora: null, geology: null };
+    const fresh = findScanTarget({ site, here, eye, forward, known: { fauna: [], flora: [], formation: [], behaviour: [] } });
+    assert.equal(fresh?.kind, 'fauna', 'an unscanned animal is scanned first');
+    const t = findScanTarget({ site, here, eye, forward, known: { fauna: [busy.sp.id], flora: [], formation: [], behaviour: [] } });
+    assert.equal(t?.kind, 'behaviour');
+    assert.equal(t.behaviour, behaviourNow(t.creature));
+    targets++;
+    const seen = findScanTarget({ site, here, eye, forward, known: { fauna: [busy.sp.id], flora: [], formation: [], behaviour: [`${busy.sp.id}:${b0}`] } });
+    assert.ok(seen && !(seen.kind === 'behaviour' && seen.id === `${busy.sp.id}:${b0}`), 'seen behaviours are not offered again');
+  }
+  assert.ok(targets >= 2, `behaviour targets found: ${targets}`);
+  assert.ok(kills > 0, 'a hunter was seen feeding on a catch');
+});
+
+test('animals follow you across the world: herds left behind move near you', () => {
+  const b = living.find(x => x.physics.life === 'complex' && faunaFor(x).species.length >= 3 && terrainFor(x).coverage < .5);
+  const { terrain, signal, fauna } = world(b);
+  let far = signal.clone().negate();
+  for (let k = 0; terrain.isLiquid(far) && k < 500; k++) far = new THREE.Vector3().randomDirection();
+  const cam = far.clone().multiplyScalar(b.radius + terrain.surface(far) + 1.7);
+  const near = () => fauna.creatures.filter(c => c.n.angleTo(far) * b.radius < 260).length;
+  assert.equal(near(), 0, 'animals were already on the far side');
+  fauna.follow(cam);
+  for (let i = 0; i < 200; i++) fauna.update(.05, i * .05, { position: cam, onFoot: true });
+  assert.ok(near() > fauna.creatures.length * .6, `only ${near()} of ${fauna.creatures.length} animals near you`);
+});

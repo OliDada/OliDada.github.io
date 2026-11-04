@@ -1,0 +1,12 @@
+import * as THREE from './vendor/three.module.js';
+import { faunaFor } from './fauna.mjs';
+import { buildFauna } from './fauna-mesh.js';
+import { buildStructures } from './structures-mesh.js';
+import { generateSystem } from './system.mjs';
+import { terrainFor } from './terrain.mjs';
+globalThis.DBG_STRUCT = 1;
+const body = generateSystem(38).bodies.find(b => b.id === 'planet-3');
+const terrain = terrainFor(body), signal = new THREE.Vector3(...terrain.site), landing = new THREE.Vector3(...terrain.landing);
+const fauna = buildFauna(THREE, { body, terrain, radius: body.radius, signalNormal: signal, budget: 90 });
+const s = buildStructures(THREE, { body, terrain, radius: body.radius, signalNormal: signal, landingNormal: landing, fauna });
+console.log(s.pieces, s.group.children.filter(m => m.isMesh).map(m => m.geometry.attributes.position.count).join('+'));

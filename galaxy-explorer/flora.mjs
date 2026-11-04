@@ -123,6 +123,8 @@ export function floraFor(body) {
       seed: r.int(0, 2 ** 31),
     });
   }
+  // Character traits, from their own random stream so adding them changed no existing species.
+  for (const s of species) Object.assign(s, traitsFor(body, s, e));
   for (const s of species) s.description = describeSpecies(s, e);
   return { species, environment: e };
 }
@@ -136,6 +138,71 @@ export function suitability(s, c) {
   if (h.highland) v *= .4 + .6 * clamp(c.altitude * 1.6, 0, 1); else v *= 1 - .6 * clamp((c.altitude - .7) * 3, 0, 1);
   return v;
 }
+
+// Plant biomes: what kind of country a point is, from its climate. A world's
+// moisture and temperature vary in broad regions (terrain.mjs climate), so walking
+// or flying across it you pass from forest into grassland, dry scrub, wetland by
+// the shore or bare highland. Each biome has its own density of plant life and
+// favours some plant forms over others; a species' own habitat (suitability)
+// still decides exactly where it grows within them.
+export const PLANT_BIOMES = {
+  forest:    { label: 'Forest',    density: .95 },
+  grassland: { label: 'Grassland', density: .6 },
+  wetland:   { label: 'Wetland',   density: .8 },
+  dryland:   { label: 'Dry scrub', density: .22 },
+  highland:  { label: 'Highland',  density: .32 },
+  barren:    { label: 'Barren',    density: .05 },
+};
+// How much each biome favours a form (1 = at home, small = rare there); unlisted forms get `other`.
+const AFFINITY = {
+  forest:    { tree: 1, conifer: 1, glasstree: 1, filament: 1, sheet: .9, fungus: 1, palm: .6, stalk: .7, shrub: .7, grass: .3, bulb: .5, plume: .5, other: .4 },
+  grassland: { grass: 1, bulb: 1, plume: 1, shrub: .8, stalk: .7, crystal: .7, mound: .7, tree: .12, conifer: .1, glasstree: .15, filament: .2, palm: .1, other: .4 },
+  wetland:   { palm: 1, mat: 1, mound: 1, grass: .7, fungus: .7, sheet: .8, filament: .6, bulb: .7, tree: .35, other: .35 },
+  dryland:   { succulent: 1, crystal: 1, chimney: 1, crust: 1, shrub: .55, grass: .3, plume: .4, tree: .04, conifer: .04, palm: .05, other: .2 },
+  highland:  { conifer: 1, shrub: .7, grass: .6, crystal: .8, crust: .8, plume: .6, mound: .5, tree: .25, other: .25 },
+  barren:    { mat: .7, crust: .7, crystal: .6, mound: .6, other: .1 },
+};
+export const biomeAffinity = (biome, form) => AFFINITY[biome][form] ?? AFFINITY[biome].other;
+
+// c: climate at a point (terrain.mjs climate); e: the world's environment (above).
+export function plantBiome(c, e) {
+  if (c.submerged) return null;
+  // Too cold or too hot for this world's life: for water-based life a band around
+  // liquid water, for other chemistry a band around the world's own temperature.
+  const harsh = e.chem === 'carbon' ? c.localT < 246 || c.localT > 334 : Math.abs(c.localT - e.T) > 42;
+  if (harsh) return 'barren';
+  if (c.altitude > .68) return 'highland';
+  if (c.above < 2.5 && c.moist > .58) return 'wetland';
+  if (c.moist > .62) return 'forest';
+  if (c.moist > .44) return 'grassland';
+  return 'dryland';
+}
+
+// How a species grows, beyond its form: its habit (straight, leaning, twisted, or several
+// stems from one root), bark, a weeping crown, trailing vines, and whether it blooms or
+// fruits (and what share of plants are in bloom at any time). flora-mesh.js builds these.
+const TRAITS = {
+  growth: { tree: ['straight', 'straight', 'leaning', 'twisted', 'multi'], conifer: ['straight', 'straight', 'leaning', 'twisted', 'multi'], palm: ['leaning', 'straight', 'multi'], stalk: ['straight', 'multi', 'leaning'], succulent: ['straight', 'straight', 'multi'], glasstree: ['straight', 'twisted', 'multi'], sheet: ['straight', 'multi'], filament: ['straight', 'leaning'], fungus: ['straight', 'twisted'], chimney: ['straight', 'twisted'] },
+  bark: { tree: ['plain', 'plain', 'banded', 'pale', 'mottled'], conifer: ['plain', 'plain', 'banded', 'mottled'], palm: ['plain', 'banded', 'pale'], glasstree: ['plain', 'banded'], stalk: ['plain', 'banded'], succulent: ['plain', 'mottled'] },
+  bloom: { tree: ['blossom', 'fruit', 'none', 'none'], shrub: ['blossom', 'berries', 'berries', 'none'], palm: ['fruit', 'fruit', 'none'], succulent: ['flower', 'flower', 'none'], grass: ['seeds', 'none'], stalk: ['blossom', 'none'], mound: ['blossom', 'none'], bulb: ['flower', 'none'], fungus: ['spores', 'none'], plume: ['blossom', 'none'], crystal: ['none', 'none', 'blossom'] },
+};
+function traitsFor(body, s, e) {
+  const t = rng(body.seed, 'flora-traits', s.id), pick = (k) => TRAITS[k][s.form] ? t.pick(TRAITS[k][s.form]) : (k === 'bloom' ? 'none' : 'straight');
+  const growth = pick('growth'), bark = TRAITS.bark[s.form] ? t.pick(TRAITS.bark[s.form]) : 'plain', bloom = pick('bloom');
+  const tall = ['tree', 'conifer', 'palm', 'glasstree'].includes(s.form);
+  const cc = CHEM_COLORS[e.chem], bloomHue = cc ? t.range(...cc.hue) + 60 : t.pick([0, 30, 50, 280, 320, 340, 200]) + t.range(-12, 12);
+  return {
+    growth, bark, bloom, bloomShare: bloom === 'none' ? 0 : t.range(.3, .8),
+    weeping: (s.form === 'tree' || s.form === 'conifer') && t() < .22,
+    vines: tall && e.chem === 'carbon' && t() < .12 + e.wet * .25,
+    colors: { ...s.colors, bloom: hsl(bloomHue, t.range(.55, .85), bloom === 'fruit' || bloom === 'berries' ? t.range(.38, .55) : t.range(.62, .82)) },
+  };
+}
+const TRAIT_TEXT = {
+  growth: { leaning: 'leaning', twisted: 'twisted', multi: 'in clumps of several stems' },
+  bark: { banded: 'banded bark', pale: 'pale bark', mottled: 'mottled bark' },
+  bloom: { blossom: 'Many are in blossom.', fruit: 'Some bear hanging fruit.', berries: 'Some carry clusters of berries.', flower: 'Some are crowned with flowers.', seeds: 'Seed heads rise above the blades.', spores: 'Some shed glittering spores.' },
+};
 
 const SIZE = (h) => h > 9 ? 'towering' : h > 5 ? 'tall' : h > 2.2 ? 'head-high' : h > .9 ? 'waist-high' : h > .3 ? 'knee-high' : 'ground-hugging';
 const HUE_WORDS = (hex) => {
@@ -159,5 +226,8 @@ function describeSpecies(s, e) {
   const glow = s.glow > .45 ? ' It glows softly, a common trait in this dim light.' : s.glow > 0 ? ' It gives off a faint glow.' : '';
   const why = e.gravity < .6 && s.height > 3 ? ' Low gravity lets it grow unusually tall.' : e.gravity > 1.4 ? ' Strong gravity keeps it squat and thick-stemmed.' : '';
   const chem = CHEM_TEXT[e.chem] ? ` ${CHEM_TEXT[e.chem]}` : '';
-  return `${SIZE(s.height)[0].toUpperCase() + SIZE(s.height).slice(1)}, ${HUE_WORDS(s.colors.leaf)} ${FORM_TEXT[s.form]}, found ${where}.${glow}${why}${chem}`;
+  const g = TRAIT_TEXT.growth[s.growth], has = [s.weeping && 'weeping crowns', TRAIT_TEXT.bark[s.bark], s.vines && 'trailing vines'].filter(Boolean);
+  const list = has.join(', ').replace(/, ([^,]*)$/, ' and $1');
+  const habit = g ? ` They grow ${g}${has.length ? `, with ${list}` : ''}.` : has.length ? ` They have ${list}.` : '', bloom = TRAIT_TEXT.bloom[s.bloom] ? ` ${TRAIT_TEXT.bloom[s.bloom]}` : '';
+  return `${SIZE(s.height)[0].toUpperCase() + SIZE(s.height).slice(1)}, ${HUE_WORDS(s.colors.leaf)} ${FORM_TEXT[s.form]}, found ${where}.${habit}${bloom}${glow}${why}${chem}`;
 }

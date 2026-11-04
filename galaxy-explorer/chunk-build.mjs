@@ -96,7 +96,7 @@ export function buildChunk(body, spec) {
   };
   const shape = {}, pshape = {}, info = {};
   // The parent's position and colour at its own grid points (even i and j), relative to the tile centre.
-  const parPos = new Float32Array(count * 3), parCol = new Float32Array(count * 3);
+  const parPos = new Float32Array(count * 3), parCol = new Float32Array(count * 3), parNor = new Float32Array(count * 3);
   const colourAt = (i, j, h, sh, outArr, k, withCover) => {
     const e = idx(i, j); n.x = dirs[e * 3]; n.y = dirs[e * 3 + 1]; n.z = dirs[e * 3 + 2];
     // terrain.mjs works in sRGB (the palettes are hex colours); the renderer expects
@@ -116,6 +116,7 @@ export function buildChunk(body, spec) {
       const hp = par[e];
       parPos[k] = dx * (R + hp) - center[0]; parPos[k + 1] = dy * (R + hp) - center[1]; parPos[k + 2] = dz * (R + hp) - center[2];
       colourAt(i, j, hp, shapeAt(par, i, j, 2, spacing * 2, pshape), parCol, k, false);
+      parNor[k] = pshape.nx; parNor[k + 1] = pshape.ny; parNor[k + 2] = pshape.nz;
     }
     if (wet) {
       const rw = R + t.sea;
@@ -129,7 +130,8 @@ export function buildChunk(body, spec) {
   // on the parent's own grid points; odd ones on the line (or diagonal) between them,
   // which is exactly the parent's triangle. The shader blends toward it with
   // distance, so switching detail levels never pops and tile edges meet coarser neighbours.
-  const lodDelta = new Float32Array(count * 3), lodColor = new Float32Array(count * 3);
+  // Normals blend too (the ground is smoothly shaded), so lighting doesn't pop either.
+  const lodDelta = new Float32Array(count * 3), lodColor = new Float32Array(count * 3), lodNormal = new Float32Array(count * 3);
   const waterDelta = wet ? new Float32Array(count * 3) : null;
   const morph = (own, target, out, j, i) => {
     const k = (j * V + i) * 3;
@@ -141,7 +143,7 @@ export function buildChunk(body, spec) {
     for (let c = 0; c < 3; c++) out[k + c] = (target[a * 3 + c] + target[b * 3 + c]) / 2 - own[k + c];
   };
   for (let j = 0; j < V; j++) for (let i = 0; i < V; i++) {
-    morph(positions, parPos, lodDelta, j, i); morph(colors, parCol, lodColor, j, i);
+    morph(positions, parPos, lodDelta, j, i); morph(colors, parCol, lodColor, j, i); morph(normals, parNor, lodNormal, j, i);
     if (wet) morph(water, water, waterDelta, j, i);
   }
   // Skirt vertices: copies of the edge, pulled toward the planet centre.
@@ -154,12 +156,12 @@ export function buildChunk(body, spec) {
     normals[k] = normals[src]; normals[k + 1] = normals[src + 1]; normals[k + 2] = normals[src + 2];
     colors[k] = colors[src]; colors[k + 1] = colors[src + 1]; colors[k + 2] = colors[src + 2];
     cover[k] = cover[src]; cover[k + 1] = cover[src + 1]; cover[k + 2] = cover[src + 2];
-    for (let c = 0; c < 3; c++) { lodDelta[k + c] = lodDelta[src + c]; lodColor[k + c] = lodColor[src + c]; if (wet) waterDelta[k + c] = waterDelta[src + c]; }
+    for (let c = 0; c < 3; c++) { lodDelta[k + c] = lodDelta[src + c]; lodColor[k + c] = lodColor[src + c]; lodNormal[k + c] = lodNormal[src + c]; if (wet) waterDelta[k + c] = waterDelta[src + c]; }
     // Water gets a shallow skirt too, so seams between tiles of different detail never show the sea floor.
     if (wet) {
       const wd = drop * .5; water[k] = water[src] - ux * wd; water[k + 1] = water[src + 1] - uy * wd; water[k + 2] = water[src + 2] - uz * wd;
       waterNormals[k] = waterNormals[src]; waterNormals[k + 1] = waterNormals[src + 1]; waterNormals[k + 2] = waterNormals[src + 2];
     }
   }
-  return { positions, colors, normals, cover, lodDelta, lodColor, water: anyWet ? water : null, waterDelta: anyWet ? waterDelta : null, waterNormals: anyWet ? waterNormals : null, center, radius: maxD + drop };
+  return { positions, colors, normals, cover, lodDelta, lodColor, lodNormal, water: anyWet ? water : null, waterDelta: anyWet ? waterDelta : null, waterNormals: anyWet ? waterNormals : null, center, radius: maxD + drop };
 }

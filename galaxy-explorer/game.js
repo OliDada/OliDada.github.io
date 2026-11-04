@@ -34,10 +34,15 @@ import {
     playArrival,
 } from "./galaxy-ui.js";
 import { createStarMap } from "./starmap.js";
-import { createCodex, backfill, floraEntry, faunaEntry, formationEntry, settlementEntry, fieldNoteEntry, worldEntry, signalEntry } from "./codex.mjs";
-import { UPGRADES, progress, advanced, recordedOn, jumpRange as rangeFor, suitDamageScale, suitRecoveryScale, heatScale } from "./upgrades.mjs";
+import { createCodex, backfill, coreEntry, floraEntry, faunaEntry, formationEntry, settlementEntry, fieldNoteEntry, worldEntry, signalEntry, behaviourEntry, phenomenonEntry } from "./codex.mjs";
+import { coreSample } from "./geology.mjs";
+import { UPGRADES, completedWorlds, progress, advanced, recordedOn, jumpRange as rangeFor, suitDamageScale, suitRecoveryScale, heatScale, observeTime, behaviourAlerts, hasFieldGlasses, ZOOM_REACH, radioHearing, decodesSignals, landsBesideLava, exposureScale, exposureOf } from "./upgrades.mjs";
+import { BEHAVIOURS, behavioursOf, behaviourNow } from "./ecology.mjs";
+import { forecast, eclipseAt } from "./phenomena.mjs";
+import { createSkyEvents } from "./sky-events.js";
 import { createUpgradeScreen } from "./upgrades-ui.js";
-import { findScanTarget, followTarget, cardFor, wordFor } from "./scanning.js";
+import { findScanTarget, followTarget, cardFor, wordFor, titleFor, verbFor } from "./scanning.js";
+import { setupDev } from "./dev-panel.js";
 import { createScanUI } from "./scan-ui.js";
 import { civilizationOf, colonistOf } from "./civilizations.mjs";
 
@@ -47,7 +52,8 @@ const coarsePointer = matchMedia("(pointer: coarse)").matches; // phones and tab
 const clamp = THREE.MathUtils.clamp;
 const Y = new THREE.Vector3(0, 1, 0);
 // Which star are we at? ?star= (galaxy chart), ?seed= (off-chart system), else the saved position or home.
-const params = new URLSearchParams(location.search);
+// A second "?" (…&world=planet-4?dev) is read as "&", so a mistyped option still works.
+const params = new URLSearchParams(location.search.replace(/(?!^)\?/g, "&"));
 const galaxyState = loadGalaxyState();
 let currentStar = starById(params.get("star"));
 let offChart = !currentStar && params.get("seed") !== null;
@@ -113,11 +119,7 @@ let orbitTime = orbitClock(),
 const positionOf = (body) => vec(...positions.get(body.id));
 let worldOrigin = positionOf(activeBody);
 let signalNormal = vec(...terrainFor(activeBody).site); // dry, level ground near the signal
-let landingNormal = vec(0, 1, 30 / RADIUS) // landing pad ~30 m from the signal
-    .normalize()
-    .applyQuaternion(
-        new THREE.Quaternion().setFromUnitVectors(Y, signalNormal),
-    );
+let landingNormal = vec(...terrainFor(activeBody).landing); // the landing pad: dry, level ground beside the site (terrain.mjs)
 const heightAt = (n) => terrainHeight(activeBody, n);
 const surfaceRadius = (n) => RADIUS + heightAt(n);
 const surfacePoint = (n, offset = 0) =>
@@ -152,7 +154,8 @@ const camera = new THREE.PerspectiveCamera(
     0.08,
     90000,
 );
-scene.add(new THREE.HemisphereLight(0xb6dfdf, 0x4c3844, 2.0));
+const hemi = new THREE.HemisphereLight(0xb6dfdf, 0x4c3844, 2.0);
+scene.add(hemi);
 // Sunlight takes the star's colour: red dwarfs cast warm, dim-looking light.
 const sun = new THREE.DirectionalLight(
     new THREE.Color(system.star.color).lerp(new THREE.Color(0xffffff), 0.45),
@@ -169,36 +172,65 @@ scene.add(fill);
 // back) doesn't rebuild them, and a cruise builds its destination's site on the way.
 let site = null;
 const siteCache = new Map(); // body id -> site, oldest first
+// The surface of the world you are flying toward (rocks, plants, formations,
+// settlements, its glowing rim), shown from a few kilometres out so it grows
+// into view as you approach instead of appearing all at once when you reach orbit.
+let approachSite = null,
+    approachBody = null,
+    siteBody = null; // the world `site` belongs to
 function makeSite(body) {
     const R = body.radius, t = terrainFor(body), signal = vec(...t.site);
-    return buildSurface({
+    const built = buildSurface({
         body,
         radius: R,
         signalNormal: signal,
-        landingNormal: vec(0, 1, 30 / R).normalize().applyQuaternion(new THREE.Quaternion().setFromUnitVectors(Y, signal)),
+        landingNormal: vec(...t.landing),
         surfacePoint: (n, offset = 0) => n.clone().multiplyScalar(R + t.surface(n) + offset),
         coarse: coarsePointer,
         colonist: colonistOf(system, body),
     });
+    // From now on its lights seen from space are the real ones (city-lights.js).
+    try { if (built.structures?.nightLights && systemView.system === system) systemView.useSiteLights?.(body, built.structures.nightLights); } catch {} // (the view may not exist yet at start-up)
+    return built;
 }
 function clearSites() {
     if (site) scene.remove(site.group);
     for (const s of siteCache.values()) disposeSurface(s.group);
     siteCache.clear();
-    site = null;
+    site = siteBody = null;
+    approachSite = approachBody = null;
 }
-function buildSite() {
-    if (site) scene.remove(site.group);
-    const next = siteCache.get(activeBody.id) ?? makeSite(activeBody);
-    siteCache.delete(activeBody.id);
-    siteCache.set(activeBody.id, next); // now the newest
+// A world's surface, built once and kept for the last few worlds.
+function siteFor(body) {
+    const s = siteCache.get(body.id) ?? makeSite(body);
+    siteCache.delete(body.id);
+    siteCache.set(body.id, s); // now the newest
     for (const [id, old] of siteCache) {
         if (siteCache.size <= 3) break;
-        if (old === next) continue;
+        if (old === s || old === site || old === approachSite) continue;
         disposeSurface(old.group);
         siteCache.delete(id);
     }
+    return s;
+}
+function buildSite() {
+    const old = site, oldBody = siteBody;
+    const next = siteFor(activeBody);
+    if (approachSite === next) approachSite = approachBody = null; // it was already in view
+    if (old && old !== next) {
+        // The world you just left stays in view, as the nearby one (if it is
+        // still close, updateApproachSite keeps it; otherwise it is removed).
+        if (approachSite) scene.remove(approachSite.group);
+        approachSite = old;
+        approachBody = oldBody;
+        old.halo.farFrom.value = oldBody.radius + 3500;
+        old.halo.farTo.value = oldBody.radius + 5800;
+    }
     site = next;
+    siteBody = activeBody;
+    site.group.position.set(0, 0, 0);
+    site.halo.farFrom.value = 1e9;
+    site.halo.farTo.value = 1e9 + 1;
     site.group.visible = true;
     scene.add(site.group);
     if (!activeBody.giant) codex.add(worldEntry(system, activeBody, siteTotals()));
@@ -207,14 +239,16 @@ function buildSite() {
 // tiles for every system are built by one shared pool of background threads.
 const streamer = createTerrainStreamer();
 let systemView = createSystemView(scene, system, streamer, { coarse: coarsePointer });
+// Sites built before the view existed: light them from space where their lights really are.
+for (const [id, built] of siteCache) { const b = system.bodies.find((x) => x.id === id); if (b && built.structures?.nightLights) systemView.useSiteLights(b, built.structures.nightLights); }
 let edge = systemEdge(system); // beyond this (metres from the star) is interstellar space
 // The real stars of the galaxy, seen from where you are (deep-space.js).
 const sky = createSky(scene, renderer);
 const nearStar = createNearStar(scene);
-const streaks = createDriveStreaks(scene);
+const streaks = createDriveStreaks(scene, 340);
 // Dust and ice motes rushing past near worlds: they move at your real speed, so
 // going faster is something you see, not just a number.
-const spaceDust = createDriveStreaks(scene, 170, { R: 70, L: 260, min: 7, color: 0xe4f2ec });
+const spaceDust = createDriveStreaks(scene, 80, { R: 80, L: 300, min: 10, color: 0xe4f2ec });
 const worldDots = createWorldDots(scene);
 const starPoint = (star) => [star.x, star.y, star.z];
 sky.update(starPoint(currentStar), camera, currentStar.id);
@@ -270,7 +304,10 @@ let spaceBlend = 0, // 0 = flying near a world's surface, 1 = in space; eases be
     exitGlide = 0, // the climb carrying on for a moment after breaking orbit
     exitClimb = 0,
     lastLocal = null,
-    lastBodyId = null;
+    lastBodyId = null,
+    orbitEntry = 0, // 1 right after dropping into orbit from space, fading to 0 over ~3 s
+    camBack = null, // the camera's (smoothed) direction behind and ahead of the ship
+    camAhead = null;
 const flowVel = new THREE.Vector3(); // ship velocity relative to the world it is near
 try { invertPitch = localStorage.getItem("elsewhere.invertPitch") === "1"; } catch {}
 {
@@ -380,7 +417,9 @@ function orientShip(dt = 1) {
     attitude.multiply(
         new THREE.Quaternion().setFromAxisAngle(vec(0, 0, 1), bankAngle),
     );
-    ship.quaternion.slerp(attitude, 1 - Math.exp(-dt * 9));
+    // Just after entering orbit the ship rolls gently to the world's horizon
+    // instead of snapping to it.
+    ship.quaternion.slerp(attitude, 1 - Math.exp(-dt * (9 - 8.2 * smoothstep(orbitEntry))));
     ship.position.copy(shipPosition);
     shipShadow.position.copy(surfacePoint(up, 0.13));
     shipShadow.quaternion.setFromUnitVectors(vec(0, 0, 1), up);
@@ -493,12 +532,21 @@ function act() {
             toast("Terrain too steep. Move toward flatter ground.");
             return;
         }
-        if (terrainFor(activeBody).isLiquid(n)) {
+        const wet = terrainFor(activeBody).isLiquid(n);
+        if (wet && !floatsHere()) {
             toast(
                 terrainFor(activeBody).liquid === "lava"
                     ? "That is molten rock. Find solid ground to land."
-                    : "Kestrel cannot land on water. Find solid ground.",
+                    : codex.unlocked.has("petrel")
+                      ? "The Petrel floats only on water; this sea is something else. Find solid ground."
+                      : "Kestrel cannot land on water. Find solid ground.",
             );
+            return;
+        }
+        afloat = wet;
+        // The world's own landing pad is always allowed: only picking your own spot by lava needs Heat plating.
+        if (!wet && !landsBesideLava(codex.unlocked) && n.angleTo(landingNormal) * RADIUS > 40 && nearLava(n)) {
+            toast("Too close to lava: the hull would overheat. Move away from it, or install Heat plating to land here.", 5);
             return;
         }
         autoApproach = false;
@@ -543,8 +591,31 @@ function act() {
         }
     }
 }
+// Petrel: sets down and floats on seas of liquid water (not methane, ammonia or sulfur).
+let afloat = false;
+const floatsHere = () => {
+    const t = terrainFor(activeBody);
+    return codex.unlocked.has("petrel") && t.liquid === "water" && (t.solvent ?? "water") === "water";
+};
+// Lava within ~25 m of a point on the ground (Heat plating lets the Kestrel land there anyway).
+function nearLava(n) {
+    const t = terrainFor(activeBody);
+    if (t.liquid !== "lava") return false;
+    const a = tangent(Math.abs(n.y) < 0.9 ? vec(0, 1, 0) : vec(1, 0, 0), n), b = n.clone().cross(a);
+    for (const d of [8, 16, 25])
+        for (let i = 0; i < 12; i++) {
+            const k = (i / 12) * Math.PI * 2;
+            const p = n.clone().addScaledVector(a, (Math.cos(k) * d) / RADIUS).addScaledVector(b, (Math.sin(k) * d) / RADIUS).normalize();
+            if (t.isLiquid(p)) return true;
+        }
+    return false;
+}
 function interact() {
     if (!started || modalOpen()) return;
+    if (mode === "landed" && afloat) {
+        toast("You are afloat: the water is too deep to walk. Take off and land on shore to go on foot.", 4);
+        return;
+    }
     if (mode === "landed") {
         const up = shipPosition.clone().normalize(),
             right = shipForward.clone().cross(up).normalize();
@@ -616,8 +687,9 @@ const input = setupInput({
         interact,
         look(dx, dy, k) {
             if (mode === "walk") {
-                playerForward.applyAxisAngle(playerNormal, -dx * 0.004 * k);
-                lookPitch = clamp(lookPitch - dy * 0.003 * k, -1.15, 1.1);
+                const fine = camera.fov / 70; // zoomed in (field glasses), the view turns more finely
+                playerForward.applyAxisAngle(playerNormal, -dx * 0.004 * k * fine);
+                lookPitch = clamp(lookPitch - dy * 0.003 * k * fine, -1.15, 1.1);
             } else if (mouseSteers()) {
                 steerYaw -= dx * 0.0032 * k;
                 steerPitch -= dy * 0.0032 * k * (invertPitch ? -1 : 1);
@@ -669,11 +741,7 @@ function switchWorld(body, globalPosition) {
     RADIUS = body.radius;
     worldOrigin = positionOf(body);
     signalNormal = vec(...terrainFor(body).site);
-        landingNormal = vec(0, 1, 30 / RADIUS)
-        .normalize()
-        .applyQuaternion(
-            new THREE.Quaternion().setFromUnitVectors(Y, signalNormal),
-        );
+    landingNormal = vec(...terrainFor(body).landing);
     buildSite();
     positionSystem();
     shipPosition.copy(globalPosition).sub(worldOrigin);
@@ -687,7 +755,13 @@ function switchWorld(body, globalPosition) {
         shipPosition.copy(arrivalNormal.multiplyScalar(safeRadius));
     const n = shipPosition.clone().normalize();
     const along = velocity.clone().addScaledVector(n, -velocity.dot(n));
-    if (along.length() > 2) shipForward = along.clone().normalize();
+    // From space, keep the way the nose points (heading and pitch), so the ship
+    // doesn't swing round as it meets the world.
+    const fromSpace = mode === "space";
+    const nose = shipForward.clone(),
+        noseAlong = nose.clone().addScaledVector(n, -nose.dot(n));
+    if (fromSpace && noseAlong.length() > 0.15) shipForward = noseAlong.clone().normalize();
+    else if (along.length() > 2) shipForward = along.clone().normalize();
     else {
         shipForward = tangent(shipForward.clone(), n);
         if (shipForward.lengthSq() < 0.01) shipForward = tangent(signalNormal.clone().sub(n), n);
@@ -695,10 +769,13 @@ function switchWorld(body, globalPosition) {
     }
     // Arriving from space keeps most of your momentum and the angle you came in
     // at; flight drag then eases you down to flying speed and the nose levels out.
-    speed = Math.min(along.length(), 320);
+    speed = fromSpace ? clamp(along.dot(shipForward), -100, 320) : Math.min(along.length(), 320);
     verticalSpeed = clamp(velocity.dot(n), -120, 120);
-    flightPitch = clamp(Math.atan2(velocity.dot(n), Math.max(along.length(), 1)), -0.65, 0.65);
-    aimPitch = flightPitch;
+    flightPitch = fromSpace
+        ? clamp(Math.asin(clamp(nose.dot(n), -1, 1)), -1.35, 1.35)
+        : clamp(Math.atan2(velocity.dot(n), Math.max(along.length(), 1)), -0.65, 0.65);
+    aimPitch = clamp(flightPitch, -0.65, 0.65);
+    if (fromSpace) orbitEntry = 1;
     lastMouseSteer = Math.min(lastMouseSteer, performance.now() - 1000); // levels out soon
     exitGlide = 0;
     turnVelocity = 0;
@@ -830,14 +907,16 @@ function updateSpace(dt) {
         .sort((a, b) => a.clearance - b.clearance);
     // Heading in toward a world the ship sheds speed as its sky gets close, so
     // reaching orbit is a glide rather than a sudden stop.
-    if (nearby.length && nearby[0].clearance < 1500) {
+    if (nearby.length && nearby[0].clearance < 2200) {
         const toward = positionOf(nearby[0].body).sub(global).normalize();
         if (shipForward.dot(toward) * speed > 0) {
-            const cap = 260 + 640 * smoothstep((nearby[0].clearance - 240) / 1260);
+            const cap = 220 + 680 * smoothstep((nearby[0].clearance - 520) / 1600);
             if (Math.abs(speed) > cap) speed = damp(speed, Math.sign(speed) * cap, 3, dt);
         }
     }
-    if (nearby.length && nearby[0].clearance >= 240) nearby.length = 0;
+    // Orbit begins at 520 m (it ends again above 600 m), high enough for the
+    // change of view to happen gradually.
+    if (nearby.length && nearby[0].clearance >= 520) nearby.length = 0;
     if (nearby.length) {
         switchWorld(nearby[0].body, global);
         return;
@@ -1216,9 +1295,7 @@ function arriveInSystem(star, offset) {
             .sort((a, b) => positionOf(a).distanceTo(entry) - positionOf(b).distanceTo(entry))[0];
         RADIUS = activeBody.radius;
         signalNormal = vec(...terrainFor(activeBody).site);
-        landingNormal = vec(0, 1, 30 / RADIUS)
-            .normalize()
-            .applyQuaternion(new THREE.Quaternion().setFromUnitVectors(Y, signalNormal));
+        landingNormal = vec(...terrainFor(activeBody).landing);
         discovered = records.has(activeBody.id);
     }
     worldOrigin = positionOf(activeBody);
@@ -1328,6 +1405,7 @@ function openMap() {
 $("mapBtn").onclick = openMap;
 
 function updateFlight(dt) {
+    orbitEntry = Math.max(0, orbitEntry - dt / 3);
     const up = shipPosition.clone().normalize();
     if (autoApproach) {
         const angle = up.angleTo(landingNormal),
@@ -1370,7 +1448,7 @@ function updateFlight(dt) {
         aimPitch = clamp(aimPitch + m.pitch * 1.5, -0.65, 0.65);
         if (pitchInput) aimPitch = 0;
         else if (performance.now() - lastMouseSteer > 1500) aimPitch = damp(aimPitch, 0, 0.5, dt);
-        flightPitch = damp(flightPitch, pitchInput ? pitchInput * 0.65 : aimPitch, 2.4, dt);
+        flightPitch = damp(flightPitch, pitchInput ? pitchInput * 0.65 : aimPitch, 2.4 * (1 - 0.8 * smoothstep(orbitEntry)), dt);
         const boost = keys.has("ShiftLeft") || keys.has("ShiftRight");
         const braking = keys.has("KeyX");
         let targetSpeed =
@@ -1454,7 +1532,7 @@ function updateManeuver(dt) {
             verticalSpeed = 0;
             speed = 0;
             maneuver = null;
-            toast("Touchdown. Engines idle. Press E to leave Kestrel.");
+            toast(afloat ? "Splashdown. The Petrel rides the swell. Take off and land on shore to go on foot." : "Touchdown. Engines idle. Press E to leave Kestrel.");
         }
     } else {
         // Charge, lift vertically, then gently hand control back above the terrain.
@@ -1503,14 +1581,44 @@ function updateFlow(dt) {
     lastLocal.copy(shipPosition);
     if (v.length() < 30000) flowVel.lerp(v, 1 - Math.exp(-dt * 8));
     const s = flowVel.length();
-    const power = clamp((s - 20) / 600, 0, 1);
+    const power = clamp((s - 30) / 1000, 0, 1);
     if (power > 0.02)
         spaceDust.update(camera, flowVel.clone().normalize(), power, dt, {
             speed: s,
-            len: clamp(s * 0.045, 1.2, 40),
-            opacity: (0.05 + 0.32 * power) * (0.45 + 0.55 * smoothstep(spaceBlend)),
+            len: clamp(s * 0.022, 0.8, 18),
+            opacity: (0.03 + 0.11 * power) * (0.45 + 0.55 * smoothstep(spaceBlend)),
         });
     else spaceDust.hide();
+}
+// Shows the surface of the nearest other world once you are within a few km of it
+// (see approachSite), and keeps it where that world is.
+function updateApproachSite() {
+    let best = null,
+        clearance = Infinity;
+    if (started && (mode === "space" || mode === "flight" || mode === "transit")) {
+        const cam = camera.position.clone().add(worldOrigin);
+        for (const b of system.bodies) {
+            if (b === activeBody || b.giant) continue;
+            const c = cam.distanceTo(positionOf(b)) - b.radius;
+            if (c < clearance) {
+                clearance = c;
+                best = b;
+            }
+        }
+    }
+    const want = best && clearance < (best === approachBody ? 7000 : 6000) ? best : null;
+    if (want !== approachBody) {
+        if (approachSite && approachSite !== site) scene.remove(approachSite.group);
+        approachBody = want;
+        approachSite = want ? siteFor(want) : null;
+        if (approachSite) {
+            approachSite.halo.farFrom.value = want.radius + 3500;
+            approachSite.halo.farTo.value = want.radius + 5800;
+            approachSite.group.visible = true;
+            scene.add(approachSite.group);
+        }
+    }
+    if (approachSite) approachSite.group.position.copy(positionOf(approachBody)).sub(worldOrigin);
 }
 function updateWalk(dt) {
     const turn =
@@ -1607,7 +1715,11 @@ function resolveCollisions(next) {
 // (scanning.js, scan-ui.js). Hold E, or the Scan button, until the ring fills to scan
 // something new; press E on something already recorded to see its card again.
 const scanUI = createScanUI({ touch: coarsePointer });
-const SCAN_TIME = 1.3; // seconds of holding
+const SCAN_TIME = 1.3, // seconds of holding
+    RECORD_TIME = 1.6; // a sky event
+const holdTime = (t) => (t.kind === "core" ? 2 : t.kind === "behaviour" ? observeTime(codex.unlocked) : t.kind === "phenomenon" ? RECORD_TIME : SCAN_TIME);
+let zoom = 0; // field glasses, 0..1 (eases in and out)
+const glassesView = $("glasses");
 let scanTarget = null, // { kind, id, ref, point, reach, known }
     scanProgress = 0, // 0..1 while holding
     scanSearch = 0,
@@ -1618,11 +1730,18 @@ $("actionBtn").addEventListener("pointerdown", () => {
     if (mode === "walk" && scanTarget && !scanTarget.known) touchScanHeld = true;
 });
 for (const ev of ["pointerup", "pointercancel", "pointerleave"]) $("actionBtn").addEventListener(ev, () => (touchScanHeld = false));
+// Behaviours and sky events live only in the codex: ask it.
+const inCodex = (kind) => ({ includes: (id) => codex.has({ kind, seed: String(system.seed), bodyId: activeBody.id, id }) });
 const scannedHere = () => ({
     fauna: (bestiary[activeBody.id] ||= []),
     flora: (catalogue[activeBody.id] ||= []),
     formation: (strata[activeBody.id] ||= []),
+    behaviour: inCodex("behaviour"),
+    phenomenon: inCodex("phenomenon"),
+    core: inCodex("core"),
 });
+// Behaviours already recorded for a species on this world.
+const seenOf = (sp) => behavioursOf(sp).filter((b) => codex.has(behaviourEntry(system, activeBody, sp, b)));
 function updateScan(dt) {
     const held = scanHeld();
     if (!held) scanNeedsRelease = false;
@@ -1630,20 +1749,27 @@ function updateScan(dt) {
     if (scanTarget) scanTarget.point = followTarget(site, scanTarget);
     if ((scanSearch += dt) >= 0.1) {
         scanSearch = 0;
-        const next = findScanTarget({
-            site,
-            here: surfacePoint(playerNormal),
-            eye: camera.position,
-            forward: camera.getWorldDirection(vec()),
-            known: scannedHere(),
-            keep: scanTarget,
-            holding: !!scanning && scanProgress > 0,
-        });
+        const holding = !!scanning && scanProgress > 0;
+        const next = scanTarget?.kind === "phenomenon" && holding
+            ? skyTarget(true)
+            : findScanTarget({
+                site,
+                here: surfacePoint(playerNormal),
+                eye: camera.position,
+                forward: camera.getWorldDirection(vec()),
+                // Field glasses: zoomed in, you can scan from farther and the aim narrows with the view.
+                reachScale: 1 + (ZOOM_REACH - 1) * smoothstep(zoom),
+                aimScale: camera.fov / 70,
+                cores: codex.unlocked.has("deepCoreSampler"),
+                known: scannedHere(),
+                keep: scanTarget,
+                holding,
+            }) || skyTarget(false);
         if (scanProgress > 0 && (!next || next.kind !== scanTarget?.kind || next.id !== scanTarget?.id)) scanProgress = 0;
         scanTarget = next;
     }
     if (scanning && scanTarget && !scanTarget.known) {
-        scanProgress += dt / SCAN_TIME;
+        scanProgress += dt / holdTime(scanTarget);
         if (scanProgress >= 1) completeScan();
     } else scanProgress = Math.max(0, scanProgress - dt * 2.5);
 }
@@ -1652,6 +1778,14 @@ function completeScan() {
     scanProgress = 0;
     scanNeedsRelease = true;
     t.known = true;
+    if (t.kind === "core") t.sample = coreSample(activeBody, t.ref);
+    if (t.kind === "behaviour" || t.kind === "phenomenon" || t.kind === "core") {
+        const entry = t.kind === "core" ? coreEntry(system, activeBody, t.ref, t.sample) : t.kind === "behaviour" ? behaviourEntry(system, activeBody, t.ref, t.behaviour) : phenomenonEntry(system, activeBody, t.id, { total: t.ref.total });
+        if (codex.has(entry)) return;
+        scanUI.flash();
+        showScanCard(t, recordInfo(entry));
+        return;
+    }
     if (list.includes(t.id)) return;
     list.push(t.id);
     saveSurvey();
@@ -1663,7 +1797,7 @@ function completeScan() {
 function showScanCard(t, info) {
     const where = `${wordFor(t).toUpperCase()} · ${activeBody.name.toUpperCase()}`;
     scanUI.card({
-        ...cardFor(t, site, activeBody),
+        ...cardFor(t, site, activeBody, t.kind === "fauna" || t.kind === "behaviour" ? seenOf(t.ref) : []),
         eyebrow: info ? `NEW ${where}` : `RECORDED ${where}`,
         footer: !info
             ? null
@@ -1677,7 +1811,7 @@ function showScanCard(t, info) {
 // The prompt at the crosshair, every frame.
 function drawScanMarker() {
     if (mode !== "walk" || !scanTarget || modalOpen()) return scanUI.prompt(null);
-    scanUI.prompt({ title: scanTarget.known ? scanTarget.ref.name : `Unknown ${wordFor(scanTarget)}`, known: scanTarget.known }, scanProgress);
+    scanUI.prompt({ title: titleFor(scanTarget), known: scanTarget.known, verb: verbFor(scanTarget) }, scanProgress);
 }
 function updateCamera(dt) {
     if (mode === "walk") {
@@ -1697,8 +1831,14 @@ function updateCamera(dt) {
             .multiplyScalar(Math.cos(lookPitch))
             .addScaledVector(playerNormal, Math.sin(lookPitch));
         camera.lookAt(eye.clone().add(look));
-        camera.fov = 70;
+        // Field glasses: hold Z (or the touch button) to zoom in.
+        const zooming = hasFieldGlasses(codex.unlocked) && keys.has("KeyZ") && !modalOpen();
+        zoom = damp(zoom, zooming ? 1 : 0, 7, dt);
+        if (zoom < 0.002) zoom = 0;
+        camera.fov = 70 - 56 * smoothstep(zoom);
+        glassesView.style.opacity = zoom.toFixed(3);
     } else {
+        if (zoom) glassesView.style.opacity = zoom = 0;
                 // The camera drifts back behind the ship once you stop looking around.
         // While the mouse steers, only looking around (Q) moves the camera off the ship.
         const holdView = mouseSteers()
@@ -1718,14 +1858,26 @@ function updateCamera(dt) {
         // How fast you are going, 0..1: wider view, camera dropping back, a faint shake.
         const boosting = keys.has("ShiftLeft") || keys.has("ShiftRight");
         const rush = mode === "deep"
-            ? throttle * (boosting ? 1 : 0.75)
-            : clamp(flowVel.length() / (110 + 790 * sb), 0, 1);
+            ? throttle * (boosting ? 1 : 0.8)
+            : clamp(flowVel.length() / (110 + 1190 * sb), 0, 0.75);
         rushLevel = damp(rushLevel, rush, 2.5, dt);
         const radial = shipPosition.clone().normalize();
         const up = radial.clone().lerp(spaceUp, sb);
         if (up.lengthSq() < 1e-4) up.copy(inSpace ? spaceUp : radial);
         up.normalize();
-        const back = shipForward.clone().negate().applyAxisAngle(up, orbitYaw);
+        // Right after entering orbit the camera swings round to its new place
+        // slowly; otherwise it follows the ship directly.
+        const ease = smoothstep(orbitEntry);
+        const backTarget = shipForward.clone().negate().applyAxisAngle(up, orbitYaw);
+        if (!camBack || ease <= 0 || mode === "walk") {
+            camBack = backTarget.clone();
+            camAhead = shipForward.clone();
+        } else {
+            const f = 1 - Math.exp(-dt * (0.9 + 6 * (1 - ease)));
+            camBack.lerp(backTarget, f).normalize();
+            camAhead.lerp(shipForward, f).normalize();
+        }
+        const back = camBack;
         const framing = Math.max(1, 0.65 / camera.aspect);
         const distance = 26 * (1 + 0.28 * rushLevel + 0.9 * pull);
         const desired = shipPosition
@@ -1739,12 +1891,12 @@ function updateCamera(dt) {
         // Carry the camera along with the ship, so at speed it stays close behind
         // (a little lag is left in, which reads as speed).
         if (mode !== "deep") camera.position.addScaledVector(flowVel, dt * 0.85);
-        camera.position.lerp(desired, 1 - Math.exp(-dt * 4));
-        camera.up.lerp(up, 1 - Math.exp(-dt * 4)).normalize();
+        camera.position.lerp(desired, 1 - Math.exp(-dt * (4 - 2.6 * ease)));
+        camera.up.lerp(up, 1 - Math.exp(-dt * (4 - 3.2 * ease))).normalize();
         const look = shipPosition
             .clone()
             // In space, look far ahead so what you fly toward sits mid-screen.
-            .addScaledVector(shipForward, 12 + 20 * sb)
+            .addScaledVector(camAhead, 12 + 20 * sb)
             // Near the ground the camera looks down a little; this fades out
             // while climbing, so leaving orbit doesn't jolt the view.
             .addScaledVector(up, -7 * (1 - smoothstep((altitude() - 120) / 480)) * (1 - sb) - 10 * pull);
@@ -1758,7 +1910,7 @@ function updateCamera(dt) {
         camera.lookAt(look);
         camera.fov = THREE.MathUtils.damp(
             camera.fov,
-            58 + 15 * rushLevel + 4 * pull,
+            58 + 13 * rushLevel + (mode === "deep" ? 9 * rushLevel : 0) + 4 * pull,
             3,
             dt,
         );
@@ -1891,19 +2043,37 @@ function airOf(body) {
     const p = body.physics?.pressure ?? 0;
     return clamp((Math.log10(Math.max(p, 1e-4)) + 1.5) / 2.5, 0, 1);
 }
+const cloudFog = new THREE.Color();
+let inCloud = 0, // 0..1: how deep in cloud the camera is
+    hiddenLayer = null; // the cloud layer faded out while you are inside it
 function updateAtmosphere() {
-    const air = airOf(activeBody);
-    let k = 0;
-    if (air > 0 && mode !== "deep") {
-        const height = camera.position.length() - RADIUS;
-        k = air * (1 - smoothstep((height - 40) / (300 + 600 * air)));
+    // The sky comes from the world nearest the camera, so a world's air fades in
+    // as you descend toward it, not all at once when you reach its orbit.
+    let body = activeBody,
+        height = camera.position.length() - RADIUS,
+        centre = vec(0, 0, 0);
+    if (mode === "space" || mode === "transit") {
+        const cam = camera.position.clone().add(worldOrigin);
+        for (const b of system.bodies) {
+            if (b === activeBody) continue;
+            const at = positionOf(b), h = cam.distanceTo(at) - b.radius;
+            if (h < height) {
+                height = h;
+                body = b;
+                centre = at.sub(worldOrigin);
+            }
+        }
     }
-    const up = camera.position.clone().normalize(),
+    const air = airOf(body);
+    let k = 0;
+    if (air > 0 && mode !== "deep")
+        k = air * (1 - smoothstep((height - 40) / (300 + 600 * air)));
+    const up = camera.position.clone().sub(centre).normalize(),
         elevation = up.dot(sun.position.clone().normalize()); // the star's height in your sky
-    const day = smoothstep((elevation + 0.1) / 0.35),
+    const day = smoothstep((elevation + 0.1) / 0.35) * (1 - 0.9 * eclipseCover),
         dusk = clamp(1 - Math.abs(elevation - 0.03) / 0.22, 0, 1);
     // The air's own colour, slightly tinted by the star and brighter in thick air.
-    skyDay.set(activeBody.atmosphere).lerp(sun.color, 0.12).multiplyScalar(0.95 + 0.5 * air);
+    skyDay.set(body.atmosphere).lerp(sun.color, 0.12).multiplyScalar(0.95 + 0.5 * air);
     skyNight.copy(skyDay).multiplyScalar(0.06);
     // Sunrise and sunset: a gentle warm shift, then dimming into night.
     skyNow.copy(skyDay).lerp(DUSK, dusk * 0.28);
@@ -1911,7 +2081,160 @@ function updateAtmosphere() {
     scene.background.copy(SPACE).lerp(skyNow, k);
     scene.fog.color.copy(scene.background);
     scene.fog.density = k * (0.00012 + 0.00045 * air);
-    sky.setDaylight(k * day);
+    // Inside a cloud (clouds.mjs, cloud-mesh.js) the view closes in to a few dozen
+    // metres of grey-white, lit like the cloud is; in a gap the air stays clear.
+    const layer = mode !== "deep" && systemView.cloudsOf?.(body.id);
+    inCloud = 0;
+    if (layer) {
+        const rel = camera.position.clone().sub(centre),
+            depth = 1 - Math.abs(rel.length() - body.radius - layer.c.height) / layer.c.thickness;
+        if (depth > 0) inCloud = smoothstep(depth / 0.6) * layer.densityAt(rel) * Math.min(1, layer.c.opacity * 1.2);
+    }
+    if (layer) layer.setSky(scene.background); // the sky behind the clouds, before any cloud fog
+    if (inCloud > 0) {
+        cloudFog.copy(layer.color).multiplyScalar(0.05 + 0.85 * day);
+        scene.background.lerp(cloudFog, inCloud * 0.9);
+        scene.fog.color.copy(scene.background);
+        scene.fog.density = Math.max(scene.fog.density, inCloud * 0.028);
+    }
+    if (hiddenLayer && hiddenLayer !== layer) hiddenLayer.hide(0);
+    hiddenLayer = layer || null;
+    if (layer) layer.hide(inCloud);
+    sky.setDaylight(Math.max(k * day, inCloud)); // no stars through a cloud
+    nightNow = mode === "walk" ? 1 - day : 0;
+}
+// Night filter: on foot at night the suit's visor brightens the view (glowing species most of all).
+let nightNow = 0,
+    nightFilter = 0;
+const nightTint = document.createElement("div");
+nightTint.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:1;opacity:0;background:#5dff9a;mix-blend-mode:soft-light";
+document.body.append(nightTint);
+function updateNightFilter(dt) {
+    const want = codex.unlocked.has("nightFilter") ? smoothstep((nightNow - 0.3) / 0.5) : 0;
+    nightFilter = damp(nightFilter, want, 1.5, dt);
+    if (nightFilter < 0.002) nightFilter = 0;
+    if (mode !== "deep") hemi.intensity = 2.0 * (1 - 0.55 * eclipseCover) * (1 + 2.2 * nightFilter); // set (not scaled) every frame, so it never compounds
+    renderer.toneMappingExposure = 1.15 * (1 + 0.6 * nightFilter);
+    nightTint.style.opacity = (0.35 * nightFilter).toFixed(3);
+}
+
+// --- Sky events (phenomena.mjs, sky-events.js) ------------------------------------
+// Eclipses, aurorae and meteor showers. On a world, a forecast for where you are is
+// worked out every few seconds; the HUD tally shows what comes next, a toast says
+// when one begins, and looking at it (the star, or up at the night sky) lets you
+// record it with E. An eclipse dims the daylight, and a total one sends day animals
+// to sleep and wakes the night ones.
+const skyEvents = createSkyEvents(scene);
+skyEvents.setWorld(activeBody);
+let eclipseCover = 0,
+    skyCast = [], // forecast: [{ type, name, start, end, total, by }] seen from here
+    skyCastAt = -Infinity,
+    skyCastBody = null,
+    visibleSky = []; // what can be seen right now
+const announcedSky = new Set();
+const onWorld = () => ["walk", "landed", "flight", "landing", "takeoff"].includes(mode) && !activeBody.giant;
+const skyRecorded = (type) => codex.has({ kind: "phenomenon", seed: String(system.seed), bodyId: activeBody.id, id: type });
+function skyDescription(e) {
+    const star = system.star.name, by = system.bodies.find((b) => b.id === e.by)?.name;
+    const giant = system.bodies.find((b) => b.id === activeBody.parent && b.giant);
+    if (e.type === "eclipse")
+        return {
+            description: `${by} slides across ${star}${e.total ? " and hides it completely: the day goes dark and the stars come out." : ", and the daylight dims."}`,
+            facts: [["Caused by", by], ["Lasts", `About ${Math.max(1, Math.round((e.end - e.start) / 60))} min`], ["Seen", "By day, while the star is up"]],
+        };
+    if (e.type === "aurora")
+        return {
+            description: `Curtains of light ripple across the night sky where ${giant ? `particles caught in ${giant.name}'s magnetic field` : `particles from ${star}'s flares`} strike the upper air.`,
+            facts: [["Caused by", giant ? `${giant.name}'s magnetic field` : `Flares from ${star}`], ["Seen", "At night, during a storm"]],
+        };
+    return {
+        description: `Streaks of light cross the night sky as ${activeBody.name} passes through the dust trail of a comet.`,
+        facts: [["Caused by", "Comet dust burning up in the air"], ["Seen", "At night, during a shower"]],
+    };
+}
+// A sky event you are looking at (the star for an eclipse, the sky for the rest).
+function skyTarget(holding) {
+    if (mode !== "walk") return null;
+    const fwd = camera.getWorldDirection(vec()), up = camera.position.clone().normalize();
+    for (const e of visibleSky) {
+        if (e.type === "eclipse") {
+            const toStar = sun.position.clone().sub(camera.position).normalize();
+            if (fwd.dot(toStar) < (holding ? 0.8 : 0.9)) continue;
+        } else if (fwd.dot(up) < (holding ? 0.12 : 0.3)) continue;
+        return {
+            kind: "phenomenon", id: e.type, known: skyRecorded(e.type), reach: Infinity,
+            point: camera.position.clone().addScaledVector(fwd, 400),
+            ref: { name: e.name, type: e.type, total: !!e.total, ...skyDescription(e) },
+        };
+    }
+    return null;
+}
+function updateSkyEvents(dt) {
+    const here = onWorld();
+    if (here && (orbitTime - skyCastAt > 8 || skyCastBody !== activeBody)) {
+        if (skyCastBody !== activeBody) skyEvents.setWorld(activeBody);
+        skyCastAt = orbitTime;
+        skyCastBody = activeBody;
+        const n = mode === "walk" ? playerNormal : shipPosition.clone().normalize();
+        skyCast = forecast(system, activeBody, n.toArray(), orbitTime, 1800);
+    }
+    visibleSky = here ? skyCast.filter((e) => e.start <= orbitTime && orbitTime < e.end) : [];
+    eclipseCover = here ? eclipseAt(system, activeBody, orbitTime).cover : 0;
+    if (mode !== "deep") {
+        sun.intensity = 3.1 * (1 - 0.92 * eclipseCover);
+        hemi.intensity = 2.0 * (1 - 0.55 * eclipseCover);
+    }
+    for (const e of started ? visibleSky : []) {
+        const key = `${system.seed}:${activeBody.id}:${e.type}:${Math.round(e.start / 30)}`;
+        if (announcedSky.has(key)) continue;
+        announcedSky.add(key);
+        if (e.type === "eclipse" && skyRecorded("eclipse")) continue; // common on moons: only news the first time
+        const look = skyRecorded(e.type) ? "" : mode !== "walk" ? " Step outside to record it." : e.type === "eclipse" ? " Look at the star and hold E to record it." : " Look up and hold E to record it.";
+        const by = system.bodies.find((b) => b.id === e.by)?.name;
+        toast(
+            e.type === "eclipse" ? `${e.total ? "A total eclipse" : "An eclipse"} is beginning: ${by} is crossing ${system.star.name}.${look}`
+                : e.type === "aurora" ? `An aurora is lighting up the night sky.${look}` : `A meteor shower has begun.${look}`,
+            6,
+        );
+    }
+    // Drawn only near the ground, and only as dark as the sky really is.
+    const up = camera.position.clone().normalize(),
+        dark = clamp(-up.dot(sun.position.clone().normalize()) / 0.12, 0, 1),
+        low = here ? 1 - smoothstep((camera.position.length() - RADIUS - 150) / 400) : 0;
+    const strength = (type) => {
+        const e = visibleSky.find((x) => x.type === type);
+        return e ? clamp(Math.min(orbitTime - e.start, e.end - orbitTime) / 25, 0, 1) * dark * low : 0;
+    };
+    skyEvents.update({ camera, up, aurora: strength("aurora"), meteors: strength("meteors"), dt, time: animationTime });
+}
+// The tally's last line: what the sky does next, seen from here.
+function skyLine() {
+    const ahead = skyCast.filter((e) => e.end > orbitTime);
+    const e = ahead.find((x) => !skyRecorded(x.type)) || ahead[0];
+    if (!e) return "";
+    const mins = (e.start - orbitTime) / 60;
+    const when = e.start <= orbitTime ? (skyRecorded(e.type) || mode !== "walk" ? "now" : e.type === "eclipse" ? "now · look at the star" : "now · look up")
+        : mins < 1 ? "in under a minute" : `in ${Math.round(mins)} min`;
+    return `<div class="tally-sky${skyRecorded(e.type) ? " done" : ""}"><span>${e.name}</span> ${when}</div>`;
+}
+// Behaviour logger (upgrade): say when an animal nearby is doing something new.
+let alertTimer = 0,
+    lastAlert = -Infinity;
+function updateBehaviourAlerts(dt) {
+    if (mode !== "walk" || !site?.fauna?.individualsOf || !behaviourAlerts(codex.unlocked) || (alertTimer += dt) < 1.5) return;
+    alertTimer = 0;
+    if (animationTime - lastAlert < 25) return;
+    const here = surfacePoint(playerNormal);
+    let best = null;
+    for (const sp of site.fauna.species)
+        for (const { creature, position } of site.fauna.individualsOf(sp)) {
+            const b = behaviourNow(creature), d = position.distanceTo(here);
+            if (!b || d > 90 || (best && d > best.d) || codex.has(behaviourEntry(system, activeBody, sp, b))) continue;
+            best = { sp, b, d };
+        }
+    if (!best) return;
+    lastAlert = animationTime;
+    toast(`Behaviour logger: a ${best.sp.name} is ${BEHAVIOURS[best.b].verb} ${Math.round(best.d)} m away.`, 5);
 }
 
 // Heat glow at the screen edges when flying close to a star.
@@ -1966,12 +2289,98 @@ function sufferAttacks() {
         } else toast(`Struck by a ${e.creature.sp.name}! Suit integrity ${Math.round(suit * 100)}%.`, 4);
     }
 }
+// Cold and heat on foot: on worlds below −80 °C or above 80 °C the suit's heat reserve runs
+// down while you walk (1.5–2.5 minutes; four times longer with Thermal lining). It refills
+// aboard the Kestrel or right beside it. Empty means the same emergency recall as a failed suit.
+let warmth = 1,
+    exposureWarned = null;
+function updateExposure(dt) {
+    const severity = exposureOf(activeBody.physics?.temperature ?? 288);
+    const sheltered = mode !== "walk" || surfacePoint(playerNormal).distanceTo(shipPosition) < 9;
+    if (!severity || sheltered) {
+        warmth = Math.min(1, warmth + dt * 0.2);
+        return null;
+    }
+    if (exposureWarned !== activeBody.id) {
+        exposureWarned = activeBody.id;
+        const cold = activeBody.physics.temperature < 288;
+        toast(`${cold ? "Extreme cold" : "Extreme heat"}: your suit's heat reserve is running down. Stay near the Kestrel to recharge it${codex.unlocked.has("thermalLining") ? "" : ", or install Thermal lining to stay out longer"}.`, 7);
+    }
+    warmth = Math.max(0, warmth - dt * (1 + 0.65 * severity) / 150 * exposureScale(codex.unlocked));
+    if (warmth <= 0) {
+        warmth = 1;
+        recallToShip();
+        toast("Suit heat reserve empty. Emergency recall: you are back beside the Kestrel.", 6);
+    }
+    return activeBody.physics.temperature < 288 ? "COLD" : "HEAT";
+}
 function updateSuit(dt) {
     sinceHit += dt;
     if (sinceHit > 6) suit = Math.min(1, suit + dt * 0.05 * suitRecoveryScale(codex.unlocked));
-    const show = mode === "walk" && suit < 0.999;
-    suitReadout.style.display = show ? "block" : "none";
-    if (show) suitReadout.textContent = `SUIT INTEGRITY ${Math.round(suit * 100)}%${sinceHit > 6 ? " · RECOVERING" : ""}`;
+    const exposure = updateExposure(dt);
+    const lines = [];
+    if (mode === "walk" && suit < 0.999) lines.push(`SUIT INTEGRITY ${Math.round(suit * 100)}%${sinceHit > 6 ? " · RECOVERING" : ""}`);
+    if (mode === "walk" && (exposure || warmth < 0.999)) lines.push(`${exposure === "HEAT" ? "COOLING" : "HEAT"} RESERVE ${Math.round(warmth * 100)}%${exposure ? ` · EXTREME ${exposure === "HEAT" ? "HEAT" : "COLD"}` : " · RECHARGING"}`);
+    suitReadout.style.display = lines.length ? "block" : "none";
+    if (lines.length) suitReadout.innerHTML = lines.join("<br>");
+}
+// Life sonar: on foot, an arrow at the top of the view points to the nearest plant or
+// animal species on this world that you have not recorded yet (within 600 m).
+const sonarView = document.createElement("div");
+sonarView.style.cssText =
+    "position:fixed;left:50%;top:112px;transform:translateX(-50%);z-index:3;pointer-events:none;display:none;text-align:center;font:600 9px 'DM Sans',sans-serif;letter-spacing:2px;color:#9ff0c0;text-shadow:0 1px 6px #000";
+sonarView.innerHTML = '<b style="display:block;font-size:20px;line-height:22px;transition:transform .2s">▲</b><span></span>';
+// The suit readouts and the sonar share one column under the header, so they never overlap.
+const topStack = document.createElement("div");
+topStack.style.cssText = "position:fixed;left:50%;top:84px;transform:translateX(-50%);z-index:3;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:8px";
+document.body.append(topStack);
+for (const el of [suitReadout, sonarView]) {
+    el.style.position = "static";
+    el.style.transform = "none";
+    topStack.append(el);
+}
+let sonarTimer = 0,
+    sonarTarget = null; // { point, kind }
+function nearestUnrecorded() {
+    const here = surfacePoint(playerNormal), known = scannedHere();
+    let best = null, bestD = 600 * 600;
+    const offer = (point, kind) => {
+        const d = point.distanceToSquared(here);
+        if (d < bestD) { bestD = d; best = { point, kind }; }
+    };
+    for (const sp of site.fauna?.species || []) {
+        if (known.fauna.includes(sp.id)) continue;
+        for (const p of site.fauna.positionsOf(sp)) offer(p, "animal");
+    }
+    for (const { species, positions } of site.flora?.placed || []) {
+        if (known.flora.includes(species.id)) continue;
+        for (let i = 0; i < positions.length; i += 3) {
+            const dx = positions[i] - here.x, dy = positions[i + 1] - here.y, dz = positions[i + 2] - here.z;
+            const d = dx * dx + dy * dy + dz * dz;
+            if (d < bestD) { bestD = d; best = { point: vec(positions[i], positions[i + 1], positions[i + 2]), kind: "plant" }; }
+        }
+    }
+    return best;
+}
+function updateSonar(dt) {
+    if (!codex.unlocked.has("lifeSonar") || mode !== "walk" || !site || modalOpen()) {
+        sonarView.style.display = "none";
+        return;
+    }
+    if ((sonarTimer -= dt) <= 0) {
+        sonarTimer = 0.5;
+        sonarTarget = nearestUnrecorded();
+    }
+    if (!sonarTarget) {
+        sonarView.style.display = "none";
+        return;
+    }
+    const here = surfacePoint(playerNormal), to = sonarTarget.point.clone().sub(here);
+    const right = playerForward.clone().cross(playerNormal);
+    const angle = Math.atan2(to.dot(right), to.dot(playerForward));
+    sonarView.style.display = "block";
+    sonarView.firstChild.style.transform = `rotate(${angle.toFixed(3)}rad)`;
+    sonarView.lastChild.textContent = `UNRECORDED ${sonarTarget.kind.toUpperCase()} · ${fmtDistance(to.length())}`;
 }
 // Back on foot beside the parked ship, facing away from it.
 function recallToShip() {
@@ -2014,7 +2423,11 @@ const hudState = {
     get system() { return system; },
     get deep() { return deepInfo(); },
     get target() { return target; },
-    get scanLabel() { return mode !== "walk" || !scanTarget ? null : scanTarget.known ? "Details" : scanProgress > 0 ? "Scanning…" : "Hold to scan"; },
+    get scanLabel() {
+        if (mode !== "walk" || !scanTarget) return null;
+        const verb = verbFor(scanTarget);
+        return scanTarget.known ? "Details" : scanProgress > 0 ? { scan: "Scanning…", observe: "Observing…", record: "Recording…", sample: "Drilling…" }[verb] : `Hold to ${verb}`;
+    },
     clearTarget,
     camera,
     shipShadow,
@@ -2027,7 +2440,12 @@ const hudState = {
     openGalaxy,
     positionOf,
 };
-const refreshHUD = () => updateHUD(hudState);
+const refreshHUD = () => {
+    updateHUD(hudState);
+    const glasses = hasFieldGlasses(codex.unlocked);
+    document.body.classList.toggle("glasses", glasses);
+    if (glasses && mode === "walk") $("controlHint").innerHTML = $("controlHint").innerHTML.replace("<kbd>E</kbd> scan / interact", "<kbd>E</kbd> scan / interact <kbd>Z</kbd> zoom");
+};
 let hudTimer = 0;
 function frame(now) {
     requestAnimationFrame(frame);
@@ -2049,12 +2467,17 @@ function frame(now) {
             else if (mode === "walk") updateWalk(dt);
         } else orientShip();
         updateFlow(dt);
+        updateApproachSite();
         updateCamera(dt);
         if (started) updateWaypoint(hudState);
         if (started) drawScanMarker();
         updateHeat(dt);
         updateSuit(dt);
+        updateSonar(dt);
         updateAtmosphere();
+        updateSkyEvents(dt);
+        updateNightFilter(dt);
+        updateBehaviourAlerts(dt);
         if (site) animateSite(dt);
         if (site?.fauna && mode !== "space" && mode !== "transit" && mode !== "deep") {
             const watcher =
@@ -2063,7 +2486,10 @@ function frame(now) {
                     : altitude() < 60
                       ? { position: shipPosition, onFoot: false }
                       : null;
-            site.fauna.update(dt, animationTime, watcher, sunDirection.copy(sun.position).normalize());
+            // In a total eclipse the animals act as if night had fallen.
+            sunDirection.copy(sun.position).normalize();
+            if (eclipseCover > 0.9) sunDirection.negate();
+            site.fauna.update(dt, animationTime, watcher, sunDirection);
             witnessHunts(watcher);
             sufferAttacks();
         }
@@ -2142,22 +2568,23 @@ function updateTally(now = false, dt = 1 / 60) {
     if (!on) return;
     const got = recordedOn(codex.entries, system.seed, activeBody.id);
     const rows = [["Plants", got.flora, totals.flora], ["Animals", got.fauna, totals.fauna], ["Geology", got.formation, totals.formations]].filter(([, , t]) => t > 0);
-    const html = rows.map(([w, g, t]) => `<div class="tally-row${g >= t ? " done" : ""}"><span>${w}</span><b>${Math.min(g, t)} / ${t}</b><i style="--f:${Math.min(1, g / t).toFixed(3)}"></i></div>`).join("");
+    const html = rows.map(([w, g, t]) => `<div class="tally-row${g >= t ? " done" : ""}"><span>${w}</span><b>${Math.min(g, t)} / ${t}</b><i style="--f:${Math.min(1, g / t).toFixed(3)}"></i></div>`).join("") + skyLine();
     if (el.innerHTML !== html) el.innerHTML = html;
 }
-// What the landing site actually holds (a species that found no room is not counted).
+// What the world holds (a formation cleared by builders is not counted).
 function siteTotals() {
     return {
-        flora: site.flora?.placed?.filter((p) => p.positions.length).length ?? 0,
+        flora: site.flora?.species?.length ?? 0, // every species grows somewhere on the world
         fauna: site.fauna?.species?.length ?? 0,
         formations: site.geology?.placed?.filter((p) => p.scales.some((x) => x > 0)).length ?? 0,
     };
 }
+const structureSun = new THREE.Vector3();
 function animateSite(dt) {
     upgradeScreen.setMode(mode);
     updateTally(false, dt);
-    if (site.flora) site.flora.update(animationTime);
-    if (site.structures) site.structures.update(animationTime);
+    site.update(camera.position, animationTime); // plants, rocks and animals fill in around you
+    if (site.structures) site.structures.update(animationTime, structureSun.copy(sun.position).normalize()); // lamps by night, solar wings to the star
     if (site.groundCover) site.groundCover.update(camera.position, animationTime);
     checkTraces(dt);
 }
@@ -2179,8 +2606,18 @@ requestAnimationFrame(frame);
 
 // --- Galaxy travel: jumps reload into the destination system. ---
 let jumping = false;
+let beaconCache = { n: -1, set: null };
 const starMap = createStarMap({
     jumpRange: () => rangeFor(codex.unlocked),
+    radioHearing: () => radioHearing(codex.unlocked),
+    decodes: () => decodesSignals(codex.unlocked),
+    orbitalSurvey: () => codex.unlocked.has("orbitalSurvey"),
+    // Return beacons: the seeds of systems with a fully documented world (recomputed when the codex grows).
+    beacons: () => {
+        if (!codex.unlocked.has("returnBeacons")) return null;
+        if (beaconCache.n !== codex.entries.length) beaconCache = { n: codex.entries.length, set: new Set(completedWorlds(codex.entries).map((e) => e.seed)) };
+        return beaconCache.set;
+    },
     // Radio sources heard from here go into the codex quietly (they arrive in the background).
     onRadio: (sources) => sources.forEach((s) => record(signalEntry(s))),
     here: currentStar,
@@ -2280,3 +2717,17 @@ try {
 } catch {}
 // Not a jump arrival after all (or storage is blocked): show the start menu as usual.
 if (!started) document.documentElement.classList.remove("arriving");
+// Test mode (?dev): install or remove any upgrade and travel to worlds to try them (dev-panel.js).
+setupDev({
+    codex,
+    system,
+    star: currentStar,
+    body: () => activeBody,
+    onChange: () => {
+        starMap.setRange(rangeFor(codex.unlocked));
+        upgradeScreen.refresh();
+        updateTally(true);
+        refreshHUD();
+    },
+    toast,
+});
