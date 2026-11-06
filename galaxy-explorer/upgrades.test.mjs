@@ -90,7 +90,11 @@ test('hunting pairs and fully documented worlds, with a world filter', () => {
   assert.equal(progress([world, hunter, prey, rock]).petrel.needs[0].have, 1, 'a world with life counts for the Petrel');
   const barren = { ...world, world: { ...world.world, life: 'none' } };
   assert.equal(progress([barren, hunter, prey, rock]).petrel.needs[0].have, 0, 'a lifeless world does not');
-  assert.deepEqual(recordedOn([world, hunter, prey, rock], 3, 'planet-1'), { flora: 0, fauna: 2, formation: 1 });
+  assert.deepEqual(recordedOn([world, hunter, prey, rock], 3, 'planet-1'), { flora: 0, fauna: 2, formation: 1, sea: 0 });
+  // Life found only under water is a bonus: recorded, counted apart, never needed to complete a world.
+  const fish = { ...E('fauna', { diet: 'herbivore', prey: [], sea: true }, {}, where), id: 'aq-0' };
+  assert.equal(completedWorlds([world, hunter, fish, rock]).length, 0, 'a fish does not stand in for a land animal');
+  assert.equal(recordedOn([world, hunter, prey, rock, fish], 3, 'planet-1').sea, 1);
 });
 
 test('advanced() reports progress on research only', () => {
@@ -164,7 +168,7 @@ test('the main line can be followed from the home star', () => {
   const home = homeStar(), entries = [];
   let frontier = [home];
   const seen = new Set([home.id]), first = {};
-  const met = (id) => progress(entries, new Set(ids))[id].needs.every((n) => n.done || n.notYet);
+  const met = (id) => progress(entries, new Set(ids))[id].needs.every((n, i) => n.done || n.notYet || UPGRADES[id].needs[i].special === 'relationship'); // contact is made in person, not found by scanning
   for (let hop = 0; hop <= 5; hop++) {
     if (hop) {
       const next = [];

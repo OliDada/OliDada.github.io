@@ -16,8 +16,11 @@
 //   layer.densityAt(dir)             0..1 cloud at a unit direction (THREE.Vector3) right now
 //   layer.hide(k)                    0..1: fade the shells out (when the camera is in a cloud)
 //   layer.setSky(color)              the sky's colour where you stand: night cloud blends into it
+//   layer.weatherAt(dir)             the weather (weather.mjs) at a unit direction right now, or null
+//   layer.flash(k)                   0..1: lightning lighting the clouds from inside
 //   addCloudShadows(material, layer, { lite })   darkens sunlight under the clouds
-import { cloudsFor, cloudAngles, cloudDensity, CLOUD_GLSL, OCTAVES, OCTAVES_LITE } from './clouds.mjs';
+import { cloudsFor, cloudAngles, cloudDensity, CLOUD_GLSL, OCTAVES, OCTAVES_LITE, MAX_STORMS } from './clouds.mjs';
+import { weatherOf, stormsAt, weatherAt } from './weather.mjs';
 
 const smooth = (x) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
 
@@ -28,7 +31,8 @@ export function createCloudLayer(THREE, body, sun, { lite = false, light = '#fff
   // From orbit: just above the highest ground, or a few percent of the radius.
   const low = Math.min(c.height, Math.max(maxH + 4, 0.03 * R));
   const shells = lite ? 2 : 3;
-  let angles = cloudAngles(c, 0);
+  let angles = cloudAngles(c, 0), storms = [];
+  const weather = weatherOf(body, c);
   // Shared with the terrain's shadow lookup, so shadows move with the clouds.
   const uniforms = {
     uCloudRot: { value: new THREE.Vector4(1, 0, 1, 0) },
@@ -40,6 +44,9 @@ export function createCloudLayer(THREE, body, sun, { lite = false, light = '#fff
     uCloudCentre: { value: new THREE.Vector3() },
     uCloudHeight: { value: c.height },
     uCloudShadow: { value: 0.55 * c.opacity },
+    // Storms (weather.mjs) heap the cloud up; set every frame.
+    uStorm: { value: Array.from({ length: MAX_STORMS }, () => new THREE.Vector4(0, 1, 0, 1)) },
+    uStormK: { value: new THREE.Vector3() },
   };
   const shared = {
     ...uniforms,
@@ -50,6 +57,7 @@ export function createCloudLayer(THREE, body, sun, { lite = false, light = '#fff
     uInside: { value: 0 },
     uHide: { value: 0 }, // inside a cloud the fog does the drawing (game.js)
     uFar: { value: 1 },
+    uFlash: { value: 0 },
   };
   const geometry = new THREE.SphereGeometry(1, lite ? 72 : 112, lite ? 48 : 72);
   const group = new THREE.Group();
@@ -83,7 +91,7 @@ export function createCloudLayer(THREE, body, sun, { lite = false, light = '#fff
         #include <common>
         #include <logdepthbuf_pars_fragment>
         uniform vec3 uCloudSun, uColor, uLight, uSky;
-        uniform float uOpacity, uInside, uFar, uHide, uLift, uTop;
+        uniform float uOpacity, uInside, uFar, uHide, uLift, uTop, uFlash;
         varying vec3 vDir, vWorld, vUp;
         varying float vFar;
         ${CLOUD_GLSL}
@@ -114,6 +122,7 @@ export function createCloudLayer(THREE, body, sun, { lite = false, light = '#fff
           // Night side: faint light, as the ground gets, not black.
           vec3 night = uColor * vec3(0.065, 0.08, 0.11);
           col = col * shade * 1.05 * lit + night * (1.0 - lit);
+          col += uFlash * uInside * vec3(0.75, 0.8, 1.0) * (0.4 + thick); // lightning inside the cloud, seen from below
           float a = d * uOpacity * (1.0 - uHide);
           float dist = distance(vWorld, cameraPosition);
           if (uInside > 0.5) a *= 1.0 - smoothstep(0.45 * uFar, uFar, dist); // into the haze at the horizon
@@ -143,6 +152,12 @@ export function createCloudLayer(THREE, body, sun, { lite = false, light = '#fff
     get color() { return shared.uColor.value; },
     update(cameraLocal, t) {
       angles = cloudAngles(c, t);
+      storms = stormsAt(body, c, t, weather);
+      for (let i = 0; i < MAX_STORMS; i++) {
+        const st = storms[i];
+        if (st) uniforms.uStorm.value[i].set(st.dir[0], st.dir[1], st.dir[2], st.cos);
+        uniforms.uStormK.value.setComponent(i, st ? st.k : 0);
+      }
       uniforms.uCloudRot.value.set(Math.cos(angles[0]), Math.sin(angles[0]), Math.cos(angles[1]), Math.sin(angles[1]));
       group.getWorldPosition(uniforms.uCloudCentre.value);
       // Real height near the world; sinking to `low` as you climb away.
@@ -163,10 +178,15 @@ export function createCloudLayer(THREE, body, sun, { lite = false, light = '#fff
       });
     },
     hide(k) { shared.uHide.value = k; },
+    flash(k) { shared.uFlash.value = k; },
+    weatherAt(v) {
+      dir.copy(v).normalize();
+      return weatherAt(body, c, weather, [dir.x, dir.y, dir.z], angles, storms);
+    },
     setSky(color) { shared.uSky.value.copy(color); },
     densityAt(v) {
       dir.copy(v).normalize();
-      return cloudDensity(c, [dir.x, dir.y, dir.z], angles);
+      return cloudDensity(c, [dir.x, dir.y, dir.z], angles, OCTAVES, storms);
     },
     dispose() { geometry.dispose(); for (const m of meshes) m.material.dispose(); },
   };

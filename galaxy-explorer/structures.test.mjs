@@ -25,7 +25,7 @@ test('the most advanced species builds, in a style that follows its body', () =>
   for (const b of civWorlds) {
     const civ = civilizationFor(b, faunaFor(b).species);
     assert.ok(civ && civ.level >= 1 && civ.level <= 6);
-    assert.equal(civ.level, Math.max(...faunaFor(b).species.map(s => s.civilization)));
+    assert.equal(civ.stage, Math.max(...faunaFor(b).species.map(s => s.civilization)));
     assert.equal(civ.family, familyOf(civ.species));
     // Buildings fit their builders: only species with hands build houses, rockets and halls.
     if (['timber', 'terraced', 'tents', 'stilts'].includes(civ.culture)) assert.ok(civ.species.arms, `${civ.species.plan} building ${civ.culture}`);
@@ -45,11 +45,11 @@ test('settlements stand on dry ground, clear of the signal and pad, within walki
     built++;
     byLevel[s.civ.level].push(s.network.settlements.reduce((a, p) => a + p.radius * p.radius, 0)); // how much ground the places cover
     for (const n of s.sites) {
-      assert.ok(!terrain.isLiquid(n));
+      assert.ok(terrain.isLiquid(n) === !!s.civ.underwater, s.civ.underwater ? 'sea builders built on land' : 'built in the sea'); // sea builders build on the sea floor
       assert.ok(n.angleTo(signal) * b.radius > 25 && n.angleTo(landing) * b.radius > 25, 'built on the landing site');
-      assert.ok(n.angleTo(signal) * b.radius < 300 || s.network.capital.far, 'too far to walk to');
+      assert.ok(n.angleTo(signal) * b.radius < (s.civ.family !== 'drifters' && !s.civ.underwater && s.civ.level >= 2 ? 1200 : 300) || s.network.capital.far, 'too far to walk to'); // planned towns are roomy (settlements.mjs), their squares counted out to 900 m
     }
-    const wetOk = s.civ.culture === 'stilts' || s.civ.family === 'drifters'; // stilts and floating homes stand over water
+    const wetOk = s.civ.culture === 'stilts' || s.civ.family === 'drifters' || s.civ.underwater; // stilts and floating homes stand over water
     for (const o of s.obstacles) assert.ok((wetOk || !terrain.isLiquid(o.p.clone().normalize())) && Number.isFinite(o.r) && o.h > 0);
     // Builders live where they build: their herds' homes moved onto the settlements.
     const homes = fauna.homes.get(s.civ.species.id);
@@ -64,7 +64,7 @@ test('settlements stand on dry ground, clear of the signal and pad, within walki
 });
 
 test('spacefarers launch satellites that stay in orbit', () => {
-  const b = civWorlds.find(b => civilizationFor(b, faunaFor(b).species).level === 5) || (() => { for (let s = 0; s < 1000; s++) for (const x of generateSystem(s).bodies) if (faunaFor(x).species.some(y => y.civilization === 5)) return x; })();
+  const b = civWorlds.find(b => civilizationFor(b, faunaFor(b).species).level === 5) || (() => { for (let s = 0; s < 1000; s++) for (const x of generateSystem(s).bodies) if (faunaFor(x).species.some(y => y.civilization === 8)) return x; })();
   const { built } = site(b);
   const sats = built.group.children.find(m => m.isInstancedMesh);
   assert.ok(sats && sats.count > 3);
@@ -84,15 +84,23 @@ test('spacefarers always get a spaceport, built smaller on small worlds so its f
   assert.ok(ports > 0, 'no spacefaring worlds in the sample');
 });
 
+test('phones get the lighter city', () => {
+  const b = civWorlds.find(b => civilizationFor(b, faunaFor(b).species)?.level >= 4);
+  const terrain = terrainFor(b), signal = new THREE.Vector3(...terrain.site), fauna = buildFauna(THREE, { body: b, terrain, radius: b.radius, signalNormal: signal, budget: 90 });
+  const built = buildStructures(THREE, { body: b, terrain, radius: b.radius, signalNormal: signal, landingNormal: new THREE.Vector3(...terrain.landing), fauna, coarse: true });
+  const pos = built.group.children.filter(m => m.isMesh && !m.isInstancedMesh).reduce((a, m) => a + m.geometry.attributes.position.count, 0);
+  assert.ok(pos < 280000, `${pos} vertices on a phone`);
+});
+
 test('the ladder: cities and beyond are bigger, planet-shapers spread over the world and stay within budget', () => {
   const sample = [];
-  for (let s = 0; s < 3000 && sample.length < 6; s++) for (const b of generateSystem(s).bodies) if (faunaFor(b).species.some(x => x.civilization >= 4)) { sample.push(b); seedOf.set(b, s); }
+  for (let s = 0; s < 3000 && sample.length < 6; s++) for (const b of generateSystem(s).bodies) if (faunaFor(b).species.some(x => x.civilization >= 6)) { sample.push(b); seedOf.set(b, s); }
   assert.ok(sample.length >= 3);
   for (const b of sample) {
     const { built, signal } = site(b);
     if (!built.civ) continue;
     const pos = built.group.children.filter(m => m.isMesh && !m.isInstancedMesh).reduce((a, m) => a + m.geometry.attributes.position.count, 0);
-    assert.ok(pos < 280000, `${pos} vertices: ${built.group.children.filter(m => m.isMesh && !m.isInstancedMesh).map(m => m.geometry.attributes.position.count).join(" + ")}`);
+    assert.ok(pos < 560000, `${pos} vertices: ${built.group.children.filter(m => m.isMesh && !m.isInstancedMesh).map(m => m.geometry.attributes.position.count).join(" + ")}`);
     // Towns well beyond the site, on the far side of the world too.
     // Planetary civilizations have towns across the world, with night lights.
     if (built.civ.extent === 'planetary' || built.civ.extent === 'system') {
@@ -143,7 +151,7 @@ test('the landing pad and the site are always on dry ground, and herds never sta
   for (const body of wet) {
     const terrain = terrainFor(body), signal = new THREE.Vector3(...terrain.site);
     const fauna = buildFauna(THREE, { body, terrain, radius: body.radius, signalNormal: signal, budget: 60 });
-    for (const c of fauna.creatures) if (c.sp.altitude[1] === 0) assert.ok(!terrain.isLiquid(c.n), `${c.sp.name} starts in the sea`);
+    for (const c of fauna.creatures) if (c.sp.altitude[1] === 0 && !c.sp.aquatic) assert.ok(!terrain.isLiquid(c.n), `${c.sp.name} starts in the sea`);
   }
 });
 
@@ -169,7 +177,7 @@ test('ships fly real routes: they leave their pads, reach the station, stay abov
       const p = f.o.position, n = p.clone().normalize(), ground = home.radius + terrain.surface(n);
       if (t === 0) start.copy(p); else moved = Math.max(moved, p.distanceTo(start));
       assert.ok(Number.isFinite(p.x) && p.length() > ground - 2, `a ship went underground at t=${t}`);
-      if (p.distanceTo(built.station.position) < 40) docked = true;
+      if (p.distanceTo(built.station.position) < (built.deck ? built.deck.radius + 40 : 40)) docked = true; // shuttles set down on the deck's pads
       if (p.length() < ground + 3) rested = true;
     }
     assert.ok(moved > 50, 'a ship that never goes anywhere');
@@ -183,7 +191,7 @@ test('ships fly real routes: they leave their pads, reach the station, stay abov
 });
 
 test('lamps, masts and dishes stand where cities light their world', () => {
-  const sample = civWorlds.map(b => [b, site(b).built]).filter(([, s]) => s.civ?.level >= 4).slice(0, 4);
+  const sample = civWorlds.map(b => [b, site(b).built]).filter(([, s]) => s.civ?.level >= 4 && !s.ruins).slice(0, 4); // (ruins are dark)
   assert.ok(sample.length >= 2);
   for (const [, s] of sample) {
     if (['hands', 'grazers', 'rollers', 'tripods', 'tentacles'].includes(s.civ.family)) assert.ok(s.landmarks.lamps.length > 4, 'no street lamps'); // only walkers have streets
@@ -192,5 +200,18 @@ test('lamps, masts and dishes stand where cities light their world', () => {
     if (s.landmarks.lamps.length) assert.ok(s.group.children.some(c => c.isPoints && c.visible), 'no lamp halos at night');
     s.update(0, s.sites[0].clone()); // noon
     assert.ok(!s.group.children.some(c => c.isPoints && c.visible), 'halos by day');
+  }
+});
+
+test('sea builders build on the sea floor, under water', () => {
+  const sea = [];
+  for (let s = 0; s < 3000 && sea.length < 3; s++) for (const b of generateSystem(s).bodies) { const c = faunaFor(b).species.find(x => x.civilization >= 2); if (c?.aquatic && civilizationFor(b, faunaFor(b).species).underwater) sea.push(b); }
+  assert.ok(sea.length >= 1, 'no sea builders found');
+  for (const b of sea) {
+    const { terrain, built: s } = site(b);
+    if (!s.civ) continue;
+    assert.ok(s.civ.underwater && s.civ.family === 'tentacles' && !s.civ.fields);
+    for (const n of s.sites) assert.ok(terrain.sea - terrain.height(n) > 2, 'a sea settlement in the shallows or on land');
+    assert.ok(/sea floor/.test(s.civ.description));
   }
 });

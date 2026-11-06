@@ -239,3 +239,8 @@ function shapeOf(THREE, f, C, r) {
   };
   return { lit: merge(lit), glow: merge(glow), foot, height };
 }
+
+// One formation as a model, for previews (codex-ui.js): { lit, glow, foot, height }.
+export function formationModel(THREE, body, f, terrain = null) {
+  return shapeOf(THREE, f, palette(THREE, body, terrain), rng(body.seed, 'geology-place', f.key));
+}

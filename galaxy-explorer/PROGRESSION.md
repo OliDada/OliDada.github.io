@@ -67,8 +67,9 @@ This gives two benefits:
 | Plant (`flora.mjs` `FORMS`) | form | tree, conifer, palm, shrub, grass, succulent, fungus, stalk, mat, mound; exotic: crystal, glasstree, chimney, plume, bulb, sheet, filament, crust |
 | Plant | glow, habitat | 0–1; temperature / moisture / shore / highland preference |
 | Formation (`geology.mjs`) | kind | basalt columns, obsidian shards, fumaroles, hoodoos, rock arches, penitentes, pingos, cryovolcanoes, crystal spires, mineral terraces, sulfur chimneys, karst pinnacles, sea stacks, impact boulders, banded outcrops; rare: geodes, iron meteorites |
-| Animal (`fauna.mjs` `PLANS`) | body plan | quadruped, hexapod, biped, serpent, flyer, floater, arachnid, slug, radial, roller |
-| Animal | form | runner, tank, raptor, mantis, spider, eel, bat, bell, manta, tripod, wheel, … |
+| Animal (`fauna.mjs` `PLANS`) | body plan | quadruped, hexapod, biped, serpent, flyer, floater, arachnid, slug, radial, roller, swimmer (sea life) |
+| Animal | form | runner, tank, raptor, mantis, spider, eel, bat, bell, manta, tripod, wheel, centipede, tower, dome, skywhale, siphon; swimmers: fish, hunter, leviathan, squid, jelly, ray, ribbon, disc |
+| Animal | build, alien | ordinary, giant, heavy, lanky; hammerhead, stalkeye, headless, proboscis |
 | Animal | diet | herbivore, omnivore, carnivore, filter |
 | Animal (`ecology.mjs`) | activity, stalksYou | diurnal, nocturnal, crepuscular, any; dangerous to explorers or not |
 | Animal | mind, manipulators | instinctive, simple, cunning, clever; tool users … system-shapers; hands, tentacles, mandibles, … |
@@ -92,7 +93,7 @@ This gives two benefits:
 | **Radio sources** | ✅ heard on the star map (`signals.mjs`): the Kestrel hears planet-shapers out to 24 ly and spacefarers out to 45; the Long-range receiver 80 and 150. Until the Signal decoder they are unidentified | what they say, through Contact |
 | **Worlds from orbit** | ✅ long-range biosignature scan on the map; with Orbital survey, every system in jump range shows its worlds as if visited | recording a world from orbit into the codex |
 | **Giant atmospheres** | ❌ | cloud samples with an atmospheric probe |
-| **Space structures** | ❌ | stations, satellites, megastructures, derelicts (see Future-proofing) |
+| **Space structures** | ✅ stations and arks: dock on the landing deck of an orbital, spacefaring or system-shaping civilization (each its own plan and size), or a spaceborne civilization's ark, and walk it; the first visit records a `station` entry | megastructures, derelicts (see Future-proofing) |
 
 ## First steps: the first ten minutes
 
@@ -121,7 +122,7 @@ Your first ship. Learn to scan, then reach farther.
 | 3 | **Jump drive II** | Ship | Jump range 12 → 16 light years. | Scan 3 plants · Scan things on 3 kinds of world | Works |
 | 4 | **Thermal lining** | Suit | On worlds colder than −80 °C or hotter than 80 °C, the suit's heat reserve lasts four times longer. | Scan something on a world colder than −80 °C · Scan something on a world hotter than 80 °C | Works |
 | 5 | **Heat plating** | Ship | The hull heats up more slowly near stars, and you can land right beside lava (without it, the Kestrel keeps ~25 m clear, except on the world's own landing pad). | Scan volcanic rock or a volcanic landform · Watch animals do 2 different things | Works |
-| 6 | **Petrel** | Ship | A new ship for seas and storms: it can set down and float on water. Opens the Petrel chapter. | Fully document 2 worlds with life: every plant, animal and rock | Partly built (floats on water; model and handling later) |
+| 6 | **Petrel** | Ship | A new ship for seas and storms: it can set down and float on water. Opens the Petrel chapter. | Fully document 2 worlds with life: every plant, animal and rock | Partly built (its own model and name; floats on water; handling later) |
 
 ### Chapter: Petrel
 
@@ -129,12 +130,12 @@ A sea and storm ship: under water, and the first contact with other minds.
 
 | Step | Upgrade | Gear | Effect | Tasks | Effect status |
 |---|---|---|---|---|---|
-| 7 | **Pressure hull I** | Ship | Dive into liquid seas, down to the shallows. | Watch 2 kinds of animal drink at the shore · Scan a coil or a creeper · Scan sea stacks or a shoreline plant | To build |
-| 8 | **Xenolinguistics** | Knowledge | Settlements give longer field notes; attempt contact with tool users and village builders. | Find a settlement | To build |
-| 9 | **Pressure hull II** | Ship | Deep dives, and the oceans hidden under the ice of frozen moons. | Scan a drifter · Scan water ice, pingos or a cryovolcano | To build |
-| 10 | **Jump drive III** | Ship | Jump range 16 → 24 light years. | Scan animals of 4 different body plans · Record 2 kinds of sky event | Works |
+| 7 | **Pressure hull I** | Ship | The Petrel becomes a submarine: fly low over deep water and hold F (or press F while afloat) to dive, down to 40 m. Hold R at the surface to fly out. | Watch 2 kinds of animal drink at the shore · Scan 2 animals that live in the sea · Scan sea stacks or a shoreline plant | Works |
+| 8 | **Xenolinguistics** | Knowledge | Make sense of tool users, village builders and metalworkers: greet them in their towns and trade what you know. | Find a settlement | Works |
+| 9 | **Pressure hull II** | Ship | Deep dives to the sea floor anywhere, and the oceans hidden under the ice of frozen moons. | Scan a plant that grows under water · Scan water ice, pingos or a cryovolcano | Partly built (deep dives; under-ice oceans later) |
+| 10 | **Jump drive III** | Ship | Jump range 16 → 24 light years. | Scan animals of 4 different body plans · Record 2 kinds of sky event · Record 2 rare finds | Works |
 | 11 | **Signal decoder** | Knowledge | Radio sources on the map say who is broadcasting: the species, their tier, their world and what they are sending. | Find a settlement of village builders or higher | Works |
-| 12 | **Albatross** | Ship | The deep-range ship. Opens the Albatross chapter. | Scan life built on 3 different chemistries · Befriend a spacefaring civilization | To build |
+| 12 | **Albatross** | Ship | The deep-range ship. Opens the Albatross chapter. | Scan life built on 3 different chemistries · Befriend a spacefaring civilization | Tasks work; the ship is to build |
 
 ### Chapter: Albatross
 
@@ -142,9 +143,9 @@ The deep-range ship: into giants and across the galaxy.
 
 | Step | Upgrade | Gear | Effect | Tasks | Effect status |
 |---|---|---|---|---|---|
-| 13 | **Cryo seals** | Ship | Dive into seas of liquid methane and ammonia. | Scan life on a methane world · Scan life on an ammonia world | To build |
+| 13 | **Cryo seals** | Ship | Dive (and, with the Dive suit, swim) in seas of liquid methane and ammonia. | Scan life on a methane world · Scan life on an ammonia world | Works |
 | 14 | **Cloud diver** | Ship | Descend below 250 m into the clouds of gas and ice giants. | Visit 3 giants with different clouds · Scan 2 drifters | To build |
-| 15 | **Diplomatic protocols** | Knowledge | Attempt contact with city builders and above. | Earn the trust of a civilization | To build |
+| 15 | **Diplomatic protocols** | Knowledge | Make sense of city builders up to planet-shapers (orbital civilizations and above meet you halfway). | Earn the trust of a civilization | Works |
 | 16 | **Signal drive** | Ship | Jump straight to any radio source you can hear, up to 150 light years. | Find a settlement of city builders or higher | To build |
 
 ### Side upgrades
@@ -156,6 +157,7 @@ The deep-range ship: into giants and across the galaxy.
 | **Life sonar** | Scanner | Orbital survey | On foot, an arrow points to the nearest plant or animal species you have not recorded (within 600 m). | Scan 4 animals · Scan a nocturnal animal | Works |
 | **Survey drone** | Vehicle | Jump drive II | Scan from a distance: cliffs, skittish herds, high nests, stalkers you would rather not approach. | Scan 2 fliers | To build |
 | **Night filter** | Suit | Thermal lining | On foot at night your visor brightens the view, and glowing species shine out. | Scan 2 glowing species · Record an aurora or a meteor shower | Works |
+| **Dive suit** | Suit | Pressure hull I | Swim on foot, down to 30 m: past the shallows you swim instead of turning back. Leave the Petrel under water and board it there. | Scan 2 plants that grow under water · Scan an animal at home both on land and in water | Works |
 | **Deep core sampler** | Scanner | Heat plating | Hold E on a rock or landform you have recorded to drill a core sample: a second entry with its age and origin. | Scan 6 kinds of rock or landform | Works |
 | **Return beacons** | Ship | Heat plating | Jump straight back to any system where you have fully documented a world, however far (blue diamonds on the map). | Fully document a world: every plant, animal and rock | Works |
 | **Rover** | Vehicle | Petrel | Fast surface travel without taking off; a refuge on wheels from stalkers. | Scan 4 walking animals on 2 kinds of world | To build |
@@ -181,6 +183,24 @@ A civilization's starting attitude to you comes from its species' traits, so it 
 | high aggression, low sociality | **guarded**: warns you off its settlements; never attacks, but contact is slow |
 | spacefarers, system-shapers | **curious**: they already know you are there |
 
+### Stations: where advanced civilizations meet you
+
+**Built (first part).** Below you on the tier ladder, *you go to them* (on foot, in their towns). From orbital up, *they meet you in space*: their station has a landing deck with a visitors' pad, in a plan and size of their own, and their crew (busy with their own work) take you according to their traits (`station-deck.js`, see README *Stations*): **welcome**, **curious**, **wary** or **guarded**. Spaceborne civilizations meet you on their ark. Disposition (above) is "curious" for every orbital civilization, so the crew's stance reads the species' sociality, perception, caution and aggression and its path instead.
+
+Next:
+- **Interception.** A ship meets you when you arrive in their system (or, for system-shapers, at its edge) and hails you, according to the stance: escorts you to the station, holds you at the edge until you have waited, or shadows you. Never a blockade of a planet (rule 1); a guarded civilization may keep you off its stations and megastructures.
+- **Station interiors**, as a new codex kind beside the deck.
+- The **greeting** itself happens on the deck, with the crew who came to meet you.
+
+### Visiting them at home
+
+**Built.** Going to a people should feel like arriving somewhere alive (README *Intelligent species at home*): they react to your landing by their stance, carry themselves by it (expression, `express.mjs`), speak (`voices.js`), keep to their streets, do things together by their path (markets, processions, stargazing, the watch, fieldwork, building, the evening hearth), raise young that come to stare at you, keep animals (while wild ones keep out of their cities), and live in homes you can go into, built to their own size (`interior.js`), where the household takes you as their people do. Contact never covers who you are talking to.
+
+Next:
+- Vignettes as recordable behaviours (a codex kind for customs: "a shrine procession", "the evening hearth"), with rarity: something to look for on each world.
+- Station interiors (the same on-demand rooms, on decks and arks).
+- Elders, and what a household keeps on its shelves (things you could learn from, or give to).
+
 ### The relationship ladder
 
 1. **Observed**: you have recorded the species and a settlement.
@@ -198,7 +218,10 @@ Your codex is what you have to offer: species and places they have never seen. W
 | tool users | where the local animals, water and formations are (HUD hints on their world) |
 | village builders | maps of their world; which worlds in the system hold life |
 | city builders | star charts for their region: reveal systems and biosignatures beyond jump range |
+| metalworkers | maps of their world and where its ores lie |
+| industrial | star charts of their region and which worlds in it hold life |
 | planet-shapers | ship knowledge: an upgrade's requirements partly satisfied |
+| orbital | ship knowledge and an orbital survey of their system |
 | spacefarers | drive technology and, at Friendship, the way to the **Albatross** |
 
 ### Choices with consequences (later)
@@ -233,9 +256,10 @@ New kinds of civilization or place should be additions, not rewrites. This plan 
 
 - **Civilizations are entities** (`civilizations.mjs`): `{ id, tier, reach, family, culture, home, species }`. Today `reach` is `local`, `world`, `orbit` or `system`. Later kinds extend it:
   - **system-spanning** ✅: ambitious spacefarers (extent `system`) settle the nearest rocky worlds and moons of their system (`colonistOf`), which get domed colonies. Still to come: radio heard from farther away, and colonies counted in the network summary.
+  - **Paths** ✅ (`PATHS` in `civilizations.mjs`: agrarian, devotional, scholarly, mercantile, martial, expansionist), shown in every town (path landmarks) and in megacity towers. In-between stages ✅ (metalworkers, industrial, orbital; `BUILD_LEVEL` in `fauna.mjs` maps every stage onto what it builds). Dispositions and offers ✅ (`civ.disposition`, `civ.offers` in `civilizations.mjs`: one thing for the tier, one for the path), shown on the settlement card. Next: the contact interaction itself (greeting, trust, trade) reading these.
   - **system-shapers** ✅ (the sixth step, `system-shapers`, reach `system`): settle every rocky world and moon, with an orbital ring and elevators at home, habitats around the giants and mirrors around the star (`megastructures.js`), and ship traffic between the worlds. A new codex kind (`megastructure`) could record the ring, habitats and swarm.
   - **Temperament** ✅ (ambition, cohesion, harmony) decides each civilization's extent (local → system) and how it builds; contact dispositions can read it too.
-  - **space-living**: no surface settlement at all. Habitats in orbit or between worlds become a new codex kind (`station`); contact happens in space.
+  - **arks** ✅ (`civ.ark`): system-shapers and spacefarers who settle their system also live on an ark at their world's leading Lagrange point (`megastation.js`). **Spaceborne** ✅ (`civ.spaceborne`, reach `space`): about one spacefarer in ten has left its world altogether for its ark; their towns stand empty and overgrown. Next: why they left (a thread like the Senders), and arks in other places (between worlds, round giants).
   - **interstellar**: several systems. One entity, several homes across stars; its radio sources share an id.
 - **The ladder grows by name.** A new step (between two others, or above spacefarers) is added to `CIVILIZATION`. Saves and requirements use names, so nothing old changes meaning. `tierAtLeast` keeps working.
 - **New codex kinds** (station, megastructure, derelict, behaviour) need a scanner and an entry shape. Requirements can ask for them immediately.
@@ -339,17 +363,29 @@ A player must never get stuck because nothing nearby matches the next requiremen
 - [ ] Rover, Survey drone, Atmospheric probe
 
 ### Phase 4: contact
-- [ ] Disposition from traits; relationship ladder saved per civilization id
-- [ ] Contact exchange (symbols and gestures) with tool users and village builders
-- [ ] Trade screen: offer codex entries, receive charts, hints and ship knowledge
+- [x] Stations with a landing deck: dock, walk the deck, meet the crew; their stance comes from traits and path
+- [x] Every civilization's station its own: nine plans, sizes from 38 m to ~150 m radius, features by path and size, a busy crew
+- [x] Arks at L4 for civilizations that spread beyond their world (on the system map), with a mega deck; a few are spaceborne, leaving overgrown ruins at home
+- [x] Intelligent species at home live as townsfolk: places to go and work, walking round buildings
+- [ ] Arks as cruise destinations on the system map (today: the waypoint points the way)
+- [ ] Interception: a ship meets you on arrival and hails you according to the stance
+- [x] Disposition from traits; relationship ladder saved per civilization id (`contact.mjs`)
+- [x] Contact exchange: greet, then show codex entries they value (gesture-and-respond; a shared-symbol layer could come later)
+- [x] Trade: charts, where things live on their world, drive technology, keepsakes
 - [x] Signal decoder: radio sources say who they are
-- [ ] Spacefarer friendship and the Albatross
+- [x] Spacefarer friendship counts toward the Albatross (the ship itself is still to build)
+- [ ] Keepsakes shown in the cockpit; a passenger from a curious species
 - [ ] Consequences: taking things, signals going dark, word spreading
 
 ### Phase 5: the Senders
 - [ ] Deterministic trail from the home star toward a spacefaring civilization
 - [ ] Field notes with fragments and bearings; map markers for bearings
 - [ ] The last fragment, read through Contact
+
+### Codex and rarity
+- [x] Codex overview (K): pictures, descriptions, where found, filters and sorting (`codex-ui.js`, `thumbs.js`)
+- [x] Rarity grades from codex entries (`rarity.mjs`), on scan cards, worth more in trade, and asked for by Jump drive III
+- [ ] More uses for rarity: a side upgrade or a reward for completing a set (every grade of a kind, a legendary of each kind)
 
 ### Phase 6: deeper scanning and danger
 - [x] Behaviour observations (graze, drink, sleep, hunt, feed on a catch, stand ground), using what `ecology.mjs` already does
@@ -373,6 +409,8 @@ A player must never get stuck because nothing nearby matches the next requiremen
 - **Names, never numbers** in saves and requirements.
 
 ## Open questions
+
+- **Knowledge you can see.** No inventory, but some rewards could be visible: a friendly civilization's tech fitted to your ship in their style (their colours and glow), keepsakes on a shelf in the cockpit, or a passenger from a curious species who flies with you and remarks on what you find. These keep knowledge-only rewards from feeling abstract.
 
 - **Contact presentation:** a symbol exchange you assemble from what you have documented, or simpler gestures? It must work with touch.
 - **Can a relationship sour on its own** (for example if you neglect a civilization), or only through your choices?

@@ -30,11 +30,14 @@ const hasSea = (b, kind) => { const t = terrainFor(b); return t.liquid === kind 
 const PLACES = [
   { label: 'Life: plants and animals', tries: 'Field glasses, Life sonar, Night filter, Behaviour logger', test: (b) => floraFor(b).species.length > 2 && faunaFor(b).species.length > 1 },
   { label: 'Stalkers', tries: 'Suit plating', test: (b) => faunaFor(b).species.some((s) => s.ecology?.stalksYou) },
+  { label: 'Sea life', tries: 'Watch from the shore: schools, leaps, leviathans', test: (b) => faunaFor(b).species.filter((s) => s.aquatic).length >= 3 },
+  { label: 'Giants and alien animals', tries: 'Megafauna, walking towers and domes, sky whales', test: (b) => faunaFor(b).species.some((s) => s.build === 'giant') && faunaFor(b).species.some((s) => s.alien || ['centipede', 'tower', 'dome', 'skywhale', 'siphon'].includes(s.form)) },
   { label: 'Colder than −80 °C', tries: 'Thermal lining', test: (b) => b.physics.temperature < 193 },
   { label: 'Hotter than 80 °C', tries: 'Thermal lining', test: (b) => b.physics.temperature > 353 },
   { label: 'Lava seas', tries: 'Heat plating (land off the pad, near lava)', test: (b) => hasSea(b, 'lava') },
   { label: 'Water seas', tries: 'Petrel (land on the water)', test: (b) => hasSea(b, 'water') },
   { label: 'A settlement', tries: 'Xenolinguistics and Contact, later', test: (b) => !!civilizationOf(b) },
+  { label: 'Sea builders', tries: 'Pressure hull I and the Dive suit: a settlement on the sea floor', test: (b) => !!civilizationOf(b)?.underwater },
 ];
 
 export function setupDev({ codex, system, star, body, onChange, toast }) {

@@ -7,8 +7,10 @@
 // (terrain.mjs color(): grass, bare rock, snow) and the world's ground type.
 // Each kind of item is one instanced mesh, so the whole layer is four draw calls.
 // THREE is passed in.
+import { wind, WIND_GLSL } from './wind.mjs';
 import { terrainFor } from './terrain.mjs';
 import { FACES } from './chunk-build.mjs';
+import { PLANT_STYLE } from './style.mjs';
 
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 function hash(f, i, j, k) {
@@ -29,10 +31,20 @@ const BARE = {
 
 export function createGroundCover(THREE, { body, radius: R, coarse = false, blocked = () => false }) {
   const t = terrainFor(body);
-  const reach = coarse ? 26 : 42, cell = coarse ? 1.25 : .95; // metres
-  const caps = coarse ? { tuft: 2600, head: 300, pebble: 1300, shard: 250 } : { tuft: 11000, head: 1400, pebble: 5000, shard: 900 };
+  // New plant style: a thicker, wider carpet (grass in clumps of several tufts, gravel and
+  // flat stones on bare ground) out to a wider circle.
+  const DENSE = PLANT_STYLE !== 'classic';
+  const reach = coarse ? (DENSE ? 32 : 26) : DENSE ? 58 : 42, cell = coarse ? 1.25 : .95; // metres
+  const caps = coarse ? (DENSE ? { tuft: 6000, head: 500, pebble: 2600, shard: 300 } : { tuft: 2600, head: 300, pebble: 1300, shard: 250 })
+    : DENSE ? { tuft: 34000, head: 2600, pebble: 10000, shard: 1400 } : { tuft: 11000, head: 1400, pebble: 5000, shard: 900 };
+  // New plant style: the woods get their own floor (terrain.mjs color() info.wood): ferns,
+  // cushions of moss, fallen twigs and branches and small mushrooms, instead of meadow grass.
+  const woods = PLANT_STYLE !== 'classic' && ['simple', 'complex'].includes(body.physics?.life) && (body.physics?.biochemistry || 'carbon') === 'carbon';
+  if (woods) Object.assign(caps, coarse ? { fern: 900, moss: 900, twig: 220 } : { fern: 3600, moss: 3800, twig: 900 });
   const bare = BARE[t.ground] || (t.airless ? BARE.rocky : BARE.soft);
   const flowers = body.physics?.life === 'complex' ? 1 : body.physics?.life === 'simple' ? .4 : 0;
+  const mossTint = [.24, .36, .16], twigTint = [.33, .25, .17];
+  const mix3 = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
   const group = new THREE.Group();
   const time = { value: 0 }, center = { value: new THREE.Vector3() }, fadeR = { value: new THREE.Vector2(reach * .3, reach) };
 
@@ -74,8 +86,38 @@ export function createGroundCover(THREE, { body, radius: R, coarse = false, bloc
     g.computeVertexNormals();
     return g;
   }
+  // A fern: fronds arching out and down from the centre, each a tapering strip with a
+  // zig-zag edge of leaflets. Darker at the heart.
+  function fernGeometry() {
+    const pos = [], col = [], fronds = 7;
+    for (let f = 0; f < fronds; f++) {
+      const a = f / fronds * Math.PI * 2 + (f % 2) * .3, ca = Math.cos(a), sa = Math.sin(a), len = .8 + (f % 3) * .15, seg = 3;
+      const at = (t, side) => { const w = .16 * Math.sin(Math.PI * Math.min(1, t * 1.1)) * (side ? 1 : -1) * (1 + .35 * ((Math.round(t * seg * 2) % 2))); const d = len * t, y = .55 * Math.sin(t * Math.PI * .75) - .1 * t; return [ca * d - sa * w, y, sa * d + ca * w]; };
+      for (let i = 0; i < seg; i++) {
+        const t0 = i / seg, t1 = (i + 1) / seg, m0 = at(t0, 0).map((v, k) => (v + at(t0, 1)[k]) / 2), m1 = at(t1, 0).map((v, k) => (v + at(t1, 1)[k]) / 2);
+        for (const side of [0, 1]) { pos.push(...m0, ...at(t0, side), ...m1, ...at(t0, side), ...at(t1, side), ...m1); const k0 = .6 + .5 * t0, k1 = .6 + .5 * t1; col.push(k0, k0, k0, k0, k0, k0, k1, k1, k1, k0, k0, k0, k1, k1, k1, k1, k1, k1); }
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.computeVertexNormals();
+    return g;
+  }
+  // A fallen twig or small branch, lying along the ground with a side shoot.
+  function twigGeometry() {
+    const a = new THREE.CylinderGeometry(.025, .04, 1, 4, 1).rotateZ(Math.PI / 2).translate(0, .03, 0).toNonIndexed();
+    const b = new THREE.CylinderGeometry(.012, .022, .4, 3, 1).rotateZ(Math.PI / 2).rotateY(.7).translate(.1, .03, .12).toNonIndexed();
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute([...a.attributes.position.array, ...b.attributes.position.array], 3));
+    g.computeVertexNormals();
+    return g;
+  }
   const geometries = {
     tuft: tuftGeometry(),
+    fern: woods ? fernGeometry() : null,
+    moss: woods ? pebbleGeometry() : null,
+    twig: woods ? twigGeometry() : null,
     head: flowerGeometry(),
     pebble: pebbleGeometry(),
     shard: new THREE.ConeGeometry(.12, 1, 4, 1).translate(0, .5, 0),
@@ -84,13 +126,13 @@ export function createGroundCover(THREE, { body, radius: R, coarse = false, bloc
   // nothing pops in or out as you walk.
   function material(kind) {
     const m = new THREE.MeshStandardMaterial({
-      vertexColors: kind === 'tuft' || kind === 'head', flatShading: kind !== 'tuft', side: kind === 'tuft' ? THREE.DoubleSide : THREE.FrontSide,
+      vertexColors: kind === 'tuft' || kind === 'head' || kind === 'fern', flatShading: kind !== 'tuft' && kind !== 'fern', side: kind === 'tuft' || kind === 'fern' ? THREE.DoubleSide : THREE.FrontSide,
       roughness: kind === 'shard' ? .3 : .95, metalness: kind === 'shard' ? .1 : 0,
     });
-    const sway = kind === 'tuft' || kind === 'head';
+    const sway = kind === 'tuft' || kind === 'head' || kind === 'fern';
     m.onBeforeCompile = (shader) => {
-      Object.assign(shader.uniforms, { uTime: time, uCenter: center, uFade: fadeR });
-      shader.vertexShader = 'uniform float uTime; uniform vec3 uCenter; uniform vec2 uFade;\n' + shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      Object.assign(shader.uniforms, { uTime: time, uCenter: center, uFade: fadeR, uWind: wind.strength, uWindDir: wind.dir });
+      shader.vertexShader = 'uniform float uTime; uniform vec3 uCenter; uniform vec2 uFade; uniform float uWind; uniform vec3 uWindDir;\n' + WIND_GLSL + shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
         vec3 coverAt = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         // Thins out gradually with distance: each item has its own random cut-off, and
         // shrinks away smoothly as you pass it, so there is no edge to the circle.
@@ -100,7 +142,8 @@ export function createGroundCover(THREE, { body, radius: R, coarse = false, bloc
         float coverPhase = coverAt.x * .41 + coverAt.z * .27 + coverAt.y * .19;
         float coverK = max(transformed.y, 0.0);
         transformed.x += sin(uTime * 1.9 + coverPhase) * .13 * coverK;
-        transformed.z += cos(uTime * 1.4 + coverPhase * 1.3) * .08 * coverK;` : ''));
+        transformed.z += cos(uTime * 1.4 + coverPhase * 1.3) * .08 * coverK;
+        transformed += windPush(coverK * .4, coverPhase); // the weather's wind (wind.mjs)` : ''));
     };
     m.customProgramCacheKey = () => 'cover-' + (sway ? 'sway' : 'still');
     return m;
@@ -139,32 +182,48 @@ export function createGroundCover(THREE, { body, radius: R, coarse = false, bloc
     const ground = t.color(n, h, shape, info);
     const r = (k) => hash(f, i, j, k);
     // du, dv: offset in metres along the face axes (for a second item in the same cell).
-    const place = (kind, scale, sink, tilt, colour, du = 0, dv = 0) => {
-      const s = scale;
+    let salt = 0; // each item in a cell turned its own way
+    const place = (kind, scale, sink, tilt, colour, du = 0, dv = 0, flat = 1) => {
+      const s = scale, o = salt++ * 7;
       let px = n.x, py = n.y, pz = n.z, ph = h;
       if (du || dv) { ph = heightAt(px + (U[0] * du + V[0] * dv) / R, py + (U[1] * du + V[1] * dv) / R, pz + (U[2] * du + V[2] * dv) / R); px = m2.x; py = m2.y; pz = m2.z; }
       const rr = R + ph - sink * s;
       dummy.position.set(px * rr, py * rr, pz * rr);
       q.setFromUnitVectors(up, dummy.position.clone().normalize());
-      dummy.quaternion.copy(q); dummy.rotateY(r(9) * 6.283); if (tilt) { dummy.rotateX((r(10) - .5) * tilt); dummy.rotateZ((r(11) - .5) * tilt); }
-      dummy.scale.set(s, s, s); dummy.updateMatrix();
+      dummy.quaternion.copy(q); dummy.rotateY(r(9 + o) * 6.283); if (tilt) { dummy.rotateX((r(10 + o) - .5) * tilt); dummy.rotateZ((r(11 + o) - .5) * tilt); }
+      dummy.scale.set(s, s * flat, s); dummy.updateMatrix();
       rec.items.push({ kind, m: dummy.matrix.toArray(), c: colour });
     };
     const lin = (rgb, k = 1) => { tint.setRGB(rgb[0] * k, rgb[1] * k, rgb[2] * k, THREE.SRGBColorSpace); return [tint.r, tint.g, tint.b]; };
     const roll = r(3);
-    const grass = info.veg * Math.max(0, 1 - info.snow * 2.5); // frost and snow thin out the grass
+    const wood = woods ? info.wood : 0;
+    const grass = info.veg * Math.max(0, 1 - info.snow * 2.5) * (1 - wood * .88); // frost and snow thin out the grass, and so does a forest's shade
+    if (wood > .15 && info.snow < .4) {
+      // The forest floor: ferns in drifts, moss cushions, fallen twigs, the odd mushroom.
+      const drift = smooth(-.2, .5, Math.sin(n.x * R / 7.3 + 1.3 * Math.sin(n.z * R / 5.1)) * Math.cos(n.y * R / 6.7 + n.x * R / 9.1));
+      const fernK = wood * (.08 + .3 * drift), mossK = wood * .22, twigK = wood * .05;
+      const w = r(15);
+      if (w < fernK) place('fern', .45 + .6 * r(4) * (.5 + drift * .7), .03, .35, lin(t.vegetation || ground, .7 + .45 * r(5)), (r(12) - .5) * cell * .5, (r(13) - .5) * cell * .5);
+      else if (w < fernK + mossK) place('moss', .12 + .3 * r(4) ** 1.5, .42, .5, lin(mossTint, .75 + .4 * r(5)));
+      else if (w < fernK + mossK + twigK) place('twig', .5 + .9 * r(4), .01, .15, lin(twigTint, .7 + .4 * r(5)));
+      else if (w > 1 - .012 * wood) place('head', .1 + .12 * r(4), .02, .3, lin([[.85, .78, .6], [.75, .25, .18], [.92, .9, .85], [.55, .4, .28]][Math.floor(r(14) * 4)]));
+    }
     if (info.snow > .4) { // snow covers whatever grows here
       if (roll < .1) place('pebble', .08 + .2 * r(4) ** 2, .3, 1, lin(ground, 1.05)); // snow clumps
       else if (t.ground === 'ice' && roll > 1 - bare.shard) place('shard', .2 + .6 * r(4) ** 2, .1, .8, lin([.75, .9, 1]));
       return;
     }
-    if (grass > .12) {
+    if (grass > (DENSE ? .06 : .12)) {
       // Grassland: tufts thick where the ground is green, a few flowers, the odd pebble.
       const k = 1.15 + .25 * r(5);
-      if (roll < grass * .95) {
+      if (roll < (DENSE ? Math.min(1, .15 + grass * 1.7) : grass * .95)) {
         place('tuft', .28 + .35 * r(4) * (.6 + grass * .6), .02, .3, lin(ground, k));
         if (r(6) < grass * .6) // a second, smaller tuft beside it
           place('tuft', .2 + .2 * r(7), .02, .5, lin(ground, k * .95), (r(12) - .5) * cell * .6, (r(13) - .5) * cell * .6);
+        if (DENSE) { // a clump: more tufts, some taller, some drier, so the meadow is a carpet
+          const extra = Math.floor(grass * 3.2 * r(40));
+          for (let e = 0; e < extra; e++) { const dry = r(41 + e) < .22; place('tuft', (.22 + .4 * r(44 + e)) * (r(47 + e) < .12 ? 1.7 : 1), .02, .45, dry ? lin(mix3(ground, [.72, .64, .4], .5), k) : lin(ground, k * (.9 + .25 * r(50 + e))), (r(53 + e) - .5) * cell, (r(56 + e) - .5) * cell); }
+        }
         if (r(8) < .1 * flowers * grass) {
           const hue = [[.95, .85, .3], [.9, .45, .6], [.85, .9, 1], [.7, .5, .95]][Math.floor(r(14) * 4)];
           place('head', .3 + .25 * r(4), .02, .25, lin(hue));
@@ -174,7 +233,14 @@ export function createGroundCover(THREE, { body, radius: R, coarse = false, bloc
     }
     // Bare ground: pebbles and stones (more where it is steep), dry tufts, shards.
     const pebbles = bare.pebble * (1 + info.bare * 1.5) * (info.shore ? .6 : 1);
-    if (roll < pebbles) place('pebble', .05 + .3 * r(4) ** 2.5, .35, 1, lin(ground, .62 + .2 * r(5)));
+    if (roll < pebbles) {
+      place('pebble', .05 + .3 * r(4) ** 2.5, .35, 1, lin(ground, .62 + .2 * r(5)));
+      if (DENSE) { // gravel round it, and now and then a flat stone half sunk in the ground
+        const g = 1 + Math.floor(r(60) * 3);
+        for (let e = 0; e < g; e++) place('pebble', .03 + .07 * r(61 + e), .3, 1, lin(ground, .55 + .3 * r(64 + e)), (r(67 + e) - .5) * cell, (r(70 + e) - .5) * cell);
+        if (r(73) < .25) place('pebble', .25 + .45 * r(74), .25, .3, lin(ground, .6 + .2 * r(75)), (r(76) - .5) * cell * .5, (r(77) - .5) * cell * .5, .35);
+      }
+    } else if (DENSE && roll < pebbles * 1.6) place('pebble', .025 + .05 * r(4), .3, 1, lin(ground, .6 + .25 * r(5))); // scattered grit
     else if (roll < pebbles + bare.dry) place('tuft', .18 + .25 * r(4), .02, .4, lin([.62, .53, .34], .8 + .3 * r(5)));
     else if (roll > 1 - bare.shard) {
       const crystal = t.ground === 'ice' ? [.75, .9, 1] : (body.crystal ? [1, 3, 5].map(o => parseInt(body.crystal.slice(o, o + 2), 16) / 255) : [.8, .7, .9]);
@@ -213,7 +279,7 @@ export function createGroundCover(THREE, { body, radius: R, coarse = false, bloc
   }
 
   function rebuild() {
-    const counts = { tuft: 0, head: 0, pebble: 0, shard: 0 };
+    const counts = Object.fromEntries(Object.keys(caps).map((k) => [k, 0]));
     for (const rec of active) {
       if (!rec.ready) continue;
       for (const it of rec.items) {

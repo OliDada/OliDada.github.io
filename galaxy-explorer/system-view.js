@@ -15,6 +15,7 @@ import { buildMegastructures } from "./megastructures.js";
 import { createCloudLayer } from "./cloud-mesh.js";
 import { orbitClock } from "./orbits.mjs";
 import { terrainFor } from "./terrain.mjs";
+import { SIZE } from "./scale.mjs";
 
 const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
@@ -34,11 +35,11 @@ function buildWorld(system, body, streamer, coarse, gradual, sun) {
     }
     if (body.ringed && !body.giant) {
         // Rocky worlds use the same banded rings as the giants, kept inside
-        // their moons' orbits (which start 420 m above the surface).
+        // their moons' orbits (which start 420 m x SIZE above the surface).
         const R = body.radius,
             inner = R * 1.2,
-            outer = Math.min(R * 1.95, R + 210);
-        if (outer > inner + 25) {
+            outer = Math.min(R * 1.95, R + 210 * SIZE);
+        if (outer > inner + 25 * SIZE) {
             const ring = createRing(THREE, body, inner, outer, { segments: 160, opacity: 0.8 });
             const tilt = new THREE.Group();
             tilt.rotation.z = (((body.seed % 1000) / 1000) - 0.5) * 0.5;
@@ -72,18 +73,23 @@ function addCityLights(system, body, planet, sun, actual = null) {
 }
 
 // What civilizations built between and around the worlds (megastructures.js).
-function addMegastructures(system, worlds, group) {
-    try { return buildMegastructures(THREE, system, worlds, group); } catch (e) { console.warn("megastructures", e); return null; }
+function addMegastructures(system, worlds, group, sun) {
+    try { return buildMegastructures(THREE, system, worlds, group, sun); } catch (e) { console.warn("megastructures", e); return null; }
 }
 
 function view(scene, system, worlds, starMesh, group, sun) {
-    const local = new THREE.Vector3(), mega = addMegastructures(system, worlds, group);
+    const local = new THREE.Vector3(), mega = addMegastructures(system, worlds, group, sun);
     return {
         system,
         group,
         starMesh,
         get visible() { return group.visible; },
         set visible(on) { group.visible = on; },
+        // What has been built around a world that can't be passed through (megastructures.js).
+        obstaclesNear: (id, p) => mega?.obstaclesNear(id, p) ?? [],
+        ringOf: (id) => mega?.ringOf(id) ?? null,
+        // Arks of spaceborne civilizations (megastation.js): { group, deck, civ, name, collide }.
+        arks: () => mega?.arks ?? [],
         // Once a world's settlements are built, light them from space where their lights really are.
         useSiteLights(body, actual) { const planet = worlds.get(body.id); if (planet && actual) addCityLights(system, body, planet, sun, actual); },
         // positions: Map id -> [x, y, z] (system coordinates); origin: THREE.Vector3.
@@ -120,6 +126,8 @@ function view(scene, system, worlds, starMesh, group, sun) {
             starMesh.getWorldPosition(sun.value);
             streamer.pump(4);
         },
+        // The material of a world's sea surface (planet-lod.js), or undefined: game.js shows its underside when you dive.
+        waterOf(id) { return worlds.get(id)?.waterMaterial; },
         // The cloud layer of a world (cloud-mesh.js), or undefined.
         cloudsOf(id) { return worlds.get(id)?.clouds; },
         dispose() {

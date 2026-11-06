@@ -37,8 +37,12 @@ export function ecologyFor(species, body, e) {
       for (const [k, v] of Object.entries(w)) { roll -= Math.max(0, v); if (roll <= 0) { activity = k; break; } }
     } else r();
     const prey = [];
+    // Where it can hunt: its own places; fliers swoop on the ground, and divers into the sea.
+    const h = s.habitats || { land: !s.aquatic && !flying, water: !!s.aquatic }, can = { land: h.land || flying, water: h.water };
     for (const o of species) {
       if (o === s || o.altitude[1] > 0) continue; // nothing catches fliers or drifters
+      const oh = o.habitats || { land: !o.aquatic, water: !!o.aquatic };
+      if (!((can.land && oh.land) || (can.water && oh.water))) continue; // never meet
       // Hunters take other hunters only when much smaller, so no two species hunt each other.
       const reach = (flying ? .7 : 1.15) * (o.traits.diet === 'carnivore' ? .55 : 1);
       if (t.diet === 'carnivore' && o.size < s.size * reach && o.size > s.size * .1) prey.push(o.id);
@@ -60,7 +64,7 @@ export function ecologyFor(species, body, e) {
   for (const s of species) for (const id of out[s.id].prey) out[id].predators.push(s.id);
   // Explorers land by day: where days and nights exist, keep at least one ground
   // species awake in daylight (the least keen-eyed one is the likeliest day-dweller).
-  const ground = species.filter(s => s.plan !== 'floater' && s.altitude[1] === 0);
+  const ground = species.filter(s => s.plan !== 'floater' && s.altitude[1] === 0 && !s.aquatic);
   if (!locked && ground.length && !ground.some(s => ['diurnal', 'any'].includes(out[s.id].activity)))
     out[ground.reduce((a, s) => s.traits.perception < a.traits.perception ? s : a).id].activity = 'diurnal';
   return out;

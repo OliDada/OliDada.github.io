@@ -24,11 +24,24 @@ test('civilized species get manipulators and culture; others none', () => {
 test('higher civilization levels wear and carry more, and stay on the ground', () => {
   const b = living.find(x => faunaFor(x).species.some(s => s.plan === 'quadruped' || s.plan === 'biped'));
   const base = faunaFor(b).species.find(s => s.plan === 'quadruped' || s.plan === 'biped');
-  const list = [0, 1, 2, 3, 5].map(L => ({ ...base, civilization: L, id: `${base.id}-${L}` }));
+  // stages: none, tool users, village builders, city builders, spacefarers
+  const list = [0, 1, 2, 4, 8].map(L => ({ ...base, civilization: L, id: `${base.id}-${L}` }));
   const terrain = terrainFor(b);
   const fauna = buildFauna(THREE, { body: b, terrain, radius: b.radius, signalNormal: new THREE.Vector3(...terrain.site), budget: 20, species: list });
   const counts = fauna.group.children.filter(m => m.geometry.attributes.aPart).map(m => m.geometry.attributes.position.count);
   for (let i = 1; i < counts.length; i++) assert.ok(counts[i] > counts[i - 1], `level ${[0, 1, 2, 3, 5][i]} adds nothing: ${counts}`);
   const glow = fauna.group.children.filter(m => m.geometry.attributes.aPart).map(m => m.geometry.attributes.aGlow.array.some(v => v > 0));
   assert.ok(glow[4], 'spacefarers carry glowing tech');
+});
+
+test('cultures differ in how they present themselves: not all dress, not all have hands', () => {
+  const styles = {}, arms = new Set(), bodies = new Set();
+  for (const b of living) for (const s of faunaFor(b).species) if (s.civilization) {
+    const c = cultureOf(s); styles[c.style] = (styles[c.style] || 0) + 1; arms.add(c.armStyle); bodies.add(`${s.build}/${s.alien || s.form}`);
+    assert.equal(s.culture.style, c.style);
+  }
+  const total = Object.values(styles).reduce((a, v) => a + v, 0);
+  assert.ok(Object.keys(styles).length >= 4, `only ${Object.keys(styles)} styles`);
+  assert.ok((styles.clothed || 0) < total * .6, 'nearly everyone wears clothes');
+  assert.ok(arms.size >= 3 && bodies.size >= 8);
 });

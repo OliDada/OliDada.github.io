@@ -46,6 +46,7 @@ export function chunkIndices(S) {
 // spec: { face, a0, b0, size, segments }. Positions are relative to the tile centre (float precision).
 export function buildChunk(body, spec) {
   const t = terrainFor(body), R = body.radius, S = spec.segments, V = S + 1;
+  const newLand = body.landStyle !== 'classic';
   const { edge } = chunkIndices(S);
   const count = V * V + edge.length;
   const positions = new Float32Array(count * 3), colors = new Float32Array(count * 3), normals = new Float32Array(count * 3);
@@ -91,6 +92,12 @@ export function buildChunk(body, spec) {
     out.nx = nx; out.ny = ny; out.nz = nz;
     out.slope = 1 - Math.max(0, nx * dirs[e * 3] + ny * dirs[e * 3 + 1] + nz * dirs[e * 3 + 2]);
     out.hollow = ((hs[at(i + st, j)] + hs[at(i - st, j)] + hs[at(i, j + st)] + hs[at(i, j - st)]) / 4 - hs[e]) / sp;
+    // New land: this measure grows with the spacing (it is curvature times spacing), so on
+    // coarse, distant tiles over tall mountains every small bench read as a deep hollow or
+    // a sharp crest, and the shading and colours that follow hollows (darker hollows, lit
+    // crests, snow, scree, moss) striped the slopes along their contours. Held to what a
+    // 2 m grid would measure.
+    if (newLand && sp > 2) out.hollow *= 2 / sp;
     out.spacing = sp;
     return out;
   };

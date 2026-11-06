@@ -18,7 +18,8 @@ const AIM = 0.12; // radians off the crosshair that still count, plus the object
 // How far away each kind can be scanned from, in metres.
 const reachOf = {
     // Fliers and drifters keep to the sky (up to about 28 m up), so they can be scanned from farther.
-    fauna: (sp) => (sp.altitude[1] > 0 ? 34 : 12) + sp.size * 6,
+    // Sea life is scanned from the shore, so it reaches farther too.
+    fauna: (sp) => (sp.altitude[1] > 0 ? 34 : sp.aquatic ? 26 : 12) + sp.size * (sp.aquatic ? 3 : 6),
     flora: (s) => 6 + s.height * 0.6,
     formation: (foot, scale) => foot * scale + 7,
 };
@@ -49,7 +50,7 @@ export function findScanTarget({ site, here, eye, forward, known, keep, holding 
             const list = fauna.individualsOf ? fauna.individualsOf(sp) : fauna.positionsOf(sp).map((position) => ({ position }));
             const scanned = known.fauna.includes(sp.id), reach = reachOf.fauna(sp), size = Math.max(0.6, sp.size * 0.8);
             for (const { creature, position } of list) {
-                const point = lift(position, sp.altitude[1] > 0 ? 0 : sp.size * 0.5 + 0.2);
+                const point = lift(position, sp.altitude[1] > 0 || sp.aquatic ? 0 : sp.size * 0.5 + 0.2);
                 // Watching works from farther than scanning: you only need to see what it does.
                 const b = scanned ? behaviourNow(creature) : null, id = `${sp.id}:${b}`;
                 if (b && !known.behaviour?.includes(id)) consider("behaviour", id, sp, point, reach * 1.6, size, { creature, behaviour: b });
@@ -86,7 +87,7 @@ export function findScanTarget({ site, here, eye, forward, known, keep, holding 
 // Where a moving animal is now (the one being watched, or the nearest of its kind to where it was).
 export function followTarget(site, t) {
     if (t.kind !== "fauna" && t.kind !== "behaviour") return t.point;
-    const lifted = (p) => p.clone().addScaledVector(p.clone().normalize(), t.ref.altitude[1] > 0 ? 0 : t.ref.size * 0.5 + 0.2);
+    const lifted = (p) => p.clone().addScaledVector(p.clone().normalize(), t.ref.altitude[1] > 0 || t.ref.aquatic ? 0 : t.ref.size * 0.5 + 0.2);
     if (t.creature && site.fauna?.individualsOf) {
         const me = site.fauna.individualsOf(t.ref).find((x) => x.creature === t.creature);
         return me ? lifted(me.position) : t.point;
@@ -94,15 +95,15 @@ export function followTarget(site, t) {
     const list = site.fauna?.positionsOf(t.ref) || [];
     if (!list.length) return t.point;
     const p = list.reduce((a, b) => (b.distanceTo(t.point) < a.distanceTo(t.point) ? b : a));
-    return p.clone().addScaledVector(p.clone().normalize(), t.ref.altitude[1] > 0 ? 0 : t.ref.size * 0.5 + 0.2);
+    return p.clone().addScaledVector(p.clone().normalize(), t.ref.altitude[1] > 0 || t.ref.aquatic ? 0 : t.ref.size * 0.5 + 0.2);
 }
 
 // What to call a target: rock types and landforms are both codex kind 'formation'.
-export const wordFor = (t) => (t.kind === "core" ? "core sample" : t.kind === "behaviour" ? "behaviour" : t.kind === "phenomenon" ? "sky event" : t.kind === "fauna" ? "animal" : t.kind === "flora" ? "plant" : t.kind === "settlement" ? "settlement" : t.ref?.type === "rock" ? "rock" : "landform");
+export const wordFor = (t) => (t.kind === "station" ? (t.ark ? "ark" : "station") : t.kind === "core" ? "core sample" : t.kind === "behaviour" ? "behaviour" : t.kind === "phenomenon" ? "sky event" : t.kind === "fauna" ? "animal" : t.kind === "flora" ? "plant" : t.kind === "settlement" ? "settlement" : t.ref?.type === "rock" ? "rock" : "landform");
 
 const PLAN_WORDS = {
     quadruped: "Four-legged", hexapod: "Six-legged", biped: "Two-legged", serpent: "Legless, coiling", flyer: "Winged flier",
-    floater: "Gas-filled drifter", arachnid: "Eight-legged", slug: "Soft-bodied, gliding", radial: "Radial, no front or back", roller: "Rolls instead of walking",
+    floater: "Gas-filled drifter", arachnid: "Eight-legged", slug: "Soft-bodied, gliding", radial: "Radial, no front or back", roller: "Rolls instead of walking", swimmer: "Swimmer",
 };
 const ACTIVE_WORDS = { diurnal: "By day", nocturnal: "By night", crepuscular: "At dawn and dusk", any: "At any hour" };
 const TEMPER_WORDS = { skittish: "Wary: bolts if you come close", curious: "Bold: comes to size you up", indifferent: "Calm: ignores you" };
@@ -177,6 +178,8 @@ export function cardFor(t, site, body, seen = []) {
             facts: [
                 ["Diet", sp.traits.diet === "filter" ? "Filter-feeder" : cap(sp.traits.diet)],
                 ["Body", PLAN_WORDS[sp.plan] || cap(sp.plan)],
+                ["Build", { giant: "Giant", heavy: "Heavy, barrel-bodied", lanky: "Tall and thin" }[sp.build] || null],
+                ["Size", sp.size >= 3 ? `About ${Math.round(sp.size)} m long` : null],
                 ["Active", ACTIVE_WORDS[eco.activity] || null],
                 ["Lives", sp.group > 1 ? `In groups of up to ${sp.group}` : "Alone"],
                 ["Temper", eco.stalksYou ? "Stalks explorers on foot" : TEMPER_WORDS[sp.behavior] || null],
@@ -212,11 +215,23 @@ export function cardFor(t, site, body, seen = []) {
             tags: [f.rare && { text: "Rare", tone: "gold" }].filter(Boolean),
         };
     }
+    if (t.kind === "station") {
+        const c = t.ref, d = t.deck;
+        const STANCE_WORDS = { welcome: "Welcoming: they come to meet you", curious: "Curious: they come to study you", wary: "Wary: they keep their distance", guarded: "Guarded: wardens follow you" };
+        return {
+            title: t.ark ? cap(t.ark.name) : c.species?.name ? `${c.species.name} station` : "Station",
+            lede: t.ark
+                ? `${c.spaceborne ? `The ark the ${c.species?.name ?? "builder"}s live on, having left their world` : `An ark of the ${c.species?.name ?? "builder"}s, home to many of them beside their world`}: ${{ cylinders: "two great turning drums on a spine", torus: "a great wheel on spokes", spindle: "a needle of stacked discs", sphere: "a vast lit sphere ringed with farms", bloom: "a cluster of grown pods round a core" }[t.ark.form] || "a vast station"}, with ${d?.layout ?? "a deck"} on top.`
+                : `A station in orbit with a landing deck open to space: ${d?.layout ?? "a deck"}.${d?.landmark ? ` On the side facing their world: ${d.landmark}.` : ""}`,
+            facts: [["Builders", c.spaceborne ? "Spaceborne" : cap(c.tier)], ["Path", c.path ? cap(c.path) : null], ["Deck", d?.radius ? `About ${Math.round(d.radius * 2)} m across, ${d.pads.length} pads` : null], ["Crew", d?.crewCount ? `${d.crewCount} on deck, in pressure suits` : null], ["Toward you", STANCE_WORDS[d?.stance] || null]].filter(([, x]) => x),
+            tags: [{ text: t.ark ? "Ark" : "Station", tone: "gold" }, c.path && { text: cap(c.path) }].filter(Boolean),
+        };
+    }
     // settlement: t.ref is the civilization drawn at the site (structures-mesh.js)
     const c = t.ref;
     return {
         title: c.species?.name ? `${c.species.name} builders` : "Settlement", lede: c.description,
-        facts: [["Builders", cap(c.tier)], ["Culture", c.culture ? cap(c.culture) : null]].filter(([, x]) => x),
-        tags: [{ text: "Intelligent life", tone: "gold" }],
+        facts: [["Builders", cap(c.tier)], ["Culture", c.culture ? cap(c.culture) : null], ["Path", c.path ? cap(c.path) : null], ["Now", c.spaceborne ? `Gone: they live on ${c.arkName}` : null], ["Toward you", c.disposition && !c.spaceborne ? cap(c.disposition) : null], ["Could teach", c.offers ? cap([c.offers.tier, c.offers.path].filter(Boolean).join("; ")) : null]].filter(([, x]) => x),
+        tags: [{ text: "Intelligent life", tone: "gold" }, c.spaceborne && { text: "Abandoned", tone: "warn" }, c.path && { text: cap(c.path) }].filter(Boolean),
     };
 }

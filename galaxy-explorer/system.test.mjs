@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateSystem, terrainHeight, distance, cruisePoint } from './system.mjs';
 import { BIOMES } from './biomes.mjs';
+import { SIZE } from './scale.mjs';
 
 const SEEDS = [0, 1, 7, 42, 1408, 912, 4294967295, ...Array.from({ length: 300 }, (_, i) => 1000 + i * 7919)];
 
@@ -41,9 +42,9 @@ test('cruise route starts and ends at requested coordinates and avoids the centr
       const start = from.position.map((v, i) => v + from.signal[i] * (from.radius + 22));
       const departure = from.position.map((v, i) => v + from.signal[i] * (from.radius + 650));
       const end = to.position.map((v, i) => v + to.signal[i] * (to.radius + 190));
-      assert.deepEqual(cruisePoint(start, departure, end, 0), start);
-      assert.deepEqual(cruisePoint(start, departure, end, 1), end);
-      for (let i = 0; i <= 100; i++) { const p = cruisePoint(start, departure, end, i / 100); assert.ok(p.every(Number.isFinite)); assert.ok(distance(p, [0, 0, 0]) > system.star.radius + 140); }
+      assert.deepEqual(cruisePoint(start, departure, end, 0, system.star.radius), start);
+      assert.deepEqual(cruisePoint(start, departure, end, 1, system.star.radius), end);
+      for (let i = 0; i <= 100; i++) { const p = cruisePoint(start, departure, end, i / 100, system.star.radius); assert.ok(p.every(Number.isFinite)); assert.ok(distance(p, [0, 0, 0]) > system.star.radius + 140); }
     }
   }
 });
@@ -71,8 +72,29 @@ test('giants form mostly beyond the frost line, have no surface, and keep their 
 });
 
 test('systems without giants keep their layout', () => {
-  // Seed 1408 has no giant; its planets sit on the original fixed orbit step.
-  const { bodies } = generateSystem(1408);
-  const planets = bodies.filter(b => !b.parent);
-  if (!planets.some(b => b.giant)) planets.forEach((p, i) => assert.ok(p.orbit >= 3000 + i * 3100 && p.orbit < 3000 + i * 3100 + 150));
+  // In a system without giants, planets after the first sit on the fixed orbit step
+  // (wider only where a big world's moons need the room).
+  const seed = SEEDS.find(sd => !generateSystem(sd).bodies.some(b => b.giant));
+  const planets = generateSystem(seed).bodies.filter(b => !b.parent);
+  for (let i = 1; i < planets.length; i++) {
+    const step = planets[i].orbit - planets[i - 1].orbit;
+    assert.ok(step >= 6000 * SIZE - 150 * SIZE && step < 6000 * SIZE + 4000 * SIZE, `seed ${seed} step ${step}`);
+  }
+});
+
+test('sizes keep realistic ratios: moon < planet < giant < star', () => {
+  for (const seed of SEEDS) {
+    const { bodies, star } = generateSystem(seed);
+    const rocky = bodies.filter(b => !b.giant && !b.parent), giants = bodies.filter(b => b.giant);
+    for (const m of bodies.filter(b => b.parent)) {
+      const p = bodies.find(b => b.id === m.parent);
+      if (p.giant) assert.ok(m.radius < p.radius / 4, `seed ${seed}: ${m.id} too big for its giant`);
+    }
+    for (const g of giants) {
+      assert.ok(g.radius > 1.5 * Math.max(...rocky.map(b => b.radius)), `seed ${seed}: giant ${g.radius} barely bigger than rocky worlds`);
+      assert.ok(star.radius > g.radius, `seed ${seed}: giant ${g.radius} bigger than its star ${star.radius}`);
+    }
+    // An Earth-sized world is at least as big as it used to be (580 m).
+    for (const b of rocky) assert.ok(b.radius >= 160 * SIZE);
+  }
 });

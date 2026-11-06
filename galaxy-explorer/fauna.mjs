@@ -7,6 +7,7 @@
 //      colours and patterns, behaviour, herd size, speed, and a civilization
 //      level for species intelligent and social enough to build or travel.
 // Plain data, deterministic per world. fauna-mesh.js builds and animates it.
+import { worldKey, harmonize, tame } from './palette.mjs';
 import { rng } from './rng.mjs';
 import { environment, CHEM_COLORS, CHEM_TEXT } from './flora.mjs';
 import { ecologyFor, describeEcology } from './ecology.mjs';
@@ -73,7 +74,12 @@ const FORM_NOUNS = { tank: 'shellback', browser: 'browser', hopper: 'hopper', be
 // shape things, and an older biosphere; roughly 1 system in 17 has tool users, 39
 // villages, 96 cities, 211 a species that has reshaped its world, 600 spacefarers, and about
 // 2200 system-shapers, who have spread through their whole solar system.
-export const CIVILIZATION = ['none', 'tool users', 'village builders', 'city builders', 'planet-shapers', 'spacefarers', 'system-shapers'];
+export const CIVILIZATION = ['none', 'tool users', 'village builders', 'metalworkers', 'city builders', 'industrial', 'planet-shapers', 'orbital', 'spacefarers', 'system-shapers'];
+// What each step builds on (structures-mesh.js reads this "build level", 1..6): the
+// in-between steps build like the one below them and add their own pieces on top
+// (metalworkers: forges; industrial: factories and smokestacks; orbital: satellites, a
+// station and a launch site, but no crewed ships yet).
+export const BUILD_LEVEL = [0, 1, 2, 2, 3, 3, 4, 4, 5, 6];
 // How well a body can shape things (0..1): hands best, then tentacles, raptorial
 // forelegs, mandibles and pedipalps, beaks and feet, coils; rollers barely at all.
 const MANIPULATORS = {
@@ -85,6 +91,7 @@ const MANIPULATORS = {
   floater: { _: [.55, 'trailing tentacles'], bell: [.75, 'tentacles'], cluster: [.7, 'tentacles'], manta: [.35, 'fins'] },
   radial: { _: [.55, 'its feet'], octo: [.9, 'tentacles'], star: [.8, 'arm tips'] },
   roller: { _: [.15, 'its mouth'] },
+  swimmer: { _: [.25, 'its mouth and fins'], squid: [.8, 'tentacles'], jelly: [.4, 'trailing tentacles'] },
 };
 export function manipulatorsOf(plan, form, arms) {
   if (arms) return { score: 1, kind: 'grasping hands' };
@@ -113,8 +120,8 @@ const hueOf = (hex) => {
 
 // Traits ("stats"), each 0..1 except diet. Future systems (ecology, building,
 // civilizations) should read these rather than the derived values.
-function rollTraits(plan, e, r, star, big) {
-  const diet = plan === 'floater' ? 'filter'
+function rollTraits(plan, e, r, star, big, forceDiet = null) {
+  const diet = forceDiet || plan === 'floater' ? forceDiet || 'filter'
     : (() => { const x = r(); return x < (big ? .6 : .48) ? 'herbivore' : x < (big ? .8 : .76) ? 'omnivore' : 'carnivore'; })();
   const age = clamp(((star?.age ?? 4) - 1.5) / 6, 0, 1); // older biospheres have had longer to evolve minds
   let intelligence = r() ** 4.5 * (e.complex >= 1 ? 1 : .35) + (diet === 'omnivore' ? .12 : diet === 'carnivore' ? .07 : 0) + (plan === 'biped' ? .15 : 0) + age * .12;
@@ -155,7 +162,7 @@ export function faunaFor(body) {
     const form0 = r.pick(FORMS[plan]);
     const civilization = civilizationLevel(t, manipulatorsOf(plan, form0, arms).score, star);
     const form = form0;
-    const look = rollLook(plan, form, t, e, r, camo);
+    const look = rollLook(plan, form, t, e, r, camo, worldKey(body));
     const chemSpeed = CHEM_SPEED[e.chem] ?? 1;
     let name = '';
     for (let k = r.int(2, 3); k > 0; k--) name += r.pick(SYLLABLES);
@@ -174,21 +181,34 @@ export function faunaFor(body) {
       form, ...look,
       group: plan === 'flyer' || plan === 'floater' ? r.int(2, 5) : Math.max(1, Math.round(1 + t.sociality * (t.diet === 'herbivore' ? 7 : 3.5))),
       herds: r.int(2, 4),
-      speed: { walk: chemSpeed * (plan === 'serpent' ? .6 : plan === 'slug' ? .25 : 1) * (.7 + legLength * .9) * (.75 + t.metabolism * .5), run: chemSpeed * (plan === 'serpent' ? .6 : plan === 'slug' ? .3 : plan === 'roller' ? 1.4 : 1) * (2.2 + legLength * 3.2) * (.8 + t.metabolism * .5) },
+      speed: speedOf(plan, legLength, t, chemSpeed),
       altitude: plan === 'flyer' ? [6, 28] : plan === 'floater' ? [5, 22] : [0, 0],
       habitat: { T: (e.chem === 'carbon' ? 288 : e.T) + r.range(-12, 12), Tw: r.range(18, 30) * (e.chem === 'carbon' ? 1 : 1.6), moist: plan === 'serpent' ? r.range(.2, .45) : r.range(.4, .8), moistW: r.range(.25, .4) },
       seed: r.int(0, 2 ** 31),
     };
+    // Body build (giant, heavy, tall and thin) and alien variants come from their own
+    // stream, so every other draw above stays as it was.
+    vary(s, e, rng(body.seed, 'fauna-variety', i), p.life === 'complex', chemSpeed);
     s.behavior = behaviorOf(s);
     s.diet = t.diet; // kept for older callers
     species.push(s);
   }
-  // Ecology (activity cycle, food web, hunger) reads the finished species list.
+  const sea = aquaticFor(body, e, star, camo);
+  species.push(...sea);
+  // Where each species can go: land, water, air, or more than one (own stream).
+  for (const s of species) habitatsFor(s, seasOf(p), rng(body.seed, 'fauna-habitat', s.id));
+  // Ecology (activity cycle, food web, hunger) reads the finished species list. Hunters
+  // only take prey that shares a place with them: fish catch fish, an amphibious hunter
+  // takes prey on the shore or in the shallows, a diving flier plucks fish from the sea.
   const eco = ecologyFor(species, body, e);
+  for (const s of sea) Object.assign(eco[s.id], { drinks: false, eatsPlants: false, stalksYou: false, defends: false });
   for (const s of species) {
     // A species that reached civilization evolved the means to build: say what it uses (fauna-culture.mjs draws it).
     const culture = cultureOf(s);
-    if (culture) s.manipulators = { ...s.manipulators, kind: MANIP_WORDS[culture.manip] || s.manipulators.kind };
+    if (culture) {
+      s.manipulators = { ...s.manipulators, kind: MANIP_WORDS[culture.manip] || s.manipulators.kind };
+      s.culture = { style: culture.style, arms: culture.armStyle };
+    }
     s.ecology = eco[s.id];
     const life = describeEcology(s, s.ecology, species);
     s.mind = mindOf(s);
@@ -203,21 +223,24 @@ export function faunaFor(body) {
 //   bold contrasts), display (social species show off crests, frills and sails),
 //   iridescent (fliers and drifters shimmer between two hues), and on dim worlds,
 //   glowing markings. Starlight shifts everything: dim red suns give deeper colours.
-function rollLook(plan, form, t, e, r, camo) {
+// key: the world's colour key (palette.mjs); rolled hues are pulled toward it afterwards,
+// so the random numbers drawn here are the same as before.
+function rollLook(plan, form, t, e, r, camo, key) {
   const scheme = t.caution > .55 && r() < .7 ? 'camouflage'
     : (t.aggression > .6 || r() < .12) && r() < .65 ? 'warning'
     : (plan === 'flyer' || plan === 'floater') && r() < .55 ? 'iridescent'
     : t.sociality > .6 && r() < .6 ? 'display' : r.pick(['camouflage', 'display', 'iridescent', 'warning']);
   const harmony = r.pick([180, 150, -150, 120, -120, 35, -35]);
-  const hue = scheme === 'camouflage' ? r.pick(camo) + r.range(-25, 25) : scheme === 'warning' ? r.pick([5, 25, 45, 55, 210, 280, 330]) + r.range(-10, 10) : r.range(0, 360);
+  const rolled = scheme === 'camouflage' ? r.pick(camo) + r.range(-25, 25) : scheme === 'warning' ? r.pick([5, 25, 45, 55, 210, 280, 330]) + r.range(-10, 10) : r.range(0, 360);
+  const hue = scheme === 'camouflage' ? rolled : harmonize(rolled, key, scheme === 'warning' ? .5 : .85); // warnings stay bold
   const dimShift = e.starT < 4000 ? -.06 : e.light > 1.2 ? .05 : 0;
   const sat = scheme === 'camouflage' ? r.range(.18, .45) : scheme === 'warning' ? r.range(.7, .95) : r.range(.35, .8);
   const light = clamp(r.range(.28, .55) + dimShift, .14, .7);
   const colors = {
     base: hsl(hue, sat, light),
     belly: hsl(hue + r.range(-20, 20), sat * .55, clamp(light + r.range(.12, .28), 0, .85)),
-    accent: scheme === 'warning' ? (r() < .6 ? hsl(0, 0, .08) : hsl(hue + 180, .85, .55)) : hsl(hue + harmony, clamp(sat + r.range(.1, .3), 0, 1), clamp(light + r.range(-.12, .18), .12, .78)),
-    shimmer: hsl(hue + r.pick([60, -60, 90, 140]), clamp(sat + .2, 0, 1), clamp(light + .12, 0, .8)),
+    accent: scheme === 'warning' ? (r() < .6 ? hsl(0, 0, .08) : hsl(hue + 180, .85, .55)) : hsl(harmonize(hue + harmony, key, .8), clamp(sat + r.range(.1, .3), 0, 1), clamp(light + r.range(-.12, .18), .12, .78)),
+    shimmer: hsl(harmonize(hue + r.pick([60, -60, 90, 140]), key, .8), clamp(sat + .2, 0, 1), clamp(light + .12, 0, .8)),
     eye: e.dim > .4 ? hsl(r.range(140, 200), .9, .65) : hsl(r.pick([25, 45, 60, 0, 200, 120]) + r.range(-10, 10), r.range(.6, .9), r.range(.4, .6)),
     horn: hsl(r.range(25, 50), r.range(.1, .35), r.range(.55, .82)),
     glow: hsl(r.pick([170, 190, 120, 280, 50, 320]) + r.range(-10, 10), .9, .62),
@@ -232,6 +255,8 @@ function rollLook(plan, form, t, e, r, camo) {
     if (e.chem === 'silicon') colors.glow = hsl(r.range(15, 45), 1, .55);                // inner heat
     if (e.chem === 'methane') colors.eye = hsl(r.range(30, 60), .9, .6);
   }
+  // Within the world's saturation (palette.mjs); warning colours are allowed a little more.
+  if (!cc) for (const k of ['base', 'belly', 'accent', 'shimmer']) colors[k] = tame(colors[k], key, scheme === 'warning' ? .22 : 0);
   const glow = e.chem === 'silicon' ? (r() < .6 ? r.range(.4, .9) : 0) : (e.dim > .35 || plan === 'floater') && r() < (plan === 'floater' ? .6 : .35) + e.dim * .3 ? r.range(.5, 1) : 0;
   const pattern = scheme === 'warning' ? r.pick(['bands', 'stripes', 'rings', 'spots']) : scheme === 'camouflage' ? r.pick(['mottled', 'spots', 'stripes', 'plain', 'dapple'])
     : r.pick(['plain', 'saddle', 'spots', 'stripes', 'gradient', 'rings']);
@@ -250,6 +275,260 @@ function rollLook(plan, form, t, e, r, camo) {
   };
 }
 
+// Walking and running speed from the legs, metabolism and chemistry.
+function speedOf(plan, legLength, t, chemSpeed) {
+  return {
+    walk: chemSpeed * (plan === 'serpent' ? .6 : plan === 'slug' ? .25 : 1) * (.7 + legLength * .9) * (.75 + t.metabolism * .5),
+    run: chemSpeed * (plan === 'serpent' ? .6 : plan === 'slug' ? .3 : plan === 'roller' ? 1.4 : 1) * (2.2 + legLength * 3.2) * (.8 + t.metabolism * .5),
+  };
+}
+
+// --- Builds and alien variants ---
+// Every species has a build: ordinary, giant (megafauna many metres tall, in small
+// herds, slow and unhurried), heavy (barrel bodies on short thick legs) or tall and
+// thin (stilt legs, long necks). Weak gravity favours giants and stilts, strong
+// gravity heavy builds. Some species are also stranger than any plan's usual forms:
+// whole new forms (many-legged crawlers, walking towers and domes, sky whales, chains
+// of drifting bells) or alien features on a familiar body (a hammer-shaped head with
+// eyes at its ends, eyes on tall stalks, no head at all, a long tube of a mouth).
+// Builders get them too (all but the drifting forms and the tube mouth, which would
+// leave their culture nothing to hold or wear).
+export const ALIEN_FORMS = { hexapod: ['centipede'], radial: ['tower', 'dome'], floater: ['skywhale', 'siphon'] };
+const ALIEN = {
+  quadruped: [['hammerhead', 1], ['stalkeye', 1], ['headless', .8], ['proboscis', 1]],
+  biped: [['stalkeye', 1], ['hammerhead', .7], ['headless', .6], ['proboscis', .7]],
+  hexapod: [['centipede', 2.2], ['stalkeye', 1], ['hammerhead', .6]],
+  arachnid: [['stalkeye', 1], ['hammerhead', .5]],
+  serpent: [['stalkeye', .6], ['hammerhead', .5]],
+  flyer: [['stalkeye', .5], ['proboscis', .5]],
+  radial: [['tower', 1.3], ['dome', 1]],
+  floater: [['skywhale', 1.2], ['siphon', 1]],
+};
+const GIANT_OK = ['quadruped', 'hexapod', 'biped', 'serpent', 'radial', 'floater', 'arachnid', 'roller', 'slug', 'flyer'];
+const LANKY_OK = ['quadruped', 'biped', 'hexapod', 'arachnid', 'radial', 'serpent', 'floater'];
+const weighted = (x, opts) => { let roll = x() * opts.reduce((a, o) => a + o[1], 0); for (const [k, w] of opts) { roll -= w; if (roll <= 0) return k; } return opts[opts.length - 1][0]; };
+function vary(s, e, x, complex, chemSpeed) {
+  s.build = 'ordinary';
+  const civ = s.civilization > 0;
+  const low = clamp((1 - e.gravity) / .6, 0, 1), high = clamp((e.gravity - 1.1) / .8, 0, 1), t = s.traits;
+  // Alien variants: about one species in three on complex worlds, more on exotic ones.
+  const alien = ALIEN[s.plan]?.filter(([k]) => !civ || !['proboscis', 'skywhale', 'siphon'].includes(k));
+  if (complex && alien?.length && x() < .32 + (e.chem !== 'carbon' ? .18 : 0)) {
+    const v = weighted(x, alien);
+    if (ALIEN_FORMS[s.plan]?.includes(v)) s.form = v; else s.alien = v;
+    if (v === 'centipede') { s.legs = 2 * x.int(6, 11); s.legLength *= .55; s.body.length *= 1.9; s.body.width *= .8; s.back = 'none'; }
+    if (v === 'tower') { s.legs = x.int(7, 11); s.legLength *= .5; }
+    if (v === 'dome') { s.legs = x.int(8, 12); s.legLength *= .8; }
+    if (v === 'headless' || v === 'hammerhead') { s.frill = false; s.horns = 0; s.ears = 'none'; }
+  }
+  // Build.
+  const w = [
+    ['ordinary', 1.25],
+    ['giant', complex && GIANT_OK.includes(s.plan) ? (.42 + low * .6) * (1 - high * .7) * (t.diet === 'carnivore' ? .25 : 1) * (s.form === 'skywhale' ? 4 : 1) : 0],
+    ['heavy', s.form === 'skywhale' || s.form === 'tower' ? 0 : .5 + high * .9 - low * .2],
+    ['lanky', LANKY_OK.includes(s.plan) && s.form !== 'dome' && s.form !== 'centipede' ? .45 + low * 1.1 - high * .35 : 0],
+  ];
+  s.build = weighted(x, w.filter(o => o[1] > 0));
+  const b = s.body;
+  if (s.build === 'giant') {
+    const cap = s.plan === 'floater' ? 30 : s.plan === 'flyer' ? 7 : 18;
+    // A giant is big in absolute terms too (a giant ant is the size of a cart), however small its kind.
+    const k = clamp(Math.max(x.range(2.4, 4.2) * (1 + low * .5), (s.plan === 'flyer' ? 2.2 : 3.2) / s.size), 2, Math.min(12, cap / s.size));
+    s.size *= k; s.legLength *= k; b.length *= k; b.width *= k * 1.08; b.height *= k * 1.05;
+    s.neck *= k; s.tail *= k; s.wingSpan *= k; s.head *= k * .72; // big bodies, relatively small heads
+    s.group = Math.min(s.group, x.int(1, 4)); s.herds = x.int(1, 2);
+    if (s.altitude[1] > 0) s.altitude = [s.size * .6 + 8, s.size * .6 + 34];
+  } else if (s.build === 'heavy') {
+    const f = x.range(1.4, 1.85);
+    b.width *= f; b.height *= x.range(1.3, 1.55); s.legLength *= x.range(.6, .8); s.neck *= .6; s.tail *= .75; s.bulk = f;
+    if (s.girth) s.girth = { hips: Math.min(.8, s.girth.hips * 1.15), belly: Math.min(.95, s.girth.belly * 1.3), shoulders: s.girth.shoulders };
+  } else if (s.build === 'lanky') {
+    s.legLength *= x.range(1.7, 2.4); b.width *= .65; b.height *= .78; s.head *= .85; s.stretch = x.range(1.5, 2.2);
+    if (s.plan === 'quadruped' || s.plan === 'biped') s.neck = Math.max(s.neck, s.size * .3) * x.range(1.6, 2.3);
+    if (s.plan === 'serpent') { b.length *= 1.5; b.width *= .8; }
+  }
+  if (s.build !== 'ordinary' || s.form === 'centipede' || s.form === 'tower' || s.form === 'dome') {
+    s.speed = speedOf(s.plan, s.legLength, t, chemSpeed);
+    if (s.build === 'giant') { s.speed.walk = Math.min(s.speed.walk, 1 + s.legLength * .2); s.speed.run = Math.min(s.speed.run, s.speed.walk * 2.3); }
+    if (s.build === 'heavy') { s.speed.walk *= .8; s.speed.run *= .7; }
+    if (s.form === 'centipede') s.speed.run *= 1.3; // a blur of legs
+  }
+}
+
+// --- Sea life ---
+// Worlds with open seas (of water, or methane, ammonia or sulfur) get animals that
+// live in them, as their own body plan, the swimmer. Each form has its own sizes,
+// diets, school sizes and depths: schools of darting fish, big hunters whose fins cut
+// the surface, enormous filter-feeding leviathans that come up to breathe, squid,
+// drifting jellies, rays, and two with no Earth counterpart: long undulating ribbons
+// and spinning discs. Simple life gets only the small, simple forms. Drawn from its own
+// stream, so land animals stay as they were.
+export const SWIM_FORMS = {
+  fish:      { size: [.25, 1.1], diet: ['herbivore', 'omnivore', 'carnivore'], group: [6, 14], depth: [.35, 2.2], w: 3, simple: true, noun: 'darter' },
+  hunter:    { size: [1.3, 3.6], diet: ['carnivore'], group: [1, 3], depth: [.25, 1.6], w: 1.2, noun: 'cutter' },
+  leviathan: { size: [9, 22], diet: ['filter'], group: [1, 3], depth: [2, 6], w: 1.1, noun: 'leviathan' },
+  squid:     { size: [.5, 2.4], diet: ['carnivore', 'omnivore'], group: [1, 5], depth: [.8, 3], w: 1.1, noun: 'squid' },
+  jelly:     { size: [.3, 1.4], diet: ['filter'], group: [4, 10], depth: [.2, 1.4], w: 1.1, simple: true, noun: 'jelly' },
+  ray:       { size: [1, 4.5], diet: ['filter', 'carnivore'], group: [1, 4], depth: [.5, 2.6], w: 1, noun: 'ray' },
+  ribbon:    { size: [1.5, 6], diet: ['filter', 'herbivore'], group: [1, 3], depth: [.4, 2.2], w: .9, simple: true, alien: true, noun: 'ribbon' },
+  disc:      { size: [.4, 1.8], diet: ['omnivore', 'herbivore'], group: [3, 8], depth: [.3, 1.8], w: .9, simple: true, alien: true, noun: 'spinner' },
+};
+// Where a species can go. Every ground animal wades into shallow water; some go further:
+//   swims    land animals that swim as well as they walk (coils and slugs most often)
+//   perches  fliers that land to walk and feed (birds most often)
+//   dives    hunting fliers that plunge into the sea for fish
+//   glides   swimmers that leap and glide over the water on wing-like fins
+// habitats: { land, water, air }. Drawn from its own stream.
+function habitatsFor(s, seas, x) {
+  const h = { land: !s.aquatic && s.altitude[1] === 0, water: !!s.aquatic, air: s.altitude[1] > 0 }, wet = clamp(seas * 1.5, 0, 1);
+  if (seas >= .05) {
+    const swimChance = { serpent: .45, slug: .3, quadruped: .25, radial: .25, biped: .15, hexapod: .12, arachnid: .08 }[s.plan] ?? 0;
+    if (h.land && x() < swimChance * (.4 + wet)) { h.water = true; s.swims = true; }
+    if (s.plan === 'flyer' && x() < (s.traits.diet === 'herbivore' ? .08 : .4) * (.3 + wet)) { h.water = true; s.dives = true; }
+    if (s.aquatic && ['fish', 'squid', 'ray', 'disc'].includes(s.form) && x() < .3) { h.air = true; s.glides = true; s.leaps = true; }
+  }
+  if (s.plan === 'flyer' && x() < ({ bird: .75, bat: .45, insect: .6 }[s.form] ?? .5)) { h.land = true; s.perches = true; }
+  s.habitats = h;
+}
+export function seasOf(p) {
+  if (p.waterState === 'liquid') return p.waterCoverage || 0;
+  return ['methane', 'ammonia', 'sulfur'].includes(p.solvent) ? p.solventCoverage || 0 : 0;
+}
+function aquaticFor(body, e, star, camo) {
+  const p = body.physics;
+  if (seasOf(p) < .05) return [];
+  const r = rng(body.seed, 'aquatic'), complex = p.life === 'complex', chemSpeed = CHEM_SPEED[e.chem] ?? 1;
+  const forms = Object.entries(SWIM_FORMS).filter(([, f]) => complex || f.simple).map(([k, f]) => [k, f.w * (f.alien && e.chem !== 'carbon' ? 2 : 1)]);
+  const count = complex ? r.int(2, 5) : r.int(1, 2), used = new Set(), out = [];
+  const seaCamo = e.chem === 'carbon' ? [195, 205, 185, ...camo.slice(0, 1)] : camo;
+  // Each world's seas have evolved their own way of building a swimmer (seaStyle): its
+  // swimmers share a family resemblance, and none look like another world's.
+  const style = seaStyle(rng(body.seed, 'sea-style'));
+  for (let i = 0; i < count; i++) {
+    const form = weighted(r, forms.map(([k, w]) => [k, w * (used.has(k) ? .2 : 1)])), f = SWIM_FORMS[form];
+    used.add(form);
+    const size = r.log(...f.size) * (complex ? 1 : .6) * (form === 'leviathan' ? 1 : clamp(1 / Math.sqrt(Math.max(e.gravity, .1)), .8, 1.4));
+    const t = rollTraits('swimmer', e, r, star, size > 3, r.pick(f.diet));
+    const look = rollLook('swimmer', form, t, e, r, seaCamo, worldKey(body));
+    let name = '';
+    for (let k = r.int(2, 3); k > 0; k--) name += r.pick(SYLLABLES);
+    const walk = chemSpeed * (form === 'leviathan' ? 1.4 : form === 'jelly' ? .35 : .5 + Math.min(size, 4) * .45) * (.75 + t.metabolism * .5);
+    const s = {
+      id: `aq-${i}`, name: `${name[0].toUpperCase() + name.slice(1)} ${f.noun}`, plan: 'swimmer', aquatic: true, form, legs: 0, chemistry: e.chem, size, legLength: size * .25,
+      // Sea life can become intelligent too (most easily the many-armed squid), though with no fire under water
+      // the ladder is harder to climb; its builders build on the sea floor.
+      traits: t, arms: false, civilization: complex ? civilizationLevel(form === 'squid' ? t : { ...t, intelligence: t.intelligence - .08 }, manipulatorsOf('swimmer', form, false).score * (form === 'squid' ? 1 : .2), star) : 0, manipulators: manipulatorsOf('swimmer', form, false), build: size > 8 ? 'giant' : 'ordinary',
+      body: { length: size, width: size * r.range(.16, .28), height: size * r.range(.22, .36) },
+      neck: 0, head: size * r.range(.16, .24) * (1 + t.intelligence * .4), snout: r.range(.7, 1.4),
+      eyes: { count: r.pick([2, 2, 2, 4, 6]), forward: t.diet === 'carnivore' ? .4 : 1.1, size: .08 + t.perception * .08 + (e.dim > .4 ? .04 : 0) },
+      horns: 0, crest: false, tail: size * r.range(.25, .45), segments: r.int(6, 12), wingSpan: 0, tentacles: r.int(6, 12),
+      ...look, form, ears: 'none', back: r.pick(['none', 'fin', 'fin', 'spines', 'sail']), finShape: r.pick(['fork', 'crescent', 'fan', 'lobes']),
+      group: r.int(...f.group), herds: r.int(1, 3),
+      speed: { walk, run: walk * (form === 'jelly' ? 1.6 : form === 'leviathan' ? 1.8 : 2.8) },
+      altitude: [0, 0], depth: form === 'leviathan' ? [size * .2 + 1.5, size * .2 + 5] : f.depth,
+      leaps: ['fish', 'hunter', 'disc', 'squid', 'ray'].includes(form) && r() < .6, surfaces: form === 'leviathan' || (form === 'ray' && r() < .5),
+      habitat: { T: (e.chem === 'carbon' ? 288 : e.T) + r.range(-12, 12), Tw: r.range(22, 34) * (e.chem === 'carbon' ? 1 : 1.6), moist: .5, moistW: 9 },
+      seed: r.int(0, 2 ** 31),
+    };
+    if (form === 'leviathan') s.herds = 1;
+    // Its own anatomy (own stream), mostly in its world's style; the name follows what stands out.
+    const ax = rng(body.seed, 'sea-anatomy', i);
+    s.anatomy = seaAnatomy(form, style, ax);
+    s.name = `${name[0].toUpperCase() + name.slice(1)} ${seaNoun(s, ax)}`;
+    if (s.anatomy.skin === 'translucent' && !s.glow) s.glow = .6;
+    s.behavior = behaviorOf(s);
+    s.diet = t.diet;
+    out.push(s);
+  }
+  return out;
+}
+
+// --- Sea anatomy ---
+// Swimmers are not Earth's fish and squid in new colours. Every world's sea has a style:
+// how bodies are arranged (two-sided like ours, or three or five rows of fins set evenly
+// round the body), how they see (paired eyes, eyes on stalks, rows of eyes, one great eye,
+// or none and glowing pits instead), their skin (smooth, armoured in rings of plates,
+// spined, frilled along the flanks, or translucent with glowing organs), their mouths (jaws,
+// a beard of feelers, a round sucker, a spear-like rostrum, a glowing lure), how they swim
+// (a tail, many rows of rowing fins, a jet, or a rippling frill), and whether the body is
+// one smooth shape or a chain of segments. Each species takes most of its traits from
+// its world's style and some of its own, then a body shape, tail, back fin and trailing
+// filaments. fauna-mesh.js builds it; the name and description follow from it.
+const pickW = (x, w) => { let v = x() * Object.values(w).reduce((a, b) => a + b, 0); for (const [k, n] of Object.entries(w)) if ((v -= n) <= 0) return k; return Object.keys(w)[0]; };
+export function seaStyle(x) {
+  return {
+    symmetry: pickW(x, { bilateral: 1.3, tri: .8, radial: .55 }),
+    eyes: pickW(x, { paired: 1, stalked: .8, row: .8, cyclops: .6, none: .45 }),
+    skin: pickW(x, { smooth: .9, plated: .8, spined: .7, frilled: .7, translucent: .6 }),
+    mouth: pickW(x, { jaws: .9, beard: .8, sucker: .6, rostrum: .6, lure: .5 }),
+    swim: pickW(x, { tail: 1.2, fins: .8, jet: .6, ripple: .6 }),
+    finShape: pickW(x, { paddle: 1, blade: 1, frond: .7 }),
+    segments: x() < .35 ? x.int(2, 4) : 1,
+    filaments: x() < .4,
+    hueShift: x.range(-40, 40),
+  };
+}
+function seaAnatomy(form, ws, x) {
+  const own = (k, w) => x() < .72 ? ws[k] : pickW(x, w);
+  const a = {
+    symmetry: own('symmetry', { bilateral: 1.3, tri: .8, radial: .55 }),
+    eyes: own('eyes', { paired: 1, stalked: .8, row: .8, cyclops: .6, none: .45 }),
+    skin: own('skin', { smooth: .9, plated: .8, spined: .7, frilled: .7, translucent: .6 }),
+    mouth: own('mouth', { jaws: .9, beard: .8, sucker: .6, rostrum: .6, lure: .5 }),
+    swim: own('swim', { tail: 1.2, fins: .8, jet: .6, ripple: .6 }),
+    finShape: own('finShape', { paddle: 1, blade: 1, frond: .7 }),
+    segments: x() < .75 ? ws.segments : x.int(1, 3),
+    shape: pickW(x, form === 'leviathan' ? { torpedo: 1, bulb: 1, deep: .7 } : form === 'hunter' ? { torpedo: 1, long: .8, flat: .6 } : { torpedo: 1, deep: .8, long: .7, bulb: .7, flat: .6 }),
+    dorsal: pickW(x, form === 'hunter' ? { blade: 2, sail: .5, spines: .5 } : { none: 1, sail: .7, spines: .7, finlets: .8, blade: .5 }),
+    filaments: (ws.filaments ? x() < .75 : x() < .15) ? x.int(2, 6) : 0,
+  };
+  a.tail = a.swim === 'jet' ? 'jet' : a.swim === 'ripple' ? 'whip' : pickW(x, a.swim === 'fins' ? { fan: 1, paddle: 1, whip: .5 } : { fork: 1, fan: .8, paddle: .8, double: .6, whip: .4 });
+  a.finRows = a.swim === 'fins' ? x.int(3, 4) : x.int(1, 2);
+  if (form === 'leviathan') { a.segments = Math.min(2, a.segments); if (a.tail === 'jet' || a.tail === 'whip') a.tail = 'paddle'; }
+  if (form === 'hunter' && (a.mouth === 'beard' || a.mouth === 'sucker') && x() < .5) a.mouth = 'jaws';
+  if (form === 'squid') { a.arms = x.int(5, 12); a.armStyle = pickW(x, { even: 1, 'two-long': 1, webbed: .7 }); a.mantle = pickW(x, { cone: 1, round: .8, ridged: .7 }); a.fins = pickW(x, { side: 1, ring: .7, none: .4 }); }
+  if (form === 'ray') { a.wingPairs = x() < .35 ? 2 : 1; }
+  if (form === 'jelly') { a.bells = x() < .3 ? 2 : 1; }
+  return a;
+}
+// What it is called, from what stands out about it.
+function seaNoun(s, x) {
+  const a = s.anatomy, f = s.form;
+  const by = {
+    squid: [a.armStyle === 'webbed' ? 'veilarm' : a.armStyle === 'two-long' ? 'lasher' : 'armcrown', 'jetarm', 'tentacler'],
+    jelly: [a.bells > 1 ? 'twinbell' : 'pulsebell', 'veilbell', 'drifter'],
+    ray: [a.wingPairs > 1 ? 'fourwing' : 'wingsail', 'veilwing', 'flapper'],
+    leviathan: [a.mouth === 'beard' ? 'beardmaw' : 'leviathan', 'deepmaw', 'behemoth'],
+  }[f];
+  if (by) return x.pick(by);
+  if (f === 'disc') return x.pick(['spinner', 'wheelfin', 'rimeye']);
+  if (f === 'ribbon') return x.pick(['ribbon', 'rippler', 'streamer']);
+  const feature = [
+    a.mouth === 'lure' && 'lanternmaw', a.mouth === 'rostrum' && 'spearnose', a.mouth === 'sucker' && 'suckermouth', a.mouth === 'beard' && 'feelerfin',
+    a.tail === 'jet' && 'jetter', a.symmetry === 'tri' && 'trifin', a.symmetry === 'radial' && 'starfin', a.skin === 'plated' && 'platefin',
+    a.segments > 1 && 'chainfin', a.eyes === 'stalked' && 'stalkeye', a.eyes === 'row' && 'manyeye', a.eyes === 'cyclops' && 'oneeye', a.eyes === 'none' && 'blindfin',
+    a.swim === 'fins' && 'rower', a.swim === 'ripple' && 'rippler',
+  ].filter(Boolean);
+  const kind = f === 'hunter' ? ['cutter', 'ripper', 'maw'] : ['finner', 'darter', 'glider'];
+  return feature.length && x() < .8 ? x.pick(feature) : x.pick(kind);
+}
+const SEA_WORDS = {
+  symmetry: { tri: 'three rows of fins set evenly round its body', radial: 'five rows of fins radiating round its body' },
+  eyes: { stalked: 'eyes on stalks', row: 'a row of small eyes down each side', cyclops: 'one great eye', none: 'no eyes at all, only glowing pits that sense the water' },
+  skin: { plated: 'armoured in rings of plates', spined: 'bristling with spines', frilled: 'frilled along its flanks', translucent: 'so translucent its glowing organs show through' },
+  mouth: { beard: 'a beard of feelers', sucker: 'a round sucker of a mouth', rostrum: 'a long spear of a snout', lure: 'a glowing lure dangling before its mouth' },
+  swim: { fins: 'rows of rowing fins', jet: 'jets of water from a funnel at its tail', ripple: 'a rippling frill' },
+};
+export function seaText(s) {
+  const a = s.anatomy; if (!a) return '';
+  const body = a.segments > 1 ? `Its body is a chain of ${a.segments} segments` : `Its body is ${{ torpedo: 'torpedo-shaped', deep: 'tall and narrow', long: 'long and slender', bulb: 'bulb-headed', flat: 'broad and flat' }[a.shape] || 'smooth'}`;
+  const parts = [SEA_WORDS.skin[a.skin]].filter(Boolean);
+  const how = SEA_WORDS.swim[a.swim] ? ` It swims by ${SEA_WORDS.swim[a.swim]}` : '';
+  const sym = SEA_WORDS.symmetry[a.symmetry] ? `${how ? ', with' : ' It has'} ${SEA_WORDS.symmetry[a.symmetry]}` : '';
+  const sees = [SEA_WORDS.eyes[a.eyes] && `sees with ${SEA_WORDS.eyes[a.eyes]}`, SEA_WORDS.mouth[a.mouth] && `feeds through ${SEA_WORDS.mouth[a.mouth]}`].filter(Boolean);
+  return ` ${body}${parts.length ? `, ${parts.join(', ')}` : ''}.${how}${sym}${how || sym ? '.' : ''}${sees.length ? ` It ${sees.join(' and ')}.` : ''}${a.filaments ? ' Long filaments trail behind it.' : ''}`;
+}
+
 // How a species reacts to you, derived from its traits.
 function behaviorOf(s) {
   const t = s.traits;
@@ -262,7 +541,7 @@ function behaviorOf(s) {
 // Civilization potential: intelligence matters most, then cooperation and
 // hands to build with; the biosphere's age gates the higher levels.
 // manip: manipulatorsOf(...).score. Older biospheres gate the higher steps.
-const LADDER = [[.75, 0], [.845, 2.5], [.905, 3.5], [.945, 4.5], [.972, 5.5], [.995, 8]];
+const LADDER = [[.75, 0], [.845, 2.5], [.88, 3], [.905, 3.5], [.93, 4], [.945, 4.5], [.96, 5], [.972, 5.5], [.995, 8]];
 export function civilizationLevel(t, manip, star) {
   const potential = t.intelligence * .62 + t.sociality * .18 + manip * .2, age = star?.age ?? 4;
   let level = 0;
@@ -271,30 +550,71 @@ export function civilizationLevel(t, manip, star) {
 }
 
 export function habitatFit(s, c) {
-  if (c.submerged) return 0;
+  if (!!c.submerged !== !!s.aquatic) return 0;
   return bell(c.localT, s.habitat.T, s.habitat.Tw) * bell(c.moist, s.habitat.moist, s.habitat.moistW);
 }
 
-const PLAN_TEXT = { quadruped: 'four-legged', hexapod: 'six-legged', biped: 'two-legged', serpent: 'legless, coiling', flyer: 'winged', floater: 'gas-filled, drifting', arachnid: 'eight-legged', slug: 'soft-bodied, gliding', radial: 'headless, radially symmetric', roller: 'rolling' };
+const PLAN_TEXT = { quadruped: 'four-legged', hexapod: 'six-legged', biped: 'two-legged', serpent: 'legless, coiling', flyer: 'winged', floater: 'gas-filled, drifting', arachnid: 'eight-legged', slug: 'soft-bodied, gliding', radial: 'headless, radially symmetric', roller: 'rolling', swimmer: 'swimming' };
 const FORM_TEXT = {
   tripod: ' It stalks on three long legs, its body slung high between them, and sees in every direction from an eye stalk on top.',
   star: ' Five arms radiate from a central disc; any arm can lead, so it never needs to turn round.',
   octo: ' It walks on a ring of muscular tentacles under a swollen mantle.',
   wheel: ' Its body is a living wheel: it rolls on a muscular rim around a hub that holds its eyes.',
   ball: ' It curls into a segmented ball and rolls, watching the world from eyes at each end of its axle.',
+  centipede: ' A long, low body ripples forward on dozens of legs.',
+  tower: ' It is a walking column: a tall, ringed body on a skirt of short legs, crowned with feeding arms and a ring of eyes.',
+  dome: ' A broad, low dome on a ring of thick legs, like a small hill that walks; eyes peer out on stalks.',
+  skywhale: ' A long gas-filled body like a whale of the air, steered by broad fins and trailing feeding tendrils.',
+  siphon: ' Not one animal but a chain of them: bell after bell strung together, drifting as one.',
+  fish: ' A fast, finned swimmer.',
+  hunter: ' A big, streamlined swimmer; its tall back fin cuts the surface as it hunts.',
+  leviathan: ' An enormous swimmer that strains the water for food and comes up to breathe.',
+  squid: ' It jets through the water, body first, trailing a crown of arms.',
+  jelly: ' A pulsing bell trailing fine tentacles, drifting with the current.',
+  ray: ' A flat swimmer that flies through the water on broad, rippling fins.',
+  ribbon: ' A long, flat ribbon of a body that swims by rippling from end to end.',
+  disc: ' A flat disc fringed with fine paddles; it spins as it swims, watching from eyes all round its rim.',
+};
+const ALIEN_TEXT = {
+  hammerhead: ' Its head is a broad bar with an eye at each end.',
+  stalkeye: ' Its eyes sit on tall stalks that turn independently.',
+  headless: ' It has no head: its eyes are set in a row across its chest above a vertical mouth.',
+  proboscis: ' Its mouth is a long, flexible tube that it sweeps across the ground.',
+};
+// How a civilized species presents itself (fauna-culture.mjs style and armStyle).
+const STYLE_TEXT = {
+  clothed: ' They dress, and their clothing grows more elaborate as their skills do.',
+  ornamented: ' They wear no clothes, only ornaments: beads, rings and studs, later of worked metal.',
+  painted: ' They go bare but paint their bodies in bold patterns.',
+  bare: ' They wear nothing at all; their skill shows only in what they carry.',
+  grown: ' Their gear is grown, not made: living sacs, crests and plates fused to their bodies.',
+  implants: ' They build their tools into themselves: metal plates and rings fused to limbs and head.',
+};
+const ARM_TEXT = { tentacle: ' Their arms are boneless and end in fine fingers.', pincer: ' Their arms end in pincers rather than hands.', twin: ' They have two pairs of arms.' };
+const HABITAT_TEXT = { swims: ' It swims as readily as it walks.', perches: ' It often lands to walk and feed.', dives: ' It plunges into the sea after fish.', glides: ' It leaps from the sea and glides far over the water on wing-like fins.' };
+const BUILD_TEXT = {
+  giant: ' A true giant; its herd is small and moves slowly, and nothing hunts it lightly.',
+  heavy: ' Heavy and barrel-bodied on short, thick legs.',
+  lanky: ' Tall and thin, on long stilt-like legs.',
 };
 const level = (v) => v > .75 ? 'high' : v > .5 ? 'notable' : v > .25 ? 'modest' : 'low';
 function describeAnimal(s, e) {
-  const t = s.traits, size = s.size > 2.5 ? 'Large' : s.size > 1.1 ? 'Mid-sized' : s.size > .5 ? 'Small' : 'Tiny';
+  const t = s.traits, size = s.size > 8 ? 'Enormous' : s.size > 4 ? 'Huge' : s.size > 2.5 ? 'Large' : s.size > 1.1 ? 'Mid-sized' : s.size > .5 ? 'Small' : 'Tiny';
   const diet = t.diet === 'filter' ? 'filter-feeder' : t.diet;
   const social = s.group > 2 ? `Lives in groups of up to ${s.group}.` : 'Mostly solitary.';
   const manner = s.behavior === 'skittish' ? 'Wary; bolts if you come close.' : s.behavior === 'curious' ? (t.diet === 'carnivore' ? 'Bold; comes to size you up.' : 'Curious about you.') : 'Unbothered by you.';
   const mind = ` Mind: ${mindOf(s)} (intelligence ${level(t.intelligence)}${t.intelligence > .4 ? `, shapes things with ${s.manipulators.kind}` : ''}).`;
-  const civ = '';
-  const why = s.plan === 'floater' ? ' Thick air or weak gravity keeps it aloft.' : e.gravity < .6 && s.legLength > s.size * .6 && ['quadruped', 'hexapod', 'biped'].includes(s.plan) ? ' Weak gravity gives it stilt-like legs.' : e.gravity > 1.4 ? ' Strong gravity keeps it low and heavy-set.' : '';
+  const civ = s.culture ? (STYLE_TEXT[s.culture.style] || '') + (ARM_TEXT[s.culture.arms] && /arms|hands/.test(s.manipulators.kind) ? ARM_TEXT[s.culture.arms] : '') : '';
+  const why = s.aquatic ? (s.leaps && !s.glides ? ' Leaps clear of the water now and then.' : s.surfaces ? ' Surfaces now and then to breathe.' : '') : s.plan === 'floater' ? ' Thick air or weak gravity keeps it aloft.' : e.gravity < .6 && s.legLength > s.size * .6 && ['quadruped', 'hexapod', 'biped'].includes(s.plan) ? ' Weak gravity gives it stilt-like legs.' : e.gravity > 1.4 ? ' Strong gravity keeps it low and heavy-set.' : '';
   const traits = [s.back === 'shell' ? 'armoured' : s.back === 'sail' ? 'sail-backed' : s.back === 'spines' ? 'spined' : '', s.glow ? 'bioluminescent' : '',
     s.scheme === 'warning' ? 'boldly marked as a warning' : s.scheme === 'iridescent' ? 'iridescent' : s.scheme === 'camouflage' ? 'camouflaged' : ''].filter(Boolean);
   const feature = traits.length ? ` ${traits.join(', ')[0].toUpperCase() + traits.join(', ').slice(1)}.` : '';
   const chem = CHEM_TEXT[s.chemistry] ? ` ${CHEM_TEXT[s.chemistry]}` : '';
-  return `${size} ${PLAN_TEXT[s.plan]} ${diet}.${FORM_TEXT[s.form] || ''}${feature} ${social} ${manner}${mind}${civ}${why}${chem}`;
+  const body = (s.plan === 'serpent' || s.plan === 'slug' || s.plan === 'roller') && s.build === 'lanky' ? '' : (BUILD_TEXT[s.build] || '').replace(' on short, thick legs', s.legs ? ' on short, thick legs' : '').replace(', on long stilt-like legs', s.legs ? ', on long stilt-like legs' : '');
+  const where = ['swims', 'perches', 'dives', 'glides'].filter(k => s[k]).map(k => HABITAT_TEXT[k]).join('');
+  // Fish-like swimmers are described from their anatomy; the others from their form, plus what of it they show.
+  const finned = ['fish', 'hunter', 'leviathan'].includes(s.form), an = s.anatomy;
+  const extra = !s.aquatic || finned || !an ? '' : `${an.skin === 'translucent' ? ' It is so translucent its glowing organs show through.' : ''}${s.form === 'squid' && SEA_WORDS.eyes[an.eyes] ? ` It sees with ${SEA_WORDS.eyes[an.eyes]}.` : ''}${an.filaments ? ' Long filaments trail behind it.' : ''}`;
+  const formText = s.aquatic && finned ? (s.form === 'leviathan' ? ' An enormous swimmer that strains the water for food and comes up to breathe.' : s.form === 'hunter' ? ' A big hunter of the open water.' : '') + seaText(s) : (FORM_TEXT[s.form] || '') + extra;
+  return `${size} ${PLAN_TEXT[s.plan]} ${diet}.${formText}${where}${ALIEN_TEXT[s.alien] || ''}${s.aquatic ? '' : body}${feature} ${social} ${manner}${mind}${civ}${why}${chem}`;
 }

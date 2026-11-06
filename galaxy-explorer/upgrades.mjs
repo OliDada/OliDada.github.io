@@ -23,7 +23,8 @@
 // A value in a query is a name, a list of names (any of them), { min, max } or { atLeast: tier }.
 // Labels are written as tasks ("Scan …"). Hints and the nearest place to go
 // (objectives.mjs) are worked out from the query, never written per upgrade.
-import { DOCUMENTED } from './codex.mjs';
+import { DOCUMENTED, seaEntry } from './codex.mjs';
+import { rarityOf, rarityAtLeast } from './rarity.mjs';
 import { tierAtLeast } from './civilizations.mjs';
 import { JUMP_RANGE } from './galaxy.mjs';
 
@@ -90,24 +91,25 @@ export const UPGRADES = {
   },
   // ===== Main line: chapter Petrel =====
   pressureHull1: {
-    line: 'main', order: 7, chapter: 'petrel', gear: 'ship', name: 'Pressure hull I', status: 'planned',
-    effect: 'Dive into liquid seas, down to the shallows.',
+    line: 'main', order: 7, chapter: 'petrel', gear: 'ship', name: 'Pressure hull I', status: 'live',
+    effect: 'The Petrel becomes a submarine: over deep water, fly low and hold F (or press F while afloat) to dive, down to 40 m. Hold R at the surface to fly out again.',
     needs: [
       { label: 'Watch 2 kinds of animal drink at the shore', ...WATCH('drink'), count: 2 },
-      { label: 'Scan a coil or a creeper', kind: 'fauna', traits: { plan: ['serpent', 'slug'] } },
+      { label: 'Scan 2 animals that live in the sea', kind: 'fauna', traits: { water: true }, count: 2 },
       { label: 'Scan sea stacks or a shoreline plant', anyOf: [ROCK('seastacks'), { kind: 'flora', traits: { habitat: { shore: true } } }] },
     ],
   },
   xenolinguistics: {
-    line: 'main', order: 8, chapter: 'petrel', gear: 'knowledge', name: 'Xenolinguistics', status: 'planned',
-    effect: 'Settlements give longer field notes; attempt contact with tool users and village builders.',
+    line: 'main', order: 8, chapter: 'petrel', gear: 'knowledge', name: 'Xenolinguistics', status: 'live',
+    effect: 'Make sense of tool users, village builders and metalworkers: greet them in their towns (E beside one you have scanned) and trade what you know.',
     needs: [{ label: 'Find a settlement', kind: 'settlement' }],
   },
   pressureHull2: {
-    line: 'main', order: 9, chapter: 'petrel', gear: 'ship', name: 'Pressure hull II', status: 'planned',
-    effect: 'Deep dives, and the oceans hidden under the ice of frozen moons.',
+    line: 'main', order: 9, chapter: 'petrel', gear: 'ship', name: 'Pressure hull II', status: 'partial',
+    effect: 'Deep dives: the Petrel goes all the way down to the sea floor. Later: the oceans hidden under the ice of frozen moons.',
+    built: 'dives to any depth; under-ice oceans come later',
     needs: [
-      { label: 'Scan a drifter', ...DRIFTER },
+      { label: 'Scan a plant that grows under water', kind: 'flora', traits: { aquatic: true } },
       { label: 'Scan water ice, pingos or a cryovolcano', ...ROCK(['ice', 'pingo', 'cryovolcano']) },
     ],
   },
@@ -117,6 +119,7 @@ export const UPGRADES = {
     needs: [
       { label: 'Scan animals of 4 different body plans', kind: 'fauna', distinct: 'traits.plan', count: 4 },
       { label: 'Record 2 kinds of sky event (eclipse, aurora, meteor shower)', kind: 'phenomenon', distinct: 'traits.type', count: 2 },
+      { label: 'Record 2 rare finds (rare or rarer)', kind: ['flora', 'fauna', 'formation', 'behaviour', 'phenomenon'], rarity: { atLeast: 'rare' }, count: 2 },
     ],
   },
   signalDecoder: {
@@ -129,12 +132,12 @@ export const UPGRADES = {
     effect: 'The deep-range ship. Opens the Albatross chapter.',
     needs: [
       { label: 'Scan life built on 3 different chemistries', kind: LIVING, distinct: 'world.biochemistry', count: 3 },
-      { label: 'Befriend a spacefaring civilization', special: 'relationship', level: 'friendship' },
+      { label: 'Befriend a spacefaring civilization', special: 'relationship', level: 'friendship', traits: { tier: { atLeast: 'spacefarers' } } },
     ],
   },
   // ===== Main line: chapter Albatross =====
   cryoSeals: {
-    line: 'main', order: 13, chapter: 'albatross', gear: 'ship', name: 'Cryo seals', status: 'planned',
+    line: 'main', order: 13, chapter: 'albatross', gear: 'ship', name: 'Cryo seals', status: 'live',
     effect: 'Dive into seas of liquid methane and ammonia.',
     needs: [
       { label: 'Scan life on a methane world', kind: LIVING, world: { biochemistry: 'methane' } },
@@ -150,8 +153,8 @@ export const UPGRADES = {
     ],
   },
   diplomaticProtocols: {
-    line: 'main', order: 15, chapter: 'albatross', gear: 'knowledge', name: 'Diplomatic protocols', status: 'planned',
-    effect: 'Attempt contact with city builders and above.',
+    line: 'main', order: 15, chapter: 'albatross', gear: 'knowledge', name: 'Diplomatic protocols', status: 'live',
+    effect: 'Make sense of city builders, industrial civilizations and planet-shapers, and trade with them. (Orbital civilizations and above meet you halfway on their stations.)',
     needs: [{ label: 'Earn the trust of a civilization', special: 'relationship', level: 'trust' }],
   },
   signalDrive: {
@@ -170,7 +173,7 @@ export const UPGRADES = {
   },
   longRangeReceiver: {
     line: 'side', opensAt: 'jumpDrive2', gear: 'ship', name: 'Long-range receiver', status: 'live',
-    effect: 'Hear radio from much farther: planet-shapers out to 80 light years, spacefarers and system-shapers out to 150.',
+    effect: 'Hear radio from much farther: industrial worlds out to 30 light years, planet-shapers 80, orbital 110, spacefarers and system-shapers 150.',
     needs: [{ label: 'Investigate 2 surface signals', kind: 'field-note', count: 2 }],
   },
   lifeSonar: {
@@ -222,6 +225,14 @@ export const UPGRADES = {
     effect: 'Distracts a stalker for a while. Never a weapon.',
     needs: [{ label: 'Scan 2 species that stalk explorers', kind: 'fauna', traits: { stalksYou: true }, count: 2 }],
   },
+  diveSuit: {
+    line: 'side', opensAt: 'pressureHull1', gear: 'suit', name: 'Dive suit', status: 'live',
+    effect: 'Swim on foot, down to 30 m: past the shallows you swim instead of turning back (Space up, C down, look where you want to go). Leave the Petrel while it is under water, and board it again there.',
+    needs: [
+      { label: 'Scan 2 plants that grow under water', kind: 'flora', traits: { aquatic: true }, count: 2 },
+      { label: 'Scan an animal at home both on land and in water', kind: 'fauna', traits: { land: true, water: true } },
+    ],
+  },
   jumpJets: {
     line: 'side', opensAt: 'pressureHull2', gear: 'suit', name: 'Jump jets', status: 'planned',
     effect: 'Much higher jumps on foot: climb ridges and cross gullies.',
@@ -259,6 +270,13 @@ export const EXPOSURE_COLD = 193, EXPOSURE_HOT = 353; // kelvin
 export const exposureOf = (temperature) => temperature < EXPOSURE_COLD ? Math.min(1, (EXPOSURE_COLD - temperature) / 80)
   : temperature > EXPOSURE_HOT ? Math.min(1, (temperature - EXPOSURE_HOT) / 120) : 0;
 export const hasFieldGlasses = (unlocked) => unlocked.has('fieldGlasses');
+// Under water. Anyone can wade into the shallows. Pressure hull I lets the Petrel dive to
+// 40 m, Pressure hull II to any depth; the Dive suit lets you swim to 30 m. Water seas from
+// the start; methane and ammonia seas need Cryo seals; molten sulfur never.
+export const WADE_DEPTH = 1.1; // metres of water you can walk in
+export const diveDepth = (unlocked) => unlocked.has('pressureHull2') ? Infinity : unlocked.has('pressureHull1') ? 40 : 0;
+export const swimDepth = (unlocked) => unlocked.has('diveSuit') ? 30 : 0;
+export const divesIn = (unlocked, solvent = 'water') => solvent === 'water' || ((solvent === 'methane' || solvent === 'ammonia') && unlocked.has('cryoSeals'));
 export const ZOOM_REACH = 4;
 // Radio: the Kestrel's receiver hears only part of signals.mjs HEARD; the Long-range receiver hears all of it.
 export const radioHearing = (unlocked) => unlocked.has('longRangeReceiver') ? 1 : 0.3;
@@ -284,6 +302,7 @@ export function matches(e, q) {
   if (kind === 'any' ? !DOCUMENTED.includes(e.kind) : Array.isArray(kind) ? !kind.includes(e.kind) : kind !== e.kind) return false;
   if (!worldMatches(e, q.world)) return false;
   if (q.traits && !Object.entries(q.traits).every(([k, c]) => matchValue(e.traits?.[k], c))) return false;
+  if (q.rarity && !rarityAtLeast(rarityOf(e), q.rarity.atLeast ?? q.rarity)) return false; // rarity.mjs
   return true;
 }
 const distinct = (list, path) => new Set(list.map((e) => get(e, path)).filter((v) => v != null)).size;
@@ -304,15 +323,16 @@ function byWorld(list) {
 }
 
 // What has been recorded on one world: { flora, fauna, formation } counts.
+// Life found only under water counts separately (sea), not toward plants and animals.
 export function recordedOn(entries, seed, bodyId) {
-  const c = { flora: 0, fauna: 0, formation: 0 };
-  for (const e of entries) if (e.seed === String(seed) && e.bodyId === bodyId && e.kind in c) c[e.kind]++;
+  const c = { flora: 0, fauna: 0, formation: 0, sea: 0 };
+  for (const e of entries) if (e.seed === String(seed) && e.bodyId === bodyId && e.kind in c) c[seaEntry(e) ? 'sea' : e.kind]++;
   return c;
 }
 // Worlds where every plant, animal and rock or landform that is there has been recorded.
 export function completedWorlds(entries) {
   const counts = new Map();
-  for (const e of entries) if (['flora', 'fauna', 'formation'].includes(e.kind)) {
+  for (const e of entries) if (['flora', 'fauna', 'formation'].includes(e.kind) && !seaEntry(e)) { // what lives only under water is a bonus
     const k = worldKey(e), c = counts.get(k) || { flora: 0, fauna: 0, formation: 0 };
     c[e.kind]++; counts.set(k, c);
   }
@@ -332,7 +352,11 @@ export function needProgress(need, entries) {
       const seen = new Set(fauna.map((e) => `${worldKey(e)}:${e.id}`));
       return measure(need, fauna.filter((e) => e.traits.diet === 'carnivore' && e.traits.prey?.some((id) => seen.has(`${worldKey(e)}:${id}`))));
     }
-    case 'relationship': return { ...measure(need, []), notYet: 'Contact' }; // relationships arrive with Contact (roadmap)
+    case 'relationship': { // a step reached with a civilization (contact.mjs), as codex 'contact' entries
+      const order = ['observed', 'understood', 'contact', 'trust', 'friendship'];
+      const civs = new Set(entries.filter((e) => e.kind === 'contact' && order.indexOf(e.traits?.step) >= order.indexOf(need.level) && (!need.traits || Object.entries(need.traits).every(([k, c]) => matchValue(e.traits?.[k], c)))).map((e) => e.id.replace(/:[a-z]+$/, '')));
+      return measure(need, [...civs].map((id) => ({ id })));
+    }
   }
   const list = entries.filter((e) => matches(e, need));
   if (!need.sameWorld) return measure(need, list);
@@ -389,7 +413,7 @@ const PLAN_HINTS = {
   quadruped: 'worlds with complex life', biped: 'complex-life worlds, more often with low gravity',
   hexapod: 'drier worlds with life', arachnid: 'drier worlds with life', serpent: 'drier worlds with life', slug: 'wet worlds with life',
   flyer: 'complex-life worlds with thick enough air: look up', floater: 'complex-life worlds with thick air or low gravity: look up',
-  radial: 'worlds with complex life', roller: 'dry complex-life worlds',
+  radial: 'worlds with complex life', roller: 'dry complex-life worlds', swimmer: 'seas of worlds with life: watch from the shore',
 };
 const FORMATION_HINTS = {
   basalt: 'volcanic worlds, and most rocky worlds', obsidian: 'volcanic worlds', ice: 'frozen worlds and icy moons',
@@ -413,6 +437,9 @@ function hintFor(q) {
   if (t.plan) out.push(...asList(t.plan).map((p) => PLAN_HINTS[p]));
   if (t.formation) out.push(...asList(t.formation).map((f) => FORMATION_HINTS[f]));
   if (t.habitat?.shore) out.push('coasts of worlds with seas');
+  if (t.aquatic) out.push('the sea floor of worlds with seas and life (dive, or look into the shallows)');
+  if (t.water && t.land) out.push('coasts of worlds with seas and life: animals that come and go from the water');
+  else if (t.water) out.push('seas of worlds with life: watch from the shore');
   if (t.legs) out.push('worlds with animals (bold green rings on the map)');
   if (t.glow) out.push('dim worlds around red dwarfs');
   if (t.activity === 'nocturnal') out.push('worlds with day and night, after dark');
@@ -429,9 +456,10 @@ const BEHAVIOUR_HINTS = {
 export function hint(need) {
   if (need.kind === 'phenomenon') return 'Eclipses come to moons and worlds with moons, by day; aurorae and meteor showers to worlds with air, at night. On a world, the panel under the tally says what the sky will do next.';
   if (need.kind === 'behaviour' && !need.traits) return 'Watch an animal you have scanned while it eats, drinks, sleeps or hunts: aim at it and hold E.';
+  if (need.rarity) return 'Rare things: glowing or strange plants and animals, life on other chemistries, rare rocks, eclipses, hunters at their kill. Scan cards and the codex (K) show how rare each find is.';
   if (need.special === 'hunt') return "Complex-life worlds: an animal's card says what it hunts.";
   if (need.special === 'complete') return 'The HUD counts what is left on the world you are on.';
-  if (need.special === 'relationship') return 'Arrives with Contact (not in the game yet).';
+  if (need.special === 'relationship') return need.traits?.tier ? 'Meet them on their station deck or ark (E beside one of the crew), and trade what you know, over more than one visit.' : 'Greet a civilization (E beside one of them) and show them things from your codex they value.';
   if (need.kind === 'settlement' && !need.traits) return 'Settlements are found on worlds with intelligent life; they record themselves when you come near.';
   const found = [...new Set(need.anyOf ? need.anyOf.flatMap(hintFor) : hintFor(need))];
   return found.length ? `Look on ${or(found)}.` : null;

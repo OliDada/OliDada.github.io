@@ -21,6 +21,8 @@ export function createEngineSound({ button, label, onError }) {
         }
     };
     return {
+        // The audio context while sound is on (voices.js), else null.
+        context: () => (sound && audioContext?.state === "running" ? audioContext : null),
         // active: engines audible (powered flight near a world).
         update(active, speed, verticalSpeed) {
             if (!engineGain) return;

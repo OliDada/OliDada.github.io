@@ -8,7 +8,7 @@ import { starsNear } from './galaxy.mjs';
 import { generateSystem } from './system.mjs';
 import { civilizationsIn, TIERS } from './civilizations.mjs';
 
-export const HEARD = { 'planet-shapers': 80, spacefarers: 150, 'system-shapers': 150 }; // a wider scan would cost too much on phones // light years, by tier
+export const HEARD = { industrial: 30, 'planet-shapers': 80, orbital: 110, spacefarers: 150, 'system-shapers': 150 }; // a wider scan would cost too much on phones // light years, by tier
 export const SCAN_RADIUS = Math.max(...Object.values(HEARD));
 
 // The most advanced civilization broadcasting from a star's system, or null.

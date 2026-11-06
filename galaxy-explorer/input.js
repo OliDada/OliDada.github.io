@@ -34,6 +34,7 @@ export function setupInput({ keys, canvas, started, mode, modalOpen, on }) {
         if (e.code === "KeyT" && !modalOpen()) return on.cruise();
         if (e.code === "KeyH") return on.help();
         if (e.code === "KeyU") return on.upgrades?.();
+        if (e.code === "KeyK") return on.codex?.();
         if (e.code === "KeyC" && started() && !modalOpen()) return on.clear();
         if (e.code === "Tab" && started() && !modalOpen()) {
             e.preventDefault();
@@ -44,10 +45,10 @@ export function setupInput({ keys, canvas, started, mode, modalOpen, on }) {
             modalOpen() ||
                     (["BUTTON", "A"].includes(document.activeElement?.tagName) &&
                 e.code === "Space" &&
-                mode() !== "walk")
+                mode() !== "walk" && mode() !== "deck")
         )
             return;
-        if (e.code === "Space" && mode() === "walk") document.activeElement?.blur?.();
+        if (e.code === "Space" && (mode() === "walk" || mode() === "deck")) document.activeElement?.blur?.();
         keys.add(e.code);
         if (
             [
@@ -66,7 +67,7 @@ export function setupInput({ keys, canvas, started, mode, modalOpen, on }) {
         )
             on.manualControl();
         if (e.code === "KeyL") {
-            if (mode() !== "walk") on.act();
+            if (mode() !== "walk" && mode() !== "deck") on.act();
         }
         if (e.code === "KeyE") on.interact();
     });
@@ -97,7 +98,7 @@ export function setupInput({ keys, canvas, started, mode, modalOpen, on }) {
     document.addEventListener("pointerlockchange", () => {
         if (mouseLocked() && !lockHintShown) {
             lockHintShown = true;
-            on.toast(mode() === "walk"
+            on.toast(mode() === "walk" || mode() === "deck"
                 ? "Mouse look on. Press Esc to free the cursor."
                 : "Mouse steering on. Hold Q to look around; Esc frees the cursor.");
         }

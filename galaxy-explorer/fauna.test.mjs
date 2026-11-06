@@ -15,7 +15,8 @@ test('only worlds with simple or complex life have animals; simple life only sma
   for (const b of worlds) {
     const { species } = faunaFor(b);
     if (b.physics.life === 'none' || b.physics.life === 'microbial') assert.equal(species.length, 0);
-    if (b.physics.life === 'simple') for (const s of species) assert.ok(['hexapod', 'serpent', 'arachnid', 'slug'].includes(s.plan));
+    if (b.physics.life === 'simple') for (const s of species) assert.ok(['hexapod', 'serpent', 'arachnid', 'slug', 'swimmer'].includes(s.plan));
+    if (b.physics.life === 'simple') for (const s of species) assert.ok(s.build !== 'giant' && (!s.aquatic || s.size < 4), `${s.name}: a giant on a simple-life world`);
     if (b.physics.pressure < .15) assert.ok(!species.some(s => s.plan === 'flyer'), `${b.name}: flyer in near-vacuum`);
   }
 });
@@ -24,7 +25,7 @@ test('species are deterministic and well-formed', () => {
   for (const b of living) {
     assert.deepEqual(faunaFor(b), faunaFor(b));
     for (const s of faunaFor(b).species) {
-      assert.ok(PLANS[s.plan] && s.size > 0 && s.size < 12 && s.legLength > 0);
+      assert.ok((PLANS[s.plan] || s.aquatic) && s.size > 0 && s.size < (s.build === 'giant' ? 32 : 12) && s.legLength > 0, `${s.name}: ${s.size} m`);
       for (const c of Object.values(s.colors)) assert.match(c, /^#[0-9a-f]{6}$/);
       assert.ok(s.description.length > 20 && s.group >= 1 && s.herds >= 1);
     }
@@ -48,11 +49,17 @@ test('animals are built, stay out of water and near the site, and skittish ones 
     for (let i = 0; i < 1200; i++) fauna.update(.05, i * .05, null); // one minute
     for (const c of fauna.creatures) {
       if (c.hidden) continue; // caught; back at its herd later
-      if (c.sp.altitude[1] === 0) assert.ok(!terrain.isLiquid(c.n), `${c.sp.name} walked into the sea`);
-      assert.ok(c.n.angleTo(signal) * body.radius < 330, `${c.sp.name} wandered off`);
+      if (c.band.dry) continue; // sea life with no sea near enough waits, unseen
       const m = new THREE.Matrix4(), p = new THREE.Vector3();
       c.mesh.getMatrixAt(c.index, m); p.setFromMatrixPosition(m);
-      assert.ok(Number.isFinite(p.x) && p.length() >= body.radius + terrain.surface(c.n) - c.sink - 1e-3); // sleepers settle onto folded legs
+      if (c.sp.aquatic) { // in the water: below the surface (or leaping just above it), above the sea floor
+        assert.ok(terrain.isLiquid(c.n), `${c.sp.name} swam ashore`);
+        assert.ok(p.length() >= body.radius + terrain.height(c.n) - 1e-3 && p.length() < body.radius + terrain.sea + c.sp.size * (c.sp.glides ? 1.5 : 1) + (c.sp.glides ? 1.5 : .5), `${c.sp.name} is out of the water`);
+      } else {
+        if (c.sp.altitude[1] === 0) assert.ok((!terrain.isLiquid(c.n) || c.sp.swims || terrain.sea - terrain.height(c.n) < (['serpent', 'slug'].includes(c.sp.plan) ? .12 + c.sp.size * .1 : c.sp.legLength * .6 + .08) + .05), `${c.sp.name} walked into deep water`); // wading is fine
+        assert.ok(Number.isFinite(p.x) && p.length() >= body.radius + terrain.height(c.n) - c.sink - 1e-3); // sleepers settle onto folded legs; waders stand on the bed
+      }
+      assert.ok(c.n.angleTo(signal) * body.radius < 330, `${c.sp.name} wandered off`);
     }
     const prey = fauna.creatures.find(c => c.sp.behavior === 'skittish' && !c.hidden && !c.eco.predators.length); // a hunter, if near, takes priority over you
     if (prey) {
@@ -72,9 +79,9 @@ test('traits drive behaviour, and civilizations are rare', () => {
     if (s.altitude[1] === 0 && s.traits.caution > .55) assert.equal(s.behavior, 'skittish');
     if (s.civilization >= 1) assert.ok(s.traits.intelligence > .4, 'civilization without intelligence');
     if (s.arms) assert.equal(s.plan, 'biped');
-    assert.ok(s.civilization >= 0 && s.civilization <= 6 && typeof s.mind === 'string' && s.description.includes(`Mind: ${s.mind}`));
-    if (s.civilization >= 3) assert.ok(s.manipulators.score >= .45, `${s.plan} city builders with only ${s.manipulators.kind}`);
-    builders += s.civilization >= 2; spacefaring += s.civilization >= 5;
+    assert.ok(s.civilization >= 0 && s.civilization <= 9 && typeof s.mind === 'string' && s.description.includes(`Mind: ${s.mind}`));
+    if (s.civilization >= 4) assert.ok(s.manipulators.score >= .45, `${s.plan} city builders with only ${s.manipulators.kind}`);
+    builders += s.civilization >= 2; spacefaring += s.civilization >= 8;
   }
   // Small samples are noisy; galaxy-wide villages are in ~1 system in 39, spacefarers ~1 in 471.
   assert.ok(builders / species < .06 && spacefaring / species < .02, `${builders} builders, ${spacefaring} spacefaring of ${species}`);
@@ -88,10 +95,11 @@ test('animal models face outward and stay connected to the ground', () => {
       let cx = 0, cy = 0, cz = 0, n = 0, out = 0, minY = Infinity;
       for (let i = 0; i < P.length; i += 3) { cx += P[i]; cy += P[i + 1]; cz += P[i + 2]; n++; minY = Math.min(minY, P[i + 1]); }
       cx /= n; cy /= n; cz /= n;
-      for (let i = 0; i < P.length; i += 3) if (part[i / 3] === 0 || part[i / 3] === 4) out += Math.sign((P[i] - cx) * N[i] + (P[i + 1] - cy) * N[i + 1] + (P[i + 2] - cz) * N[i + 2]);
-      assert.ok(out > 0, `${m.geometry.uuid}: body normals point inward`);
       const sp = fauna.species[fauna.group.children.indexOf(m)];
-      if (sp.altitude[1] === 0 && !['serpent', 'slug'].includes(sp.plan)) assert.ok(Math.abs(minY) < sp.size * .15, `${sp.name}: feet are ${minY.toFixed(2)} m from the ground`);
+      const bodyParts = sp.form === 'tower' ? [0, 3] : [0, 4, 11, 12]; // whole-body parts: rigid, slithering, waving, spinning (a tower's column sways)
+      for (let i = 0; i < P.length; i += 3) if (bodyParts.includes(part[i / 3])) out += Math.sign((P[i] - cx) * N[i] + (P[i + 1] - cy) * N[i + 1] + (P[i + 2] - cz) * N[i + 2]);
+      assert.ok(out > 0, `${sp.name}: body normals point inward`);
+      if (sp.altitude[1] === 0 && !sp.aquatic && !['serpent', 'slug'].includes(sp.plan)) assert.ok(Math.abs(minY) < sp.size * .15, `${sp.name}: feet are ${minY.toFixed(2)} m from the ground`);
     }
   }
 });
@@ -110,11 +118,52 @@ test('life on other chemistry: own plants, own palette, slower animals; alien bo
     const chem = b.physics.biochemistry, p = b.physics;
     if (chem === 'methane') assert.ok(p.temperature < 130);
     if (chem === 'silicon') assert.ok(p.temperature > 550);
-    for (const s of floraFor(b).species) assert.ok(['mat', 'mound'].includes(s.form) || (FORMS[s.form].chem || 'carbon') === chem, `${s.form} on a ${chem} world`);
+    for (const s of floraFor(b).species) assert.ok(s.aquatic || ['mat', 'mound'].includes(s.form) || (FORMS[s.form].chem || 'carbon') === chem, `${s.form} on a ${chem} world`);
     for (const s of faunaFor(b).species) assert.equal(s.chemistry, chem);
   }
   const all = living.flatMap(b => faunaFor(b).species);
   assert.ok(all.some(s => s.plan === 'radial') && all.some(s => s.plan === 'roller'), 'no radial walkers or rollers in the sample');
   const meth = all.filter(s => s.chemistry === 'methane'), carb = all.filter(s => s.chemistry === 'carbon');
   if (meth.length > 2) assert.ok(meth.reduce((a, s) => a + s.speed.walk / s.size, 0) / meth.length < carb.reduce((a, s) => a + s.speed.walk / s.size, 0) / carb.length);
+});
+
+test('bodies vary in build: giants, heavy and tall thin animals, and alien forms', () => {
+  const all = living.flatMap(b => faunaFor(b).species.filter(s => !s.aquatic).map(s => ({ s, g: b.physics.gravity })));
+  const share = (f) => all.filter(f).length / all.length;
+  assert.ok(share(x => x.s.build === 'giant') > .04 && share(x => x.s.build === 'heavy') > .06 && share(x => x.s.build === 'lanky') > .06, 'builds too rare');
+  assert.ok(share(x => x.s.alien || ['centipede', 'tower', 'dome', 'skywhale', 'siphon'].includes(x.s.form)) > .06, 'alien variants too rare');
+  for (const { s } of all) {
+    if (s.build === 'giant') assert.ok(s.size >= 2.2 && s.group <= 4, `${s.name}: a ${s.size.toFixed(1)} m giant in groups of ${s.group}`);
+    if (s.form === 'centipede') assert.ok(s.legs >= 12);
+  }
+  assert.ok(all.some(x => x.s.build === 'giant' && x.s.size > 6), 'no really big animals');
+});
+
+test('worlds with seas have sea life, which stays in the water', () => {
+  const { seasOf } = { seasOf: (p) => p.waterState === 'liquid' ? p.waterCoverage : ['methane', 'ammonia', 'sulfur'].includes(p.solvent) ? p.solventCoverage : 0 };
+  for (const b of living) {
+    const sea = faunaFor(b).species.filter(s => s.aquatic);
+    if (seasOf(b.physics) >= .05) assert.ok(sea.length >= 1, `${b.name}: seas but no sea life`);
+    else assert.equal(sea.length, 0);
+    for (const s of sea) {
+      assert.equal(s.civilization, 0); assert.equal(s.plan, 'swimmer');
+      assert.ok(!s.ecology.drinks && !s.ecology.stalksYou, `${s.name}: land habits`);
+    }
+    for (const s of faunaFor(b).species.filter(s => !s.aquatic && !s.swims && !s.dives)) assert.ok(s.ecology.prey.every(id => !id.startsWith('aq-')), `${s.name} hunts fish`);
+    for (const s of faunaFor(b).species.filter(s => s.aquatic)) assert.ok(s.ecology.prey.every(id => faunaFor(b).species.find(o => o.id === id).habitats.water), `${s.name} hunts on land`);
+  }
+  const wet = living.filter(b => b.physics.life === 'complex' && terrainFor(b).liquid === 'water' && faunaFor(b).species.some(s => s.aquatic)).slice(0, 4);
+  let swimming = 0, leapt = 0;
+  for (const body of wet) {
+    const terrain = terrainFor(body), signal = new THREE.Vector3(...terrain.site);
+    const fauna = buildFauna(THREE, { body, terrain, radius: body.radius, signalNormal: signal, budget: 60 });
+    for (let i = 0; i < 1200; i++) {
+      fauna.update(.05, i * .05, null);
+      for (const c of fauna.creatures) if (c.sp.aquatic && !c.band.dry && !c.hidden) {
+        swimming++; leapt += c.leap >= 0;
+        assert.ok(terrain.isLiquid(c.n), `${c.sp.name} swam ashore`);
+      }
+    }
+  }
+  assert.ok(swimming > 0, 'no sea life near any site');
 });

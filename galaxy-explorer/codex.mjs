@@ -7,7 +7,8 @@
 //
 //   kind: 'flora' | 'fauna' | 'formation' | 'settlement' | 'field-note' | 'world' | 'signal'
 //         | 'behaviour' (an animal seen doing something) | 'phenomenon' (a sky event)
-//   Later kinds ('station', 'megastructure', 'derelict', 'contact') only need
+//         | 'station' (a station you docked at)
+//   Later kinds ('megastructure', 'derelict', 'contact') only need
 //   an entry function here and a scanner in the game; requirements can ask for them at once.
 //
 // Pure apart from the storage passed in (localStorage in the browser, a stub in tests).
@@ -41,12 +42,18 @@ const entry = (kind, system, body, id, traits) => ({
   kind, seed: String(system.seed), bodyId: body.id, id, traits, world: worldTraits(system, body),
 });
 
+// Life that lives only under water (sea plants, swimmers that never leave the sea). It is
+// recorded like anything else, but "fully documenting" a world does not need it: you can
+// reach it only once you can dive.
+export const seaOnly = (s) => !!s.aquatic && !s.habitats?.land && !s.habitats?.air;
+export const seaEntry = (e) => !!e.traits?.sea;
 export const floraEntry = (system, body, s) => entry('flora', system, body, s.id, {
-  name: s.name, form: s.form, glow: round(s.glow || 0),
+  name: s.name, form: s.form, glow: round(s.glow || 0), aquatic: !!s.aquatic, sea: !!s.aquatic,
   habitat: { shore: !!s.habitat?.shore, highland: !!s.habitat?.highland },
 });
 export const faunaEntry = (system, body, s) => entry('fauna', system, body, s.id, {
   name: s.name, plan: s.plan, form: s.form, diet: s.traits?.diet ?? s.diet, legs: s.legs ?? 0, glow: round(s.glow || 0),
+  land: !!s.habitats?.land, water: !!s.habitats?.water, air: !!s.habitats?.air, sea: seaOnly(s),
   activity: s.ecology?.activity ?? 'any', stalksYou: !!s.ecology?.stalksYou, prey: [...(s.ecology?.prey || [])],
   mind: s.mind ?? null,
 });
@@ -67,6 +74,14 @@ export const phenomenonEntry = (system, body, type, { total = false } = {}) => e
 export const settlementEntry = (system, body, civ, tier = civ?.tier) => entry('settlement', system, body, civ?.id ?? `${system.seed}:${body.id}`, {
   name: civ?.species?.name ?? null, tier: tierName(tier), family: civ?.family ?? null, culture: civ?.culture ?? null, reach: civ?.reach ?? null,
 });
+// A station you docked at (station-deck.js): whose it is, by civilization id, and how its crew took you.
+export const stationEntry = (system, body, civ, stance) => entry('station', system, body, civ?.id ?? `${system.seed}:${body.id}`, {
+  name: civ?.species?.name ?? null, tier: civ?.tier ?? null, path: civ?.path ?? null, stance: stance ?? null,
+});
+// A step on the ladder with a civilization (contact.mjs): one entry per step reached.
+export const contactEntry = (system, body, civ, step) => entry('contact', system, body, `${civ.id}:${step}`, {
+  step, tier: civ.tier ?? null, path: civ.path ?? null, name: civ.species?.name ?? null,
+});
 export const fieldNoteEntry = (system, body) => entry('field-note', system, body, 'signal', { name: body.title || body.name });
 // A world you have been to. `totals` (how many plants, animals and formations it has)
 // lets "fully document a world" be checked later.
@@ -80,10 +95,14 @@ export const signalEntry = (source) => ({
 // actually placed at the landing site (a species that found no room is not counted).
 export function totalsOf(body) {
   if (body.giant || !body.physics) return { flora: 0, fauna: 0, formations: 0 };
+  // A spaceborne civilization's species no longer lives on its world (megastation.js).
+  const gone = civilizationOf(body)?.spaceborne ? civilizationOf(body).species.id : null;
+  const flora = floraFor(body).species, fauna = faunaFor(body).species.filter(s => s.id !== gone);
   return {
-    flora: floraFor(body).species.length,
-    fauna: faunaFor(body).species.length,
+    flora: flora.filter(s => !s.aquatic).length,
+    fauna: fauna.filter(s => !seaOnly(s)).length,
     formations: geologyFor(body).formations.length,
+    sea: flora.filter(s => s.aquatic).length + fauna.filter(seaOnly).length, // optional: under water
   };
 }
 

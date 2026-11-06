@@ -23,7 +23,7 @@ function updateDeepHUD(g) {
     $("altitude").innerHTML = info ? fmtLy(info.distance) : "–";
     $("speed").innerHTML = `${info ? fmtC(info.lightSpeeds) : 0} <small>× light</small>`;
     $("verticalReadout").hidden = true;
-    $("vesselStatus").textContent = "KESTREL";
+    $("vesselStatus").textContent = (g.shipName || "Kestrel").toUpperCase();
     $("actionBtn").disabled = false;
     $("approachBtn").disabled = false;
     $("approachBtn").hidden = false;
@@ -68,7 +68,8 @@ function updateMainHUD(g) {
         speed, verticalSpeed, camera, signalNormal, worldOrigin, shipShadow } = g;
     const { surfacePoint, distanceToSignal, altitude, openMap, act, approach, positionOf } = g;
     const isWalking = mode === "walk",
-        maneuvering = mode === "landing" || mode === "takeoff";
+        maneuvering = mode === "landing" || mode === "takeoff",
+        diving = mode === "dive", swimming = !!g.swimming;
     const inSpace = mode === "space" || mode === "transit";
     const destination = selectedBody ? positionOf(selectedBody).sub(worldOrigin) : null;
     $("worldName").textContent = inSpace
@@ -79,15 +80,17 @@ function updateMainHUD(g) {
             ? `Destination: ${selectedBody.name} · ${selectedBody.type}`
             : "No destination · Tab or tap a world to choose one"
         : activeBody.type + " · " + system.name + " system";
-    shipShadow.visible = !inSpace;
+    shipShadow.visible = !inSpace && !diving;
     $("modeLabel").textContent = inSpace
         ? mode === "transit"
             ? "CRUISE / INTERPLANETARY"
             : "FREE FLIGHT / INTERPLANETARY"
         : isWalking
-          ? "SURFACE EXPEDITION"
-          : mode === "landed"
-            ? "LANDED / KEStREL".toUpperCase()
+          ? swimming ? "SWIMMING / DIVE SUIT" : "SURFACE EXPEDITION"
+          : diving
+            ? "SUBMERGED / PETREL"
+            : mode === "landed"
+            ? `LANDED / ${g.shipName || "Kestrel"}`.toUpperCase()
             : maneuvering
               ? mode === "landing"
                   ? "LANDING / GEAR DOWN"
@@ -98,12 +101,14 @@ function updateMainHUD(g) {
     $("altLabel").textContent = inSpace
         ? "TO DESTINATION"
         : isWalking
-          ? "TO SHIP"
-          : mode === "flight" && altitude() > 200
+          ? swimming ? "DEPTH · TO SHIP " + fmtM(g.playerPos().distanceTo(shipPosition)).replace(/<\/?small>/g, "") : "TO SHIP"
+          : diving
+            ? "DEPTH"
+            : mode === "flight" && altitude() > 200
             ? "ALTITUDE · ORBIT AT 600 M"
             : "ALTITUDE";
     $("altitude").innerHTML =
-        inSpace && !selectedBody ? "–" : fmtM(Math.max(0, inSpace ? shipPosition.distanceTo(destination) - selectedBody.radius : isWalking ? surfacePoint(playerNormal).distanceTo(shipPosition) : altitude()));
+        inSpace && !selectedBody ? "–" : fmtM(Math.max(0, inSpace ? shipPosition.distanceTo(destination) - selectedBody.radius : diving || swimming ? g.depth : isWalking ? g.playerPos().distanceTo(shipPosition) : altitude()));
     $("speed").innerHTML =
         `${(isWalking ? Math.abs(speed) : Math.hypot(speed, verticalSpeed)).toFixed(0)} <small>m/s</small>`;
     const displayedVertical =
@@ -114,8 +119,8 @@ function updateMainHUD(g) {
     $("actionBtn").disabled = maneuvering;
     $("approachBtn").disabled = maneuvering;
     $("vesselStatus").textContent =
-        mode === "landed" ? "LANDED" : isWalking ? "ON FOOT" : "KESTREL";
-    $("approachBtn").hidden = mode === "walk";
+        mode === "landed" ? "LANDED" : swimming ? "SWIMMING" : isWalking ? "ON FOOT" : diving ? "PETREL · SUBMERGED" : (g.shipName || "Kestrel").toUpperCase();
+    $("approachBtn").hidden = mode === "walk" || diving;
     $("approachBtn").textContent = inSpace
         ? "◉ System map [M]"
         : mode === "landed"
@@ -142,15 +147,16 @@ function updateMainHUD(g) {
                 ? "Settling onto surface…"
                 : "Lift engines engaged…";
     else if (mode === "landed") label = "Leave ship <kbd>E</kbd>";
+    else if (diving) label = g.scanLabel ? `${g.scanLabel} <kbd>E</kbd>` : g.canSwim ? "Swim out <kbd>E</kbd>" : "";
     else if (isWalking) {
         const nearShip =
-            surfacePoint(playerNormal).distanceTo(shipPosition) < 9;
+            g.playerPos().distanceTo(shipPosition) < 9;
         label = distanceToSignal() < 9 && !g.discovered
             ? "Investigate <kbd>E</kbd>"
             : g.scanLabel
               ? `${g.scanLabel} <kbd>E</kbd>`
               : nearShip
-                ? "Board Kestrel <kbd>E</kbd>"
+                ? `Board the ${g.shipName || "Kestrel"} <kbd>E</kbd>`
                 : distanceToSignal() < 9
                   ? "Investigate <kbd>E</kbd>"
                   : ""; // nothing to do here: no button (the waypoint shows the way)
@@ -163,13 +169,34 @@ function updateMainHUD(g) {
                   : `Land on ${activeBody.name} <kbd>L</kbd>`;
     $("actionBtn").innerHTML = label;
     $("actionBtn").hidden = !label;
-        $("crosshair").style.display = isWalking ? "block" : "none";
+        $("crosshair").style.display = isWalking || diving ? "block" : "none";
     document.body.classList.toggle("walking", isWalking);
-    $("controlHint").innerHTML = isWalking
+    document.body.classList.toggle("swimming", swimming); // touch: rise and sink buttons while swimming
+    $("controlHint").innerHTML = swimming
+        ? "<kbd>W A S D</kbd> swim where you look <kbd>SPACE R</kbd> rise <kbd>F</kbd> sink <kbd>E</kbd> scan / board <span>Click: mouse look · M map · H controls</span>"
+        : diving
+          ? "<kbd>MOUSE</kbd> steer <kbd>W S</kbd> throttle <kbd>A D</kbd> turn <kbd>R F</kbd> rise / sink <kbd>X</kbd> stop <kbd>E</kbd> scan / swim out <span>Hold R at the surface to fly · H controls</span>"
+          : isWalking
         ? "<kbd>W A S D</kbd> walk <kbd>SPACE</kbd> jump <kbd>E</kbd> scan / interact <span>Click: mouse look · M map · H controls</span>"
         : inSpace
           ? "<kbd>MOUSE</kbd> steer <kbd>W S</kbd> thrust <kbd>A D</kbd> slide <kbd>R F</kbd> up / down <kbd>SHIFT</kbd> boost <kbd>X</kbd> brake <span>Click to steer · Q look around · H controls</span>"
           : "<kbd>MOUSE</kbd> steer <kbd>W S</kbd> thrust <kbd>A D</kbd> turn <kbd>R F</kbd> lift <kbd>SHIFT</kbd> boost <kbd>X</kbd> brake <span>Click to steer · Q look around · H controls</span>";
+    // At a station (game.js stationHUD): its own readouts over the usual ones.
+    const st = g.station;
+    if (st) {
+        if (st.modeLabel) $("modeLabel").textContent = st.modeLabel;
+        if (st.status) $("vesselStatus").textContent = st.status;
+        if (st.altLabel) $("altLabel").textContent = st.altLabel;
+        if (st.altitude != null) $("altitude").innerHTML = fmtM(st.altitude);
+        if (st.action !== undefined) { $("actionBtn").innerHTML = st.action; $("actionBtn").hidden = !st.action; $("actionBtn").disabled = !!st.busy; }
+        if (st.approach !== undefined) {
+            $("approachBtn").hidden = !st.approach;
+            if (st.approach) { $("approachBtn").textContent = st.approach.text; $("approachBtn").onclick = st.approach.onclick; }
+        }
+        if (st.hint) $("controlHint").innerHTML = st.hint;
+        if (st.walking) { document.body.classList.add("walking"); $("crosshair").style.display = "block"; $("verticalReadout").hidden = true; $("speed").innerHTML = `${Math.abs(speed).toFixed(0)} <small>m/s</small>`; }
+        if (!st.open) shipShadow.visible = false;
+    }
 }
 
 // The waypoint marker, updated every frame so it moves smoothly with the view.
@@ -198,10 +225,15 @@ export function updateWaypoint(g) {
         point = g.positionOf(g.selectedBody).sub(g.worldOrigin);
         name = g.selectedBody.name.toUpperCase();
         distance = fmtM(Math.max(0, g.shipPosition.distanceTo(point) - g.selectedBody.radius)).replace(/<\/?small>/g, "");
+    } else if (g.stationMark) {
+        const m = g.stationMark;
+        point = m.point;
+        name = m.name;
+        distance = fmtM(m.distance).replace(/<\/?small>/g, "");
     } else if (mode === "walk") {
         point = g.shipPosition.clone();
-        name = "KESTREL";
-        distance = fmtM(g.surfacePoint(g.playerNormal).distanceTo(point)).replace(/<\/?small>/g, "");
+        name = (g.shipName || "Kestrel").toUpperCase();
+        distance = fmtM(g.playerPos().distanceTo(point)).replace(/<\/?small>/g, "");
     }
     const el = $("waypoint");
     const visible = !!point;

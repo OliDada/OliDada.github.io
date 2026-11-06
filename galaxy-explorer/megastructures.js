@@ -3,22 +3,26 @@
 //
 //   traffic        any civilization with colonies (extent 'system'): ship lights crossing
 //                  between its home world and each colony, slowing as they arrive
-//   system-shapers an orbital ring around the home world, passing over the capital, joined
+//   system-shapers a home world built over from coast to coast (a world-city), an orbital ring around it, passing over the capital, joined
 //                  to the ground by elevators with climbers riding up and down; habitats
 //                  (spinning cylinders with lit window bands) circling every giant; and a
 //                  swarm of mirrors circling the star in a few tilted rings
 //
 // Everything is cheap: a handful of meshes, the mirror rings turn as whole groups, and
 // the traffic is one Points object. THREE is passed in.
+import { SIZE } from './scale.mjs';
 import { civilizationsIn, colonistOf } from './civilizations.mjs';
 import { networkFor } from './settlements.mjs';
 import { terrainFor } from './terrain.mjs';
 import { shipDesign } from './ships.js';
 import { rng } from './rng.mjs';
+import { nightPoints } from './city-lights.js';
+import { buildMegastation } from './megastation.js';
 
 const ease = (x) => x * x * (3 - 2 * x);
 
-export function buildMegastructures(THREE, system, worlds, group) {
+// sun: { value } the star's position in the world (shared with city-lights.js).
+export function buildMegastructures(THREE, system, worlds, group, sun = null) {
   const parts = [], updates = [], disposables = [];
   const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
   const track = (o) => { o.traverse?.(c => { if (c.geometry) disposables.push(c.geometry); if (c.material) disposables.push(c.material); c.frustumCulled = false; }); return o; };
@@ -46,6 +50,12 @@ export function buildMegastructures(THREE, system, worlds, group) {
   };
   const M = (pos, quat, s = 1) => new THREE.Matrix4().compose(pos || V(), quat || new THREE.Quaternion(), V(s, s, s));
   const lanes = [];
+  // What can't be flown or walked through, by world: tall things as vertical cylinders
+  // { p: base, r, h } in a coarse grid of directions, and orbital rings as bands.
+  const solids = new Map(), rings = new Map();
+  const solidsOf = (id, R) => { if (!solids.has(id)) solids.set(id, { R, cell: 45 / R, grid: new Map() }); return solids.get(id); };
+  const keyOf = (s, n) => `${Math.floor(n.x / s.cell)},${Math.floor(n.y / s.cell)},${Math.floor(n.z / s.cell)}`;
+  const addSolid = (id, R, o) => { const s = solidsOf(id, R), n = o.p.clone().normalize(), k = keyOf(s, n); if (!s.grid.has(k)) s.grid.set(k, []); s.grid.get(k).push(o); };
 
   for (const civ of civilizationsIn(system)) {
     if (civ.extent !== 'system') continue;
@@ -75,9 +85,139 @@ export function buildMegastructures(THREE, system, worlds, group) {
       ring.add(new THREE.BoxGeometry(width * 1.8, width * 1.5, width * 1.3), M(p, q), i % 3 ? hullC : trimC);
       ringGlow.add(new THREE.BoxGeometry(width * 1.85, width * .18, width * 1.35), M(p, q), glowC);
     }
+    rings.set(home.id, { axis: axis.clone(), radius: RR, width, thick: 4 });
     const ringGroup = new THREE.Group(); ringGroup.quaternion.copy(tilt);
     ringGroup.add(new THREE.Mesh(ring.geometry(), lit({ side: THREE.DoubleSide, emissive: new THREE.Color(hullC).multiplyScalar(.22) })), new THREE.Mesh(ringGlow.geometry(), glowing()));
     homeWorld.group.add(track(ringGroup)); parts.push(ringGroup);
+    // --- A world-city -----------------------------------------------------------------
+    // The whole home world is built over: every stretch of dry land away from the places
+    // built in detail (structures-mesh.js) is covered by towers, denser and taller round
+    // district centres, with parks left between. Three instanced tower shapes and one
+    // shader: lit by the star by day, windows lighting up across the night side; and a
+    // point of light on each roof so the night side glows when seen from far off.
+    {
+      const site = V(...terrain.site), nets = net.settlements.map(s => ({ n: V(...s.n), r: s.radius + 12 }));
+      const count = Math.round(Math.min(16000, 11000 * (R / 600) ** 2)), golden = Math.PI * (3 - Math.sqrt(5));
+      const shapes = [[], [], []], noise = (n) => Math.sin(n.x * 7.1 + n.y * 3.3) * Math.sin(n.y * 5.7 - n.z * 4.1) * Math.sin(n.z * 6.3 + n.x * 2.9);
+      for (let i = 0; i < count; i++) {
+        const y = 1 - (i + .5) / count * 2, rr = Math.sqrt(1 - y * y), th = i * golden;
+        const n = V(Math.cos(th) * rr, y, Math.sin(th) * rr).add(V(r() - .5, r() - .5, r() - .5).multiplyScalar(.6 / Math.sqrt(count))).normalize();
+        if (n.angleTo(site) * R < 280 || terrain.isLiquid(n) || nets.some(s => n.angleTo(s.n) * R < s.r)) continue;
+        const d = noise(n); if (d < -.18) continue; // parks
+        // Mostly low blocks that read as one city from orbit; towers where districts gather.
+        const tall = Math.max(0, d - .05) ** 1.2, kind = tall > .1 && r() < .6 ? (r() < .5 ? 1 : 2) : 0;
+        shapes[kind].push({ n, h: 5 + r() * 9 + tall * 110 * (.5 + r()), w: 9 + r() * 8, turn: r() * 6.28, tint: r(), lit: .35 + r() * .5 });
+      }
+      // In the builders' own idiom (the same families as structures-mesh.js towers) and the
+      // world's own colours: three shapes per idiom, unit-sized, standing on y = 0.
+      const style = civ.family === 'nests' ? 'roost' : civ.family === 'drifters' ? 'floating' : civ.family === 'burrowers' || ['mounds', 'trapdoor', 'burrows'].includes(civ.culture) ? 'burrow'
+        : ['grown', 'living', 'shell', 'membrane'].includes(civ.material) ? 'grown' : civ.material === 'wax' || civ.family === 'hive' ? 'comb' : civ.material === 'silk' || civ.family === 'web' ? 'silk' : 'built';
+      const join = (...parts) => { const g = merged(); for (const [geo, m] of parts) g.add(geo, m || null, '#fff'); return g.geometry(); };
+      const T = (x, y, z, s = 1) => new THREE.Matrix4().compose(V(x, y, z), new THREE.Quaternion(), V(s, s, s));
+      const bulbU = (r, y) => new THREE.SphereGeometry(r, 9, 6).translate(0, y, 0);
+      const units = {
+        // Those who build with stone, timber, adobe, ice or glass, in their culture's idiom.
+        built: () => ({
+          timber: () => [join([new THREE.CylinderGeometry(.42, .45, .3, 8).translate(0, .15, 0)], [new THREE.ConeGeometry(.75, .14, 8, 1, true).translate(0, .36, 0)], [new THREE.CylinderGeometry(.34, .37, .25, 8).translate(0, .55, 0)], [new THREE.ConeGeometry(.6, .12, 8, 1, true).translate(0, .73, 0)], [new THREE.ConeGeometry(.3, .25, 8).translate(0, .9, 0)]),
+            join([new THREE.BoxGeometry(.8, .6, .8).translate(0, .3, 0)], [new THREE.ConeGeometry(.75, .4, 4).rotateY(Math.PI / 4).translate(0, .8, 0)]), new THREE.CylinderGeometry(.4, .45, 1, 8).translate(0, .5, 0)],
+          terraced: () => [join([new THREE.BoxGeometry(1, .3, 1).translate(0, .15, 0)], [new THREE.BoxGeometry(.75, .3, .75).translate(0, .45, 0)], [new THREE.BoxGeometry(.5, .25, .5).translate(0, .72, 0)], [new THREE.BoxGeometry(.25, .15, .25).translate(0, .92, 0)]),
+            new THREE.BoxGeometry(1, 1, 1).translate(0, .5, 0), join([new THREE.BoxGeometry(1, .5, 1).translate(0, .25, 0)], [new THREE.BoxGeometry(.6, .5, .6).translate(.2, .75, .2)])],
+          tents: () => [new THREE.ConeGeometry(.6, 1, 8).translate(0, .5, 0), join([new THREE.ConeGeometry(.5, .7, 7).translate(-.25, .35, 0)], [new THREE.ConeGeometry(.45, 1, 7).translate(.25, .5, .1)]),
+            join([new THREE.CylinderGeometry(.04, .04, 1, 3).translate(0, .5, 0)], [new THREE.ConeGeometry(.6, .35, 9, 1, true).translate(0, .4, 0)], [new THREE.ConeGeometry(.4, .3, 9, 1, true).translate(0, .75, 0)])],
+          stilts: () => [join([new THREE.CylinderGeometry(.05, .05, .5, 3).translate(.3, .25, .3)], [new THREE.CylinderGeometry(.05, .05, .5, 3).translate(-.3, .25, -.3)], [new THREE.CylinderGeometry(.05, .05, .5, 3).translate(.3, .25, -.3)], [new THREE.CylinderGeometry(.05, .05, .5, 3).translate(-.3, .25, .3)], [new THREE.BoxGeometry(.8, .3, .8).translate(0, .65, 0)], [new THREE.ConeGeometry(.65, .25, 4).rotateY(Math.PI / 4).translate(0, .92, 0)]),
+            join([new THREE.CylinderGeometry(.08, .1, .35, 4).translate(0, .175, 0)], [new THREE.CylinderGeometry(.4, .4, .65, 8).translate(0, .67, 0)]), new THREE.CylinderGeometry(.35, .45, 1, 6).translate(0, .5, 0)],
+        }[civ.culture] || (() => [join([new THREE.CylinderGeometry(.55, .6, .45, 12).translate(0, .225, 0)], [new THREE.SphereGeometry(.55, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, .9, 1).translate(0, .45, 0)]),
+            join([new THREE.CylinderGeometry(.4, .45, .7, 10).translate(0, .35, 0)], [new THREE.TorusGeometry(.5, .06, 3, 14).rotateX(Math.PI / 2).translate(0, .5, 0)], [new THREE.SphereGeometry(.4, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, .7, 0)]),
+            new THREE.CylinderGeometry(.5, .55, 1, 10).translate(0, .5, 0)]))(),
+        grown: () => [new THREE.SphereGeometry(.5, 10, 7).scale(1, 1, 1).translate(0, .5, 0), new THREE.CylinderGeometry(.18, .55, 1, 8).translate(0, .5, 0),
+          join([bulbU(.5, .3)], [bulbU(.36, .68)], [bulbU(.22, .92)])],
+        comb: () => [new THREE.CylinderGeometry(.55, .55, 1, 6).translate(0, .5, 0), join([new THREE.CylinderGeometry(.3, .3, 1, 6).translate(0, .5, 0)], [new THREE.CylinderGeometry(.3, .3, .7, 6).translate(.52, .35, 0)], [new THREE.CylinderGeometry(.3, .3, .8, 6).translate(-.26, .4, .45)]),
+          new THREE.CylinderGeometry(.3, .38, 1, 6).translate(0, .5, 0)],
+        silk: () => [new THREE.ConeGeometry(.62, 1, 9).translate(0, .5, 0), join([new THREE.ConeGeometry(.4, .5, 8).rotateX(Math.PI).translate(0, .25, 0)], [new THREE.ConeGeometry(.4, .5, 8).translate(0, .75, 0)]),
+          join([new THREE.CylinderGeometry(.35, .4, .7, 8).translate(0, .35, 0)], [new THREE.ConeGeometry(.5, .3, 8).translate(0, .85, 0)])],
+        roost: () => [join([new THREE.CylinderGeometry(.2, .28, 1, 8).translate(0, .5, 0)], [new THREE.CylinderGeometry(.55, .55, .04, 10).translate(.2, .45, 0)], [new THREE.CylinderGeometry(.5, .5, .04, 10).translate(-.2, .75, 0)]),
+          new THREE.CylinderGeometry(.12, .4, 1, 8).translate(0, .5, 0), join([new THREE.CylinderGeometry(.25, .3, .8, 8).translate(0, .4, 0)], [new THREE.CylinderGeometry(.6, .6, .05, 12).translate(0, .82, 0)])],
+        floating: () => [join([new THREE.CylinderGeometry(.03, .03, .55, 3).translate(0, .275, 0)], [new THREE.SphereGeometry(.5, 10, 7).scale(1, .8, 1).translate(0, .78, 0)]),
+          join([new THREE.CylinderGeometry(.03, .03, .4, 3).translate(0, .2, 0)], [new THREE.CylinderGeometry(.3, .4, .45, 8).translate(0, .62, 0)], [new THREE.SphereGeometry(.5, 10, 7).scale(1, .6, 1).translate(0, .95, 0)]),
+          join([new THREE.CylinderGeometry(.03, .03, .6, 3).translate(0, .3, 0)], [new THREE.SphereGeometry(.45, 9, 6).scale(1, .7, 1).translate(0, .8, 0)])],
+        burrow: () => [new THREE.SphereGeometry(.6, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 0, 0), new THREE.CylinderGeometry(.55, .65, .25, 12).translate(0, .125, 0),
+          join([new THREE.SphereGeometry(.5, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2)], [new THREE.CylinderGeometry(.06, .08, 1, 5).translate(.4, .5, 0)])],
+      };
+      const unit = units[style]();
+      // How this species lights its walls (not always our rows of windows): 0 windows,
+      // 1 round ports, 2 vertical seams, 3 bands, 4 scattered glows, 5 a spiral.
+      const pr = rng(civ.seed ?? 1, 'light-style'), pattern = { grown: [1, 4], comb: [1, 3], silk: [3, 2], roost: [2, 1], floating: [1, 3], burrow: [1, 4] }[style]?.[Math.floor(pr() * 2)] ?? [0, 1, 2, 3, 4, 5, 2, 3][Math.floor(pr() * 8)];
+      const winC = civ.species.glow ? new THREE.Color('#ffd98a').lerp(new THREE.Color(civ.species.colors?.glow || '#9fe3ff'), .5) : pr() < .5 ? new THREE.Color('#ffd98a') : new THREE.Color('#ffd98a').lerp(new THREE.Color(['#9fe3ff', '#c9a0ff', '#a8ffb8'][Math.floor(pr() * 3)]), .45);
+      // Colours: the world's building material (or the species' own, for those who grow theirs).
+      const sp = civ.species.colors || {};
+      const MAT = { wood: ['#7b5a3c', '#5a4030', '#9a7a58', '#8fb7c4'], ice: ['#cfe6f2', '#e8f3f8', '#9fc3d6', '#b8d8e6'], adobe: ['#c99a6b', '#b07850', '#e0c09a', '#d4b48a'],
+        stone: ['#9a958e', '#7d7a76', '#b9b2a6', '#8fb7c4'], glass: ['#9fe3e6', '#7fc6d6', '#c9eef0', '#8fb7c4'], wax: ['#d9a441', '#c08a30', '#e8c070', '#b07a28'], silk: ['#f2f0ea', '#e4e0d6', '#d8d2c4', '#c9c2b5'] };
+      const palette = (MAT[civ.material] || [sp.base || '#9a6a50', sp.belly || '#c9c2b5', sp.accent || '#c0503a', sp.shimmer || '#d8c07a'])
+        .flatMap(c => [c, c, hullC]).map(c => new THREE.Color(c).lerp(new THREE.Color(home.rock || '#9aa7b0'), .15));
+      const tempC = (home.physics?.temperature ?? 288) - 273.15, snow = Math.min(1, Math.max(0, (4 - tempC) / 34)), gravityK = Math.min(1.4, Math.max(.8, 1 / Math.sqrt(home.physics?.gravity || 1)));
+      const flatten = style === 'burrow' ? .22 : 1;
+      const cityMat = new THREE.ShaderMaterial({
+        uniforms: { sun: sun || { value: V() }, windowC: { value: winC }, snow: { value: snow }, pattern: { value: pattern } },
+        vertexShader: `#include <common>
+#include <logdepthbuf_pars_vertex>
+attribute vec3 tint; attribute float lit; varying vec3 vWorld, vNormal, vTint, vLocal, vRadial; varying float vLit, vUp;
+void main() {
+  vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0);
+  mat3 m = mat3(modelMatrix * instanceMatrix);
+  vWorld = w.xyz; vNormal = normalize(m * normal); vTint = tint; vLit = lit;
+  vLocal = position * vec3(length(m[0]), length(m[1]), length(m[2]));
+  vUp = abs(normal.y);
+  vRadial = normalize(w.xyz - (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz);
+  gl_Position = projectionMatrix * viewMatrix * w;
+  #include <logdepthbuf_vertex>
+}`,
+        fragmentShader: `#include <logdepthbuf_pars_fragment>
+uniform vec3 sun, windowC; uniform float snow, pattern; varying vec3 vWorld, vNormal, vTint, vLocal, vRadial; varying float vLit, vUp;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+void main() {
+  #include <logdepthbuf_fragment>
+  vec3 up = normalize(vRadial), toSun = normalize(sun - vWorld);
+  float day = dot(up, toSun), light = max(dot(normalize(vNormal), toSun), 0.0) * smoothstep(-0.1, 0.15, day);
+  vec3 c = mix(vTint, vec3(0.93, 0.95, 0.97), snow * smoothstep(0.5, 0.85, dot(normalize(vNormal), up)) * 0.9) * (0.28 + 0.85 * light); // snow on what faces the sky
+  // Windows: rows of panes on the walls, some lit, more of them as night deepens.
+  float across = (vLocal.x + vLocal.z), hgt = vLocal.y;
+  vec2 cell = vec2(floor(across * 0.45), floor(hgt / 3.2));
+  float pane = step(0.25, fract(hgt / 3.2)) * step(0.2, fract(across * 0.45));                       // 0: windows
+  if (pattern > 0.5 && pattern < 1.5) { vec2 g = fract(vec2(across * 0.35, hgt / 2.8)) - 0.5; pane = step(length(g), 0.2); cell = floor(vec2(across * 0.35, hgt / 2.8)); }   // round ports
+  else if (pattern < 2.5 && pattern > 1.5) { pane = step(0.86, fract(across * 0.3)) * step(0.1, fract(hgt / 9.0)); cell = vec2(floor(across * 0.3), floor(hgt / 9.0)); }    // vertical seams
+  else if (pattern < 3.5 && pattern > 2.5) { pane = step(0.82, fract(hgt / 4.0)); cell = vec2(0.0, floor(hgt / 4.0)); }                                                   // bands
+  else if (pattern < 4.5 && pattern > 3.5) { cell = floor(vec2(across * 0.9, hgt * 0.9)); pane = step(0.9, hash(cell * 1.7)); }                                         // scattered glows
+  else if (pattern > 4.5) { pane = step(0.85, fract((across * 0.25 + hgt * 0.18))); cell = vec2(floor(across * 0.25 + hgt * 0.18), 0.0); }                               // a spiral
+  float on = step(1.0 - vLit, hash(cell + vTint.xy * 17.0)) * pane * (1.0 - vUp);
+  float night = smoothstep(0.1, -0.15, day);
+  c = mix(c, windowC * 1.15, on * night * 0.9) + windowC * on * 0.06;
+  gl_FragColor = vec4(c, 1.0);
+}`,
+      });
+      disposables.push(cityMat, ...unit);
+      const lightPos = [];
+      shapes.forEach((list, kind) => {
+        if (!list.length) return;
+        const mesh = new THREE.InstancedMesh(unit[kind], cityMat, list.length), m = new THREE.Matrix4(), q = new THREE.Quaternion(), tq = new THREE.Quaternion();
+        const tint = new Float32Array(list.length * 3), litA = new Float32Array(list.length);
+        list.forEach((t, i) => {
+          const ground = R + terrain.surface(t.n) - 2;
+          q.setFromUnitVectors(V(0, 1, 0), t.n).multiply(tq.setFromAxisAngle(V(0, 1, 0), t.turn));
+          mesh.setMatrixAt(i, m.compose(t.n.clone().multiplyScalar(ground), q, V(t.w * (style === 'burrow' ? 1.4 : 1), (t.h * flatten * gravityK) + 2, t.w * (style === 'burrow' ? 1.4 : 1))));
+          const c = palette[Math.floor(t.tint * palette.length)].clone().multiplyScalar(.85 + (t.tint * 7 % 1) * .3); tint.set([c.r, c.g, c.b], i * 3); litA[i] = t.lit;
+          lightPos.push(t.n.clone().multiplyScalar(ground + t.h * flatten * gravityK * .7));
+          addSolid(home.id, R, { p: t.n.clone().multiplyScalar(ground), r: t.w * (style === 'burrow' ? .8 : kind === 1 ? .55 : .62), h: t.h * flatten * gravityK + 2 });
+        });
+        mesh.geometry = unit[kind].clone(); mesh.geometry.setAttribute('tint', new THREE.InstancedBufferAttribute(tint, 3)); mesh.geometry.setAttribute('lit', new THREE.InstancedBufferAttribute(litA, 1));
+        disposables.push(mesh.geometry); mesh.frustumCulled = false; mesh.name = 'world-city';
+        homeWorld.group.add(mesh);
+      });
+      // From far off the towers are too small to see their windows: a point of light on each.
+      if (lightPos.length && sun) {
+        const lights = nightPoints(THREE, lightPos, sun, '#ffd98a'); lights.name = 'world-city-lights';
+        disposables.push(lights.geometry, lights.material); homeWorld.group.add(lights);
+      }
+    }
 
     // Elevators: a tether from an anchor tower up to the ring, two climbers on each.
     const lift = merged(), liftGlow = merged(), climbers = [];
@@ -88,6 +228,8 @@ export function buildMegastructures(THREE, system, worlds, group) {
       lift.add(new THREE.CylinderGeometry(.9, .9, len, 6).translate(0, len / 2, 0), M(n.clone().multiplyScalar(ground), q), '#c9ced2');
       for (let y = 60; y < len - 20; y += 45) liftGlow.add(new THREE.SphereGeometry(1.4, 6, 4), M(n.clone().multiplyScalar(ground + y), q), '#ff5a5a');
       liftGlow.add(new THREE.TorusGeometry(10, .8, 3, 16).rotateX(Math.PI / 2), M(n.clone().multiplyScalar(ground + 24), q), glowC);
+      addSolid(home.id, R, { p: n.clone().multiplyScalar(ground), r: 15, h: 40 }); // the anchor tower
+      for (let y = 40; y < len; y += 30) addSolid(home.id, R, { p: n.clone().multiplyScalar(ground + y), r: 4, h: 32 }); // the tether, in lengths
       for (let k = 0; k < 2; k++) climbers.push({ n, q, from: ground + 40, to: RR - width, phase: k * .5 + r() * .2, period: 70 + r() * 20 });
     }
     homeWorld.group.add(track(new THREE.Mesh(lift.geometry(), lit())), track(new THREE.Mesh(liftGlow.geometry(), glowing())));
@@ -266,7 +408,7 @@ void main() {
     };
     updates.push((t) => {
       ships.forEach((s, i) => {
-        const wa = worlds.get(s.l.a), wb = worlds.get(s.l.b), dist = wa.group.position.distanceTo(wb.group.position), period = 40 + dist / 180;
+        const wa = worlds.get(s.l.a), wb = worlds.get(s.l.b), dist = wa.group.position.distanceTo(wb.group.position), period = 40 + dist / (180 * SIZE * 4); // worlds are far apart (scale.mjs): traffic flies faster
         const x = ((t / period + s.phase) % 1);
         for (let k = 0; k < TRAIL; k++) { at(s, Math.max(0, x - k * .006), p); pos.set([p.x, p.y, p.z], (i * TRAIL + k) * 3); }
       });
@@ -274,12 +416,43 @@ void main() {
     });
   }
 
+  const c60 = Math.cos(Math.PI / 3), s60 = Math.sin(Math.PI / 3);
+  function placeArk(a, star, t) {
+    const w = a.anchor.group.position, sx = star ? star.x : 0, sz = star ? star.z : 0, dx = w.x - sx, dz = w.z - sz;
+    a.group.position.set(sx + dx * c60 - dz * s60, w.y, sz + dx * s60 + dz * c60);
+    if (t !== a.lastT) { a.lastT = t; a.update(t); }
+  }
+  // Arks (megastation.js), sixty degrees ahead of their builders' world.
+  const arks = [];
+  for (const civ of civilizationsIn(system)) {
+    if (!civ.ark) continue;
+    try {
+      const home = system.bodies.find(b => b.id === civ.home), anchor = worlds.get(home.parent || home.id);
+      if (!anchor) continue;
+      const ark = buildMegastation(THREE, civ);
+      ark.anchor = anchor;
+      ark.sync = (star) => placeArk(ark, star, ark.lastT ?? 0); // place it now (game.js, before walking on it)
+      group.add(ark.group); arks.push(ark);
+    } catch (e) { console.warn('ark', e); }
+  }
+
   return {
+    arks,
     // starPosition: where the star is drawn (the swarm follows it).
+    // Solid things near p (a point relative to that world's centre): [{ p, r, h }].
+    obstaclesNear(id, p, out = []) {
+      const s = solids.get(id); if (!s) return out;
+      const n = p.clone().normalize(), cx = Math.floor(n.x / s.cell), cy = Math.floor(n.y / s.cell), cz = Math.floor(n.z / s.cell);
+      for (let x = cx - 1; x <= cx + 1; x++) for (let y = cy - 1; y <= cy + 1; y++) for (let z = cz - 1; z <= cz + 1; z++) { const c = s.grid.get(`${x},${y},${z}`); if (c) out.push(...c); }
+      return out;
+    },
+    // A world's orbital ring: { axis, radius, width, thick } or null.
+    ringOf: (id) => rings.get(id) || null,
     update(t, starPosition) {
       for (const p of parts) if (p.userData.followStar && starPosition) p.position.copy(starPosition);
+      for (const a of arks) placeArk(a, starPosition, t);
       for (const u of updates) u(t);
     },
-    dispose() { for (const d of disposables) d.dispose?.(); },
+    dispose() { for (const d of disposables) d.dispose?.(); for (const a of arks) a.dispose(); },
   };
 }

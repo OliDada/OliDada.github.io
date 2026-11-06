@@ -17,14 +17,17 @@ import { rng } from './rng.mjs';
 import { faunaFor, habitatFit } from './fauna.mjs';
 import { isAwake } from './ecology.mjs';
 import { cultureOf, cultureSkin, cultureGlow, dress, KIND, tag } from './fauna-culture.mjs';
+import { createExpression, express, lookAngles, startGesture, gestureOf, moodOf } from './express.mjs';
 
 // Vertex roles for animation.
-const BODY = 0, LEG = 1, WING = 2, SWAY = 3, SLITHER = 4, SHIN = 5, ARM = 6, FOREARM = 7, RLEG = 9, ROLL = 10;
+const BODY = 0, LEG = 1, WING = 2, SWAY = 3, SLITHER = 4, SHIN = 5, ARM = 6, FOREARM = 7, RLEG = 9, ROLL = 10, WAVE = 11, SPIN = 12, HEAD = 13; // HEAD: turns to look (iLook)
 const RANGE = 230; // metres around you (at first, the site) that animals roam
 
 // species/herdCentres: an explicit list of species (instead of the world's own) and
 // where their herds live; used for colonists from another world (see suitUp).
-export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget = 90, plants = [], species: only = null, herdCentres = null }) {
+// absent: ids of species that no longer live here (a spaceborne civilization's): their
+// homes are still worked out (their empty towns stand there), but none of them are.
+export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget = 90, plants = [], species: only = null, herdCentres = null, absent = null }) {
   const species = only || faunaFor(body).species;
   const group = new THREE.Group();
   const creatures = [], events = [];
@@ -35,7 +38,32 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
   // across the world (follow): herds left far behind move, out of sight, to fitting
   // ground near you, so every part of a living world has its animals.
   const home = signalNormal.clone(), toHome = toSite.clone();
-  const scale = Math.min(1, budget / species.reduce((n, s) => n + s.group * s.herds, 0));
+  // Land and sea animals have budgets of their own, so sea life never thins out the herds on land.
+  const total = (list) => Math.max(1, list.reduce((n, s) => n + s.group * s.herds, 0));
+  const scale = Math.min(1, budget / total(species.filter(s => !s.aquatic))), seaScale = Math.min(1, budget * .45 / total(species.filter(s => s.aquatic)));
+  // Sea life needs water deep enough to swim in; everything else needs dry ground.
+  const depthAt = (n) => terrain.sea - terrain.height(n);
+  const needOf = (sp) => .6 + sp.size * .22;
+  // Big towns and cities are no place for wild animals (keepOut): none live or wander there.
+  const keepZones = [], tame = new Set(); // tame: species that may (their builders)
+  let keepTest = null; // and a whole city world's city (keepOut test)
+  const zoneAt = (sp, n) => sp.aquatic || tame.has(sp.id) ? null : keepZones.find((z) => z.n.angleTo(n) * radius < z.r) || (keepTest?.(n) ? { n: nearestOutside(n), r: 0 } : null);
+  // Somewhere just outside the city, for animals to head for: the way the city thins.
+  function nearestOutside(n) { let best = n, bv = Infinity; for (let k = 0; k < 8; k++) { const t = n.clone().add(randomNear(THREE, Math.random, 60 / radius).sub(Y)).normalize(); const v = keepTest(t) ? 1 : 0; if (v < bv) { bv = v; best = t; } } return best.clone().multiplyScalar(-1).add(n.clone().multiplyScalar(2)).normalize(); }
+  const fits = (sp, n) => (sp.aquatic ? terrain.liquid === 'water' && depthAt(n) > needOf(sp) : !terrain.isLiquid(n)) && !zoneAt(sp, n);
+  // Where an animal may go once it is out and about. Ground animals wade into the
+  // shallows (up to about knee-deep for their legs), amphibious ones swim anywhere,
+  // sea life keeps to water deep enough for it; nothing enters lava.
+  const wadeOf = (sp) => ['serpent', 'slug'].includes(sp.plan) ? .12 + sp.size * .1 : sp.legLength * .6 + .08;
+  const wet = (n) => terrain.liquid === 'water' ? depthAt(n) : terrain.isLiquid(n) ? Infinity : -1;
+  function canGo(sp, n, airborne) {
+    if (airborne) return true;
+    if (sp.aquatic) return depthAt(n) > needOf(sp) * .7;
+    const d = wet(n);
+    return d === Infinity ? false : sp.swims ? true : d <= wadeOf(sp);
+  }
+  // The ground (or sea floor) under a point.
+  const bedAt = (n) => terrain.liquid === 'water' ? terrain.height(n) : terrain.surface(n);
   const meshes = [];
   const er = rng(body.seed, 'ecology-places');
   const homes = new Map(); // species id -> herd centres (where intelligent species build)
@@ -76,10 +104,17 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
   for (const sp of species) {
     const r = rng(body.seed, 'animals', sp.id);
     const geometry = buildGeometry(THREE, sp, r);
-    const count = Math.max(1, Math.round(sp.group * sp.herds * scale));
+    // Builders are many more than a herd: a village has its households, a city its crowds.
+    const townsfolk = !only && sp.civilization >= 2 ? Math.round((6 + Math.min(sp.civilization, 7) * 3) * (budget < 70 ? .6 : 1)) : 0;
+    const count = absent?.has(sp.id) ? 0 : Math.max(1, townsfolk, Math.round(sp.group * sp.herds * (sp.aquatic ? seaScale : scale)));
+    geometry.computeBoundingBox();
+    const extent = { top: geometry.boundingBox.max.y, bottom: Math.max(geometry.boundingBox.min.y, -sp.size * .6) };
     const anim = new THREE.InstancedBufferAttribute(new Float32Array(count * 2), 2);
     anim.setUsage(THREE.DynamicDrawUsage);
     geometry.setAttribute('iAnim', anim);
+    const look = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
+    look.setUsage(THREE.DynamicDrawUsage);
+    geometry.setAttribute('iLook', look);
     const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .7 });
     material.userData.surfaceDetail = true; // creatures have their own surfaces (addAnimation), not the ground's grain
     addAnimation(material, sp);
@@ -96,37 +131,156 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
       helmet.instanceMatrix.setUsage(THREE.DynamicDrawUsage); helmet.frustumCulled = false; group.add(helmet);
       sp.helmet = { mesh: helmet, offset: new THREE.Matrix4().makeTranslation(centre.x, centre.y, centre.z) };
     }
-    meshes.push({ sp, mesh, anim });
+    meshes.push({ sp, mesh, anim, look });
     // Herds start at places that suit the species, near the site.
     const herdCount = Math.max(1, Math.round(sp.herds * Math.min(1, scale * 1.5)));
     const herds = [];
     for (let h = 0; h < herdCount; h++) {
       if (herdCentres?.length) { herds.push({ centre: herdCentres[h % herdCentres.length].clone(), alarm: 0, threat: null }); continue; }
       let best = null, bestFit = -1;
-      for (let t = 0; t < 30; t++) {
+      for (let t = 0; t < (sp.aquatic ? 60 : 30); t++) {
         const n = randomNear(THREE, r, RANGE * .8 / radius).applyQuaternion(toSite);
-        if (n.angleTo(signalNormal) < 25 / radius) continue;
+        if (n.angleTo(signalNormal) < 25 / radius || !fits(sp, n)) continue;
         const c = terrain.climate(n), f = habitatFit(sp, c) + r() * .15;
-        if (!c.submerged && f > bestFit) { bestFit = f; best = n; }
+        if (f > bestFit) { bestFit = f; best = n; }
       }
-      // Nothing suits it nearby: any dry ground will do, rather than piling every herd onto one spot.
-      for (let t = 0; !best && t < 60; t++) { const n = randomNear(THREE, r, RANGE * .8 / radius).applyQuaternion(toSite); if (!terrain.isLiquid(n) && n.angleTo(signalNormal) * radius > 15) best = n; }
-      herds.push({ centre: best || signalNormal.clone(), alarm: 0, threat: null });
+      // Nothing suits it nearby: any dry ground (or deep enough water) will do, rather than piling every herd onto one spot.
+      for (let t = 0; !best && t < 60; t++) { const n = randomNear(THREE, r, RANGE * .8 / radius).applyQuaternion(toSite); if (fits(sp, n) && n.angleTo(signalNormal) * radius > 15) best = n; }
+      // Sea life with no water near enough waits (unseen) until you come to a coast.
+      herds.push({ centre: best || signalNormal.clone(), alarm: 0, threat: null, dry: !!sp.aquatic && !best });
     }
     homes.set(sp.id, herds.map(h => h.centre));
     if (!herdCentres?.length) for (const herd of herds) bands.push({ sp, herd, r });
     for (let i = 0; i < count; i++) {
       const herd = herds[i % herds.length], centre = herd.centre;
       const n = centre.clone().add(randomNear(THREE, r, 12 / radius).sub(Y)).normalize();
-      if (terrain.isLiquid(n)) n.copy(centre);
+      if (!fits(sp, n)) n.copy(centre);
       const heading = tangent(new THREE.Vector3(r() - .5, r() - .5, r() - .5), n);
+      const depth = sp.aquatic ? sp.depth[0] + r() * (sp.depth[1] - sp.depth[0]) : 0;
       creatures.push({ sp, eco: sp.ecology, mesh, index: i, herd: centre, band: herd, n, heading, speed: 0, target: 0, cycle: r() * 6.28, timer: r() * 3, state: 'idle',
         alt: sp.altitude[0] + r() * (sp.altitude[1] - sp.altitude[0]), altPhase: r() * 6.28, r,
         hunger: er() * .6, thirst: er() * .6, scan: er() * .5, goal: null, face: null, prey: null, threat: null, chase: 0, rest: 0, hidden: 0,
-        tilt: 0, sink: 0, dive: 0, cooldown: er() * 10, stalking: false });
+        tilt: 0, sink: 0, dive: 0, cooldown: er() * 10, stalking: false,
+        perch: 0, depth, depthGoal: depth, depthTimer: r() * 6, breath: 10 + r() * 30, surfacing: 0, leap: -1, leapTime: 1, ...extent, pos: new THREE.Vector3() });
     }
   }
   const bySpecies = new Map(species.map(s => [s.id, creatures.filter(c => c.sp === s)]));
+  // Townsfolk: an intelligent species living among its buildings (setTown). Instead of
+  // roaming like a herd, each goes from one place in town to another (a doorstep to work
+  // at, a square to talk in), walks round the buildings on the way, works with its hands
+  // there (or bends to the work), and sleeps by a door at night.
+  const towns = new Map(); // species id -> { spots: [{ n, face, kind, taken }], near(p) -> [{ p, r, h }] }
+  const TOWN_TIME = { work: [14, 34], chat: [12, 26], watch: [10, 22], stroll: [3, 9], graze: [20, 50] };
+  // The ways along the streets (structures-mesh.js paths): a graph of points about 3 m
+  // apart, joined along each street and wherever two meet. Trips across town follow it.
+  function streetGraph(paths) {
+    const nodes = [], adj = [], cell = new Map(), key = (v) => `${Math.round(v.x * radius / 3)},${Math.round(v.y * radius / 3)},${Math.round(v.z * radius / 3)}`;
+    for (const path of paths || []) {
+      let prev = -1;
+      for (const n of path) {
+        const i = nodes.length; nodes.push(n); adj.push([]);
+        if (prev >= 0 && apart(nodes[prev], n) < 6) { adj[i].push(prev); adj[prev].push(i); }
+        prev = i;
+        const k = key(n); (cell.get(k) || cell.set(k, []).get(k)).push(i);
+      }
+    }
+    // Junctions: points of different streets within 2.5 m of each other.
+    for (const list of cell.values()) for (const a of list) for (const b of list) if (a < b && !adj[a].includes(b) && apart(nodes[a], nodes[b]) < 2.5) { adj[a].push(b); adj[b].push(a); }
+    for (let i = 0; i < nodes.length; i++) {
+      const v = nodes[i], [x, y, z] = key(v).split(',').map(Number);
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+        if (!dx && !dy && !dz) continue;
+        for (const j of cell.get(`${x + dx},${y + dy},${z + dz}`) || []) if (j > i && !adj[i].includes(j) && apart(v, nodes[j]) < 2.5) { adj[i].push(j); adj[j].push(i); }
+      }
+    }
+    return { nodes, adj };
+  }
+  // --- Vignettes: things a town does together -----------------------------------------
+  // Every so often a few townsfolk who are not busy leave what they are doing for something
+  // their people do: by their path (civilizations.mjs) and the time of day. Mercantile
+  // peoples hold a market in a square (one in the middle, the rest round it); devotional ones
+  // walk in procession along the streets to the heart of the capital and bow there;
+  // scholarly ones go out at night to look at the sky; martial ones change the watch, in
+  // pairs; farming ones work in their fields; expansionist ones are building at the edge of
+  // town. And at dusk, those with hearths gather round them. Each one is an event (type
+  // 'vignette'), so the game can say what is going on.
+  const sunNow = new THREE.Vector3(); let hasSun = false;
+  const VIGNETTE_WORDS = {
+    market: 'are holding a market in the square', procession: 'are walking in procession to the heart of their town', stargaze: 'have gone out to watch the sky',
+    watch: 'are changing the watch', field: 'are out working in their fields', build: 'are building at the edge of town', hearth: 'are gathering for the evening',
+  };
+  function vignettes(id, town, dt, t) {
+    const o = town.opts;
+    if (!o || (town.nextVignette ??= t + 8 + Math.random() * 12) > t) return;
+    town.nextVignette = t + 60 + Math.random() * 60;
+    const folk = (bySpecies.get(id) || []).filter((c) => c.spots && !c.young && !c.kept && !c.duty && !c.meet && !c.talk && !c.hidden && ['atSpot', 'idle', 'toSpot'].includes(c.state));
+    if (folk.length < 2) return;
+    const centres = o.centres || [];
+    if (!centres.length) return;
+    const near = playerNow.current, pick = (list) => list[Math.floor(Math.random() * list.length)];
+    // Day or night, here (the middle of town).
+    const light = hasSun ? centres[0].dot(sunNow) : .5, night = light < -.05, dusk = Math.abs(light) < .18;
+    const choices = [];
+    if (dusk && o.hearths) choices.push('hearth', 'hearth');
+    if (night && o.path === 'scholarly') choices.push('stargaze', 'stargaze');
+    if (!night) {
+      if (o.path === 'mercantile') choices.push('market', 'market');
+      if (o.path === 'devotional') choices.push('procession', 'procession');
+      if (o.path === 'martial') choices.push('watch', 'watch');
+      if (o.path === 'agrarian' && o.fields?.length) choices.push('field', 'field');
+      if (o.path === 'expansionist') choices.push('build', 'build');
+      if (o.fields?.length) choices.push('field');
+      choices.push('market'); // anyone gathers to talk
+    }
+    if (!choices.length) return;
+    const kind = pick(choices);
+    // Where: the square nearest you (so you see it), or the capital's heart for processions.
+    const byYou = near ? [...centres].sort((a, b) => a.angleTo(near) - b.angleTo(near)) : centres;
+    const centre = kind === 'procession' ? centres[0] : kind === 'field' ? (near ? nearest(o.fields, near, (x) => x) : pick(o.fields)) : byYou[0];
+    const n = Math.min(Math.ceil(folk.length * .6), { market: 6, procession: 7, stargaze: 4, watch: 4, field: 5, build: 4, hearth: 7 }[kind]);
+    const crew = folk.sort((a, b) => apart(a.n, centre) - apart(b.n, centre)).slice(0, n);
+    const frame = frameAround(centre), size = crew[0].sp.size;
+    const until = t + (kind === 'procession' ? 110 : 40 + Math.random() * 30);
+    crew.forEach((c, i) => {
+      let dist, ang = i / n * Math.PI * 2 + Math.random() * .2, pose = 'chat', face = null, look = null, gesture = null, inward = true;
+      switch (kind) {
+        case 'market': dist = i === 0 ? 0 : 3 + size * 1.4; pose = i === 0 ? 'work' : 'chat'; break;
+        case 'hearth': dist = 2.4 + size * 1.3; pose = 'chat'; break;
+        case 'procession': dist = 3.5 + size * 1.2; pose = 'stand'; gesture = 'bow'; break;
+        case 'stargaze': dist = 6 + size * 2 + Math.random() * 3; pose = 'stand'; look = 'up'; inward = false; break;
+        case 'watch': dist = 10 + i * 6; ang = (i >> 1) * Math.PI + (i % 2) * .25; pose = 'stand'; inward = false; break;
+        case 'field': dist = 1 + Math.random() * 6; ang = Math.random() * 6.28; pose = 'field'; inward = false; break;
+        case 'build': dist = (town.edge || 30) + 4; ang = 1.1 + (i - n / 2) * .12; pose = 'work'; break;
+      }
+      const dir = frame.east.clone().multiplyScalar(Math.cos(ang)).addScaledVector(frame.north, Math.sin(ang));
+      const at = centre.clone().addScaledVector(dir, dist / radius).normalize();
+      if (terrain.isLiquid(at)) return;
+      face = inward && dist > 0 ? tangent(centre.clone().sub(at), at) : tangent(dir, at);
+      releaseSpot(c); c.spot = null;
+      c.duty = { kind, n: at, face, pose, look, gesture, centre: inward ? centre : null, until, start: kind === 'procession' ? t + i * 2.2 : t, night: kind === 'stargaze' || kind === 'hearth', pace: kind === 'procession' ? .5 : .75,
+        path: streetRoute(town.graph, c.n, at)?.slice() ?? null };
+      c.state = 'duty'; c.goal = null;
+    });
+    if (!crew.some((c) => c.duty)) return;
+    events.push({ type: 'vignette', kind, species: crew[0].sp, at: centre.clone(), words: VIGNETTE_WORDS[kind] });
+  }
+  function frameAround(n) {
+    const east = new THREE.Vector3(0, 1, 0).cross(n); if (east.lengthSq() < 1e-6) east.set(1, 0, 0).cross(n);
+    east.normalize(); return { east, north: n.clone().cross(east).normalize() };
+  }
+  // A way along the streets from one place to another (null if there is none, or no need).
+  function streetRoute(g, from, to) {
+    if (!g?.nodes.length || apart(from, to) < 18) return null;
+    let a = -1, b = -1, da = 14, db = 14;
+    for (let i = 0; i < g.nodes.length; i++) { const x = apart(g.nodes[i], from), y = apart(g.nodes[i], to); if (x < da) { da = x; a = i; } if (y < db) { db = y; b = i; } }
+    if (a < 0 || b < 0 || a === b) return null;
+    const prev = new Int32Array(g.nodes.length).fill(-2), queue = [a]; prev[a] = -1;
+    for (let q = 0; q < queue.length && prev[b] === -2; q++) for (const j of g.adj[queue[q]]) if (prev[j] === -2) { prev[j] = queue[q]; queue.push(j); }
+    if (prev[b] === -2) return null;
+    const out = []; for (let i = b; i >= 0; i = prev[i]) out.push(g.nodes[i]);
+    out.reverse();
+    return out.length * 3 < apart(from, to) * 4 ? out : null; // not a long way round
+  }
   const helmetM = new THREE.Matrix4();
   const tmpQ = new THREE.Quaternion(), basis = new THREE.Matrix4(), m = new THREE.Matrix4(), pos = new THREE.Vector3(), right = new THREE.Vector3();
   const up = new THREE.Vector3(), fwd = new THREE.Vector3(), hidden = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -135,20 +289,26 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
 
   // player: { position: Vector3 (planet-local), onFoot: boolean } or null
   // sun: unit Vector3 toward the star (planet-local), or null for always day
+  const playerNow = { current: null, onFoot: false };
   function update(dt, t, player, sun = null) {
     time.value = t;
     events.length = 0;
+    playerNow.current = player ? player.position.clone().normalize() : null; playerNow.onFoot = !!player?.onFoot;
+    if (sun) sunNow.copy(sun); hasSun = !!sun;
+    for (const [id, town] of towns) vignettes(id, town, dt, t);
     for (const c of creatures) step(c, dt, t, player, sun);
-    for (const { mesh, anim } of meshes) { mesh.instanceMatrix.needsUpdate = true; anim.needsUpdate = true; }
+    for (const { mesh, anim, look } of meshes) { mesh.instanceMatrix.needsUpdate = true; anim.needsUpdate = true; look.needsUpdate = true; }
   }
 
   // Every half second or so an animal looks around: for hunters closing in, and,
   // when hungry and awake, for something to hunt.
   function scan(c, t, awake) {
     const eco = c.eco, range = eco.sight * (awake ? 1 : .4);
+    c.inZone = keepZones.length && !c.kept ? zoneAt(c.sp, c.n) : null;
     c.threat = null;
     let best = Infinity;
-    for (const id of eco.predators) for (const h of bySpecies.get(id)) {
+    // Townsfolk are safe among their buildings: hunters keep away from towns.
+    if (!c.spots) for (const id of eco.predators) for (const h of bySpecies.get(id)) {
       if (h.hidden) continue;
       const d = apart(c.n, h.n), hunting = h.prey === c || h.state === 'hunt';
       if (d < (hunting ? range : range * .45) && d < best) { best = d; c.threat = h; }
@@ -159,7 +319,7 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
     if (!c.prey && awake && c.hunger > (opportunist ? .75 : .6) && c.rest <= 0 && c.state !== 'feed' && eco.prey.length && (!opportunist || c.r() < .06)) {
       let pick = null, d0 = eco.sight;
       for (const id of eco.prey) for (const p of bySpecies.get(id)) {
-        if (p.hidden) continue;
+        if (p.hidden || p.spots) continue;
         const d = apart(c.n, p.n);
         if (d < d0) { d0 = d; pick = p; }
       }
@@ -167,17 +327,152 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
     }
   }
 
+  // --- Townsfolk ---------------------------------------------------------------------
+  const tmpP = new THREE.Vector3(), tmpD = new THREE.Vector3(), tmpS = new THREE.Vector3();
+  function releaseSpot(c) { if (c.spot && c.spot.taken === c) c.spot.taken = null; }
+  function pickSpot(c, night) {
+    const list = c.spots.filter((s) => (!s.taken || s.taken === c) && s !== c.spot && (!night || s.kind === 'work'));
+    if (!list.length) return null;
+    const near = list.filter((s) => apart(s.n, c.n) < 35);
+    const from = near.length && c.r() < .85 ? near : list.sort((a, b) => apart(a.n, c.n) - apart(b.n, c.n)).slice(0, 4);
+    return from[Math.floor(c.r() * from.length)];
+  }
+  function goTo(c, s, state) {
+    releaseSpot(c); c.spot = s; if (s) s.taken = c;
+    c.state = s ? state : 'idle'; c.goal = null;
+    c.route = s ? streetRoute(towns.get(c.sp.id)?.graph, c.n, s.n) : null;
+    c.timer = s ? (c.route ? c.route.length * 3 : apart(c.n, s.n)) / Math.max(.3, c.sp.speed.walk * .7) + 12 : 2;
+  }
+  function townLife(c, dt, t, awake, player = playerNow) {
+    const sp = c.sp;
+    if (c.state === 'inside') { // indoors: out again after a while (or in the morning)
+      c.target = 0; c.speed = 0;
+      if (c.timer > 1e8 ? awake : (c.timer -= dt) <= 0) { c.state = 'atSpot'; c.timer = 2 + c.r() * 4; if (c.spot) c.heading = tangent(c.spot.face.clone().negate(), c.n); }
+      return 0;
+    }
+    // Come out to meet you (arrive): walk to the place given, wait there facing you, greet.
+    if (c.meet) {
+      const mt = c.meet;
+      if (t > mt.until || (!awake && mt.until - t > 5)) { c.meet = null; c.state = 'idle'; c.timer = 0; return 0; }
+      const d = apart(c.n, mt.n);
+      if (c.state === 'toMeet' && d > .6 + sp.size * .3 && t < mt.leave) { steer(c, mt.n, 4, dt); c.target = sp.speed.walk * (d > 12 ? 1.1 : d < 3 ? .45 : .8); return 0; }
+      c.target = 0;
+      if (c.state === 'toMeet') { c.state = 'meeting'; mt.greetAt = t + (mt.delay || 0); }
+      if (mt.greet && mt.greetAt != null && t >= mt.greetAt) { mt.greetAt = null; startGesture(c.ex ||= createExpression(c.r), gestureOf(sp)); }
+      return 0;
+    }
+    // Part of something the town is doing together (vignettes, below).
+    if (c.duty) {
+      const du = c.duty;
+      if (t > du.until || (!awake && !du.night)) { c.duty = null; c.state = 'idle'; c.timer = 0; return 0; }
+      c.state = 'duty';
+      if (t < du.start) { c.target = 0; return 0; } // waiting for its turn (a procession sets off one by one)
+      while (du.path?.length && apart(c.n, du.path[0]) < 2.2) du.path.shift();
+      const d = apart(c.n, du.n);
+      if (!du.arrived && (du.path?.length || d > .5 + sp.size * .3)) { steer(c, du.path?.length ? du.path[0] : du.n, 4, dt); c.target = sp.speed.walk * (du.pace || .7) * (d < 3 ? .6 : 1); return 0; }
+      if (!du.arrived) { du.arrived = true; if (du.gesture) startGesture(c.ex ||= createExpression(c.r), du.gesture === true ? gestureOf(sp) : du.gesture); }
+      c.target = 0;
+      if (du.face) c.heading.lerp(tangent(du.face, c.n), Math.min(1, dt * 2.5));
+      return du.pose === 'field' ? 1 : 0;
+    }
+    // Kept animals graze in their pens, and sleep where they are.
+    if (c.kept) {
+      if (!awake) { c.target = 0; c.state = 'sleep'; return 2; }
+      if (c.state === 'sleep') { c.state = 'idle'; c.timer = 0; }
+      if (c.state === 'atSpot') { c.target = 0; c.heading.lerp(tangent(c.spot.face, c.n), Math.min(1, dt)); if (c.timer <= 0) c.state = 'idle'; return 1; }
+    }
+    // The young: never far from a grown-up, at play (chasing round, hopping), and drawn to
+    // a stranger: they come close to stare (unless their people are wary of you: then they hide).
+    if (c.young) {
+      let p = c.parent;
+      if (!p || p.hidden || p.young) { p = c.parent = nearest(bySpecies.get(sp.id).filter((o) => !o.young && o.spots), c.n, (o) => o.n); }
+      if (!p) return 0;
+      if (p.state === 'inside' || p.state === 'sleep') { c.state = p.state === 'inside' ? 'inside' : 'sleep'; c.timer = 1e9; if (c.state === 'inside') return 0; c.target = 0; return 2; }
+      if (c.state === 'sleep' || c.state === 'inside') c.state = 'play';
+      c.state = 'play';
+      const pp = player.current, pd = pp ? apart(c.n, pp) : Infinity;
+      if (pp && player.onFoot && pd < 12 && c.townStance !== 'wary' && c.townStance !== 'guarded') { // come and stare
+        if (pd > 2.6 + sp.size) { steer(c, pp, 4, dt); c.target = sp.speed.walk * .9; } else { c.target = 0; if (c.r() < dt * .25) startGesture(c.ex ||= createExpression(c.r), 'hop'); }
+        return 0;
+      }
+      if (pp && pd < 10 && c.townStance === 'wary') { steer(c, tmpP.copy(p.n).addScaledVector(tmpD.copy(p.n).sub(pp).normalize(), 1.5 / radius).normalize(), 5, dt); c.target = sp.speed.run * .7; return 0; } // behind the grown-up
+      const ang = t * (.6 + (c.index % 3) * .2) + c.altPhase, rr = (1.8 + sp.size * 1.5) / radius;
+      const orbit = tmpP.copy(p.n).add(tmpD.copy(p.heading).multiplyScalar(Math.cos(ang) * rr)).add(tmpS.copy(p.n).cross(p.heading).multiplyScalar(Math.sin(ang) * rr)).normalize();
+      steer(c, orbit, 5, dt); c.target = apart(c.n, orbit) > 1 ? sp.speed.walk * (Math.sin(t * .5 + c.altPhase) > .3 ? 1.6 : .8) : sp.speed.walk * .4;
+      if (c.r() < dt * .06) startGesture(c.ex ||= createExpression(c.r), c.r() < .5 ? 'hop' : 'spin');
+      return 0;
+    }
+    if (!awake && c.state !== 'sleep' && c.state !== 'toBed') goTo(c, pickSpot(c, true), 'toBed');
+    if (c.state === 'sleep') { c.target = 0; if (awake) { c.state = 'idle'; c.timer = 0; } return 2; }
+    if ((c.state === 'toSpot' || c.state === 'toBed') && c.spot) {
+      const d = apart(c.n, c.spot.n);
+      if (d < .45 + sp.size * .25) {
+        c.target = 0;
+        if (c.state === 'toBed') { if (c.r() < .6) { c.state = 'inside'; c.timer = 1e9; } else c.state = 'sleep'; return 2; } // most sleep indoors
+        c.state = 'atSpot'; const [a, b] = TOWN_TIME[c.spot.kind] || [10, 20]; c.timer = a + c.r() * (b - a);
+        // Someone to talk to, at the next place round the square.
+        c.partner = null;
+        if (c.spot.kind === 'chat') for (const o of bySpecies.get(sp.id)) if (o !== c && o.spot?.kind === 'chat' && apart(o.n, c.n) < 6 + sp.size * 2) { c.partner = o; if (!o.partner || o.partner.spot?.kind !== 'chat') o.partner = c; break; }
+      } else {
+        // Along the streets when it is far, then straight to the place.
+        while (c.route?.length && apart(c.n, c.route[0]) < 2.2) c.route.shift();
+        steer(c, c.route?.length ? c.route[0] : c.spot.n, 4, dt); c.target = sp.speed.walk * (d < 3 ? .45 : .75);
+        if (c.timer <= 0) c.state = 'idle'; // couldn't get there: do something else
+      }
+      return 0;
+    }
+    if (c.state === 'atSpot' && c.spot) {
+      c.target = 0;
+      const face = tmpS.copy(c.spot.face);
+      if (c.spot.kind === 'watch' || c.spot.kind === 'stroll') face.applyAxisAngle(c.n, Math.sin(t * .4 + c.altPhase) * .6); // looking about
+      c.heading.lerp(tangent(face, c.n), Math.min(1, dt * 2.5));
+      if (c.timer <= 0) {
+        // Now and then, in through the door for a while.
+        if (c.spot.kind === 'work' && c.spot.door && c.r() < .3) { c.state = 'inside'; c.timer = 15 + c.r() * 35; }
+        else c.state = 'idle';
+      }
+      return 0;
+    }
+    goTo(c, pickSpot(c, false), 'toSpot');
+    return 0;
+  }
+  // Steer round buildings ahead (they are circles on the ground: { p, r }).
+  function avoidBuildings(c, list, dt) {
+    const here = tmpP.copy(c.n).multiplyScalar(radius + terrain.surface(c.n)), look = 2.5 + c.sp.size * 1.5 + c.speed, rad = c.sp.size * .45;
+    let turn = 0;
+    for (const o of list) {
+      tmpD.copy(o.p).sub(here); tmpD.addScaledVector(c.n, -tmpD.dot(c.n));
+      const along = tmpD.dot(c.heading);
+      if (along <= 0 || along > look + o.r) continue;
+      const lat = tmpS.copy(c.n).cross(c.heading).dot(tmpD), need = o.r + rad + .4; // + : to the left
+      if (Math.abs(lat) >= need) continue;
+      turn += (lat > 0 ? -1 : 1) * (need - Math.abs(lat)) / need * (1 - along / (look + o.r + 1));
+    }
+    if (turn) c.heading.applyAxisAngle(c.n, Math.max(-1, Math.min(1, turn)) * dt * 4);
+  }
+  // Never inside a building: step back out to its edge.
+  function pushOut(c, list) {
+    const here = tmpP.copy(c.n).multiplyScalar(radius + terrain.surface(c.n)), rad = c.sp.size * .4;
+    for (const o of list) {
+      tmpD.copy(here).sub(o.p); tmpD.addScaledVector(c.n, -tmpD.dot(c.n));
+      const d = tmpD.length(), min = o.r + rad;
+      if (d < min && d > 1e-4) { here.addScaledVector(tmpD, (min - d) / d); c.n.copy(here).normalize(); }
+    }
+  }
+
   // Animals that were caught come back later at their herd, out of your sight.
   function respawn(c, player) {
     if (player && apart(player.position.clone().normalize(), c.herd) < 70) return false;
     c.n.copy(c.herd).add(randomNear(THREE, c.r, 10 / radius).sub(Y)).normalize();
-    if (terrain.isLiquid(c.n)) c.n.copy(c.herd);
+    if (!fits(c.sp, c.n)) c.n.copy(c.herd);
     c.heading = tangent(c.heading, c.n); c.hidden = 0; c.state = 'idle'; c.timer = 0; c.speed = 0; c.hunger = .2; c.threat = null;
     return true;
   }
 
   function step(c, dt, t, player, sun) {
-    const sp = c.sp, eco = c.eco, flying = sp.altitude[1] > 0;
+    // Fliers that have landed (perch) walk like ground animals until they take off again.
+    const sp = c.sp, eco = c.eco, flying = sp.altitude[1] > 0 && c.perch < .5, swim = !!sp.aquatic;
+    if (c.band.dry) { c.mesh.setMatrixAt(c.index, hidden); return; }
     if (c.hidden > 0) {
       c.hidden -= dt;
       if (c.hidden > 0 || !respawn(c, player)) { c.hidden = Math.max(c.hidden, .01); c.mesh.setMatrixAt(c.index, hidden); return; }
@@ -197,7 +492,14 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
     const toPlayer = player ? player.position.clone().normalize().sub(c.n).multiplyScalar(radius) : null, playerDist = toPlayer ? toPlayer.length() : Infinity;
     const fear = 6 + sp.size * 5 + (player && !player.onFoot ? 10 : 0);
     const reacting = (state) => { c.state = state; c.meal = null; c.goal = null; c.face = null; c.timer = Math.min(c.timer, 1.5); };
-    if (threat && apart(c.n, threat.n) < eco.sight * 1.5) {
+    if (c.talk) { c.target = 0; c.state = 'talk'; c.prey = null; } // talking with you (talkWith): stand and attend
+    else if (c.meet && c.spots) busy = false; // coming out to meet you (arrive): townLife
+    // Wary townsfolk step back if you come too close (unless it is to talk).
+    else if (c.spots && c.state !== 'inside' && c.townStance === 'wary' && player?.onFoot && playerDist < 4 + sp.size && awake) {
+      const away = tangent(toPlayer.clone().negate(), c.n);
+      c.heading.lerp(away, Math.min(1, dt * 4)); c.target = sp.speed.walk; if (c.spot) releaseSpot(c); c.spot = null; c.state = 'idle'; c.timer = 0;
+    }
+    else if (threat && apart(c.n, threat.n) < eco.sight * 1.5) {
       c.prey = null;
       if (eco.defends && threat.sp.size < sp.size * 1.4) {
         const d = apart(c.n, threat.n);
@@ -210,7 +512,7 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
     }
     // 2. You, as prey: big aggressive hunters stalk you on foot, close in at a run and
     //    lunge, then back off for a while. Your ship is a refuge (you are not on foot there).
-    else if (eco.stalksYou && player?.onFoot && awake && !c.prey && c.cooldown <= 0 && playerDist < (c.stalking ? eco.sight * 1.7 : eco.sight)) {
+    else if (eco.stalksYou && !c.spots && player?.onFoot && awake && !c.prey && c.cooldown <= 0 && playerDist < (c.stalking ? eco.sight * 1.7 : eco.sight)) {
       c.heading.lerp(tangent(toPlayer, c.n), Math.min(1, dt * (playerDist < 8 ? 7 : 3)));
       c.target = playerDist > 16 ? sp.speed.walk * .9 : sp.speed.run;
       if (flying) c.dive = Math.min(1, c.dive + dt * (playerDist < 25 ? .9 : 0));
@@ -222,11 +524,11 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
       }
     }
     // 2b. Otherwise: skittish animals bolt (sleepers let you come closer), curious ones come over.
-    else if (sp.behavior === 'skittish' && playerDist < fear * (sleeping ? .5 : 1)) {
+    else if (sp.behavior === 'skittish' && !c.spots && playerDist < fear * (sleeping ? .5 : 1)) {
       const away = tangent(toPlayer.clone().negate(), c.n);
       if (c.heading.dot(away) < -.5) away.addScaledVector(c.n.clone().cross(c.heading), 1.2); // wheel round rather than freeze when you are dead ahead
       c.heading.lerp(away, Math.min(1, dt * 6)); c.target = sp.speed.run; c.prey = null; reacting('flee');
-    } else if (sp.behavior === 'curious' && player?.onFoot && playerDist < 35 && awake && !c.prey && !eco.stalksYou) {
+    } else if (sp.behavior === 'curious' && !c.spots && player?.onFoot && playerDist < 35 && awake && !c.prey && !eco.stalksYou) {
       c.heading.lerp(tangent(toPlayer, c.n), Math.min(1, dt * 2)); c.target = playerDist > 4 + sp.size * 2 ? sp.speed.walk : 0; reacting('approach');
     }
     // 3. The hunt: stalk at a walk, then sprint; give up when tired or outrun.
@@ -252,8 +554,14 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
       }
     } else busy = false;
 
-    // 4. Daily life: sleep when it is not your time of day, otherwise drink, eat or roam.
-    if (!busy) {
+    // 4. Daily life: sleep when it is not your time of day, otherwise drink, eat or roam
+    //    (or, in a town, go about its work).
+    const town = !busy && !flying && !swim && c.spots?.length ? towns.get(sp.id) : null;
+    if (town) {
+      posture = townLife(c, dt, t, awake, playerNow);
+      if (c.state === 'inside') { c.mesh.setMatrixAt(c.index, hidden); if (sp.helmet) sp.helmet.mesh.setMatrixAt(c.index, hidden); return; }
+    }
+    else if (!busy) {
       const arrived = c.goal && apart(c.n, c.goal) < 1 + sp.size * .5;
       if (c.state === 'feed' || c.state === 'drink') {
         c.target = 0; posture = 1;
@@ -269,6 +577,12 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
         if (s === 'toWater') { c.state = 'drink'; c.timer = 4 + c.r() * 5; }
         else if (s === 'toFood') { c.state = 'feed'; c.timer = 6 + c.r() * 8; }
         else if (s === 'toRest') { c.state = 'sleep'; }
+        else if (s === 'toSwim') { c.state = 'paddle'; c.timer = 12 + c.r() * 20; }
+      } else if ((c.state === 'perch' || c.state === 'paddle') && c.timer > 0) {
+        // On the ground (or paddling about): a slow amble with the odd turn.
+        c.target = awake ? sp.speed.walk * (c.state === 'paddle' ? .5 : .3) * (Math.sin(t * .7 + c.altPhase) > 0 ? 1 : 0) : 0;
+        if (c.r() < dt * .4) c.heading.applyAxisAngle(c.n, (c.r() - .5) * 2);
+        if (!awake && c.state === 'perch') posture = 2;
       } else if (c.timer <= 0 || c.goal) {
         c.goal = null; c.face = null; c.timer = 2 + c.r() * 5; c.state = 'idle';
         // Trips are limited to what this animal can walk in about a minute and a half,
@@ -289,10 +603,19 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
           if (f && apart(c.n, f) < Math.min(90, reach)) { c.state = 'toFood'; c.goal = f; c.face = null; c.timer = trip(f); }
           else { c.state = 'feed'; c.timer = 6 + c.r() * 6; } // graze the ground cover where it stands
         }
-        if (!c.goal && c.state !== 'feed') {
+        // Fliers that perch land now and then to walk and feed, and roost on the ground by night.
+        if (sp.perches && !c.goal && c.state !== 'feed' && !c.prey && (!awake || c.r() < .35) && !terrain.isLiquid(c.n)) {
+          c.state = 'perch'; c.timer = awake ? 10 + c.r() * 20 : 20 + c.r() * 20; c.target = 0;
+        }
+        // Amphibious animals go for a swim: out into the water, paddle about, then back.
+        else if (sp.swims && awake && !c.goal && c.state !== 'feed' && shore.length && c.r() < .3) {
+          const s = nearest(shore, c.n, x => x.n, 12, c.r);
+          if (s && apart(c.n, s.n) < Math.min(120, reach)) { c.state = 'toSwim'; c.goal = s.n.clone().addScaledVector(s.toWater, (6 + c.r() * 16) / radius).normalize(); c.timer = trip(c.goal) + 6; }
+        }
+        if (!c.goal && c.state !== 'feed' && c.state !== 'perch') {
           const prowl = eco.prey.length && c.hunger > .6 && awake;
-          c.state = flying ? 'drift' : !prowl && c.r() < .35 ? 'graze' : 'wander';
-          c.target = flying ? sp.speed.walk * (awake ? 2.2 : 1.2) : c.state === 'graze' ? 0 : sp.speed.walk * (prowl ? 1 : .6 + c.r() * .6);
+          c.state = flying || swim ? 'drift' : !prowl && c.r() < .35 ? 'graze' : 'wander';
+          c.target = swim ? sp.speed.walk * (awake ? (prowl ? 1 : .4 + c.r() * .7) : .15) : flying ? sp.speed.walk * (awake ? 2.2 : 1.2) : c.state === 'graze' ? 0 : sp.speed.walk * (prowl ? 1 : .6 + c.r() * .6);
           c.heading.applyAxisAngle(c.n, (c.r() - .5) * (prowl ? 1.2 : 2.2));
         }
       }
@@ -300,51 +623,154 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
       // Herd cohesion keeps roaming animals near their herd.
       if (['wander', 'graze', 'drift', 'idle'].includes(c.state)) {
         const fromHerd = c.n.angleTo(c.herd) * radius;
-        if (fromHerd > 14 + sp.group * 2) steer(c, c.herd, .8, dt);
-        if (flying) c.heading.applyAxisAngle(c.n, dt * .25); // lazy circles
+        if (fromHerd > (swim ? 5 + sp.group * 1.2 + sp.size * 2 : 14 + sp.group * 2)) steer(c, c.herd, .8, dt); // schools keep closer than herds
+        if (flying || swim) c.heading.applyAxisAngle(c.n, dt * (swim ? .12 : .25)); // lazy circles
       }
     }
     if (c.state !== 'stalk') c.stalking = false; // lost you, or you got back aboard
     if (!c.prey) c.dive = Math.max(0, c.dive - dt * .3);
+    // Out of the towns (keepOut), unless it is running for its life.
+    if (c.inZone && c.state !== 'flee') {
+      c.heading.lerp(tangent(c.n.clone().sub(c.inZone.n), c.n), Math.min(1, dt * 3)); c.target = Math.max(c.target, sp.speed.walk * .9);
+      if (c.goal) { c.goal = null; c.state = 'wander'; c.timer = 4; }
+    }
     // A leash keeps everything within the explorable area.
     if (!pinned.has(sp.id) && c.n.angleTo(home) * radius > RANGE) steer(c, home, 1, dt);
 
     c.speed += (c.target - c.speed) * Math.min(1, dt * 3);
     c.heading = tangent(c.heading, c.n);
+    const solidsHere = c.spots?.length && !flying && !swim ? towns.get(sp.id)?.near(tmpP.copy(c.n).multiplyScalar(radius + terrain.surface(c.n))) : null;
+    if (solidsHere && c.speed > .05) avoidBuildings(c, solidsHere, dt);
     if (c.speed > .01) {
       const angle = c.speed * dt / radius, axis = c.n.clone().cross(c.heading).normalize();
       tmpQ.setFromAxisAngle(axis, angle);
       const next = c.n.clone().applyQuaternion(tmpQ);
-      // Ground animals turn back at water's edge; nothing leaves the sky.
-      if (!flying && terrain.isLiquid(next)) {
+      // Ground animals turn back where the water gets too deep to wade (amphibious ones
+      // swim on), sea life at the shallows; nothing leaves the sky.
+      if (!canGo(sp, next, flying)) {
         c.heading.negate(); c.speed *= .3;
         if (c.goal && c.state === 'toWater') { c.state = 'drink'; c.goal = null; c.timer = 4 + c.r() * 5; c.face = c.heading.clone().negate(); }
         else c.timer = Math.min(c.timer, 1);
       }
       else { c.n.copy(next).normalize(); c.heading.applyQuaternion(tmpQ); }
+      if (solidsHere) pushOut(c, solidsHere);
     }
     // Gait: legs cycle with distance travelled; wings and floaters keep moving in place.
     // Rollers turn once per circumference travelled, so they really roll.
     const stride = sp.plan === 'roller' ? sp.size * .5 : Math.max(.3, sp.legLength * 1.6 || sp.size);
     const still = posture === 2 && !flying;
-    c.cycle += still ? 0 : flying ? dt * (sp.plan === 'floater' ? 1.2 : 5) : c.speed * dt / stride * (sp.plan === 'roller' ? 1 : Math.PI);
-    const amp = still ? 0 : flying ? 1 : Math.min(1, c.speed / Math.max(.2, sp.speed.walk));
+    c.perch += ((c.state === 'perch' ? 1 : 0) - c.perch) * Math.min(1, dt * .8);
+    // Swimmers beat their tails faster the faster they go (jellies pulse slowly).
+    c.cycle += still ? 0 : swim ? dt * Math.min(14, sp.form === 'jelly' ? 1.4 : 1.8 + c.speed / Math.max(.25, sp.size) * 2.2) : flying ? dt * (sp.plan === 'floater' ? 1.2 : 5) : c.speed * dt / stride * (sp.plan === 'roller' ? 1 : Math.PI);
+    // amp 1 marks full flight (wings beat); below that, a landed flier's wings stay nearly folded.
+    let amp = still ? 0 : flying ? 1 : sp.altitude[1] > 0 ? Math.min(.95, c.speed / Math.max(.2, sp.speed.walk)) : swim ? 1 : Math.min(1, c.speed / Math.max(.2, sp.speed.walk));
+    // At work in town: hands busy (negative amp, see addAnimation); talking: now and then a gesture.
+    if (c.state === 'duty' && c.duty?.arrived && c.speed < .1) {
+      if (c.duty.pose === 'work' || c.duty.pose === 'field') { c.cycle += dt * 3.2; amp = -1; }
+      else if (c.duty.pose === 'chat') { c.cycle += dt * 2; amp = -(.2 + .4 * Math.max(0, Math.sin(t * .9 + c.altPhase))); }
+    } else if (c.state === 'atSpot' && c.speed < .1 && c.spot) {
+      if (c.spot.kind === 'work') { c.cycle += dt * 3.2; amp = -1; }
+      else if (c.spot.kind === 'chat') { c.cycle += dt * 2; amp = -(.2 + .4 * Math.max(0, Math.sin(t * .9 + c.altPhase))); }
+    }
     // Posture: lower the head to eat or drink, settle down to sleep. Fliers swoop on prey.
-    const grounded = !flying && !['serpent', 'slug'].includes(sp.plan);
-    c.tilt += ((posture === 1 && grounded ? .32 : 0) - c.tilt) * Math.min(1, dt * 3);
+    const grounded = !flying && !swim && !['serpent', 'slug'].includes(sp.plan) && !(sp.altitude[1] > 0);
+    // Bending to the work, for those with no hands to work with.
+    const bend = ((c.state === 'atSpot' && c.spot?.kind === 'work') || (c.state === 'duty' && c.duty?.arrived && (c.duty.pose === 'work' || c.duty.pose === 'field'))) && !sp.arms ? .1 + .16 * (.5 + .5 * Math.sin(t * 2.4 + c.altPhase)) : 0;
+    c.tilt += ((posture === 1 && grounded ? .32 : bend) - c.tilt) * Math.min(1, dt * 3);
+    if (swim) swimDepth(c, dt, awake);
     c.sink += ((posture === 2 && grounded ? (sp.plan === 'roller' ? .15 * sp.size : sp.legLength * .55) : 0) - c.sink) * Math.min(1, dt * 1.5);
-    const air = sp.plan === 'floater' || flying ? (c.alt + Math.sin(t * .6 + c.altPhase) * 1.5) * (1 - c.dive * .85) : 0;
-    const ground = radius + terrain.surface(c.n) + air - c.sink;
+    const air = sp.altitude[1] > 0 ? (c.alt + Math.sin(t * .6 + c.altPhase) * 1.5) * (1 - c.dive * .85) * (1 - c.perch) : 0;
+    let ground = swim ? swimHeight(c) : radius + terrain.surface(c.n) + air - c.sink;
+    if (!swim && sp.altitude[1] === 0) {
+      // On the bed of the shallows when wading; amphibious animals float with their backs at the surface where it is deeper.
+      const bed = radius + bedAt(c.n) - c.sink;
+      ground = sp.swims ? Math.max(bed, radius + terrain.sea - sp.legLength - sp.body.height * .55 - (c.state === 'hunt' || c.state === 'flee' ? .6 : 0)) : bed;
+    } else if (sp.altitude[1] > 0) {
+      ground -= c.perch * (terrain.surface(c.n) - bedAt(c.n)); // a landed flier stands on the bed of the shallows
+      // Diving fliers plunge after what they hunt, even under the water.
+      if (sp.dives && c.prey && c.dive > .5 && c.prey.pos.lengthSq()) ground = Math.max(radius + terrain.surface(c.n) + .2, ground + (c.prey.pos.length() - ground) * Math.min(1, (c.dive - .5) * 2.2)); // (never into a hillside: the prey may be lower down a slope)
+    }
     pos.copy(c.n).multiplyScalar(ground);
+    c.pos.copy(pos);
     right.copy(c.n).cross(c.heading).normalize();
     const ct = Math.cos(c.tilt), st = Math.sin(c.tilt);
     up.copy(c.n).multiplyScalar(ct).addScaledVector(c.heading, st);
     fwd.copy(c.heading).multiplyScalar(ct).addScaledVector(c.n, -st);
+    // Expression (express.mjs): what it looks at, how it carries itself, a greeting.
+    const pose = expression(c, dt, t, player, toPlayer, playerDist, posture, flying, swim);
+    if (pose.arms !== null && sp.arms) { amp = pose.arms; c.cycle += dt * 2; }
     basis.makeBasis(right, up, fwd); // local +Y up, +Z forward
     m.copy(basis).setPosition(pos);
+    const k = c.young ? .55 : 1; // the young are small
+    if (pose.pitch || pose.roll || pose.yaw || pose.lift || pose.scale !== 1 || k !== 1) {
+      const hip = (c.top ?? sp.size) * .35 * k;
+      exQ.setFromEuler(exE.set(pose.pitch, pose.yaw, pose.roll, 'YXZ'));
+      exM.compose(exV.set(0, hip + pose.lift, 0), exQ, exS.set(k, pose.scale * k, k)).multiply(exM2.makeTranslation(0, -hip, 0));
+      m.multiply(exM);
+    }
     c.mesh.setMatrixAt(c.index, m);
-    if (sp.helmet) { helmetM.multiplyMatrices(m, sp.helmet.offset); sp.helmet.mesh.setMatrixAt(c.index, helmetM); sp.helmet.mesh.instanceMatrix.needsUpdate = true; }
+    if (sp.helmet) {
+      helmetM.copy(m);
+      const hp = c.mesh.geometry.userData.headPivot;
+      if (hp) helmetM.multiply(exM2.makeTranslation(hp[0], hp[1], hp[2])).multiply(exM3.makeRotationFromEuler(exE.set(-pose.headPitch, pose.headYaw, 0, 'YXZ'))).multiply(exM2.makeTranslation(-hp[0], -hp[1], -hp[2]));
+      helmetM.multiply(sp.helmet.offset); sp.helmet.mesh.setMatrixAt(c.index, helmetM); sp.helmet.mesh.instanceMatrix.needsUpdate = true;
+    }
     c.mesh.geometry.attributes.iAnim.setXY(c.index, c.cycle, amp);
+    c.mesh.geometry.attributes.iLook.setXYZ(c.index, pose.headYaw, pose.headPitch, pose.glow);
+  }
+  // What an animal is paying attention to, and how that shows (express.mjs). In order: you,
+  // when you are talking to it (talk) or it has come out to meet you (meet); whoever it is
+  // talking to in town; something it hunts or runs from; you, if you are close and it is
+  // the kind to notice; otherwise it glances about.
+  const exQ = new THREE.Quaternion(), exE = new THREE.Euler(), exM = new THREE.Matrix4(), exM2 = new THREE.Matrix4(), exM3 = new THREE.Matrix4(), exV = new THREE.Vector3(), exS = new THREE.Vector3(), exT = new THREE.Vector3();
+  function expression(c, dt, t, player, toPlayer, playerDist, posture, flying, swim) {
+    const sp = c.sp, ex = c.ex ||= createExpression(c.r);
+    const headY = (c.top ?? sp.size) * .8 * (c.young ? .55 : 1);
+    let at = null, mood = null;
+    const playerHead = () => exT.copy(player.position).addScaledVector(c.n, player.onFoot ? 1.6 : 2.5);
+    if (posture === 2 || c.state === 'sleep') at = null;
+    else if (c.talk && player) { at = playerHead(); mood = c.talk.mood; }
+    else if (c.meet && player && c.meet.until > t) { at = playerHead(); mood = c.meet.mood; }
+    else if (c.state === 'duty' && c.duty?.arrived && c.duty.look === 'up') at = exT.copy(pos).addScaledVector(c.n, 30).addScaledVector(c.heading, 12); // stargazing
+    else if (c.state === 'duty' && c.duty?.arrived && c.duty.centre && !(player && playerDist < 5)) at = exT.copy(c.duty.centre).multiplyScalar(radius + terrain.surface(c.duty.centre)).addScaledVector(c.n, headY);
+    else if (c.state === 'flee' || c.state === 'hunt' || c.state === 'defend') at = c.prey && c.state !== 'flee' ? exT.copy(c.prey.pos) : null;
+    else if (c.state === 'atSpot' && c.spot?.kind === 'chat' && c.partner && c.partner.state === 'atSpot' && !c.partner.hidden) at = exT.copy(c.partner.pos).addScaledVector(c.n, (c.partner.top ?? c.partner.sp.size) * .8);
+    else if (player && playerDist < (c.spots ? 14 : sp.behavior === 'indifferent' ? 7 : 12 + sp.size * 2) && !flying) {
+      at = playerHead();
+      if (c.spots && playerDist < 10) mood = c.townMood;
+    }
+    let look = null;
+    if (at) {
+      const a = lookAngles(at.x - pos.x - up.x * headY, at.y - pos.y - up.y * headY, at.z - pos.z - up.z * headY, right, up, fwd);
+      look = a;
+      // Townsfolk (and anything you talk to) turn to face what they look at, if it is behind them.
+      if ((c.talk || c.meet || c.spots) && c.speed < .1 && Math.abs(a.yaw) > (c.talk || c.meet ? .2 : .9)) c.heading.applyAxisAngle(c.n, Math.sign(a.yaw) * Math.min(Math.abs(a.yaw) - (c.talk || c.meet ? 0 : .6), dt * 2));
+    }
+    return express(ex, dt, { look, mood, t, phase: c.altPhase, sp, still: c.speed < .15 && !flying && !swim });
+  }
+  // Sea life: how deep each swimmer is. Each picks a depth in its range every few
+  // seconds (deeper when asleep or fleeing); leviathans and some rays come up to
+  // breathe, their backs breaking the surface; quick swimmers leap clear now and then,
+  // more often when chased or chasing.
+  function swimDepth(c, dt, awake) {
+    const sp = c.sp, [d0, d1] = sp.depth, alarmed = c.state === 'flee' || c.state === 'hunt';
+    if ((c.depthTimer -= dt) <= 0) { c.depthTimer = 4 + c.r() * 8; c.depthGoal = awake ? d0 + c.r() * (d1 - d0) : d1; }
+    if (sp.surfaces && awake && (c.breath -= dt) <= 0) { c.breath = 25 + c.r() * 35; c.surfacing = 6 + c.r() * 5; }
+    let goal = c.state === 'flee' ? d1 : c.depthGoal;
+    if (c.surfacing > 0) { c.surfacing -= dt; goal = sp.body.height * .1; }
+    c.depth += (goal - c.depth) * Math.min(1, dt * (alarmed ? 1.2 : .5));
+    if (c.leap < 0 && sp.leaps && awake && c.depth < d1 + .5 && c.r() < dt * (alarmed ? .3 : sp.glides ? .04 : .02)) { c.leap = 0; c.leapTime = sp.glides ? 2.2 + sp.size * 1.2 : .55 + Math.sqrt(sp.size) * .45; }
+    if (c.leap >= 0 && sp.glides) c.target = Math.max(c.target, sp.speed.run); // gliders sail far
+    if (c.leap >= 0) {
+      c.leap += dt / c.leapTime;
+      if (c.leap >= 1) { c.leap = -1; c.depth = Math.max(c.depth, .5); }
+      else c.tilt = -(sp.glides ? .35 : .85) * Math.cos(Math.PI * c.leap); // nose up out of the water, nose down back in
+    }
+  }
+  function swimHeight(c) {
+    const floor = radius + terrain.height(c.n) - c.bottom + .05, sea = radius + terrain.sea;
+    if (c.leap >= 0) { const a = Math.sin(Math.PI * c.leap), arc = c.sp.glides ? Math.min(1, a * 2.5) * (1.2 + c.sp.size * 1.4) : a * (.35 + c.sp.size * .8); return Math.max(floor, sea + arc - (1 - a) * .4); }
+    return Math.max(floor, sea - c.depth);
   }
   // Moves the animals' home area to follow you. Herds left more than RANGE behind
   // find new ground that suits them near you (never right beside you), and their
@@ -359,21 +785,22 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
     if (here.angleTo(home) * radius < RANGE * .45) return;
     home.copy(here); toHome.setFromUnitVectors(Y, home);
     for (const { sp, herd, r } of bands) {
-      if (pinned.has(sp.id) || herd.centre.angleTo(home) * radius < RANGE * .9) continue;
+      if (pinned.has(sp.id) || (!herd.dry && herd.centre.angleTo(home) * radius < RANGE * .9)) continue;
       let best = null, bestFit = -1;
-      for (let t = 0; t < 24; t++) {
+      for (let t = 0; t < (sp.aquatic ? 48 : 24); t++) {
         const n = randomNear(THREE, r, RANGE * .8 / radius).applyQuaternion(toHome);
-        if (n.angleTo(here) * radius < 70 || n.angleTo(signalNormal) < 25 / radius) continue;
+        if ((!sp.aquatic && n.angleTo(here) * radius < 70) || n.angleTo(signalNormal) < 25 / radius || !fits(sp, n)) continue;
         const c = terrain.climate(n), f = habitatFit(sp, c) + r() * .15;
-        if (!c.submerged && f > bestFit) { bestFit = f; best = n; }
+        if (f > bestFit) { bestFit = f; best = n; }
       }
-      if (!best) continue; // no dry ground here: stay put for now
-      herd.centre.copy(best);
+      if (!best) continue; // no dry ground (or open water) here: stay put for now
+      const wasDry = herd.dry;
+      herd.centre.copy(best); herd.dry = false;
       herd.alarm = 0; herd.threat = null;
       for (const c of creatures) {
-        if (c.band !== herd || c.n.angleTo(here) * radius < 90) continue;
+        if (c.band !== herd || (!wasDry && c.n.angleTo(here) * radius < 90)) continue;
         c.n.copy(best).add(randomNear(THREE, c.r, 10 / radius).sub(Y)).normalize();
-        if (terrain.isLiquid(c.n)) c.n.copy(best);
+        if (!fits(sp, c.n)) c.n.copy(best);
         c.heading = tangent(c.heading, c.n); c.state = 'idle'; c.timer = 0; c.speed = 0; c.goal = null; c.prey = null; c.threat = null;
       }
     }
@@ -381,13 +808,107 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
   }
 
   return {
-    group, species, creatures, events, update, homes, follow,
+    group, species: absent ? species.filter((s) => !absent.has(s.id)) : species, creatures, events, update, homes, follow,
     // Keeps a species' herds where they are (builders stay in their settlements).
     pin(id) { pinned.add(id); },
+    // An intelligent species' town: places to go (spots: { n, face, kind }) and the buildings to walk round (near(p)).
+    // stance: how they take to you (station-deck.js stanceOf), shown in how they carry themselves.
+    // opts: { path, centres (unit vectors of squares and hearts of town), fields, hearths, edge (metres) }:
+    // what the town does together (vignettes). A quarter of them are young.
+    setTown(id, town, { stance = null, ...opts } = {}) {
+      towns.set(id, town); tame.add(id);
+      town.opts = opts; town.edge = opts.edge;
+      (bySpecies.get(id) || []).forEach((c, i) => { c.young = i % 4 === 3 && (bySpecies.get(id).length >= 4); });
+      town.graph ||= streetGraph(town.paths);
+      // A few places along the streets to stroll to.
+      if (town.graph.nodes.length && !town.strolls) {
+        town.strolls = [];
+        for (let i = 0; i < town.graph.nodes.length; i += 7) { const n = town.graph.nodes[i], nx = town.graph.nodes[Math.min(i + 1, town.graph.nodes.length - 1)]; town.strolls.push({ n, face: tangent(nx.clone().sub(n).lengthSq() > 1e-12 ? nx.clone().sub(n) : new THREE.Vector3(1, 0, 0), n), kind: 'stroll', taken: null }); }
+        town.spots = [...town.spots, ...town.strolls];
+      }
+      for (const c of creatures) if (c.sp.id === id) { c.townStance = stance; c.townMood = moodOf(stance); c.spots = town.spots.filter((s) => apart(s.n, c.herd) < 70); if (c.spots.length < 3) { c.spots = null; continue; }
+        // They start out in town, already at something (their herds were moved there when it was built).
+        const s = c.spots.find((x) => !x.taken);
+        if (s) { c.n.copy(s.n); c.heading = tangent(s.face, s.n); s.taken = c; c.spot = s; c.state = 'atSpot'; c.timer = 3 + c.r() * 20; c.goal = null; }
+        else { c.state = 'idle'; c.timer = 0; c.goal = null; }
+      }
+    },
+    // Some of a wild species live in town, kept by the builders: they graze in pens round
+    // the edge and are never chased off. pens: [{ n, face }]. Returns the species, or null.
+    keepAnimals(pens, { count = 5, builderSize = 1 } = {}) {
+      if (!pens?.length) return null;
+      const fit = species.filter((sp) => !sp.aquatic && !(sp.altitude[1] > 0) && !tame.has(sp.id) && !sp.ecology.stalksYou && sp.traits.diet === 'herbivore' && sp.size < builderSize * 2.5 && !sp.arms);
+      if (!fit.length) return null;
+      const sp = fit.sort((a, b) => a.size - b.size)[0], spots = pens.map((p) => ({ n: p.n, face: p.face, kind: 'graze', taken: null }));
+      const kept = bySpecies.get(sp.id).filter((c) => !c.hidden).slice(0, count);
+      kept.forEach((c, i) => {
+        c.kept = true; c.spots = spots;
+        const s = spots[i % spots.length]; c.n.copy(s.n).add(randomNear(THREE, c.r, 2 / radius).sub(Y)).normalize(); c.heading = tangent(s.face, c.n); c.state = 'idle'; c.timer = 0; c.goal = null;
+      });
+      towns.set(sp.id, { spots, near: [...towns.values()][0]?.near ?? (() => []), graph: [...towns.values()][0]?.graph });
+      return kept.length ? sp : null;
+    },
+    // You have set down near a town (at: unit vector of where; stance: theirs). Welcoming
+    // townsfolk gather at the edge of the landing ground and greet you; curious ones, a few,
+    // come close to look; wary ones go to their doorways and watch; guarded ones send two
+    // out to stand a few metres off. Returns how many came.
+    arrive(at, stance, { from = 160, ship = 9 } = {}) {
+      const t = time.value, mood = moodOf(stance);
+      const near = creatures.filter((c) => c.spots && !c.kept && !c.hidden && !c.talk && c.state !== 'sleep' && c.state !== 'toBed' && apart(c.n, at) < from).sort((a, b) => apart(a.n, at) - apart(b.n, at));
+      const n = { welcome: 9, curious: 3, wary: 6, guarded: 2 }[stance] ?? 0, chosen = near.slice(0, n);
+      if (!chosen.length) return 0;
+      // Toward the town: the arc they gather on faces where they came from.
+      const toward = new THREE.Vector3();
+      for (const c of chosen) toward.add(tangent(c.n.clone().sub(at), at));
+      if (toward.lengthSq() < 1e-6) toward.copy(tangent(new THREE.Vector3(1, 0, 0), at)); else toward.copy(tangent(toward, at));
+      const across = at.clone().cross(toward).normalize();
+      chosen.forEach((c, i) => {
+        let dist, ang;
+        if (stance === 'welcome') { dist = ship + 4 + (i % 2) * 2.5 + c.sp.size; ang = (i / Math.max(1, chosen.length - 1) - .5) * 1.8; }
+        else if (stance === 'curious') { dist = ship - 2 + c.sp.size + i * 1.5; ang = (i - 1) * .6; }
+        else if (stance === 'guarded') { dist = ship - 3 + c.sp.size * 1.5; ang = (i ? 1 : -1) * (.12 + c.sp.size * .05); }
+        else { // wary: the doorstep nearest them, facing you
+          const s = c.spots.filter((x) => x.kind !== 'chat' && (!x.taken || x.taken === c)).sort((a, b) => apart(a.n, c.n) - apart(b.n, c.n))[0];
+          releaseSpot(c); if (s) { c.spot = s; s.taken = c; }
+          c.meet = { n: (s?.n ?? c.n).clone(), mood, until: t + 50 + c.r() * 20, leave: t + 40, greet: false };
+          c.state = 'toMeet'; c.goal = null; return;
+        }
+        const dir = toward.clone().multiplyScalar(Math.cos(ang)).addScaledVector(across, Math.sin(ang));
+        releaseSpot(c); c.spot = null;
+        c.meet = { n: at.clone().addScaledVector(dir, dist / radius).normalize(), mood, until: t + (stance === 'guarded' ? 120 : 45 + c.r() * 25), leave: t + 40, greet: stance !== 'guarded', delay: i * .35 + c.r() * .4 };
+        c.state = 'toMeet'; c.goal = null;
+      });
+      return chosen.length;
+    },
+    // Talking to one of them (contact): it stops, turns to you and attends; mood from stance.
+    talkWith(creature, stance) {
+      for (const c of creatures) if (c.talk) { c.talk = null; c.state = 'idle'; c.timer = 0; }
+      if (!creature) return;
+      if (creature.spot) releaseSpot(creature); creature.spot = null; creature.meet = null;
+      creature.talk = { mood: moodOf(stance) }; creature.speed = 0;
+    },
+    // A gesture (its greeting, unless another kind is given).
+    gesture(creature, kind) { if (creature) startGesture(creature.ex ||= createExpression(creature.r), kind || gestureOf(creature.sp)); },
+    // Keep wild animals out of big towns and cities: zones [{ n (unit), r (metres) }]. Herds
+    // living there move out to fitting ground nearby, at once.
+    keepOut(zones, test = null) {
+      keepZones.length = 0; keepZones.push(...zones); keepTest = test;
+      for (const b of bands) {
+        if (b.sp.aquatic || tame.has(b.sp.id) || !zoneAt(b.sp, b.herd.centre)) continue;
+        let best = null;
+        for (let k = 0; k < 70 && !best; k++) { const n = b.herd.centre.clone().add(randomNear(THREE, b.r, (60 + k * (keepTest ? 30 : 6)) / radius).sub(Y)).normalize(); if (fits(b.sp, n)) best = n; }
+        if (best) b.herd.centre.copy(best);
+      }
+      for (const c of creatures) if (!c.kept && zoneAt(c.sp, c.n)) {
+        c.n.copy(c.band.centre).add(randomNear(THREE, c.r, 8 / radius).sub(Y)).normalize();
+        if (!fits(c.sp, c.n)) c.n.copy(c.band.centre);
+        c.heading = tangent(c.heading, c.n); c.goal = null; c.state = 'idle'; c.timer = 0;
+      }
+    },
     // Planet-local positions of every visible animal of a species (for cataloguing).
-    positionsOf(sp) { return creatures.filter(c => c.sp === sp && !c.hidden).map(c => c.n.clone().multiplyScalar(radius + terrain.surface(c.n))); },
+    positionsOf(sp) { return creatures.filter(c => c.sp === sp && !c.hidden && !c.band.dry && c.state !== 'inside').map(c => sp.aquatic ? c.pos.clone() : c.n.clone().multiplyScalar(radius + terrain.surface(c.n))); },
     // The same, with each animal: [{ creature, position }] (for watching what one is doing).
-    individualsOf(sp) { return creatures.filter(c => c.sp === sp && !c.hidden).map(c => ({ creature: c, position: c.n.clone().multiplyScalar(radius + terrain.surface(c.n)) })); },
+    individualsOf(sp) { return creatures.filter(c => c.sp === sp && !c.hidden && !c.band.dry && c.state !== 'inside').map(c => ({ creature: c, position: sp.aquatic ? c.pos.clone() : c.n.clone().multiplyScalar(radius + terrain.surface(c.n)) })); },
   };
 }
 
@@ -400,6 +921,49 @@ function nearest(list, n, get, sample = 0, r = Math.random) {
     if (d > d0) { d0 = d; best = x; }
   }
   return best;
+}
+
+// A crew of one species for a place that is not a world's surface (a station deck): one
+// instanced mesh (plus helmets for suited species) in the caller's own frame. set(i, matrix,
+// cycle, amp) poses individual i; cycle is its gait phase and amp how hard it is moving
+// (the same values the herds use). THREE is passed in.
+export function buildCrew(THREE, sp, count, seed = 'crew') {
+  const geometry = buildGeometry(THREE, sp, rng(seed, 'crew', sp.id));
+  geometry.computeBoundingBox();
+  const bb = geometry.boundingBox, extent = { top: bb.max.y, bottom: Math.max(bb.min.y, -sp.size * .6) };
+  const anim = new THREE.InstancedBufferAttribute(new Float32Array(count * 2), 2);
+  anim.setUsage(THREE.DynamicDrawUsage);
+  geometry.setAttribute('iAnim', anim);
+  const look = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
+  look.setUsage(THREE.DynamicDrawUsage);
+  geometry.setAttribute('iLook', look);
+  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .7 });
+  material.userData.surfaceDetail = true;
+  addAnimation(material, sp);
+  const group = new THREE.Group(), mesh = new THREE.InstancedMesh(geometry, material, count);
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); mesh.frustumCulled = false; group.add(mesh);
+  let helmet = null, offset = null;
+  if (sp.suit) {
+    const hr = sp.head * 1.45, upright = sp.plan === 'biped';
+    offset = new THREE.Matrix4().makeTranslation(0, bb.max.y - hr * (upright ? .75 : 1), upright ? bb.max.z * .35 : bb.max.z - hr * 1.05);
+    helmet = new THREE.InstancedMesh(new THREE.SphereGeometry(hr, 14, 10), new THREE.MeshStandardMaterial({ color: '#cfefff', transparent: true, opacity: .32, roughness: .05, metalness: .2, depthWrite: false }), count);
+    helmet.instanceMatrix.setUsage(THREE.DynamicDrawUsage); helmet.frustumCulled = false; group.add(helmet);
+  }
+  const hm = new THREE.Matrix4(), hr = new THREE.Matrix4(), ht = new THREE.Matrix4(), he = new THREE.Euler(), hp = geometry.userData.headPivot;
+  const stride = sp.plan === 'roller' ? sp.size * .5 : Math.max(.3, sp.legLength * 1.6 || sp.size);
+  return {
+    group, mesh, extent, stride, headPivot: hp,
+    // yaw/pitch: where the head points (express.mjs); glow: extra glow, 0..1.
+    set(i, matrix, cycle, amp, yaw = 0, pitch = 0, glow = 0) {
+      mesh.setMatrixAt(i, matrix); anim.setXY(i, cycle, amp); look.setXYZ(i, yaw, pitch, glow);
+      if (helmet) {
+        hm.copy(matrix);
+        if (hp && (yaw || pitch)) hm.multiply(ht.makeTranslation(hp[0], hp[1], hp[2])).multiply(hr.makeRotationFromEuler(he.set(-pitch, yaw, 0, 'YXZ'))).multiply(ht.makeTranslation(-hp[0], -hp[1], -hp[2]));
+        helmet.setMatrixAt(i, hm.multiply(offset));
+      }
+    },
+    commit() { mesh.instanceMatrix.needsUpdate = true; anim.needsUpdate = true; look.needsUpdate = true; if (helmet) helmet.instanceMatrix.needsUpdate = true; },
+  };
 }
 
 // A colonist from another world: the same species in a pressure suit (plain suit
@@ -437,43 +1001,55 @@ function randomNear(THREE, r, maxAngle) {
 function addAnimation(material, sp) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uSize = { value: sp.size };
-    shader.vertexShader = `attribute float aPart; attribute vec3 aPivot; attribute vec3 aKnee; attribute float aPhase; attribute float aBend; attribute float aGlow; attribute float aKind; attribute vec2 iAnim; uniform float uSize; varying float vGlow; flat varying float vKind; varying vec3 vRest; varying vec3 vRestN; // flat: a kind must not blend into another across a triangle
+    shader.vertexShader = `attribute float aPart; attribute vec3 aPivot; attribute vec3 aKnee; attribute vec2 aPhase; /* x: phase, y: bend (packed: WebGL allows only 16 attributes) */ attribute float aGlow; attribute float aKind; attribute vec2 iAnim; attribute vec3 iLook; uniform float uSize; varying float vGlow; flat varying float vKind; varying vec3 vRest; varying vec3 vRestN; // flat: a kind must not blend into another across a triangle
 mat3 rX(float a) { float c = cos(a), s = sin(a); return mat3(1., 0., 0., 0., c, s, 0., -s, c); }
 mat3 rY(float a) { float c = cos(a), s = sin(a); return mat3(c, 0., -s, 0., 1., 0., s, 0., c); }
 mat3 rZ(float a) { float c = cos(a), s = sin(a); return mat3(c, s, 0., -s, c, 0., 0., 0., 1.); }
 vec3 rotK(vec3 v, vec3 k, float a) { return v * cos(a) + cross(k, v) * sin(a) + k * dot(k, v) * (1. - cos(a)); }
 void creaturePose(inout vec3 p, inout vec3 n) {
-  float cyc = iAnim.x, amp = iAnim.y;
+  // iAnim.y below zero: standing at work. The legs rest and the arms work: reach forward,
+  // and lift and fall in a steady rhythm (hammering, tending, handling), each arm its own way.
+  float cyc = iAnim.x, amp = max(0., iAnim.y), work = max(0., -iAnim.y);
   if (aPart == 1. || aPart == 5. || aPart == 6. || aPart == 7.) {
     bool arm = aPart >= 6.;
-    float ph = cyc + aPhase + (arm ? 3.14159 : 0.);
+    float ph = cyc + aPhase.x + (arm ? 3.14159 : 0.);
     float swing = sin(ph) * (arm ? .35 : .5) * amp;
+    if (arm && work > 0.) swing = (-.8 + sin(cyc + aPhase.x * 1.7) * .45) * min(1., work);
+    if (arm && work > 1.5) swing = -2.5 + sin(cyc * 1.3 + aPhase.x) * .18; // both arms raised high (a greeting)
     if (aPart == 5. || aPart == 7.) {
-      float bend = (arm ? .5 : max(0., sin(ph + 1.5708)) * .9 * amp) * aBend;
+      float bend = (arm ? (work > 1.5 ? .25 : work > 0. ? .55 + .5 * (.5 + .5 * sin(cyc + aPhase.x * 1.7 + 1.2)) * work : .5) : max(0., sin(ph + 1.5708)) * .9 * amp) * aPhase.y;
       mat3 k = rX(bend); p = k * (p - aKnee) + aKnee; n = k * n;
     }
     mat3 h = rX(swing); p = h * (p - aPivot) + aPivot; n = h * n;
   } else if (aPart == 2.) {
-    mat3 w = rZ(sin(cyc) * .75 * aPhase); p = w * (p - aPivot) + aPivot; n = w * n;
+    mat3 w = rZ(sin(cyc) * .75 * aPhase.x * (amp > .99 ? 1. : amp * .15)); p = w * (p - aPivot) + aPivot; n = w * n; // landed: wings still
   } else if (aPart == 3.) {
-    mat3 t = rY(sin(cyc * .5 + aPhase) * .4 * aBend) * rX(sin(cyc * .37 + aPhase) * .12 * aBend); p = t * (p - aPivot) + aPivot; n = t * n;
+    mat3 t = rY(sin(cyc * .5 + aPhase.x) * .4 * aPhase.y) * rX(sin(cyc * .37 + aPhase.x) * .12 * aPhase.y); p = t * (p - aPivot) + aPivot; n = t * n;
   } else if (aPart == 4.) {
-    p.x += sin(cyc * 1.5 - p.z * 6. / uSize) * uSize * .1 * (.3 + amp);
+    p.x += sin(cyc * 1.5 - p.z * 6. / uSize) * uSize * .1 * (.3 + amp) * (aPhase.y > 0. ? aPhase.y : 1.); // aPhase.y: how far it swings (fish swing their tails more than their heads)
   } else if (aPart == 9.) {
     // Radial legs (aKnee holds the leg's outward direction): lift the foot, then swing it round.
-    float ph = cyc + aPhase; vec3 k = normalize(cross(aKnee, vec3(0., 1., 0.)));
-    float lift = max(0., sin(ph)) * .45 * amp * aBend, yaw = cos(ph) * .22 * amp;
+    float ph = cyc + aPhase.x; vec3 k = normalize(cross(aKnee, vec3(0., 1., 0.)));
+    float lift = max(0., sin(ph)) * .45 * amp * aPhase.y, yaw = cos(ph) * .22 * amp;
     p = rotK(p - aPivot, k, lift) + aPivot; n = rotK(n, k, lift);
     mat3 y = rY(yaw); p = y * (p - aPivot) + aPivot; n = y * n;
   } else if (aPart == 10.) {
     mat3 r = rX(cyc); p = r * (p - aPivot) + aPivot; n = r * n;
+  } else if (aPart == 11.) {
+    // An up-and-down wave travelling down the body (ribbons, leviathans), stronger toward the tail.
+    p.y += sin(cyc * 1.5 + p.z * 5. / uSize) * uSize * .05 * (.4 + amp) * (.35 + aPhase.y);
+  } else if (aPart == 12.) {
+    mat3 r = rY(cyc * .45); p = r * (p - aPivot) + aPivot; n = r * n;
+  } else if (aPart == 13.) {
+    // The head turns to look (iLook.x yaw, + to its right; iLook.y pitch, + up).
+    mat3 r = rY(iLook.x) * rX(-iLook.y); p = r * (p - aPivot) + aPivot; n = r * n;
   }
-  if (aPart != 2. && aPart != 10. && aPivot.y >= 0.) p.y += abs(sin(cyc)) * amp * uSize * .025;
+  if (aPart != 2. && (aPart < 10. || aPart == 13.) && aPivot.y >= 0.) p.y += abs(sin(cyc)) * amp * uSize * .025;
 }
 ` + shader.vertexShader
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nvec3 cP = position; vec3 cN = objectNormal; creaturePose(cP, cN); objectNormal = cN;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
-transformed = cP; vGlow = aGlow; vKind = aKind; vRest = position; vRestN = normal;
+transformed = cP; vGlow = aGlow * (1. + iLook.z * 2.5) + iLook.z * .12 * step(.01, aGlow); vKind = aKind; vRest = position; vRestN = normal;
 #ifdef USE_INSTANCING
 vRest *= length(instanceMatrix[0].xyz); // metres, whatever the instance's size
 #endif`);
@@ -548,7 +1124,7 @@ float cNoise(vec3 x) {
       }`)
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n#ifdef USE_COLOR\ntotalEmissiveRadiance += vColor.rgb * vGlow * 1.4;\n#endif');
   };
-  material.customProgramCacheKey = () => 'fauna-v5';
+  material.customProgramCacheKey = () => 'fauna-v7';
 }
 
 // --- Geometry ---------------------------------------------------------------
@@ -582,7 +1158,7 @@ function buildGeometry(THREE, sp, r) {
   // Civilized species: evolved manipulators and visible culture (fauna-culture.mjs).
   // Builders record anchor points (torso, collar, back, head, mouth, shoulders, limbs, hands) for it.
   const cult = cultureOf(sp), anchors = { limbs: [], hands: [] };
-  let zone = null;
+  let zone = null, headPivotOut = null;
 
   // Sweep rings along a path. pt.mod(ang) can reshape a ring (ribs, scallops, flat bellies).
   function tube(path, seg, colorAt, animAt, { capStart = true, capEnd = true, glowAt = null, ref: fixedRef = null } = {}) {
@@ -703,7 +1279,10 @@ function buildGeometry(THREE, sp, r) {
   }
 
   const plan = sp.plan, form = sp.form;
-  if (plan === 'floater') buildFloater(); else if (plan === 'radial') buildRadial(); else if (plan === 'roller') buildRoller(); else buildSpineAnimal();
+  if (plan === 'swimmer') buildSwimmer();
+  else if (plan === 'floater') form === 'skywhale' ? buildSkywhale() : form === 'siphon' ? buildSiphon() : buildFloater();
+  else if (plan === 'radial') form === 'tower' ? buildTower() : form === 'dome' ? buildDome() : buildRadial();
+  else if (plan === 'roller') buildRoller(); else buildSpineAnimal();
   if (cult) {
     if (plan === 'roller') {
       const R = s * .5;
@@ -769,7 +1348,7 @@ function buildGeometry(THREE, sp, r) {
 
   // ---- Rollers: living wheels and balls ----
   function buildRoller() {
-    const R = s * .5, hub = [0, R, 0];
+    const R = s * .5 * Math.sqrt(sp.bulk || 1), hub = [0, R, 0];
     if (form === 'wheel') {
       // Rim: a thick ring in the y-z plane that rolls; spokes; a hub that stays upright.
       const rim = [], m = 24;
@@ -801,10 +1380,11 @@ function buildGeometry(THREE, sp, r) {
   }
 
   // ---- Floaters: bells, balloons, mantas and bladder clusters ----
-  function buildFloater() {
-    const R = s * .5, lobes = sp.lobes || 10, ribs = sp.ribs ?? .05, frills = sp.frills ?? .08;
+  function buildFloater(form = sp.form) {
+    const R = s * .5 * Math.sqrt(sp.bulk || 1), lobes = sp.lobes || 10, ribs = sp.ribs ?? .05, frills = sp.frills ?? .08;
     const tentacle = (x, y, z, len, i, thick = .045) => {
       const a = Math.atan2(z, x), path = [];
+      len *= sp.stretch || 1;
       for (let k = 0; k <= 9; k++) { const f = k / 9, curl = Math.sin(f * 2.6 + i) * s * .14; path.push({ p: [x * (1 + f * .4) + Math.cos(a) * curl, y - len * f, z * (1 + f * .4) + Math.sin(a) * curl], rx: s * thick * (1 - f * .85), ry: s * thick * (1 - f * .85), w: f, t: f }); }
       tube(path, 6, (pt) => accent.clone().lerp(belly, .3 + pt.w * .5), (pt) => A(SWAY, [x, y, z], [0, 0, 0], i * .9, pt.w), { glowAt: (pt) => glowLevel && pt.w > .7 ? glowLevel : 0 });
     };
@@ -879,13 +1459,396 @@ function buildGeometry(THREE, sp, r) {
     }
   }
 
+  // ---- Alien forms: walking towers and domes ----
+  // A radial leg: hip -> knee -> foot on the ground, stepping in turn with its neighbours.
+  function radialLeg(i, n, hipR, hipY, pts, thick, colorAt) {
+    const a = i / n * Math.PI * 2, dir = [Math.sin(a), 0, Math.cos(a)];
+    const hip = [dir[0] * hipR, hipY, dir[2] * hipR], phase = (i % 2) * Math.PI + i * .4;
+    const P = [hip, ...pts.map(([out, y]) => [dir[0] * out, y, dir[2] * out])];
+    const path = catmull(P.map((p, k) => ({ p, rx: thick * (1 - k / P.length * .6), ry: thick * (1 - k / P.length * .6) })), 3);
+    tube(path, 7, colorAt, () => A(RLEG, hip, dir, phase, 1), { glowAt: (pt) => glowLevel && pt.t > .92 ? glowLevel * .8 : 0 });
+  }
+  // A tall ringed column on a skirt of short legs, crowned with feeding arms and a ring of eyes.
+  // The column bends gently (more toward the top) as it walks.
+  function buildTower() {
+    const n = sp.legs, R = s * .17, ly = sp.legLength, bodyY = ly * .55, H0 = s * .95 * (sp.stretch || 1), lobes = sp.lobes || 8;
+    const pivot = [0, bodyY, 0], bendAt = (y) => Math.max(0, (y - bodyY) / H0) * .55;
+    const prof = [[0, .8], [.05, 1], [.25, .8], [.5, .76], [.7, .68], [.84, .95], [.93, .75], [1, .22]];
+    const path = catmull(prof.map(([y, rr], i) => ({ p: [0, bodyY + y * H0, 0], rx: rr * R, ry: rr * R, t: i / (prof.length - 1) })), 3)
+      .map(pt => ({ ...pt, mod: (ang) => 1 + (sp.ribs ?? .05) * Math.cos(lobes * ang) }));
+    tube(path, 16, (pt, ang) => skin({ t: pt.t }, ang * 2, .35 + .3 * Math.cos(ang)).lerp(dark, Math.abs(Math.sin(pt.t * 30)) > .94 ? .35 : 0),
+      (pt) => A(SWAY, pivot, [0, 0, 0], 0, bendAt(pt.p[1])), { glowAt: (pt, ang) => glowLevel && Math.cos(lobes * ang) > .85 && pt.t > .3 ? glowLevel : 0 });
+    for (let i = 0; i < n; i++) radialLeg(i, n, R * .7, bodyY + H0 * .04, [[R + ly * .45, bodyY * .95], [R + ly * .75, ly * .18], [R + ly * .8, 0]], s * .05, (pt, ang, sy) => base.clone().lerp(belly, Math.max(0, -sy) * .5));
+    const ringY = bodyY + H0 * .84, ne = Math.max(5, sp.eyes.count), eyeAnim = A(SWAY, pivot, [0, 0, 0], 0, bendAt(ringY));
+    for (let k = 0; k < ne; k++) {
+      const a = k / ne * Math.PI * 2, er = R * .2, rr = R * .93;
+      ellipsoid([Math.sin(a) * rr, ringY, Math.cos(a) * rr], [er, er, er], tag(eyeC.clone().lerp(white, .25), KIND.gloss), eyeAnim, 1, glowLevel > .5 ? .6 : 0);
+      ellipsoid([Math.sin(a) * (rr + er * .6), ringY, Math.cos(a) * (rr + er * .6)], [er * .5, er * .6, er * .5], tag(dark.clone(), KIND.gloss), eyeAnim, 0);
+    }
+    const sw = (y) => A(SWAY, pivot, [0, 0, 0], 0, bendAt(y));
+    anchors.torso = { c: [0, bodyY + H0 * .45, 0], axis: [0, 1, 0], rx: R * .78, ry: R * .78, anim: sw(bodyY + H0 * .45) };
+    anchors.belt = { c: [0, bodyY + H0 * .2, 0], axis: [0, 1, 0], rx: R * .82, ry: R * .82, anim: sw(bodyY + H0 * .2) };
+    anchors.back = { p: [0, bodyY + H0 * .62, -R * .75], size: s * .2, anim: sw(bodyY + H0 * .62) };
+    anchors.head = { p: [0, ringY, 0], size: R * .93, ring: true, anim: eyeAnim };
+    anchors.shoulders = [-1, 1].map(side => ({ p: [side * R * .75, bodyY + H0 * .72, R * .3], side }));
+    const top = bodyY + H0, arms = Math.min(10, Math.max(5, sp.tentacles));
+    anchors.mouth = { p: [0, top, 0], dir: [0, .6, .8], size: R * .5, anim: sw(top) };
+    for (let k = 0; k < arms; k++) {
+      const a = k / arms * Math.PI * 2, p2 = [];
+      for (let j = 0; j <= 7; j++) { const f = j / 7, out = R * .2 + f * s * .38; p2.push({ p: [Math.sin(a) * out, top + Math.sin(f * 2.4) * s * .22 - f * f * s * .1, Math.cos(a) * out], rx: s * .03 * (1 - f * .75), ry: s * .03 * (1 - f * .75), w: f, t: f }); }
+      tube(p2, 6, (pt) => accent.clone().lerp(belly, pt.w * .4), (pt) => A(SWAY, [0, top, 0], [0, 0, 0], k * 1.1, .55 + pt.w * .6), { glowAt: (pt) => glowLevel && pt.w > .85 ? glowLevel : 0 });
+    }
+  }
+  // A broad, low dome walking on a ring of thick legs, with a fringe round its rim and eyes on stalks.
+  function buildDome() {
+    const n = sp.legs, bulk = Math.sqrt(sp.bulk || 1), R = s * .42 * bulk, ly = sp.legLength, bodyY = ly * .6, lobes = sp.lobes || 10;
+    const prof = [[-.12, .9], [0, 1], [.2, .95], [.4, .8], [.55, .56], [.64, .26], [.67, .02]];
+    const path = prof.map(([y, rr], i) => ({ p: [0, bodyY + y * R, 0], rx: rr * R, ry: rr * R, t: i / (prof.length - 1), mod: (ang) => 1 + (sp.ribs ?? .04) * Math.cos(lobes * ang) }));
+    tube(path, 28, (pt, ang) => skin({ t: .15 + pt.t * .7 }, ang * 3, .6).lerp(accent, Math.cos(lobes * ang) > .9 && pt.t > .2 ? .3 : 0), () => A(BODY),
+      { glowAt: (pt, ang) => glowLevel && Math.cos(lobes * ang) > .9 && pt.t > .5 ? glowLevel : 0 });
+    for (let i = 0; i < n; i++) radialLeg(i, n, R * .78, bodyY, [[R + ly * .15, bodyY * .8], [R + ly * .22, ly * .12], [R + ly * .26, 0]], s * .075 * bulk, (pt, ang, sy) => base.clone().lerp(dark, .15).lerp(belly, Math.max(0, -sy) * .4));
+    anchors.torso = { c: [0, bodyY + R * .15, 0], axis: [0, 1, 0], rx: R * .98, ry: R * .98, anim: A(BODY) };
+    anchors.back = { p: [0, bodyY + R * .62, 0], size: s * .25, anim: A(BODY) };
+    anchors.mouth = { p: [0, bodyY - R * .05, R * .92], dir: [0, -.3, 1], size: R * .3, anim: A(BODY) };
+    anchors.shoulders = [-1, 1].map(side => ({ p: [side * R * .55, bodyY + R * .35, R * .7], side }));
+    // Fringe of short feelers hanging round the rim.
+    for (let k = 0; k < 18; k++) {
+      const a = (k + .5) / 18 * Math.PI * 2, rr = R * .93, y0 = bodyY - R * .1, p2 = [];
+      for (let j = 0; j <= 3; j++) { const f = j / 3; p2.push({ p: [Math.sin(a) * rr * (1 + f * .05), y0 - f * ly * .3, Math.cos(a) * rr * (1 + f * .05)], rx: s * .018 * (1 - f * .6), ry: s * .018 * (1 - f * .6), w: f }); }
+      tube(p2, 5, () => accent.clone().lerp(belly, .5), (pt) => A(SWAY, [Math.sin(a) * rr, y0, Math.cos(a) * rr], [0, 0, 0], k, pt.w * .6));
+    }
+    // Plates or spines on top for defensive species.
+    if (sp.back === 'spines' || sp.back === 'plates' || sp.back === 'shell' || sp.facets) for (let k = 0; k < 12; k++) {
+      const a = k / 12 * Math.PI * 2, ring = k % 2 ? .45 : .7, y0 = bodyY + R * (k % 2 ? .52 : .35), rr = R * ring * .9;
+      if (sp.back === 'spines' || sp.facets) spike([Math.sin(a) * rr, y0, Math.cos(a) * rr], [Math.sin(a) * rr * 1.2, y0 + s * .16, Math.cos(a) * rr * 1.2], s * .035, sp.facets ? accent : horn, A(BODY), { glow: sp.facets ? glowLevel * .7 : 0 });
+      else ellipsoid([Math.sin(a) * rr, y0, Math.cos(a) * rr], [s * .1, s * .03, s * .1], accent.clone().lerp(dark, .2), A(BODY), 1);
+    }
+    // Eyes on stalks rising from the crown.
+    const stalks = Math.min(4, Math.max(2, sp.eyes.count));
+    for (let k = 0; k < stalks; k++) {
+      const a = k / stalks * Math.PI * 2 + .4, b0 = [Math.sin(a) * R * .2, bodyY + R * .62, Math.cos(a) * R * .2], p2 = [];
+      for (let j = 0; j <= 5; j++) { const f = j / 5; p2.push({ p: [b0[0] * (1 + f * 2), b0[1] + f * s * .45, b0[2] * (1 + f * 2)], rx: s * .025 * (1 - f * .3), ry: s * .025 * (1 - f * .3), w: f }); }
+      const anim = (w) => A(SWAY, b0, [0, 0, 0], k * 2.1, w * .7);
+      tube(p2, 6, () => base.clone().lerp(belly, .4), (pt) => anim(pt.w));
+      const tip = p2[5].p, er = s * .05;
+      ellipsoid(tip, [er, er, er], tag(eyeC.clone().lerp(white, .25), KIND.gloss), anim(1), 1, glowLevel > .5 ? .6 : 0);
+      ellipsoid([tip[0] * 1.08, tip[1], tip[2] * 1.08], [er * .5, er * .55, er * .5], tag(dark.clone(), KIND.gloss), anim(1), 0);
+    }
+  }
+
+  // ---- Alien drifters: sky whales and chains of bells ----
+  function hanging(x, y, z, len, i, thick) {
+    const a = Math.atan2(z, x), path = [];
+    for (let k = 0; k <= 8; k++) { const f = k / 8, curl = Math.sin(f * 2.6 + i) * s * .1; path.push({ p: [x + Math.cos(a) * curl, y - len * f, z + Math.sin(a) * curl], rx: thick * (1 - f * .8), ry: thick * (1 - f * .8), w: f, t: f }); }
+    tube(path, 5, (pt) => accent.clone().lerp(belly, .3 + pt.w * .5), (pt) => A(SWAY, [x, y, z], [0, 0, 0], i * .9, pt.w), { glowAt: (pt) => glowLevel && pt.w > .75 ? glowLevel : 0 });
+  }
+  // A long gas-filled body like a whale of the air: blunt head, tapering tail with
+  // flukes, broad fins, a row of gas sacs along its back and feeding tendrils beneath.
+  function buildSkywhale() {
+    const L = s * 1.15 * (sp.stretch || 1), R = s * .2 * Math.sqrt(sp.bulk || 1), path = [];
+    const shape = (f) => f < .12 ? .14 + f / .12 * .3 : f < .6 ? .44 + (f - .12) / .48 * .56 : 1 - Math.pow((f - .6) / .4, 2.4) * .5;
+    const wave = (z) => A(WAVE, [0, 0, 0], [0, 0, 0], 0, Math.max(0, .5 - z / L) * .9);
+    for (let k = 0; k <= 16; k++) { const f = k / 16; path.push({ p: [0, 0, -L / 2 + f * L], rx: R * shape(f), ry: R * shape(f) * .92, t: f }); }
+    tube(path, 18, (pt, ang, sy) => skin(pt, ang, sy).lerp(dark, sy < -.45 && pt.t > .55 && Math.sin(ang * 26) > .7 ? .3 : 0), (pt) => wave(pt.p[2]), { glowAt: skinGlow });
+    for (const side of [-1, 1]) {
+      const z0 = L * .15, root = [[side * R * .8, -R * .2, z0 + R * .5], [side * R * .85, -R * .25, z0], [side * R * .8, -R * .2, z0 - R * .4]];
+      const tip = [[side * R * 1.4, -R * .45, z0 + R * .1], [side * R * 2.6, -R * .7, z0 - R * .9], [side * R * 1.3, -R * .4, z0 - R * .8]];
+      membrane(root, tip, (f, w) => base.clone().lerp(accent, w * .6).lerp(shimmer, sp.scheme === 'iridescent' ? .4 : 0), A(WING, [side * R * .8, -R * .2, z0], [0, 0, 0], side * .3));
+    }
+    const tz = -L / 2, fl = [], fr = [];
+    for (let k = 0; k <= 6; k++) { const f = k / 6 * 2 - 1; fl.push([f * R * .2, 0, tz + R * .3]); fr.push([f * R * 1.6, Math.abs(f) * R * .1, tz - R * (.25 + (1 - Math.abs(f)) * .1 + Math.abs(f) * .5)]); }
+    membrane(fl, fr, (f, w) => base.clone().lerp(accent, w * .5), wave(tz));
+    const sacs = 3 + (sp.seed % 3);
+    for (let k = 0; k < sacs; k++) {
+      const z = L * (.25 - k * .5 / sacs), top = R * shape(.5 + z / L) * .92;
+      ellipsoid([0, top * .85, z], [R * .35, R * .3, R * .45], shimmer.clone().lerp(white, .2), wave(z), 1, glowLevel ? glowLevel * .7 : 0);
+    }
+    eyesAt([0, R * .05, L / 2 - R * .75], R * .62, R * .6, 1.2, wave(L / 2));
+    ellipsoid([0, -R * .28, L / 2 - R * .35], [R * .45, R * .04, R * .35], dark, wave(L / 2), 1);
+    for (let k = 0; k < Math.min(10, sp.tentacles); k++) {
+      const z = L * (.3 - k * .05), x = (k % 2 ? 1 : -1) * R * .3;
+      hanging(x, -R * .8, z, s * (.35 + (k % 3) * .15) * (sp.stretch || 1), k, s * .02);
+    }
+  }
+  // A colony: a gas float on top, a stem, and bell after bell strung along it, trailing tentacles.
+  function buildSiphon() {
+    const n = 4 + (sp.seed % 4), seg = s * .26 * Math.min(1.4, sp.stretch || 1), R = s * .3, top = [0, 0, 0];
+    const fp = [[1.1, .1], [.85, .75], [.4, 1], [0, .95], [-.4, .55], [-.6, .12]];
+    tube(fp.map(([y, rr], i) => ({ p: [0, y * R, 0], rx: rr * R * .8, ry: rr * R * .8, t: i / 5 })), 16, (pt, ang) => shimmer.clone().lerp(white, .25).lerp(accent, Math.sin(ang * 4) > .8 ? .4 : 0), () => A(BODY),
+      { glowAt: () => glowLevel * .4 });
+    const stem = [];
+    for (let k = 0; k <= n * 2; k++) { const f = k / (n * 2); stem.push({ p: [Math.sin(f * 5) * s * .03, -R * .5 - f * n * seg, 0], rx: s * .035, ry: s * .035, w: f }); }
+    tube(stem, 5, () => accent.clone().lerp(dark, .2), (pt) => A(SWAY, top, [0, 0, 0], 0, pt.w));
+    for (let k = 1; k <= n; k++) {
+      const side = k % 2 ? 1 : -1, y = -R * .5 - (k - .5) * seg, w = k / n, cx = side * R * .45, bp = [];
+      const prof = [[.55, .1], [.4, .7], [.1, 1], [-.2, .95], [-.3, .75]];
+      for (const [yy, rr] of prof) bp.push({ p: [cx, y + yy * R * .75, 0], rx: rr * R * .7, ry: rr * R * .7, t: (yy + .3) / .85 });
+      tube(bp, 12, (pt, ang) => base.clone().lerp(shimmer, .3 + .3 * Math.sin(ang * 3)).lerp(accent, Math.cos(ang * 6) > .8 ? .4 : 0), () => A(SWAY, top, [0, 0, 0], 0, w), { capEnd: false, glowAt: (pt) => glowLevel && pt.t < .2 ? glowLevel : 0 });
+    }
+    const bottom = -R * .5 - n * seg;
+    for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; hanging(Math.cos(a) * s * .06, bottom, Math.sin(a) * s * .06, s * (.5 + (i % 2) * .4) * (sp.stretch || 1), i, s * .015); }
+    eyesAt([0, -R * .1, R * .55], R * .3, R * .6, .8);
+  }
+
+  // ---- Sea life ----
+  // Built around its centre (the animal swims at a depth, not on the ground), +Z forward.
+  function buildSwimmer() {
+    const an = sp.anatomy || {};
+    if (form === 'jelly') {
+      buildFloater('bell');
+      // A second, smaller bell stacked above the first (twin-bells).
+      if (an.bells > 1) { const R = s * .3, path = [[.6, .05], [.45, .7], [.15, 1], [-.1, .9]].map(([y, rr], i) => ({ p: [0, s * .45 + y * R, 0], rx: rr * R, ry: rr * R, t: i / 3 })); tube(path, 18, () => shimmer.clone().lerp(base, .3), () => A(BODY), { glowAt: () => glowLevel * .6 }); }
+    } else if (form === 'ray') {
+      buildFloater('manta');
+      // Four-winged: a second, smaller pair of wing-fins behind the first.
+      if (an.wingPairs > 1) for (const side of [-1, 1]) { const L = s * 1.1, R = s * .5, root = [], edge = []; for (let k = 0; k <= 4; k++) { const f = k / 4, z = -L * .45 + f * L * .3; root.push([side * R * .3, 0, z]); edge.push([side * (R * .3 + Math.sin(f * Math.PI) * s * .6), 0, z - Math.sin(f * Math.PI) * s * .15]); } membrane(root, edge, (f, w) => base.clone().lerp(accent, w * .6), A(WING, [side * R * .3, 0, -L * .3], [0, 0, 0], -side * .45)); }
+    } else if (form === 'squid') buildSquid(an);
+    else if (form === 'ribbon') buildRibbon();
+    else if (form === 'disc') buildDisc();
+    else return buildFish(form);
+    // What every swimmer may share with its world's style: glowing organs and trailing filaments.
+    if (an.skin === 'translucent') for (let k = 0; k < 3; k++) ellipsoid([(k - 1) * s * .08, -s * .02, (k - 1) * s * .1], [s * .06, s * .05, s * .08], glowC, A(BODY), 1, .8);
+    for (let k = 0; k < (an.filaments || 0); k++) {
+      const b0 = [(k % 2 ? 1 : -1) * s * .05 * (1 + k * .3), -s * .12, -s * .1 * k], p2 = [], len = s * (.6 + (k % 3) * .3);
+      for (let j = 0; j <= 7; j++) { const f = j / 7; p2.push({ p: [b0[0] * (1 + f), b0[1] - f * len * .7, b0[2] - f * len * .5], rx: s * .012 * (1 - f * .7), ry: s * .012 * (1 - f * .7), w: f }); }
+      tube(p2, 4, () => accent.clone().lerp(shimmer, .4), (pt) => A(SWAY, b0, [0, 0, 0], k, pt.w), { glowAt: (pt) => glowLevel && pt.w > .8 ? glowLevel : 0 });
+    }
+  }
+  // Fish-like swimmers (fish, big hunters, leviathans), built from their anatomy
+  // (fauna.mjs seaAnatomy): a body shape (torpedo, deep, long, bulb-headed, flat) that may
+  // be a chain of segments; fin rows set two-sided like ours or in three or five rows round
+  // the body; a tail (forked, fanned, paddle, double, whip) or a jet funnel; a back fin;
+  // eyes (paired, on stalks, in rows, one great eye, or glowing pits); a mouth (jaws, a
+  // beard of feelers, a round sucker, a spear-like rostrum, a glowing lure); skin (plates,
+  // spines, flank frills, glowing organs); trailing filaments. Fish swing from side to
+  // side; leviathans flex up and down.
+  function buildFish(kind) {
+    const lev = kind === 'leviathan', hunter = kind === 'hunter', a = sp.anatomy || { symmetry: 'bilateral', eyes: 'paired', skin: 'smooth', mouth: 'jaws', swim: 'tail', finShape: 'paddle', segments: 1, shape: 'torpedo', dorsal: 'none', tail: 'fork', finRows: 1, filaments: 0 };
+    const shapeK = { torpedo: [1, 1, 1], deep: [.95, .75, 1.6], long: [1.45, .6, .6], bulb: [1, 1.05, 1.05], flat: [1, 1.6, .5] }[a.shape] || [1, 1, 1];
+    const L = b.length * shapeK[0], W = b.width * (lev ? 1.35 : hunter ? .95 : 1) * shapeK[1], H = b.height * (lev ? .95 : 1) * shapeK[2], hd = sp.head;
+    const bendAt = (z) => .2 + Math.min(1, Math.max(0, .5 - z / L)) * .9;
+    const mv = (z) => lev ? A(WAVE, [0, 0, 0], [0, 0, 0], 0, Math.max(0, .5 - z / L) * .9) : A(SLITHER, [0, 0, 0], [0, 0, 0], 0, bendAt(z));
+    const prof = a.shape === 'bulb' ? [[-.5, .06, .08], [-.3, .22, .26], [-.05, .45, .45], [.15, .85, .85], [.3, 1, 1], [.42, .85, .85], [.5, .3, .3]]
+      : a.shape === 'long' ? [[-.5, .08, .1], [-.4, .5, .55], [-.2, .9, .95], [0, 1, 1], [.2, 1, 1], [.4, .8, .8], [.5, .25, .25]]
+      : lev ? [[-.5, .05, .05], [-.42, .15, .17], [-.25, .55, .6], [0, .95, .95], [.2, 1, 1], [.37, .93, .9], [.46, .74, .72], [.5, .38, .4]]
+      : hunter ? [[-.5, .08, .12], [-.4, .2, .3], [-.22, .62, .75], [0, .92, .98], [.18, 1, 1], [.34, .82, .8], [.45, .45, .48], [.53, .08, .1]]
+      : [[-.5, .1, .14], [-.4, .22, .3], [-.25, .58, .72], [-.05, .88, .96], [.15, 1, 1], [.32, .86, .84], [.43, .58, .58], [.5, .2, .22]];
+    // A chain of segments: the body pinches in between them.
+    const seg = (t) => a.segments > 1 && t > .08 && t < .92 ? .7 + .3 * Math.abs(Math.sin(Math.PI * a.segments * (t - .08) / .84)) : 1;
+    const path = catmull(prof.map(([z, w, h], i) => ({ p: [0, 0, z * L], rx: W * .5 * w, ry: H * .5 * h, t: i / (prof.length - 1) })), a.segments > 1 ? 6 : 3)
+      .map(pt => { const k = seg(pt.t ?? 0); return { ...pt, rx: pt.rx * k, ry: pt.ry * k }; });
+    tube(path, 14, (pt, ang, sy) => skin(pt, ang, sy).lerp(dark, lev && sy < -.5 && pt.t > .5 && Math.sin(ang * 30) > .6 ? .25 : 0).lerp(white, a.skin === 'translucent' ? .35 : 0),
+      (pt) => mv(pt.p[2]), { glowAt: skinGlow });
+    // The body's surface at z, in the direction th round the axis (0 = right, PI/2 = up).
+    const ring = (z) => { let best = path[0]; for (const pt of path) if (Math.abs(pt.p[2] - z) < Math.abs(best.p[2] - z)) best = pt; return best; };
+    const surf = (z, th, out = 0) => { const q = ring(z), c = Math.cos(th), s0 = Math.sin(th), rr = 1 / Math.sqrt((c / q.rx) ** 2 + (s0 / q.ry) ** 2); return [c * (rr * .92 + out), s0 * (rr * .92 + out), z]; };
+    const angles = a.symmetry === 'tri' ? [0, 1, 2].map(i => Math.PI / 2 + i * 2.094) : a.symmetry === 'radial' ? [0, 1, 2, 3, 4].map(i => Math.PI / 2 + i * 1.2566) : null;
+    const finC = (f, w) => accent.clone().lerp(shimmer, w * .5).lerp(base, .2);
+    // A fin from the body at z, round angle th, reaching len out.
+    const fin = (z, th, len, shape, span = L * .12) => {
+      const d = [Math.cos(th), Math.sin(th)], o = (zz, out) => { const s0 = surf(zz, th); return [s0[0] + d[0] * out, s0[1] + d[1] * out, zz]; };
+      const shapes = {
+        paddle: [[z + span * .5, z, z - span * .5], [[z + span * .3, .75], [z - span * .1, 1], [z - span * .6, .7]]],
+        blade: [[z + span * .5, z - span * .5], [[z - span * .3, 1], [z - span * .9, .35]]],
+        frond: [[z + span * .2, z - span * .2], [[z - len * 1.2, .55], [z - len * 1.45, .45]]],
+      }[shape] || null;
+      const [rootZ, outer] = shapes;
+      membrane(rootZ.map(zz => o(zz, 0)), outer.map(([zz, f]) => o(zz, len * f)), finC, (f) => mv(z - f * span));
+    };
+    // Fin rows: two-sided pairs (and a small belly fin), or rows evenly round the body.
+    const flen = W * .55 * (a.finShape === 'frond' ? 1.3 : 1) * (lev ? 1.6 : 1);
+    for (let k = 0; k < a.finRows; k++) {
+      const z = L * (.2 - k * (.45 / Math.max(1, a.finRows - 1 || 1))) * (a.finRows > 1 ? 1 : 1);
+      for (const th of angles || [-.35, Math.PI + .35]) fin(z, th, flen * (1 - k * .12), a.finShape);
+    }
+    if (!angles && !lev) fin(-L * .28, -Math.PI / 2, H * .3, 'blade', L * .08);
+    // Tail.
+    const tz = -L * .5 + L * .02, Lt = L * (hunter ? .26 : lev ? .22 : .22);
+    const lobeAngles = angles || (lev ? [0, Math.PI] : [Math.PI / 2, -Math.PI / 2]);
+    const lobe = (th, x0 = 0) => {
+      const d = [Math.cos(th), Math.sin(th)], at = (out, zz) => [x0 + d[0] * out, d[1] * out, zz];
+      const outer = { fork: [[Lt * .95, tz - Lt], [Lt * .3, tz - Lt * .5]], fan: [[Lt * .75, tz - Lt * .7], [Lt * .25, tz - Lt * .95]], paddle: [[Lt * .55, tz - Lt * .85], [Lt * .08, tz - Lt * 1.05]], double: [[Lt * .8, tz - Lt * .9], [Lt * .25, tz - Lt * .55]] }[a.tail] || [[Lt * .8, tz - Lt], [Lt * .3, tz - Lt * .6]];
+      membrane([at(W * .05, tz + L * .03), at(0, tz)], outer.map(([out, zz]) => at(out, zz)), finC, (f, w) => mv(tz - w * Lt));
+    };
+    if (a.tail === 'jet') { // a funnel at the tail, glowing inside
+      const q = ring(tz + L * .04), rr = Math.max(q.rx, q.ry) * 1.6 + W * .08;
+      const fp = [{ p: [0, 0, tz + L * .05], rx: rr * .6, ry: rr * .6 }, { p: [0, 0, tz - L * .02], rx: rr, ry: rr }, { p: [0, 0, tz - L * .06], rx: rr * 1.15, ry: rr * 1.15 }];
+      tube(fp, 12, () => accent.clone().lerp(dark, .2), () => mv(tz), { capStart: false, capEnd: false });
+      ellipsoid([0, 0, tz - L * .01], [rr * .7, rr * .7, rr * .1], glowC, mv(tz), 1, .9);
+    } else if (a.tail === 'whip') {
+      const wp = []; for (let k = 0; k <= 8; k++) { const f = k / 8; wp.push({ p: [0, 0, tz - f * L * .6], rx: W * .06 * (1 - f * .85), ry: W * .06 * (1 - f * .85), w: f }); }
+      tube(wp, 6, () => base, (pt) => mv(tz - pt.w * L * .6));
+    } else if (a.tail === 'double') for (const x0 of [-W * .18, W * .18]) for (const th of lobeAngles) lobe(th, x0);
+    else for (const th of lobeAngles) lobe(th);
+    // Back fin (two-sided bodies only).
+    const topAt = (z) => ring(z).ry;
+    if (!angles && (hunter || lev || a.dorsal !== 'none')) {
+      const kindD = hunter ? 'blade' : lev ? 'low' : a.dorsal;
+      if (kindD === 'spines') for (let k = 0; k < 6; k++) { const z = -L * .25 + k * L * .08, h = H * (.25 + Math.sin(k / 5 * Math.PI) * .25); spike([0, topAt(z) * .85, z], [0, topAt(z) + h, z - h * .3], s * .015, horn.clone().lerp(accent, .4), mv(z)); }
+      else if (kindD === 'finlets') for (let k = 0; k < 6; k++) { const z = -L * .3 + k * L * .1; membrane([[0, topAt(z) * .9, z + L * .03], [0, topAt(z) * .9, z - L * .03]], [[0, topAt(z) + H * .18, z - L * .03], [0, topAt(z) + H * .05, z - L * .05]], finC, mv(z)); }
+      else {
+        const z0 = hunter ? -L * .02 : lev ? -L * .2 : -L * .12, z1 = hunter ? L * .16 : lev ? -L * .1 : kindD === 'sail' ? L * .3 : L * .1;
+        const h = hunter ? H * 1.05 : lev ? H * .22 : kindD === 'sail' ? H * .9 : H * .5, ea = [], eo = [];
+        for (let k = 0; k <= 4; k++) { const f = k / 4, z = z0 + (z1 - z0) * f; ea.push([0, topAt(z) * .9, z]); eo.push([0, topAt(z) * .9 + h * Math.sin(f * Math.PI * (kindD === 'sail' ? 1 : .9)) * (hunter ? (f < .7 ? f / .7 : 1) : 1), z - h * f * .55]); }
+        if (hunter) eo[4] = [0, topAt(z1) + h, z0 - h * .35];
+        membrane(ea, eo, (f, w) => base.clone().lerp(accent, w * .5).lerp(dark, hunter ? .15 : 0), (f) => mv(z0 + (z1 - z0) * f));
+      }
+    }
+    // Skin.
+    if (a.skin === 'plated') for (let k = 0; k < 6; k++) { const z = L * (.3 - k * .12), q = ring(z); for (let j = 0; j < 6; j++) { const th = j / 6 * Math.PI * 2 + k * .5, p0 = surf(z, th, q.rx * .05); ellipsoid(p0, [Math.max(q.rx, q.ry) * .32, Math.max(q.rx, q.ry) * .32, L * .045], accent.clone().lerp(dark, .25), mv(z), 0); } }
+    if (a.skin === 'spined') for (let k = 0; k < 7; k++) { const z = L * (.28 - k * .09); for (const th of angles || [Math.PI / 2, .2, Math.PI - .2]) { const p0 = surf(z, th), d = [Math.cos(th), Math.sin(th)], h = H * .28; spike(p0, [p0[0] + d[0] * h, p0[1] + d[1] * h, z - h * .4], s * .012, horn.clone().lerp(accent, .3), mv(z)); } }
+    if (a.skin === 'frilled') for (const th of angles || [0, Math.PI]) { const ea = [], eo = []; for (let k = 0; k <= 10; k++) { const z = L * (.32 - k * .065), p0 = surf(z, th), d = [Math.cos(th), Math.sin(th)], out = W * .28 * (1 + .3 * Math.sin(k * 1.3)); ea.push(p0); eo.push([p0[0] + d[0] * out, p0[1] + d[1] * out, z]); } membrane(ea, eo, (f, w) => accent.clone().lerp(shimmer, w), (f) => mv(L * (.32 - f * .65))); }
+    if (a.skin === 'translucent') for (let k = 0; k < 3; k++) { const z = L * (.15 - k * .15), q = ring(z); ellipsoid([0, -q.ry * .2, z], [q.rx * .55, q.ry * .45, L * .06], glowC, mv(z), 1, .8); }
+    // Where an intelligent swimmer's manipulators and gear go (fauna-culture.mjs dress).
+    Object.assign(anchors, {
+      torso: { c: [0, 0, L * .05], axis: [0, 0, 1], rx: W * .5, ry: H * .5, anim: mv(L * .05) }, belt: { c: [0, 0, -L * .15], axis: [0, 0, 1], rx: W * .4, ry: H * .4, anim: mv(-L * .15) },
+      back: { p: [0, H * .45, -L * .05], size: s * .18, anim: mv(-L * .05) }, head: { p: [0, H * .1, L * .33], size: hd * .8, anim: mv(L * .33) },
+      mouth: { p: [0, -H * .1, L * .45], dir: [0, -.2, 1], size: W * .25, anim: mv(L * .45) }, shoulders: [-1, 1].map(side => ({ p: [side * W * .42, -H * .15, L * .22], side })),
+    });
+    // Eyes.
+    const ez = lev ? L * .36 : L * .33, eyeAnim = mv(ez), er0 = hd * (sp.eyes?.size ?? .1);
+    const eyeball = (p0, er, look) => { ellipsoid(p0, [er, er, er], tag(eyeC.clone().lerp(white, .25), KIND.gloss), eyeAnim, 1, glowLevel > .6 ? .5 : 0); ellipsoid([p0[0] + look[0] * er * .55, p0[1] + look[1] * er * .55, p0[2] + look[2] * er * .55], [er * .5, er * .55, er * .5], tag(dark.clone(), KIND.gloss), eyeAnim, 0); };
+    if (a.eyes === 'paired' && !angles) eyesAt([0, lev ? -H * .08 : H * .1, ez], W * .5 * (lev ? .78 : .7), lev ? hd * .55 : hd, lev ? 1.4 : sp.eyes.forward, eyeAnim);
+    else if (a.eyes === 'paired') for (const th of angles) { const p0 = surf(ez, th, er0 * .3); eyeball(p0, er0 * 1.2, [Math.cos(th), Math.sin(th), .4]); }
+    else if (a.eyes === 'stalked') for (const side of [-1, 1]) {
+      const b0 = surf(ez, side > 0 ? .9 : Math.PI - .9), tip = [b0[0] + side * W * .35, b0[1] + H * .45, b0[2] + L * .04];
+      tube([{ p: b0, rx: er0 * .35, ry: er0 * .35 }, { p: [b0[0] + side * W * .15, b0[1] + H * .3, b0[2]], rx: er0 * .3, ry: er0 * .3 }, { p: tip, rx: er0 * .25, ry: er0 * .25 }], 5, () => base.clone().lerp(belly, .4), () => eyeAnim);
+      eyeball(tip, er0 * 1.4, [side * .5, .2, .8]);
+    } else if (a.eyes === 'row') for (const th of angles || [.25, Math.PI - .25]) for (let k = 0; k < 4; k++) { const z = ez - k * L * .045, p0 = surf(z, th, er0 * .2); eyeball(p0, er0 * (.8 - k * .1), [Math.cos(th), Math.sin(th), .3]); }
+    else if (a.eyes === 'cyclops') { const p0 = surf(ez + L * .03, Math.PI / 2, er0 * .4); eyeball(p0, er0 * 2.6, [0, .4, .9]); }
+    else for (let k = 0; k < 6; k++) { const th = Math.PI / 2 + (k - 2.5) * .35, p0 = surf(ez - (k % 2) * L * .03, th, 0); ellipsoid(p0, [er0 * .6, er0 * .6, er0 * .6], glowC, eyeAnim, 0, .9); } // glowing pits
+    // Mouth.
+    const nose = path[path.length - 1].p, mz = L * (lev ? .43 : .46), my = lev ? -H * .16 : -H * .08;
+    if (a.mouth === 'jaws' || lev) {
+      ellipsoid([0, my, mz], [W * (lev ? .4 : .15), H * .035, L * (lev ? .07 : .03)], dark, mv(mz), 1);
+      if (hunter) for (let k = 0; k < 6; k++) { const side = k % 2 ? 1 : -1, z = L * (.38 + Math.floor(k / 2) * .03); spike([side * W * .12, -H * .1, z], [side * W * .12, -H * .17, z + L * .005], L * .006, white, mv(z)); }
+    }
+    if (a.mouth === 'beard') for (let k = 0; k < 8; k++) {
+      const x0 = (k - 3.5) * W * .05, b0 = [x0, my - H * .05, mz - L * .03], p2 = [];
+      for (let j = 0; j <= 5; j++) { const f = j / 5; p2.push({ p: [x0 * (1 + f), b0[1] - f * H * (.5 + (k % 3) * .2), b0[2] - f * L * .08], rx: W * .025 * (1 - f * .6), ry: W * .025 * (1 - f * .6), w: f }); }
+      tube(p2, 5, () => accent.clone().lerp(belly, .3), (pt) => A(SWAY, b0, [0, 0, 0], k, pt.w * .5), { glowAt: (pt) => glowLevel && pt.w > .85 ? glowLevel : 0 });
+    }
+    if (a.mouth === 'sucker') {
+      ellipsoid([nose[0], nose[1], nose[2]], [W * .18, W * .18, L * .02], dark, mv(mz), 1);
+      tube(Array.from({ length: 13 }, (_, k) => { const t0 = k / 12 * Math.PI * 2; return { p: [Math.cos(t0) * W * .2, Math.sin(t0) * W * .2, nose[2]], rx: W * .05, ry: W * .05 }; }), 6, () => accent, () => mv(mz), { capStart: false, capEnd: false });
+      for (let k = 0; k < 8; k++) { const t0 = k / 8 * Math.PI * 2; spike([Math.cos(t0) * W * .18, Math.sin(t0) * W * .18, nose[2]], [Math.cos(t0) * W * .08, Math.sin(t0) * W * .08, nose[2] - L * .01], W * .02, white, mv(mz)); }
+    }
+    if (a.mouth === 'rostrum') spike([0, nose[1], nose[2] - L * .02], [0, nose[1] + H * .02, nose[2] + L * .38], W * .1, horn.clone().lerp(base, .3), mv(mz));
+    if (a.mouth === 'lure') {
+      const b0 = [0, topAt(L * .32) * .9, L * .32], p2 = [];
+      for (let j = 0; j <= 6; j++) { const f = j / 6; p2.push({ p: [0, b0[1] + Math.sin(f * 2.4) * H * .55, b0[2] + f * L * .28], rx: W * .03 * (1 - f * .5), ry: W * .03 * (1 - f * .5), w: f }); }
+      tube(p2, 5, () => base, (pt) => A(SWAY, b0, [0, 0, 0], 1, pt.w * .3));
+      ellipsoid(p2[6].p, [W * .1, W * .1, W * .1], glowC, A(SWAY, b0, [0, 0, 0], 1, .3), 1, 1.2);
+      ellipsoid([0, my, mz], [W * .3, H * .08, L * .04], dark, mv(mz), 1);
+    }
+    if (lev) {
+      for (const side of [-1, 1]) ellipsoid([side * W * .07, H * .45, L * .3], [W * .035, H * .03, L * .02], dark, mv(L * .3), 0);
+      const humps = 3 + (sp.seed % 4);
+      for (let k = 0; k < humps; k++) { const z = -L * (.08 + k * .07); ellipsoid([0, topAt(z) * .92, z], [W * .06, H * .06, L * .025], accent.clone().lerp(base, .5), mv(z), 1, glowLevel ? glowLevel * .8 : 0); }
+    }
+    // Trailing filaments from the belly.
+    for (let k = 0; k < (a.filaments || 0); k++) {
+      const z0 = -L * (.05 + k * .06), b0 = [(k % 2 ? 1 : -1) * W * .1, -ring(z0).ry * .8, z0], p2 = [], len = L * (.5 + (k % 3) * .25);
+      for (let j = 0; j <= 7; j++) { const f = j / 7; p2.push({ p: [b0[0] * (1 + f), b0[1] - f * H * .3, z0 - f * len], rx: W * .015 * (1 - f * .7), ry: W * .015 * (1 - f * .7), w: f }); }
+      tube(p2, 4, () => accent.clone().lerp(shimmer, .4), (pt) => mv(z0 - pt.w * len), { glowAt: (pt) => glowLevel && pt.w > .8 ? glowLevel : 0 });
+    }
+  }
+  // Squid: swims mantle first, fins near the tip, big eyes, a crown of arms trailing behind.
+  // Many-armed swimmers: the body (pointed, round or ridged) leads, fins at its tip (a
+  // pair, a frill all round, or none), eyes as its world's style has them, and a crown of
+  // 5 to 12 arms behind: even, with two long lashing ones, or webbed together like a skirt.
+  function buildSquid(an = {}) {
+    const L = b.length, R = b.width * .55, mz = -L * .12;
+    const prof = an.mantle === 'round' ? [[-.12, .7], [0, 1], [.15, 1.15], [.3, 1], [.42, .6], [.48, .1]] : [[-.12, .7], [-.05, .95], [.12, 1], [.28, .8], [.42, .45], [.5, .06]];
+    const lobes = an.mantle === 'ridged' ? 5 : 0;
+    tube(prof.map(([z, rr], i) => ({ p: [0, 0, z * L], rx: rr * R, ry: rr * R * .95, t: i / 5, mod: lobes ? (ang) => 1 + .12 * Math.cos(lobes * ang) : null })), 14, skin, () => A(BODY), { glowAt: skinGlow });
+    if (an.fins === 'ring') { const ea = [], eo = []; for (let k = 0; k <= 16; k++) { const t0 = k / 16 * Math.PI * 2; ea.push([Math.cos(t0) * R * .55, Math.sin(t0) * R * .55, L * .36]); eo.push([Math.cos(t0) * R * 1.1, Math.sin(t0) * R * 1.1, L * .3]); } membrane(ea, eo, (f, w) => base.clone().lerp(accent, w * .5).lerp(shimmer, .2), A(BODY)); }
+    else if (an.fins !== 'none') for (const side of [-1, 1]) membrane([[side * R * .45, 0, L * .45], [side * R * .7, 0, L * .28]], [[side * R * 1.3, 0, L * .4], [side * R * 1.45, 0, L * .25]],
+      (f, w) => base.clone().lerp(accent, w * .5).lerp(shimmer, .2), A(WING, [side * R * .5, 0, L * .35], [0, 0, 0], side * .35));
+    ellipsoid([0, 0, mz - L * .06], [R * .75, R * .7, L * .1], base.clone().lerp(belly, .3), A(BODY), 2);
+    const er = R * (sp.eyes?.size ?? .1) * 1.3;
+    const eye = (p0, e0, look) => { ellipsoid(p0, [e0, e0, e0], tag(eyeC.clone().lerp(white, .25), KIND.gloss), A(BODY), 1, glowLevel > .6 ? .5 : 0); ellipsoid([p0[0] + look[0] * e0 * .55, p0[1] + look[1] * e0 * .55, p0[2] + look[2] * e0 * .55], [e0 * .5, e0 * .55, e0 * .5], tag(dark.clone(), KIND.gloss), A(BODY), 0); };
+    if (an.eyes === 'cyclops') eye([0, R * .55, mz - L * .05], er * 2.4, [0, .5, -.5]);
+    else if (an.eyes === 'row') for (const side of [-1, 1]) for (let k = 0; k < 4; k++) eye([side * R * .72, R * .1, mz - L * .02 - k * L * .035], er * (.8 - k * .1), [side, 0, 0]);
+    else if (an.eyes === 'stalked') for (const side of [-1, 1]) { const b0 = [side * R * .5, R * .4, mz - L * .05], tip = [side * R * 1.1, R * 1.2, mz - L * .1]; tube([{ p: b0, rx: er * .3, ry: er * .3 }, { p: tip, rx: er * .25, ry: er * .25 }], 5, () => base, () => A(BODY)); eye(tip, er * 1.3, [side * .5, .3, -.5]); }
+    else if (an.eyes === 'none') for (let k = 0; k < 6; k++) { const t0 = k / 6 * Math.PI * 2; ellipsoid([Math.cos(t0) * R * .72, Math.sin(t0) * R * .66, mz - L * .05], [er * .5, er * .5, er * .5], glowC, A(BODY), 0, .9); }
+    else eyesAt([0, R * .1, mz - L * .05], R * .7, R * 1.3, 1.4);
+    Object.assign(anchors, {
+      torso: { c: [0, 0, L * .15], axis: [0, 0, 1], rx: R * .95, ry: R * .9, anim: A(BODY) }, back: { p: [0, R * .9, L * .1], size: s * .2, anim: A(BODY) },
+      head: { p: [0, R * .1, mz - L * .05], size: R * .8, anim: A(BODY) }, mouth: { p: [0, 0, mz - L * .16], dir: [0, 0, -1], size: R * .4, anim: A(BODY) },
+      shoulders: [-1, 1].map(side => ({ p: [side * R * .6, -R * .2, mz - L * .1], side })),
+    });
+    const arms = an.arms || 8, len = L * .55 * (sp.stretch || 1), longs = an.armStyle === 'even' ? 0 : an.armStyle === 'webbed' ? 0 : 2;
+    if (an.armStyle === 'webbed') { // a web between the arms, a skirt that pulses as it swims
+      const ea = [], eo = []; for (let k = 0; k <= arms * 2; k++) { const t0 = k / (arms * 2) * Math.PI * 2, deep = k % 2 ? .45 : .7; ea.push([Math.cos(t0) * R * .4, Math.sin(t0) * R * .4, mz - L * .14]); eo.push([Math.cos(t0) * R * (.4 + deep * 1.2), Math.sin(t0) * R * (.4 + deep * 1.2), mz - L * .14 - len * deep]); }
+      membrane(ea, eo, (f, w) => base.clone().lerp(accent, w * .4).lerp(shimmer, .15), (f, w) => A(SWAY, [0, 0, mz - L * .14], [0, 0, 0], f * 6, w * .5));
+    }
+    for (let k = 0; k < arms + longs; k++) {
+      const a = k / arms * Math.PI * 2, long = k >= arms, x0 = Math.cos(a) * R * .35, y0 = Math.sin(a) * R * .35, z0 = mz - L * .14, p2 = [], l = long ? len * 1.7 : len;
+      for (let j = 0; j <= 8; j++) { const f = j / 8, wob = Math.sin(f * 3 + k) * R * .2; p2.push({ p: [x0 * (1 + f * .5) + (long ? (k % 2 ? 1 : -1) * R * .2 : wob), y0 * (1 + f * .5), z0 - f * l], rx: R * (long ? .07 : .14) * (1 - f * .75), ry: R * (long ? .07 : .14) * (1 - f * .75), w: f, t: f }); }
+      tube(p2, 6, (pt, ang, sy) => base.clone().lerp(belly, Math.max(0, -sy) * .6).lerp(accent, sy < -.3 && Math.sin(pt.t * 60) > .5 ? .5 : 0), (pt) => A(SWAY, [0, 0, z0], [0, 0, 0], k * .8, pt.w * .8),
+        { glowAt: (pt) => glowLevel && pt.w > .85 ? glowLevel : 0 });
+      if (long) ellipsoid(p2[8].p, [R * .12, R * .08, R * .22], accent.clone().lerp(base, .3), A(SWAY, [0, 0, z0], [0, 0, 0], k * .8, .8), 1);
+    }
+  }
+  // A long, flat ribbon that swims by rippling, with frilled edges and stalked eyes at the front.
+  function buildRibbon() {
+    const L = b.length, Wd = s * .2, Th = s * .028, path = [], mv = A(WAVE, [0, 0, 0], [0, 0, 0], 0, .7);
+    const wAt = (f) => f < .12 ? .35 + f / .12 * .65 : f > .85 ? .25 + (1 - f) / .15 * .75 : 1;
+    for (let k = 0; k <= 22; k++) { const f = k / 22; path.push({ p: [0, 0, -L / 2 + f * L], rx: Wd * .5 * wAt(f), ry: Th * wAt(f), t: f }); }
+    tube(path, 10, (pt, ang, sy) => skin(pt, ang, sy).lerp(accent, Math.abs(Math.cos(ang)) < .3 && Math.sin(pt.t * 50) > .4 ? .5 : 0), () => mv,
+      { glowAt: (pt, ang) => glowLevel && sy0(ang) && Math.sin(pt.t * 40) > .6 ? glowLevel : 0 });
+    for (const side of [-1, 1]) {
+      const a = [], o = [];
+      for (let k = 0; k <= 22; k++) { const f = k / 22, z = -L / 2 + f * L, w = Wd * .5 * wAt(f); a.push([side * w * .95, 0, z]); o.push([side * (w + Wd * .22 * wAt(f)), Math.sin(k * .9) * Th * 2.5, z]); }
+      membrane(a, o, (f, w) => accent.clone().lerp(shimmer, w * .6), mv);
+    }
+    Object.assign(anchors, {
+      torso: { c: [0, 0, L * .2], axis: [0, 0, 1], rx: Wd * .5, ry: Th * 1.2, anim: mv }, back: { p: [0, Th, L * .15], size: s * .12, anim: mv },
+      mouth: { p: [0, 0, L / 2], dir: [0, 0, 1], size: Wd * .2, anim: mv }, shoulders: [-1, 1].map(side => ({ p: [side * Wd * .45, 0, L * .35], side })),
+    });
+    for (const side of [-1, 1]) {
+      const b0 = [side * Wd * .18, Th * .6, L / 2 - Wd * .25], tip = [side * Wd * .3, Th * 4 + Wd * .15, L / 2 - Wd * .15], er = Wd * .07;
+      tube([{ p: b0, rx: er * .4, ry: er * .4 }, { p: tip, rx: er * .3, ry: er * .3 }], 5, () => base, () => mv);
+      ellipsoid(tip, [er, er, er], tag(eyeC.clone().lerp(white, .25), KIND.gloss), mv, 1, glowLevel > .5 ? .6 : 0);
+      ellipsoid([tip[0], tip[1], tip[2] + er * .6], [er * .5, er * .55, er * .5], tag(dark.clone(), KIND.gloss), mv, 0);
+    }
+  }
+  function sy0(ang) { return Math.abs(Math.sin(ang)) > .8; }
+  // A flat disc fringed with paddles that spins as it swims, with eyes all round its rim.
+  function buildDisc() {
+    const R = s * .5, T = R * .2, spin = A(SPIN, [0, 0, 0]), lobes = sp.lobes || 8;
+    const prof = [[-1, .2], [-.8, .8], [-.3, 1], [0, 1.02], [.4, .92], [.8, .6], [1.15, .28], [1.3, .05]];
+    tube(prof.map(([y, rr], i) => ({ p: [0, y * T, 0], rx: rr * R, ry: rr * R, t: i / 7 })), 26,
+      (pt, ang) => skin({ t: pt.t }, ang * 3, .5).lerp(accent, Math.cos(lobes * ang) > .75 && pt.t > .2 ? .45 : 0), () => spin,
+      { glowAt: (pt, ang) => glowLevel && Math.cos(lobes * ang) > .8 && pt.t > .5 ? glowLevel : 0 });
+    const m = 26;
+    for (let k = 0; k < m; k++) {
+      const a = k / m * Math.PI * 2, d = .09, c0 = Math.cos(a - d), s0 = Math.sin(a - d), c1 = Math.cos(a + d), s1 = Math.sin(a + d);
+      membrane([[c0 * R * .97, 0, s0 * R * .97], [c1 * R * .97, 0, s1 * R * .97]], [[c0 * R * 1.24, T * .3 * Math.sin(k), s0 * R * 1.24], [c1 * R * 1.24, T * .3 * Math.sin(k), s1 * R * 1.24]],
+        (f, w) => accent.clone().lerp(shimmer, w * .6), spin);
+    }
+    const ne = Math.max(6, sp.eyes.count + 4);
+    for (let k = 0; k < ne; k++) {
+      const a = (k + .5) / ne * Math.PI * 2, er = R * .07, x = Math.cos(a) * R * .9, z = Math.sin(a) * R * .9;
+      ellipsoid([x, T * .55, z], [er, er, er], tag(eyeC.clone().lerp(white, .25), KIND.gloss), spin, 1, glowLevel > .5 ? .6 : 0);
+      ellipsoid([x * 1.05, T * .7, z * 1.05], [er * .5, er * .5, er * .5], tag(dark.clone(), KIND.gloss), spin, 0);
+    }
+    ellipsoid([0, T * 1.1, 0], [R * .3, T * .6, R * .3], shimmer.clone().lerp(white, .15), spin, 1, glowLevel * .6);
+    Object.assign(anchors, {
+      torso: { c: [0, 0, 0], axis: [0, 1, 0], rx: R * .99, ry: R * .99, anim: spin }, back: { p: [0, T * 1.3, 0], size: s * .2, anim: spin },
+      head: { p: [0, T * .55, 0], size: R * .9, ring: true, anim: spin }, mouth: { p: [0, -T, 0], dir: [0, -1, 0], size: R * .3, anim: spin },
+      shoulders: [-1, 1].map(side => ({ p: [side * R * .7, -T * .5, R * .3], side })),
+    });
+  }
+
   // ---- Everything with a spine ----
   function buildSpineAnimal() {
     const hexa = plan === 'hexapod', arach = plan === 'arachnid', bug = hexa || arach, biped = plan === 'biped', flyer = plan === 'flyer';
     const serp = plan === 'serpent', slug = plan === 'slug', g = sp.girth || { hips: .5, belly: .56, shoulders: .48 };
     let legY = sp.legLength * ({ tank: .7, prowler: .78, waddler: .65, harvestman: 1.6 }[form] || 1);
     const L = b.length * ({ prowler: 1.3, tank: 1.1, harvestman: .45, ant: 1.1 }[form] || 1), W = b.width * ({ tank: 1.35, roach: 1.4, waddler: 1.3 }[form] || 1), H = b.height * ({ prowler: .8, roach: .55, tank: 1.1, waddler: 1.35 }[form] || 1);
-    const bodyY = serp || slug ? 0 : bug ? legY * (form === 'harvestman' ? .9 : .7) : legY + H * .3;
+    const bodyY = serp || slug ? 0 : bug ? Math.max(legY * (form === 'harvestman' ? .9 : .7), H * .5) : legY + H * .3; // heavy bugs: keep the belly off the ground
     const upright = biped ? (form === 'upright' ? .9 : form === 'raptor' ? .1 : form === 'waddler' ? .7 : .35) + tr.intelligence * .3 : form === 'hopper' ? -.12 : 0;
     const lift = (z) => z * Math.sin(upright);
     const hump = sp.back === 'hump' ? (sp.hump || .15) * 2 : 0;
@@ -911,6 +1874,13 @@ function buildGeometry(THREE, sp, r) {
         body.push({ p: [0, rad * (slug ? .55 : 1), z], rx: rad * taper, ry: rad * taper * (slug ? .55 : .8), flatBelly: slug,
           mod: form === 'segmented' ? (ang) => 1 + .06 * Math.cos(ang * 6) : null });
       }
+    } else if (form === 'centipede') {
+      // Many segments, each a swelling with a narrow joint behind it.
+      const n = sp.legs / 2;
+      for (let i = 0; i < n; i++) {
+        const z = -L / 2 + i * L / Math.max(1, n - 1), taper = i === 0 ? .55 : i === n - 1 ? .8 : 1;
+        body.push({ p: [0, bodyY, z - L / n * .3], rx: W * .3 * taper, ry: H * .26 * taper }, { p: [0, bodyY + H * .04, z], rx: W * .46 * taper, ry: H * .36 * taper, mod: (ang) => 1 + .08 * Math.cos(ang * 2) });
+      }
     } else if (form === 'ant' || (flyer && form === 'insect')) {
       // Three segments with narrow waists.
       body.push({ p: [0, bodyY + H * .1, -L * .55], rx: W * .2, ry: H * .2 }, { p: [0, bodyY + H * .15, -L * .35], rx: W * .55, ry: H * .55 }, { p: [0, bodyY, -L * .1], rx: W * .12, ry: H * .12 },
@@ -931,7 +1901,8 @@ function buildGeometry(THREE, sp, r) {
     const neckLen = (sp.neck || 0) * (form === 'browser' ? 1.7 : 1);
     const headUp = neckLen * (biped ? .9 : .75), headFwd = neckLen * (biped ? .25 : .6);
     const hd = sp.head * (form === 'browser' ? .8 : 1), snout = sp.snout || 1, shape = flyer && form === 'bird' ? 'beaked' : sp.headShape || 'round';
-    const neck = serp || slug || bug ? [] : neckLen > 0 ? [{ p: [0, neckBase[1] + headUp * .55, L / 2 + headFwd * .5], rx: s * .07 + W * .1, ry: s * .07 + H * .1 }] : [];
+    const headless = sp.alien === 'headless' && !serp && !slug && !bug;
+    const neck = serp || slug || bug || headless ? [] : neckLen > 0 ? [{ p: [0, neckBase[1] + headUp * .55, L / 2 + headFwd * .5], rx: s * .07 + W * .1, ry: s * .07 + H * .1 }] : [];
     const front = serp || slug ? body[body.length - 1].p : bug ? body[body.length - 1].p : null;
     const hz = front ? front[2] + hd * .35 : L / 2 + headFwd + hd * .3, hy = front ? front[1] + (slug ? hd * .2 : 0) : neckBase[1] + headUp;
     // Head shapes: [forward offset, half-width, half-height, drop] for skull, mid-head, snout and tip.
@@ -943,19 +1914,27 @@ function buildGeometry(THREE, sp, r) {
       domed:  [[-.05, .48, .62, -.15], [.38, .46, .5, .02], [.38 + .32 * snout, .26, .22, .12], [.42 + .45 * snout, .1, .08, .14]],
       beaked: [[0, .48, .46, 0], [.45, .42, .4, .02], [.62, .26, .24, .08], [.72, .14, .13, .1]],
     };
-    const head = (HEADS[shape] || HEADS.round).map(([f, w, h2, d]) => ({ p: [0, hy - d * hd, hz + f * hd], rx: hd * w, ry: hd * h2 }));
+    const head = headless
+      ? [{ p: [0, neckBase[1] - H * .05, L / 2 + W * .16], rx: W * .26, ry: H * .28 }, { p: [0, neckBase[1] - H * .08, L / 2 + W * .3], rx: W * .12, ry: H * .14 }]
+      : (HEADS[shape] || HEADS.round).map(([f, w, h2, d]) => ({ p: [0, hy - d * hd, hz + f * hd], rx: hd * w, ry: hd * h2 }));
     const spine = serp || slug ? [...body, ...head.slice(1)] : [...sp0, ...body, ...neck, ...head];
     const path = catmull(spine, 3);
     // Garments (city builders and up) cover the torso; suits more of it.
     if (cult && cult.level >= 3) zone = serp || slug
       ? (pt) => pt.p && pt.t > .25 && pt.t < .78 ? Math.min(pt.t - .25, .78 - pt.t) / .26 : 0
       : (pt) => { if (!pt.p || pt.tail) return 0; const z0 = -L * (cult.level >= 5 ? .45 : .32), z1 = L * (cult.level >= 5 ? .5 : .42), z = pt.p[2]; return z > z0 && z < z1 ? Math.min(z - z0, z1 - z) / ((z1 - z0) / 2) : 0; };
-    tube(path, 14, skin, (pt) => serp ? A(SLITHER) : pt.tail ? A(SWAY, (body[0] || sp0[0]).p, [0, 0, 0], 0, pt.tail) : A(BODY), { glowAt: skinGlow });
-    const snoutTip = head[head.length - 1].p, skull = head[0].p;
-    const headAnim = serp ? A(SLITHER) : A(BODY);
+    // The head (and neck) turn about the base of the neck to look at things (iLook).
+    const turns = !serp && !slug && !bug && !headless;
+    const headPivot = neckBase;
+    if (turns) headPivotOut = headPivot;
+    tube(path, 14, skin, (pt) => serp ? A(SLITHER) : pt.tail ? A(SWAY, (body[0] || sp0[0]).p, [0, 0, 0], 0, pt.tail) : turns && pt.p[2] > headPivot[2] ? A(HEAD, headPivot) : A(BODY), { glowAt: skinGlow });
+    const snoutTip = head[head.length - 1].p, skull = head[0].p, base0 = base;
+    const headAnim = serp ? A(SLITHER) : turns ? A(HEAD, headPivot) : A(BODY);
 
     // Face: eyes, brow, jaw, beak, ears, antennae, mandibles, frill, horns, crest.
-    eyesAt([0, skull[1] + hd * .12, skull[2] + hd * .42], hd * (shape === 'flat' ? .58 : .5), hd, slug ? 1 : sp.eyes.forward, headAnim);
+    if (headless) headlessFace(); else {
+    if (sp.alien !== 'hammerhead' && sp.alien !== 'stalkeye') eyesAt([0, skull[1] + hd * .12, skull[2] + hd * .42], hd * (shape === 'flat' ? .58 : .5), hd, slug ? 1 : sp.eyes.forward, headAnim);
+    alienHead();
     if (sp.brow && !bug && !slug) for (const side of [-1, 1]) ellipsoid([side * hd * .28, skull[1] + hd * .32, skull[2] + hd * .42], [hd * .22, hd * .07, hd * .14], base.clone().lerp(dark, .3), headAnim, 1);
     if (shape === 'beaked') spike([0, snoutTip[1], snoutTip[2] - hd * .05], [0, snoutTip[1] - hd * .25, snoutTip[2] + hd * (.5 + .4 * snout)], hd * .16, horn, headAnim, { bendDir: [0, 1, 0], bend: hd * .12 });
     if (sp.jaw && !bug && !slug && shape !== 'beaked') {
@@ -990,6 +1969,52 @@ function buildGeometry(THREE, sp, r) {
     } else if (sp.crest && !bug && !slug && !serp) {
       const cp = []; for (let k = 0; k <= 4; k++) cp.push({ p: [0, skull[1] + hd * (.4 + Math.sin(k / 4 * Math.PI) * .25), skull[2] - hd * (.2 + k * .2)], rx: hd * .04, ry: hd * .12 * (1 - k / 6) });
       tube(cp, 6, () => accent, () => headAnim);
+    }
+    }
+
+    // Alien heads: a bar with an eye at each end, eyes on tall stalks, a long tube of a mouth.
+    function alienHead() {
+      if (sp.alien === 'hammerhead') {
+        const span = hd * 1.5, y = skull[1] + hd * .08, z = skull[2] + hd * .35, bar = [];
+        for (let k = 0; k <= 8; k++) { const f = k / 8 * 2 - 1; bar.push({ p: [f * span, y + Math.abs(f) * hd * .1, z - f * f * hd * .25], rx: hd * .2 * (1 - Math.abs(f) * .35), ry: hd * .17 * (1 - Math.abs(f) * .3), t: .85 }); }
+        tube(bar, 8, skin, () => headAnim);
+        for (const side of [-1, 1]) {
+          const e = [side * (span + hd * .02), y + hd * .14, z - hd * .25], er = hd * .17;
+          ellipsoid(e, [er, er, er], tag(eyeC.clone().lerp(white, .25), KIND.gloss), headAnim, 1, glowLevel > .6 ? .5 : 0);
+          ellipsoid([e[0] + side * er * .55, e[1], e[2] + er * .2], [er * .5, er * .6, er * .55], tag(dark.clone(), KIND.gloss), headAnim, 0);
+        }
+      } else if (sp.alien === 'stalkeye') {
+        const n = Math.min(4, Math.max(2, sp.eyes.count)), len = hd * (1.4 + (sp.seed % 5) * .15) * (serp ? .8 : 1);
+        for (let k = 0; k < n; k++) {
+          const x = (k - (n - 1) / 2) * hd * .32, base = [x, skull[1] + hd * .3, skull[2] + hd * .15], path2 = [];
+          for (let j = 0; j <= 5; j++) { const f = j / 5; path2.push({ p: [x * (1 + f * 1.4), base[1] + f * len, base[2] + Math.sin(f * 2) * hd * .35], rx: hd * .07 * (1 - f * .4), ry: hd * .07 * (1 - f * .4), w: f }); }
+          const anim = (w) => A(SWAY, base, [0, 0, 0], k * 1.9, w * .7);
+          tube(path2, 6, () => belly.clone().lerp(base0, .5), (pt) => anim(pt.w));
+          const tip = path2[5].p, er = hd * .16;
+          ellipsoid(tip, [er, er, er], tag(eyeC.clone().lerp(white, .25), KIND.gloss), anim(1), 1, glowLevel > .6 ? .6 : 0);
+          ellipsoid([tip[0], tip[1], tip[2] + er * .6], [er * .5, er * .55, er * .5], tag(dark.clone(), KIND.gloss), anim(1), 0);
+        }
+      } else if (sp.alien === 'proboscis') {
+        // Hanging down to the ground from a raised head; reaching forward from one held low.
+        const t0 = snoutTip, low = t0[1] < hd * 2.2, len = low ? hd * 2.2 : Math.max(hd * 1.6, t0[1] * .85), path2 = [];
+        for (let j = 0; j <= 8; j++) { const f = j / 8; path2.push({ p: [0, low ? t0[1] + Math.sin(f * 2.4) * hd * .35 - f * t0[1] * .5 : t0[1] - f * len * .9, t0[2] + (low ? f * len : Math.sin(f * 1.8) * hd * .9)], rx: hd * (.13 - f * .06 + (j === 8 ? .07 : 0)), ry: hd * (.13 - f * .06 + (j === 8 ? .07 : 0)), w: f, t: f }); }
+        tube(path2, 8, (pt, ang, sy) => base0.clone().lerp(belly, .3).lerp(dark, Math.sin(pt.t * 40) > .6 ? .25 : 0), (pt) => serp ? A(SLITHER) : A(SWAY, t0, [0, 0, 0], 1, pt.w * .8));
+      }
+    }
+    // No head at all: a row of eyes across the chest above a vertical mouth, and feeding feelers below it.
+    function headlessFace() {
+      const c0 = head[0].p, z = c0[2] + W * .2, n = Math.max(3, Math.min(6, sp.eyes.count + 1));
+      for (let k = 0; k < n; k++) {
+        const x = (k - (n - 1) / 2) * W * .11, y = c0[1] + H * .14 - Math.abs(x) * .3, er = W * .045 * (1 + sp.eyes.size * 3), zz = z - Math.abs(x) * .6;
+        ellipsoid([x, y, zz], [er, er, er], tag(eyeC.clone().lerp(white, .2), KIND.gloss), A(BODY), 1, glowLevel ? .7 : 0);
+        ellipsoid([x, y, zz + er * .6], [er * .5, er * .55, er * .4], tag(dark.clone(), KIND.gloss), A(BODY), 0);
+      }
+      ellipsoid([0, c0[1] - H * .06, z - W * .02], [W * .025, H * .14, W * .03], dark, A(BODY), 1);
+      for (let k = 0; k < 5; k++) {
+        const x = (k - 2) * W * .045, top = [x, c0[1] - H * .2, z - W * .05], path2 = [];
+        for (let j = 0; j <= 4; j++) { const f = j / 4; path2.push({ p: [x * (1 + f), top[1] - f * H * .35, top[2] + Math.sin(f * 2) * W * .06], rx: W * .02 * (1 - f * .6), ry: W * .02 * (1 - f * .6), w: f }); }
+        tube(path2, 5, () => accent.clone().lerp(belly, .4), (pt) => A(SWAY, top, [0, 0, 0], k * 1.3, pt.w));
+      }
     }
 
     // Back: shell, spines, plates, sail or ridge, along the top of the body.
@@ -1062,13 +2087,16 @@ function buildGeometry(THREE, sp, r) {
     for (let i = 0; i < pairs; i++) {
       let z = pairs === 1 ? -L * .12 : L * .3 - i * (L * .62) / (pairs - 1);
       if (bug && form !== 'harvestman') z = (arach ? L * .3 : L * .25) - i * (arach ? L * .5 : L * .55) / Math.max(1, pairs - 1);
+      if (form === 'centipede') z = L * .45 - i * L * .9 / Math.max(1, pairs - 1);
       const frontPair = pairs > 1 && i === 0;
       const hopperHind = form === 'hopper' && i === pairs - 1, hopperFront = form === 'hopper' && i === 0;
       for (const side of [-1, 1]) {
         const ly = legY * (hopperHind ? 1.35 : hopperFront ? .8 : 1);
         const hipY = bodyY + lift(z) - H * .15, hipX = side * W * .3;
-        const thick = s * (bug ? .03 : .06) * (biped ? 1.35 : 1) * (tr.diet === 'herbivore' ? 1.1 : .95) * (form === 'tank' ? 1.5 : form === 'harvestman' ? .5 : 1) * (hopperHind ? 1.5 : 1);
-        const phase = ((i + (side > 0 ? 1 : 0)) % 2) * Math.PI;
+        const thick = s * (bug ? .03 : .06) * (biped ? 1.35 : 1) * (tr.diet === 'herbivore' ? 1.1 : .95) * (form === 'tank' ? 1.5 : form === 'harvestman' ? .5 : 1) * (hopperHind ? 1.5 : 1)
+          * Math.sqrt(sp.bulk || 1) * (sp.build === 'giant' ? 1.25 : sp.build === 'lanky' ? .8 : 1);
+        // Centipede legs step in a wave that runs along the body.
+        const phase = form === 'centipede' ? i * .85 + (side > 0 ? Math.PI : 0) : ((i + (side > 0 ? 1 : 0)) % 2) * Math.PI;
         if (frontPair && (form === 'mantis' || form === 'scorpion')) {
           // Raised grasping forelegs / pincers, folded in front of the body.
           const sh = [side * W * .3, bodyY + H * .2, z], el = [side * W * .6, bodyY + H * (form === 'mantis' ? .9 : .1), z + ly * .3], hand = [side * W * .4, bodyY + H * (form === 'mantis' ? .3 : .05), z + ly * .7];
@@ -1079,7 +2107,7 @@ function buildGeometry(THREE, sp, r) {
         }
         let knee, ankle, toe;
         if (bug) { // knee up and out, foot out and down
-          const spread = form === 'harvestman' ? 2.2 : arach ? 1.4 : 1, fwd = arach ? (i - 1.5) * -.35 : (i - 1) * -.25;
+          const spread = form === 'harvestman' ? 2.2 : arach ? 1.4 : 1, fwd = form === 'centipede' ? 0 : arach ? (i - 1.5) * -.35 : (i - 1) * -.25;
           knee = [side * (W * .3 + ly * .55 * spread), hipY + ly * (form === 'harvestman' ? .9 : .35), z + ly * fwd * .5];
           ankle = [side * (W * .3 + ly * 1.05 * spread), ly * .12, z + ly * fwd];
           toe = [side * (W * .3 + ly * 1.2 * spread), 0, z + ly * fwd * 1.1];
@@ -1096,7 +2124,24 @@ function buildGeometry(THREE, sp, r) {
     if (sp.arms) for (const side of [-1, 1]) {
       const sz = L * .42, shY = bodyY + lift(sz) + H * .1, sx = side * W * .42, armL = sp.legLength * .65;
       const shoulder = [sx * .8, shY, sz], elbow = [sx * 1.15, shY - armL * .5, sz + armL * .08], hand = [sx * 1.1, shY - armL * .95, sz + armL * .25];
+      // Builders' arms vary (fauna-culture.mjs armStyle): boneless tentacles, pincers, or jointed arms with fingers.
+      if (cult?.armStyle === 'tentacle') {
+        const path2 = [];
+        for (let j = 0; j <= 8; j++) { const f = j / 8; path2.push({ p: [shoulder[0] + side * Math.sin(f * 2) * armL * .25, shoulder[1] - f * armL * .85, shoulder[2] + Math.sin(f * 2.6) * armL * .45], rx: s * .045 * (1 - f * .6), ry: s * .045 * (1 - f * .6), w: f }); }
+        const ta = A(SWAY, shoulder, [0, 0, 0], side, .45), tip = path2[8].p;
+        tube(path2, 7, (pt, ang, sy) => base.clone().lerp(belly, Math.max(0, -sy) * .5), (pt) => A(SWAY, shoulder, [0, 0, 0], side, pt.w * .45));
+        for (const f of [-1, 0, 1]) spike(tip, [tip[0] + f * s * .04, tip[1] - s * .06, tip[2] + s * .05], s * .01, belly, ta, { bendDir: [0, 1, 0], bend: s * .015 });
+        anchors.hands.push({ p: tip, dir: [0, -.3, 1], anim: ta, size: s * .035 });
+        continue;
+      }
       limb([shoulder, elbow, hand], [s * .05, s * .035, s * .03], ARM, FOREARM, shoulder, elbow, side > 0 ? 0 : Math.PI, 1, base);
+      if (cult?.armStyle === 'pincer') {
+        const fa = A(FOREARM, shoulder, elbow, side > 0 ? 0 : Math.PI, 1);
+        ellipsoid(hand, [s * .05, s * .045, s * .065], horn, fa, 1);
+        for (const k of [-1, 1]) spike([hand[0] + k * s * .02, hand[1], hand[2] + s * .04], [hand[0] - k * s * .005, hand[1] - s * .02, hand[2] + s * .13], s * .02, horn, fa, { bendDir: [-k, 0, 0], bend: s * .015 });
+        anchors.hands.push({ p: hand, dir: [0, -.3, 1], anim: fa, size: s * .04 });
+        continue;
+      }
       ellipsoid(hand, [s * .045, s * .04, s * .05], belly, A(FOREARM, shoulder, elbow, side > 0 ? 0 : Math.PI, 1), 1);
       for (const f of [-1, 0, 1]) spike([hand[0] + f * s * .02, hand[1] - s * .02, hand[2] + s * .03], [hand[0] + f * s * .03, hand[1] - s * .07, hand[2] + s * .06], s * .012, belly, A(FOREARM, shoulder, elbow, side > 0 ? 0 : Math.PI, 1));
       anchors.hands.push({ p: hand, dir: [0, -.3, 1], anim: A(FOREARM, shoulder, elbow, side > 0 ? 0 : Math.PI, 1), size: s * .04 });
@@ -1124,7 +2169,7 @@ function buildGeometry(THREE, sp, r) {
   // Merge parts. Tubes keep shared vertices (smooth normals); small rigid parts
   // get their own normals.
   const pos = [], colr = [], part = [], pivot = [], knee = [], phase = [], bend = [], normal = [], glow = [], kind = [];
-  const bodyKind = sp.suit ? KIND.suit : KIND.skin; // a suited colonist's body is all suit
+  const bodyKind = sp.suit ? KIND.suit : sp.aquatic ? KIND.gloss : KIND.skin; // a suited colonist's body is all suit; sea life is wet and shiny
   for (const p of parts) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(p.pos, 3));
@@ -1146,10 +2191,10 @@ function buildGeometry(THREE, sp, r) {
   out.setAttribute('aPart', new THREE.Float32BufferAttribute(part, 1));
   out.setAttribute('aPivot', new THREE.Float32BufferAttribute(pivot, 3));
   out.setAttribute('aKnee', new THREE.Float32BufferAttribute(knee, 3));
-  out.setAttribute('aPhase', new THREE.Float32BufferAttribute(phase, 1));
-  out.setAttribute('aBend', new THREE.Float32BufferAttribute(bend, 1));
+  out.setAttribute('aPhase', new THREE.Float32BufferAttribute(phase.flatMap((v, i) => [v, bend[i]]), 2)); // phase, bend
   out.setAttribute('aGlow', new THREE.Float32BufferAttribute(glow, 1));
   out.setAttribute('aKind', new THREE.Float32BufferAttribute(kind, 1));
   out.computeBoundingSphere();
+  out.userData.headPivot = headPivotOut;
   return out;
 }

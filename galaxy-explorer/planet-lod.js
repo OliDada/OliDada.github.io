@@ -37,7 +37,7 @@ function addDetail(material, ground, airless, lite, objects = false) {
     shader.uniforms.uStyle = { value: style };
     shader.vertexShader = (objects ? '' : 'attribute vec3 cover;\n') + 'varying vec3 vCover; varying vec3 vDetailPos;\n' + shader.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
       vCover = ${objects ? 'vec3(0.0)' : 'cover'};
-      ${objects ? `vDetailPos = transformed;
+      ${objects ? `vDetailPos = position; // the rest shape: the grain stays put on the surface as plants sway and animals move
       #ifdef USE_INSTANCING
         vDetailPos *= length(instanceMatrix[0].xyz); // metres, whatever the instance's size
       #endif` : 'vDetailPos = (modelMatrix * vec4(transformed, 1.0)).xyz;'}`);
@@ -50,7 +50,7 @@ function addDetail(material, ground, airless, lite, objects = false) {
       }
 ` + shader.fragmentShader
       .replace('#include <color_fragment>', `#include <color_fragment>
-      float detailK = 1.0 - smoothstep(${lite ? '25.0, 50.0' : '40.0, 90.0'}, length(vViewPosition));
+      float detailK = 1.0 - smoothstep(${lite ? '45.0, 110.0' : objects ? '40.0, 90.0' : '120.0, 260.0'}, length(vViewPosition)); // ground: a wide area round you (each layer still fades below a pixel)
       float detailH = 0.0;
       // Screen-space slopes are taken here, outside any branch: taken inside one, they
       // are undefined where neighbouring pixels differ, which drew a ring of black
@@ -63,8 +63,8 @@ function addDetail(material, ground, airless, lite, objects = false) {
         float n1 = mix(.5, dNoise(P * 6.0), w1), n2 = mix(.5, dNoise(P * 17.0), w2);
         float n3 = ${lite ? '.5' : 'mix(.5, dNoise(P * 41.0), w3)'};
         // The shared grain: the same on every surface.
-        float f = 1.0 + (n1 - .5) * .14 + (n2 - .5) * .12 + (n3 - .5) * .08;
-        detailH = (n1 * .3 + n2 * .4 + n3 * .3) * .015;
+        float f = 1.0 + ((n1 - .5) * .14 + (n2 - .5) * .12 + (n3 - .5) * .08)${objects ? ' * .5' : ''}; // objects: a lighter grain, so plants and animals read as smooth shapes
+        detailH = (n1 * .3 + n2 * .4 + n3 * .3) * ${objects ? '.006' : '.015'};
         ${objects ? '' : `// Bare ground adds its own character on top: cracks on rock and ice, pits in crust.
         float grass = vCover.x * (1.0 - vCover.z), snow = vCover.z;
         float rock = clamp(max(vCover.y, uStyle.x) * (1.0 - snow) * (1.0 - grass), 0.0, 1.0);
@@ -90,7 +90,20 @@ function addDetail(material, ground, airless, lite, objects = false) {
         detailH += (rock * (n1 * .3 - crack * .08) * .03 + ice * (-crack * .008) + crust * (-crack * .006));`}
         diffuseColor.rgb *= mix(1.0, f, detailK);
         detailH *= detailK;
-      }`)
+      }
+      ${objects ? '' : `// Far detail: broad patches a few metres to a few dozen across (lighter and darker
+      // ground, drier and lusher grass, worn rock), kept far beyond the close-up grain so
+      // distant country never looks like a smooth wash of colour. Each layer fades only
+      // once it is smaller than a few pixels.
+      {
+        float g1 = 1.0 - smoothstep(.12, .3, px / 3.2), g2 = 1.0 - smoothstep(.12, .3, px / 11.0), g3 = 1.0 - smoothstep(.12, .3, px / 37.0), g4 = 1.0 - smoothstep(.12, .3, px / 120.0);
+        float m = (dNoise(P / 3.2 + 11.0) - .5) * .12 * g1 + (dNoise(P / 11.0 + 3.0) - .5) * .2 * g2 + (dNoise(P / 37.0 + 7.0) - .5) * .2 * g3 + (dNoise(P / 120.0 + 1.0) - .5) * .14 * g4;
+        float lush = vCover.x * (1.0 - vCover.z);
+        float dryPatch = smoothstep(.5, .78, dNoise(P / 23.0 + 17.0)) * g3 * lush;
+        diffuseColor.rgb *= 1.0 + m;
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.14, 1.06, .78), dryPatch * .55);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(.82, .92, .84), smoothstep(.55, .8, dNoise(P / 8.0 + 29.0)) * g2 * lush * .5);
+      }`}`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       // Bump: tilt the normal by the slope of detailH across the pixel (slopes taken unconditionally, see above).
       vec3 dpx = dFdx(-vViewPosition), dpy = dFdy(-vViewPosition);
@@ -104,7 +117,7 @@ function addDetail(material, ground, airless, lite, objects = false) {
   material.customProgramCacheKey = () => baseKey + '-detail-' + style.join(',') + (lite ? '-lite' : '') + (objects ? '-objects' : '');
 }
 
-const SPLIT = 1.8;
+const SPLIT = 2.1; // (1.8 before the new land: its hills and valleys want finer tiles further out)
 const MORPH_START = .7;
 const FADE_IN = .7;       // seconds for a newly shown tile to ease from its parent's shape into its own
 const JUMP = 8;           // metres: a camera move bigger than this in one frame is a jump (e.g. stepping out of the ship)   // a tile starts blending toward its parent's shape at 70% of the parent's split distance
@@ -203,6 +216,10 @@ export function createPlanet(THREE, streamer, body, { segments = 20, lite = fals
   // blotchy mosaic of light and dark (most visible from the ship, looking down).
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
   const skirtMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
+  // The ground is lit smoothly, not in the stylised steps (look.js STYLE_SMOOTH): on rolling,
+  // hummocky slopes the light's steps traced every little rise and fall, which drew wavy
+  // stripes across whole hillsides. Plants, animals and buildings keep the steps.
+  material.defines = { ...(material.defines || {}), STYLE_SMOOTH: 1 }; skirtMaterial.defines = { ...(skirtMaterial.defines || {}), STYLE_SMOOTH: 1 };
   const lava = terrain.liquid === 'lava', wet = lava || terrain.liquid === 'water';
   const liquidColor = new THREE.Color().setRGB(...terrain.waterColor, THREE.SRGBColorSpace);
   const waterMaterial = wet ? new THREE.MeshStandardMaterial(lava
@@ -220,7 +237,7 @@ export function createPlanet(THREE, streamer, body, { segments = 20, lite = fals
   const waterIndices = indices.subarray(0, gridIndexCount);
   const maxLevel = Math.max(2, Math.ceil(Math.log2(R * Math.PI / 2 / segments / FINEST)));
   const mountain = Math.acos(R / (R + Math.max(5, terrain.maxH)));
-  const planet = { body, key: `${body.id}:${body.seed}`, group, terrain, attach, update, dispose, maxLevel };
+  const planet = { body, key: `${body.id}:${body.seed}`, group, terrain, attach, update, dispose, maxLevel, waterMaterial }; // waterMaterial: seen from below when diving (game.js)
 
   function makeNode(face, level, a0, b0, size) {
     const c = faceDirection(face, a0 + size / 2, b0 + size / 2);

@@ -17,8 +17,19 @@ import { rng } from './rng.mjs';
 import { floraFor, suitability, plantBiome, PLANT_BIOMES, biomeAffinity } from './flora.mjs';
 import { makeNoise } from './terrain.mjs';
 import { createScatter, obstacleGrid } from './scatter.js';
+import { wind, WIND_GLSL } from './wind.mjs';
+import { STRESS } from './look.js';
+import { PLANT_STYLE } from './style.mjs';
+import { FOREST_FORMS, forestDecor } from './flora-forest.js';
 
-const CELL = 12, SLOTS = 7; // metres per cell; places a plant may take root in each cell
+const CELL = 12, SLOTS = 7 * STRESS; // metres per cell; places a plant may take root in each cell (STRESS: test multiplier, look.js)
+const NEW = PLANT_STYLE !== 'classic';
+// New plant style: how thickly trees stand in each plant biome (share of the nine tree
+// spots in a cell, 4 m apart, that hold a tree). The dark heart of a forest is a tree
+// every 25-30 m², shoulder to shoulder; glades open where the stand thins.
+const WOODS = { darkwood: .97, forest: .7, wetland: .25, highland: .16, grassland: .07, dryland: .03, barren: 0 };
+const TALL = 4; // metres: plants at least this tall take the tree spots (and get a distant model)
+const triCount = (g) => (g.index ? g.index.count : g.attributes.position.count) / 3;
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
@@ -32,7 +43,15 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
   const placed = [];
   if (!species.length) return { group, species, placed, update() {}, nearbyObstacles: (p, out = []) => out, setBlocked() {}, biomeAt: () => null, busy: 0 };
 
-  const reach = coarse ? 220 : 320, cap = Math.round(budget * 2), triangles = coarse ? 4.5e5 : 1.1e6;
+  const FAR = coarse ? 45 : 70; // metres: beyond this plants use their lighter model
+  // New plant style: beyond DISTANT, trees use a third, very light model (a few dozen
+  // triangles), which is what lets a whole forest stand around you.
+  const DISTANT = coarse ? 110 : 170, FAR_TREE = coarse ? 30 : 45; // forest trees switch to their lighter model sooner
+  const reach = coarse ? 220 : 320, cap = Math.round(budget * 2 * STRESS), triangles = (coarse ? 4.5e5 : NEW ? .75e6 : 1.1e6) * STRESS;
+  // New plant style: trees are filled and drawn much farther out (treeReach, their own grid
+  // of cells, filled nearest first like the rest), thinning out towards the horizon, so the
+  // country is wooded as far as you can see and from the air too.
+  const treeReach = NEW ? (coarse ? 420 : 720) : reach, treeCap = Math.round(budget * (coarse ? 3 : 6) * STRESS), treeTriangles = (coarse ? 3e5 : 1.1e6) * STRESS;
   const Y = new THREE.Vector3(0, 1, 0);
   const groves = makeNoise(body.seed, 'flora-groves');
   const kinds = species.map((sp, si) => {
@@ -42,44 +61,80 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
     const flat = sp.form === 'mat' || sp.form === 'crust';
     const V = flat ? 1 : ['grass', 'mound', 'plume', 'crystal'].includes(sp.form) ? 2 : 3;
     const blooming = V > 1 && sp.bloom && !['none', 'seeds'].includes(sp.bloom);
-    const geos = [buildGeometry(THREE, sp, r, { bloom: false })];
-    for (let v = 1; v < V; v++) geos.push(buildGeometry(THREE, sp, rng(body.seed, 'plants', sp.id, 'v' + v), { bloom: blooming && v === V - 1 }));
-    const view = sp.height < 1.6 ? reach * .45 : sp.height < 4 ? reach * .75 : reach;
-    const fade = { value: new THREE.Vector2(view * .7, view) };
-    const materials = [false, true].map((foliage) => {
-      const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: foliage ? .75 : .95 });
+    const variantRng = (v) => v ? rng(body.seed, 'plants', sp.id, 'v' + v) : rng(body.seed, 'plants', sp.id);
+    const geos = [], farGeos = [];
+    for (let v = 0; v < V; v++) {
+      geos.push(buildGeometry(THREE, sp, variantRng(v), { bloom: blooming && v === V - 1 }));
+      // Plants beyond FAR metres use a lighter model, built from the same random numbers.
+      farGeos.push(buildGeometry(THREE, sp, variantRng(v), { bloom: blooming && v === V - 1, far: true }));
+    }
+    const view = sp.height < 1.6 ? reach * .45 : sp.height < 4 ? reach * .75 : NEW && !sp.aquatic ? treeReach : reach;
+    const fade = { value: new THREE.Vector2(view * (view > reach ? .82 : .7), view) };
+    // One material, so each model is one draw call; only glowing species need a second
+    // one for their glowing foliage (the geometry keeps its two groups: stems, foliage).
+    const material = (foliage) => {
+      const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: foliage === null ? .88 : foliage ? .75 : .95 });
       if (foliage && sp.glow > 0) { m.emissive = new THREE.Color(sp.colors.accent).lerp(new THREE.Color(sp.colors.leaf), .4); m.emissiveIntensity = sp.glow * .55; }
       addPlantShader(m, { time, center, fade }, sp);
       return m;
-    });
-    const meshes = geos.map((g) => newMesh(THREE, g, materials, 32));
-    for (const m of meshes) group.add(m);
+    };
+    const materials = sp.glow > 0 ? [material(false), material(true)] : material(null);
+    // Tall plants also get a distant model (new plant style); for the others it is the far one.
+    const hasDistant = NEW && sp.height >= TALL && !flat;
+    // (Where the far model is lighter anyway, it serves as the distant one too.)
+    const distantGeos = hasDistant ? geos.map((_, v) => { const g = buildGeometry(THREE, sp, variantRng(v), { bloom: blooming && v === V - 1, distant: true }); if (triCount(g) < triCount(farGeos[v])) return g; g.dispose(); return farGeos[v]; }) : [];
+    const meshes = geos.map((g) => newMesh(THREE, g, materials, 32)), farMeshes = farGeos.map((g) => newMesh(THREE, g, materials, 32)), distantMeshes = distantGeos.map((g) => newMesh(THREE, g, materials, 32));
+    for (const m of [...meshes, ...farMeshes, ...distantMeshes]) group.add(m);
     return {
-      sp, geos, materials, meshes, V, flat, blooming, view, foot: plantFootprint(sp), tris: geos.map(g => (g.index ? g.index.count : g.attributes.position.count) / 3),
+      sp, geos, farGeos, distantGeos, materials, meshes, farMeshes, distantMeshes, V, flat, blooming, view, foot: plantFootprint(sp), tris: geos.map(triCount), farTris: farGeos.map(triCount), distantTris: distantGeos.map(triCount),
+      tall: NEW && sp.height >= TALL && !sp.aquatic,
       spacing: clamp(2.2 / Math.max(sp.height, .5), .22, 1), // big plants stand further apart
       grove: si * 31.7 + 5, groveFloor: sp.form === 'grass' || flat ? .35 : .06,
     };
   });
-  for (const k of kinds) placed.push({ species: k.sp, positions: new Float32Array(0), scales: new Float32Array(0), meshes: k.meshes });
+  // All of a kind's models, in slot order: near 0..V-1, far V..2V-1, distant 2V..
+  const modelsOf = (k) => [...k.meshes, ...k.farMeshes, ...k.distantMeshes];
+  const geoOf = (k, slotV) => slotV < k.V ? k.geos[slotV] : slotV < 2 * k.V ? k.farGeos[slotV - k.V] : k.distantGeos[slotV - 2 * k.V];
+  const setModel = (k, slotV, m) => { if (slotV < k.V) k.meshes[slotV] = m; else if (slotV < 2 * k.V) k.farMeshes[slotV - k.V] = m; else k.distantMeshes[slotV - 2 * k.V] = m; };
+  const trisOf = (k, slotV) => slotV < k.V ? k.tris[slotV] : slotV < 2 * k.V ? k.farTris[slotV - k.V] : k.distantTris[slotV - 2 * k.V];
+  for (const k of kinds) placed.push({ species: k.sp, positions: new Float32Array(0), scales: new Float32Array(0), get meshes() { return modelsOf(k); } });
+  // Deadwood and stones on the forest floor (new plant style): fallen trunks, stumps and
+  // mossy boulders, in the bark of the world's own trees and the colour of its rock.
+  const treeSp = kinds.find((k) => k.tall && ['tree', 'conifer'].includes(k.sp.form))?.sp;
+  const decor = NEW && treeSp && (env?.chem || 'carbon') === 'carbon' ? forestDecor(THREE, {
+    bark: treeSp.colors.stem, moss: '#' + new THREE.Color().setRGB(...(terrain.vegetation || [.3, .45, .2])).multiplyScalar(.6).getHexString(),
+    rock: '#' + new THREE.Color().setRGB(...(terrain.rockColor || [.45, .43, .4])).getHexString(),
+  }).map((d) => {
+    const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .95 });
+    addPlantShader(material, { time, center, fade: { value: new THREE.Vector2(reach * .45, reach * .6) } }, { sway: 0, height: 1 });
+    const mesh = newMesh(THREE, d.geo, material, 64);
+    group.add(mesh);
+    return { ...d, material, mesh, tris: triCount(d.geo) };
+  }) : [];
   // Groves: each species thick in some patches (tens of metres across) and thin in others.
   const groveAt = (k, n) => k.groveFloor + (1 - k.groveFloor) * smooth(-.25, .35, groves(n.x * radius / 70 + k.grove, n.y * radius / 70, n.z * radius / 70));
 
   let blocked = () => false; // settlements clear their ground (setBlocked)
   const n = new THREE.Vector3(), mid = new THREE.Vector3(), dummy = new THREE.Object3D(), tint = new THREE.Color();
   const weight = new Float64Array(kinds.length), quality = new Float64Array(kinds.length);
-  function fill(f, i, j, cell) {
+  function fill(f, i, j, cell, part = 'all') {
     // The climate is read once per cell (it changes over hundreds of metres, not a dozen).
     if (!cell.point(.5, .5, mid)) return null;
-    const c = terrain.climate(mid), biome = plantBiome(c, env);
-    if (!biome) return null;
+    const c = terrain.climate(mid), sea = c.submerged && terrain.liquid === 'water', biome = sea ? null : plantBiome(c, env);
+    if (!biome && !sea) return null;
     let W = 0;
     for (let s = 0; s < kinds.length; s++) {
       const k = kinds[s];
-      quality[s] = biomeAffinity(biome, k.sp.form) * (.15 + .85 * suitability(k.sp, c)) * groveAt(k, mid);
+      // Under water only sea plants grow (by depth); on land only land plants.
+      quality[s] = sea ? (k.sp.aquatic ? suitability(k.sp, c) * groveAt(k, mid) : 0)
+        : k.sp.aquatic ? 0 : biomeAffinity(biome, k.sp.form) * (.15 + .85 * suitability(k.sp, c)) * groveAt(k, mid);
       W += weight[s] = k.sp.abundance * quality[s];
     }
     if (W <= 0) return null;
-    const density = PLANT_BIOMES[biome].density, items = [];
+    // Sea life crowds the sunlit shallows and thins out with depth.
+    const density = sea ? .15 + .75 * Math.exp(c.above / 14) : PLANT_BIOMES[biome].density, items = [];
+    if (NEW && !sea) return fillWoods(f, i, j, cell, c, biome, density, W, items, part);
+    if (NEW && part === 'tall') return items; // sea plants live on the near grid
     for (let slot = 0; slot < SLOTS; slot++) {
       const h = (q) => cell.hash(slot * 16 + q), u = h(1), v = h(2);
       if (h(3) > cell.area(u, v)) continue; // cells near a cube corner cover less ground
@@ -87,12 +142,78 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
       while (s < kinds.length - 1 && (roll -= weight[s]) > 0) s++;
       const k = kinds[s];
       if (h(5) > density * k.spacing * (.3 + .7 * quality[s])) continue;
-      if (!cell.point(u, v, n)) continue;
-      if (n.angleTo(signalNormal) < 9 / radius || n.angleTo(landingNormal) < 10 / radius) continue; // keep the site and landing pad clear
+      placeAt(f, i, j, slot, cell, s, u, v, items);
+    }
+    return items;
+  }
+  // New plant style. Trees take a jittered grid of spots (so they stand close but never
+  // inside each other) as thick as the biome's woods; where a forest's stand thins (the
+  // climate's stand field) it opens into glades. Smaller plants fill in between, fewer
+  // under a closed canopy. Old giants are commoner in old forest, saplings at its edges.
+  const tallW = new Float64Array(kinds.length), smallW = new Float64Array(kinds.length);
+  function fillWoods(f, i, j, cell, c, biome, density, W, items, part) {
+    let TW = 0, SW = 0;
+    for (let s = 0; s < kinds.length; s++) { const w = weight[s]; tallW[s] = kinds[s].tall ? w : 0; smallW[s] = kinds[s].tall ? 0 : w; TW += tallW[s]; SW += smallW[s]; }
+    const glade = biome === 'darkwood' || biome === 'forest' ? smooth(-.75, .05, c.stand) : 1;
+    const woods = (WOODS[biome] ?? .05) * glade * STRESS;
+    // Four tree spots per 12 m cell, 6 m apart and jittered only so far that trees always
+    // stand at least about 3 m apart: thick woods you can still walk through.
+    if (part !== 'small' && TW > 0 && woods > 0) for (let gx = 0; gx < 2; gx++) for (let gz = 0; gz < 2; gz++) {
+      const slot = 100 + gx * 3 + gz, h = (q) => cell.hash(slot * 16 + q);
+      const u = (gx + .25 + .5 * h(1)) / 2, v = (gz + .25 + .5 * h(2)) / 2;
+      if (h(3) > cell.area(u, v)) continue;
+      let roll = h(4) * TW, s = 0;
+      while (s < kinds.length - 1 && (roll -= tallW[s]) > 0) s++;
+      if (h(5) > woods * (.45 + .55 * Math.min(1, quality[s] * 1.6))) continue;
+      const before = items.length;
+      placeAt(f, i, j, slot, cell, s, u, v, items, biome === 'darkwood' ? .2 : biome === 'forest' ? .1 : 0, glade);
+      if (items.length > before) items[before].thin = h(10); // which trees are left out far away
+    }
+    if (part === 'tall') return items;
+    // Deadwood and boulders: where trees stand, some have fallen.
+    if (decor.length && (biome === 'darkwood' || biome === 'forest') && woods > .2) {
+      const h = (q) => cell.hash(900 + q), roll = h(1);
+      const which = roll < .2 * woods ? 0 : roll < .3 * woods ? 1 : roll > 1 - .07 * woods ? 2 : -1;
+      if (which >= 0 && cell.point(h(2), h(3), n) && n.angleTo(signalNormal) > 14 / radius && n.angleTo(landingNormal) > 16 / radius && !blocked(n)) {
+        const ht = terrain.height(n);
+        if (!terrain.isLiquid(n) && !(terrain.liquid === 'ice' && ht <= terrain.sea + .01)) {
+          const d = decor[which], sc = which === 2 ? .6 + h(4) * 1.1 : .75 + h(4) * .6;
+          dummy.position.copy(n).multiplyScalar(radius + ht - (which === 2 ? .3 * sc : .08));
+          dummy.quaternion.setFromUnitVectors(Y, which === 0 ? slopeNormal(THREE, terrain, radius, n) : n);
+          dummy.rotateY(h(5) * Math.PI * 2);
+          dummy.scale.setScalar(sc); dummy.updateMatrix();
+          // What you bump into: a row of circles along a log, one for a stump or boulder.
+          const foot = [], axis = new THREE.Vector3(1, 0, 0).applyQuaternion(dummy.quaternion);
+          if (d.foot.along) for (let a = -d.foot.along; a <= d.foot.along + 1e-6; a += 1) foot.push(dummy.position.clone().addScaledVector(axis, a * sc));
+          else foot.push(dummy.position.clone());
+          items.push({ decor: which, m: Float32Array.from(dummy.matrix.elements), c: [1, 1, 1], p: dummy.position.toArray(), sc, view: reach * .6, keep: false, foot: foot.map((p) => ({ p, r: d.foot.r * sc, h: d.foot.h * sc })) });
+        }
+      }
+    }
+    if (SW <= 0) return items;
+    const shade = biome === 'darkwood' ? .55 : biome === 'forest' ? .8 : 1; // a closed canopy shades out the undergrowth
+    for (let slot = 0; slot < SLOTS + 3; slot++) {
+      const h = (q) => cell.hash(slot * 16 + q), u = h(1), v = h(2);
+      if (h(3) > cell.area(u, v)) continue;
+      let roll = h(4) * SW, s = 0;
+      while (s < kinds.length - 1 && (roll -= smallW[s]) > 0) s++;
+      const k = kinds[s];
+      if (h(5) > density * shade * k.spacing * (.3 + .7 * quality[s])) continue;
+      placeAt(f, i, j, slot, cell, s, u, v, items);
+    }
+    return items;
+  }
+  // Places one plant of kind s at (u, v) in the cell, if the ground there allows it.
+  // old: extra chance of an old giant (new plant style); edge: 0 at a glade's edge.
+  function placeAt(f, i, j, slot, cell, s, u, v, items, old = 0, edge = 1) {
+      const k = kinds[s], h = (q) => cell.hash(slot * 16 + q);
+      if (!cell.point(u, v, n)) return;
+      if (n.angleTo(signalNormal) < 9 / radius || n.angleTo(landingNormal) < 10 / radius) return; // keep the site and landing pad clear
       const keep = h(6) <= 1 / 7; // builders clear their ground, but keep a few plants
-      if (!keep && blocked(n)) continue;
+      if (!keep && blocked(n)) return;
       const ht = terrain.height(n);
-      if (terrain.liquid === 'ice' ? ht <= terrain.sea + .01 : (terrain.liquid === 'water' || terrain.liquid === 'lava') && ht < terrain.sea) continue;
+      if (k.sp.aquatic) { if (!(ht < terrain.sea - .15)) return; } // sea plants stay under water
+      else if (terrain.liquid === 'ice' ? ht <= terrain.sea + .01 : (terrain.liquid === 'water' || terrain.liquid === 'lava') && ht < terrain.sea) return;
       const r = rng(body.seed, 'plant', f, i, j, slot);
       dummy.position.copy(n).multiplyScalar(radius + ht - .05);
       // Flat growths (mats, crusts) lie along the slope; everything else grows upright.
@@ -102,7 +223,12 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
       // Each plant its own: young or old, broader or slimmer, a little warmer or cooler in colour.
       let sc = k.flat ? .6 + r() * 1.2 : .7 + r() * .6;
       const age = r();
-      if (!k.flat) sc *= age < .12 ? .4 + r() * .25 : age > .94 ? 1.25 + r() * .2 : 1;
+      if (k.tall) { // forest trees: mostly grown, saplings where the stand thins, old giants in old forest
+        const g = h(7);
+        sc = .82 + .36 * h(9);
+        if (g < .06 + .3 * (1 - edge)) sc *= .4 + .3 * h(8);
+        else if (g > 1 - old - .04) sc *= 1.25 + .3 * h(8);
+      } else if (!k.flat) sc *= age < .12 ? .4 + r() * .25 : age > .94 ? 1.25 + r() * .2 : 1;
       const wide = k.flat ? 1 : .82 + r() * .36;
       dummy.scale.set(sc * wide, sc, sc * (k.flat ? 1 : wide * (.9 + r() * .2)));
       dummy.updateMatrix();
@@ -110,45 +236,68 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
       const variant = k.blooming && age >= .12 && r() < k.sp.bloomShare ? k.V - 1 : Math.floor(r() * (k.blooming ? k.V - 1 : k.V));
       tint.setRGB(b * (1 + d), b * (1 + e), b * (1 - d));
       items.push({ s, variant, m: Float32Array.from(dummy.matrix.elements), c: [tint.r, tint.g, tint.b], p: dummy.position.toArray(), sc, view: k.view, keep });
-    }
-    return items;
   }
-  const scatter = createScatter({ radius, cell: CELL, reach, fill });
+  const scatter = createScatter({ radius, cell: CELL, reach, fill: NEW ? (f, i, j, cell) => fill(f, i, j, cell, 'small') : fill });
+  const treeScatter = NEW ? createScatter({ radius, cell: CELL, reach: treeReach, fill: (f, i, j, cell) => fill(f, i, j, cell, 'tall') }) : null;
 
   // Draws the filled cells, nearest first, up to the cap; also lists every plant
   // (placed: what the scanner, sonar and grazing animals look at) and the obstacles.
   let grid = obstacleGrid([]);
   function rebuild() {
-    const counts = kinds.map(k => k.meshes.map(() => 0)), chosen = [];
+    // Slot v of a species is its near model v; slot V + v is its far model v.
+    const counts = kinds.map(k => modelsOf(k).map(() => 0)), chosen = [], decorChosen = [], decorCount = decor.map(() => 0);
     let tris = 0;
-    for (const rec of scatter.active) {
+    const lists = treeScatter ? [[scatter.active, cap, triangles], [treeScatter.active, treeCap, treeTriangles]] : [[scatter.active, cap, triangles]];
+    for (const [active, capN, triN] of lists) { let count = 0; tris = 0;
+    for (const rec of active) {
       if (!rec.ready) continue;
-      if (chosen.length >= cap || tris >= triangles) break;
-      for (const it of rec.items) if (rec.d <= it.view) { chosen.push(it); counts[it.s][it.variant]++; tris += kinds[it.s].tris[it.variant]; }
+      if (count >= capN || tris >= triN) break;
+      // Far trees thin out towards the horizon (fewer and fewer of them drawn).
+      const keepShare = rec.d > reach ? 1 - .6 * smooth(reach, treeReach, rec.d) : 1;
+      const far = rec.d > FAR, nearTree = rec.d <= FAR_TREE, distant = rec.d > DISTANT;
+      for (const it of rec.items) if (rec.d <= it.view && !(it.thin > keepShare)) {
+        if (it.decor !== undefined) { decorChosen.push(it); decorCount[it.decor]++; tris += decor[it.decor].tris; continue; }
+        count++; it.d = rec.d;
+        const k = kinds[it.s], slotV = distant && k.distantGeos.length ? 2 * k.V + it.variant : far || (k.tall && !nearTree) ? k.V + it.variant : it.variant;
+        chosen.push([it, slotV]); counts[it.s][slotV]++;
+        tris += trisOf(k, slotV);
+      }
     }
-    kinds.forEach((k, s) => k.meshes.forEach((m, v) => {
-      if (counts[s][v] <= m.instanceMatrix.count) return;
-      const grown = newMesh(THREE, k.geos[v], k.materials, Math.ceil(counts[s][v] * 1.5));
+    }
+    kinds.forEach((k, s) => modelsOf(k).forEach((m, slotV) => {
+      if (counts[s][slotV] <= m.instanceMatrix.count) return;
+      const grown = newMesh(THREE, geoOf(k, slotV), k.materials, Math.ceil(counts[s][slotV] * 1.5));
       group.remove(m); m.dispose(); group.add(grown);
-      k.meshes[v] = placed[s].meshes[v] = grown;
+      setModel(k, slotV, grown);
     }));
-    const at = kinds.map(k => k.meshes.map(() => 0)), pos = kinds.map(() => []), scl = kinds.map(() => []), obstacles = [];
-    for (const it of chosen) {
-      const k = kinds[it.s], mesh = k.meshes[it.variant], slot = at[it.s][it.variant]++;
+    const at = kinds.map(k => modelsOf(k).map(() => 0)), pos = kinds.map(() => []), scl = kinds.map(() => []), obstacles = [];
+    for (const [it, slotV] of chosen) {
+      const k = kinds[it.s], mesh = modelsOf(k)[slotV], slot = at[it.s][slotV]++;
       mesh.instanceMatrix.array.set(it.m, slot * 16);
       mesh.instanceColor.array.set(it.c, slot * 3);
       pos[it.s].push(it.p[0], it.p[1], it.p[2]); scl[it.s].push(it.sc);
-      if (k.foot) obstacles.push({ p: new THREE.Vector3(it.p[0], it.p[1], it.p[2]), r: k.foot.r * it.sc, h: k.foot.h * it.sc }); // grasses and mats are walked over
+      if (k.foot && !(it.d > 90)) obstacles.push({ p: new THREE.Vector3(it.p[0], it.p[1], it.p[2]), r: k.foot.r * it.sc, h: k.foot.h * it.sc }); // grasses and mats are walked over
     }
     kinds.forEach((k, s) => {
-      k.meshes.forEach((m, v) => { m.count = at[s][v]; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; });
+      modelsOf(k).forEach((m, slotV) => { m.count = at[s][slotV]; m.visible = m.count > 0; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; });
       placed[s].positions = new Float32Array(pos[s]); placed[s].scales = new Float32Array(scl[s]);
     });
+    decor.forEach((d, q) => {
+      if (decorCount[q] > d.mesh.instanceMatrix.count) { const grown = newMesh(THREE, d.geo, d.material, Math.ceil(decorCount[q] * 1.5)); group.remove(d.mesh); d.mesh.dispose(); group.add(grown); d.mesh = grown; }
+      d.mesh.count = 0;
+    });
+    for (const it of decorChosen) {
+      const d = decor[it.decor], slot = d.mesh.count++;
+      d.mesh.instanceMatrix.array.set(it.m, slot * 16); d.mesh.instanceColor.array.set(it.c, slot * 3);
+      for (const o of it.foot) obstacles.push(o);
+    }
+    for (const d of decor) { d.mesh.visible = d.mesh.count > 0; d.mesh.instanceMatrix.needsUpdate = true; d.mesh.instanceColor.needsUpdate = true; }
     grid = obstacleGrid(obstacles);
   }
 
   // Fill around the landing pad at once, so you never land in an empty field.
   scatter.prime(landingNormal, coarse ? 140 : 190);
+  treeScatter?.prime(landingNormal, coarse ? 160 : 240);
   rebuild();
 
   let dirty = false, wait = 0;
@@ -161,11 +310,12 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
       if (!camera) return;
       dir.copy(camera).normalize();
       const altitude = camera.length() - radius - terrain.surface(dir);
-      group.visible = altitude < reach;
+      group.visible = altitude < treeReach;
       if (!group.visible) return;
       center.value.copy(camera);
-      if (scatter.update(dir, coarse ? 2 : 3)) dirty = true;
-      if (dirty && (--wait <= 0 || !scatter.busy)) { rebuild(); dirty = false; wait = 8; }
+      if (altitude < reach && scatter.update(dir, coarse ? 2 : 3)) dirty = true;
+      if (treeScatter?.update(dir, coarse ? 2 : 3)) dirty = true;
+      if (dirty && (--wait <= 0 || !(scatter.busy || treeScatter?.busy))) { rebuild(); dirty = false; wait = 8; }
     },
     // Plants you can bump into near a point (grasses and mats are walked over).
     nearbyObstacles: (p, out) => grid.near(p, out),
@@ -173,12 +323,12 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
     setBlocked(fn) {
       blocked = fn;
       const at = new THREE.Vector3();
-      for (const rec of scatter.active) if (rec.ready) rec.items = rec.items.filter(it => it.keep || !fn(at.fromArray(it.p).normalize()));
+      for (const sc of [scatter, treeScatter]) if (sc) for (const rec of sc.active) if (rec.ready) rec.items = rec.items.filter(it => it.keep || !fn(at.fromArray(it.p).normalize()));
       rebuild();
     },
     // The plant biome at a surface direction (for the HUD or scanner).
     biomeAt(dirAt) { return plantBiome(terrain.climate(dirAt), env); },
-    get busy() { return scatter.busy; },
+    get busy() { return scatter.busy + (treeScatter?.busy || 0); },
   };
 }
 
@@ -186,6 +336,7 @@ function newMesh(THREE, geometry, materials, capacity) {
   const m = new THREE.InstancedMesh(geometry, materials, capacity);
   m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
   m.count = 0; m.frustumCulled = false; // instances are spread around you
+  m.visible = false; // until it has plants: an empty instanced mesh still costs a draw call
   return m;
 }
 
@@ -215,26 +366,35 @@ export function plantFootprint(sp) {
 // Wind: vertices sway more the higher they are on the plant. Plants also thin out
 // towards the edge of their view distance (fade: from, to in metres from the
 // camera): each has its own cut-off and shrinks away smoothly, so there is no edge.
+// How far a plant's top sways, in metres. New plant style: big trees barely move (a tall
+// trunk only stirs at the top, and slowly; uRate, uPush), so a forest stands still in a breeze.
+const swayAmp = (sp) => sp.sway * (sp.aquatic ? .08 : .045) * (NEW && !sp.aquatic && sp.height > 4 ? 4 * Math.sqrt(sp.height / 4) * .55 : sp.height);
 function addPlantShader(material, { time, center, fade }, sp) {
   const sway = sp.sway > 0;
   material.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, { uTime: time, uCenter: center, uFade: fade, uAmp: { value: sp.sway * .045 * sp.height }, uInvH: { value: 1 / sp.height } });
-    shader.vertexShader = 'uniform float uTime; uniform vec3 uCenter; uniform vec2 uFade; uniform float uAmp; uniform float uInvH;\n' + shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+    // Sea plants sway slowly with the swell, and the wind does not reach them.
+    Object.assign(shader.uniforms, { uTime: sp.aquatic ? { get value() { return time.value * .45; } } : time, uCenter: center, uFade: fade, uAmp: { value: swayAmp(sp) }, uRate: { value: NEW && sp.height > 4 ? .5 : 1 }, uPush: { value: NEW && sp.height > 4 ? 1.6 : 5 }, uInvH: { value: 1 / sp.height }, uWind: sp.aquatic ? { value: 0 } : wind.strength, uWindDir: wind.dir });
+    shader.vertexShader = 'uniform float uTime; uniform vec3 uCenter; uniform vec2 uFade; uniform float uAmp; uniform float uRate; uniform float uPush; uniform float uInvH; uniform float uWind; uniform vec3 uWindDir;\n' + WIND_GLSL + shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
       vec3 plantAt = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
       float plantT = 1.0 - smoothstep(uFade.x, uFade.y, distance(plantAt, uCenter));
       float plantR = fract(sin(dot(plantAt, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
       transformed *= smoothstep(plantR * .8, plantR * .8 + .2, plantT);` + (sway ? `
-      float swayK = pow(max(transformed.y * uInvH, 0.0), 2.0) * uAmp;
+      float swayK = pow(clamp(transformed.y * uInvH, 0.0, 1.3), 2.0) * uAmp;
       float swayPhase = instanceMatrix[3].x * .37 + instanceMatrix[3].z * .23;
-      transformed.x += sin(uTime * 1.7 + swayPhase) * swayK;
-      transformed.z += cos(uTime * 1.3 + swayPhase * 1.3) * swayK * .6;` : ''));
+      transformed.x += sin(uTime * 1.7 * uRate + swayPhase) * swayK;
+      transformed.z += cos(uTime * 1.3 * uRate + swayPhase * 1.3) * swayK * .6;
+      transformed += windPush(swayK * uPush, swayPhase); // the weather's wind (wind.mjs)` : ''));
   };
-  material.customProgramCacheKey = () => (sway ? 'plant-sway' : 'plant');
+  material.customProgramCacheKey = () => (sway ? 'plant-sway' : 'plant'); // same program; uniforms differ
 }
 
 // --- Geometry: each form assembled from a few primitives, merged into one mesh
 // with two groups (0: stems and trunks, 1: foliage, caps and pods). ---
-export function buildGeometry(THREE, sp, r, { bloom = false } = {}) { // exported for previews
+// far: a lighter model for plants seen from a distance (same shape, from the same random
+// numbers): small parts dropped, rounder parts with fewer facets.
+// distant: a very light stand-in for trees far off (new plant style): the trunk and a few
+// crown shapes, or one cone for a spire-shaped crown, in the plant's own colours.
+export function buildGeometry(THREE, sp, r, { bloom = false, far = false, distant = false } = {}) { // exported for previews
   const parts = [], H = sp.height, c = sp.colors;
   const M = (x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) =>
     new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz, 'YXZ')), new THREE.Vector3(sx, sy, sz));
@@ -261,7 +421,9 @@ export function buildGeometry(THREE, sp, r, { bloom = false } = {}) { // exporte
   };
 
   const grow = () => {
-  if (sp.form === 'tree') {
+  // New plant style: forest trees get their own models (flora-forest.js); the classic ones below stay for ?plants=classic.
+  if (PLANT_STYLE !== 'classic' && FOREST_FORMS[sp.form]) FOREST_FORMS[sp.form]({ THREE, add, M, cyl, blob, blade, r, H, c, sp, leaf });
+  else if (sp.form === 'tree') {
     // A trunk in two bent sections with root flares and bark rings, branches with
     // twigs, crowns broken up by smaller clumps, and fruit or blossom on some.
     const trunkH = H * .55, tr = H * sp.trunkRatio, bend = (r() - .5) * .18;
@@ -370,6 +532,65 @@ export function buildGeometry(THREE, sp, r, { bloom = false } = {}) { // exporte
       add(blob(H * (.05 + r() * .05), 1), M(Math.cos(a) * d, y, Math.sin(a) * d, 0, 0, 0, 1, 1.3, 1), c.accent, true);
     }
     for (let i = 0; i < 6; i++) add(blade(H * .18, H * .06, .5, .3, 3), M(0, H * .01, 0, 0, i * 1.05 + r() * .3, .2), leaf(i), true);
+  } else if (sp.form === 'kelp') {
+    // Several long stems, each hung with alternating blades and gas floats at the joints.
+    const stems = 2 + (sp.seed % 3);
+    for (let k = 0; k < stems; k++) {
+      const a = k / stems * 6.28 + r(), d = H * .03, h = H * (.75 + r() * .3), lean = (r() - .5) * .25;
+      const m = M(Math.cos(a) * d, 0, Math.sin(a) * d, 0, a, lean);
+      add(cyl(H * .006, H * .01, h, 4), m, c.stem, false);
+      for (let j = 1; j < 11; j++) {
+        const y = h * j / 11, mj = m.clone().multiply(M(0, y, 0, 0, j * 2.4, 0));
+        add(blade(H * (.2 + r() * .1), H * .07, -.08, .05, 5), mj.clone().multiply(M(0, 0, 0, 0, 0, .7 + r() * .5)), leaf(j), true);
+        if (j % 2) add(blob(H * .014, 0), mj, c.accent, true);
+      }
+    }
+    add(blob(H * .03, 0), M(0, H * .01, 0, 0, 0, 0, 1.5, .6, 1.5), c.stem, false); // holdfast
+  } else if (sp.form === 'seagrass') {
+    const blades = 9 + (sp.seed % 6);
+    for (let i = 0; i < blades; i++) { const a = i / blades * 6.28 + r(), h = H * (.6 + r() * .5); add(spear(h, H * .05, .1 + r() * .2, 3), M(Math.cos(a) * H * .1, 0, Math.sin(a) * H * .1, 0, a + Math.PI / 2, 0), leaf(i), true); }
+  } else if (sp.form === 'coral') {
+    // A branching colony: forking cylinders with rounded tips.
+    const branch = (m, len, rad, depth) => {
+      add(cyl(rad * .75, rad, len, 5), m, c.leaf, false);
+      const tipM = m.clone().multiply(M(0, len, 0));
+      if (depth >= 3 || len < H * .12) { add(blob(rad * 1.1, 0), tipM, c.accent, true); return; }
+      const n = 2 + (r() < .4 ? 1 : 0);
+      for (let k = 0; k < n; k++) branch(tipM.clone().multiply(M(0, 0, 0, 0, k / n * 6.28 + r(), .45 + r() * .3)), len * (.65 + r() * .2), rad * .7, depth + 1);
+    };
+    const trunks = 3 + (sp.seed % 3);
+    for (let k = 0; k < trunks; k++) branch(M(Math.cos(k * 2.1) * H * .1, 0, Math.sin(k * 2.1) * H * .1, 0, k * 2.1, (r() - .5) * .6), H * .38, H * .06, 0);
+    add(blob(H * .2, 0), M(0, 0, 0, 0, 0, 0, 1.3, .35, 1.3), c.leaf2, false);
+  } else if (sp.form === 'fan') {
+    // A flat lattice: radiating ribs joined by cross-bars, all in one plane, on a short stem.
+    add(cyl(H * .02, H * .03, H * .2, 4), M(), c.stem, false);
+    // The fan's web: a thin sector between the ribs.
+    add(new THREE.CircleGeometry(H * .72, 14, Math.PI / 2 - 1.1, 2.2), M(0, H * .18, 0), c.leaf2, true);
+    add(new THREE.CircleGeometry(H * .72, 14, Math.PI / 2 - 1.1, 2.2), M(0, H * .18, 0, 0, Math.PI, 0), c.leaf2, true);
+    const ribs = 7 + (sp.seed % 4);
+    for (let k = 0; k < ribs; k++) {
+      const a = -1.1 + k / (ribs - 1) * 2.2, len = H * (.65 + r() * .2);
+      add(cyl(H * .008, H * .014, len, 3), M(0, H * .18, 0, 0, 0, a), leaf(k), true);
+      for (let j = 1; j < 5; j++) { const t = j / 5, l2 = len * t; add(new THREE.BoxGeometry(len * .2 * t + H * .02, H * .012, H * .012), M(-Math.sin(a) * l2, H * .18 + Math.cos(a) * l2, 0, 0, 0, a), j % 2 ? c.leaf : c.accent, true); }
+    }
+  } else if (sp.form === 'anemone') {
+    // A soft column with a disc on top, ringed by tentacles that curl outward.
+    const R = H * .22, top = H * .38;
+    add(cyl(R * .85, R, top, 8), M(), c.stem, false);
+    add(new THREE.CylinderGeometry(R * 1.25, R * .9, H * .07, 10).translate(0, H * .035, 0), M(0, top, 0), c.leaf2, true);
+    const n = 20 + (sp.seed % 10);
+    for (let i = 0; i < n; i++) { const a = i / n * 6.28, ring = i % 2 ? .6 : 1.05; add(spear(H * (.45 + r() * .2) * ring, H * .06, .55, 3), M(Math.cos(a) * R * ring, top + H * .05, Math.sin(a) * R * ring, 0, -a + Math.PI / 2, -.25), i % 2 ? c.accent : c.leaf, true); }
+  } else if (sp.form === 'bladder') {
+    // Thin stalks strung with clusters of round, buoyant bladders.
+    const stalks = 3 + (sp.seed % 3);
+    for (let k = 0; k < stalks; k++) {
+      const a = k / stalks * 6.28 + r(), h = H * (.6 + r() * .4), m = M(Math.cos(a) * H * .05, 0, Math.sin(a) * H * .05, 0, a, (r() - .5) * .4);
+      add(cyl(H * .008, H * .012, h, 3), m, c.stem, false);
+      for (let j = 1; j <= 4; j++) for (let q = 0; q < 3; q++) { const y = h * (.3 + j * .17), b = H * (.035 + r() * .03); add(blob(b, 1), m.clone().multiply(M(Math.cos(q * 2.1 + j) * b * 1.3, y, Math.sin(q * 2.1 + j) * b * 1.3)), q ? c.leaf : c.accent, true); }
+    }
+  } else if (sp.form === 'reefmound') {
+    // Layered stone domes built by microbial mats.
+    for (let k = 0; k < 3; k++) { const a = k * 2.3, d = k ? H * .5 : 0, s2 = k ? .6 : 1; for (let j = 0; j < 4; j++) add(new THREE.CylinderGeometry(H * .5 * s2 * (1 - j * .2), H * .55 * s2 * (1 - j * .18), H * .25 * s2, 9).translate(0, H * .125 * s2, 0), M(Math.cos(a) * d, j * H * .22 * s2, Math.sin(a) * d), j % 2 ? c.leaf : c.leaf2, j === 3); }
   } else if (sp.form === 'mat') {
     // Overlapping patches, each a little thicker than the last so no two tops are
     // level (level tops flicker against each other), and each reaching down into the
@@ -491,7 +712,7 @@ export function buildGeometry(THREE, sp, r, { bloom = false } = {}) { // exporte
       const p0 = tip(q, false), n = 4 + Math.floor(r() * 4), st = H * .03;
       for (let j = 0; j < n; j++) add(blob(H * .024 * (1 - j / n * .5), 0), M(p0.x + Math.sin(j * 1.7) * st * .3, p0.y - j * st, p0.z + Math.cos(j * 1.3) * st * .3, 0, r() * 6, 0, 1, 1.3, 1), j % 2 ? c.leaf : c.leaf2, true);
     }
-    const tr = H * (sp.trunkRatio || .05);
+    const tr = H * (sp.trunkRatio || .05) * (NEW ? .5 : 1); // (new trees have slimmer trunks)
     for (let k = 0; k < 4; k++) { const a = r() * 6.28; add(blob(tr * (.5 + r() * .4), 0), M(Math.cos(a) * tr * .9, H * (.1 + r() * .35), Math.sin(a) * tr * .9, 0, 0, 0, 1, 1.6, 1), c.leaf2, false); }
   }
   // In bloom: blossom, fruit, berries, a flower, or spores, in the species' bloom colour.
@@ -511,8 +732,9 @@ export function buildGeometry(THREE, sp, r, { bloom = false } = {}) { // exporte
   const twist = sp.growth === 'twisted' ? (.7 + r() * .6) * (r() < .5 ? -1 : 1) : 0, bend = (r() - .5) * .12;
   const PALE = new THREE.Color('#ddd6c8'), tmp = new THREE.Color();
 
+  if (distant) standIn(THREE, parts, H);
   // Merge: stems first, then foliage, each part non-indexed with its colour baked in.
-  const ordered = [...parts.filter(p => !p.foliage), ...parts.filter(p => p.foliage)];
+  const ordered = [...parts.filter(p => !p.foliage), ...parts.filter(p => p.foliage)].map(far ? (p) => simplerPart(THREE, p, H) : (p) => p).filter(Boolean);
   const pos = [], nor = [], col = [];
   let stemVerts = 0;
   for (const p of ordered) {
@@ -543,6 +765,67 @@ export function buildGeometry(THREE, sp, r, { bloom = false } = {}) { // exporte
   geometry.addGroup(stemVerts, pos.length / 3 - stemVerts, 1);
   geometry.computeBoundingSphere();
   return geometry;
+}
+
+// The distant model: the plant itself, simplified hard, so it keeps its own silhouette
+// and colours from afar. Stems under an eighth of the plant's height go and the rest get
+// three sides; the foliage (except very big pieces, which are kept with few facets) is
+// gathered by where it is into a few rounded masses in its own colours, so a crown of
+// many small pieces still reads as that crown.
+function standIn(THREE, parts, H) {
+  const keep = [], buckets = new Map(), cellK = H * .3, tmpB = new THREE.Box3();
+  for (const p of parts) {
+    const g = p.geo; if (!g.boundingSphere) g.computeBoundingSphere();
+    const e = p.matrix.elements, scale = Math.sqrt(Math.max(e[0] ** 2 + e[1] ** 2 + e[2] ** 2, e[4] ** 2 + e[5] ** 2 + e[6] ** 2, e[8] ** 2 + e[9] ** 2 + e[10] ** 2));
+    const big = g.boundingSphere.radius * scale;
+    if (p.foliage ? big >= H * .32 && !g.userData?.detail : big >= H * .05) {
+      const q = g.parameters || {};
+      let lite = null;
+      if (g.type === 'IcosahedronGeometry') lite = new THREE.IcosahedronGeometry(q.radius, 0);
+      else if (g.type === 'CylinderGeometry') lite = new THREE.CylinderGeometry(q.radiusTop, q.radiusBottom, q.height, p.foliage ? 5 : 3, 1, q.openEnded);
+      else if (g.type === 'ConeGeometry') lite = new THREE.ConeGeometry(q.radius, q.height, p.foliage ? 5 : 3, 1, q.openEnded);
+      if (lite) { if (!g.boundingBox) g.computeBoundingBox(); lite.computeBoundingBox(); const a = g.boundingBox.getCenter(new THREE.Vector3()), b = lite.boundingBox.getCenter(new THREE.Vector3()); lite.translate(a.x - b.x, a.y - b.y, a.z - b.z); keep.push({ ...p, geo: lite }); }
+      else keep.push(p);
+      continue;
+    }
+    if (!p.foliage) continue;
+    // A small piece of foliage: into the bucket for where it is.
+    if (!g.boundingBox) g.computeBoundingBox();
+    tmpB.copy(g.boundingBox).applyMatrix4(p.matrix);
+    const c = tmpB.getCenter(new THREE.Vector3()), key = `${Math.floor(c.x / cellK)},${Math.floor(c.y / cellK)},${Math.floor(c.z / cellK)}`;
+    let b = buckets.get(key);
+    if (!b) buckets.set(key, b = { box: tmpB.clone(), color: new THREE.Color(0, 0, 0), n: 0 });
+    b.box.union(tmpB); b.color.add(p.color); b.n++;
+  }
+  for (const b of buckets.values()) {
+    if (b.n < 2) continue; // a lone small piece is not missed
+    const size = b.box.getSize(new THREE.Vector3()), c = b.box.getCenter(new THREE.Vector3());
+    keep.push({ geo: new THREE.IcosahedronGeometry(.5, 0), matrix: new THREE.Matrix4().compose(c, new THREE.Quaternion(), size.multiplyScalar(.85).max(new THREE.Vector3(.2, .2, .2))), color: b.color.multiplyScalar(1 / b.n), foliage: true });
+  }
+  if (!keep.some((p) => p.foliage)) return; // nothing would be left of it: keep the full parts
+  parts.length = 0;
+  parts.push(...keep);
+}
+
+// For the far model: parts under 6% of the plant's height go (twigs, fruit, small leaves,
+// bark rings), and spheres, cylinders and cones are rebuilt with fewer facets, in place.
+function simplerPart(THREE, p, H) {
+  const g = p.geo;
+  if (!g.boundingSphere) g.computeBoundingSphere();
+  const e = p.matrix.elements, scale = Math.sqrt(Math.max(e[0] ** 2 + e[1] ** 2 + e[2] ** 2, e[4] ** 2 + e[5] ** 2 + e[6] ** 2, e[8] ** 2 + e[9] ** 2 + e[10] ** 2));
+  if (g.boundingSphere.radius * scale < H * .06 || g.userData?.detail) return null;
+  const q = g.parameters || {};
+  let lite = null;
+  if (g.type === 'IcosahedronGeometry' && q.detail > 0) lite = new THREE.IcosahedronGeometry(q.radius, 0);
+  else if (g.type === 'CylinderGeometry' && q.radialSegments > 4) lite = new THREE.CylinderGeometry(q.radiusTop, q.radiusBottom, q.height, Math.max(4, Math.ceil(q.radialSegments / 2)), 1, q.openEnded);
+  else if (g.type === 'ConeGeometry' && q.radialSegments > 4) lite = new THREE.ConeGeometry(q.radius, q.height, Math.max(4, Math.ceil(q.radialSegments / 2)), 1, q.openEnded);
+  if (!lite) return p;
+  // The original may have been moved after it was made (cyl() stands it on its base): move the lighter one the same way.
+  if (!g.boundingBox) g.computeBoundingBox();
+  lite.computeBoundingBox();
+  const a = g.boundingBox.getCenter(new THREE.Vector3()), b = lite.boundingBox.getCenter(new THREE.Vector3());
+  lite.translate(a.x - b.x, a.y - b.y, a.z - b.z);
+  return { ...p, geo: lite };
 }
 
 // The ground's own normal at n, from heights 1.5 m away in two directions.

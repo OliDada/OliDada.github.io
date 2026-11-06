@@ -13,7 +13,7 @@ test('radio signals: planet-shapers and spacefarers are heard far beyond jump ra
   for (const e of sources) {
     const star = starById(e.id);
     assert.ok(star && Math.abs(starDistance(star, here) - e.distance) < 1e-6);
-    assert.ok(tierAtLeast(e.tier, 'planet-shapers') && e.distance <= HEARD[e.tier]);
+    assert.ok(HEARD[e.tier] && tierAtLeast(e.tier, 'industrial') && e.distance <= HEARD[e.tier]);
     assert.equal(broadcasterAt(star).id, e.civ);
     // The civilization is really there, with a home world in that system.
     const civ = civilizationsIn(generateSystem(star.seed)).find(c => c.id === e.civ);
@@ -32,7 +32,7 @@ test('civilizations are entities with names, not numbers', () => {
   for (let s = 0; s < 1500; s++) for (const c of civilizationsIn(generateSystem(s))) {
     n++;
     assert.ok(TIERS.includes(c.tier) && typeof c.id === 'string' && c.id.startsWith(`${generateSystem(s).bodies.find(b => b.id === c.home).seed}:${c.home}:`));
-    assert.equal(c.reach, c.tier === 'system-shapers' ? 'system' : c.tier === 'spacefarers' ? 'orbit' : c.tier === 'planet-shapers' ? 'world' : 'local');
+    assert.equal(c.reach, c.spaceborne ? 'space' : c.tier === 'system-shapers' ? 'system' : c.tier === 'spacefarers' || c.tier === 'orbital' ? 'orbit' : c.tier === 'planet-shapers' ? 'world' : 'local');
   }
   assert.ok(n > 20);
   assert.ok(tierAtLeast('city builders', 'village builders') && !tierAtLeast('tool users', 'city builders') && !tierAtLeast('unknown', 'tool users'));

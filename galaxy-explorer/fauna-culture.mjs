@@ -11,8 +11,21 @@
 //   3 city builders    woven garments over the body, metal bands and a circlet
 //   4 planet-shapers   glowing seams and implants, a wrist device, metal tools
 //   5 spacefarers      a fitted suit, collar ring, life-support pack, visor, glowing rod
+// But not every culture dresses. Each has a style of its own (cultureOf .style):
+//   clothed     the ladder above: harness and sash, woven garments, then a fitted suit
+//   ornamented  no cloth at all: beads, metal rings and studs, crowns; at the top a floating halo
+//   painted     bare skin painted in bold patterns, later glowing; a hovering companion device
+//   bare        nothing worn; their skill shows in what they carry (a pouch, tools, a device);
+//               spacefarers keep a hovering device and a shimmering field round the head
+//   grown       gear grown from living tissue: sacs and pods on the back, grown crests,
+//               glowing nodules, a membrane hood
+//   implants    the body itself is the tool: metal plates and rings fused to limbs and head,
+//               glowing ports, an eye band
+// and arms of their own (armStyle): jointed, boneless tentacle arms, pincers, or two pairs.
+// Style and arms come from their own stream, so nothing else about a culture changed.
 // All of it is drawn from the species' own seed, so it is stable and varied.
 import { rng } from './rng.mjs';
+import { BUILD_LEVEL } from './fauna.mjs';
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const hsl = (h, s, l) => {
@@ -34,6 +47,7 @@ const MANIP_OPTIONS = {
   floater: [['tentacle-hands', 1]],
   radial: [['tendrils', 2], ['arms', 1]],
   roller: [['arms', 1]],
+  swimmer: [['tentacle-hands', 2], ['tendrils', 2], ['chest-arms', 1]],
 };
 export const MANIP_WORDS = {
   arms: 'jointed arms with fingered hands', 'chest-arms': 'a second, smaller pair of arms on its chest', trunk: 'a prehensile trunk ending in fingers',
@@ -42,17 +56,29 @@ export const MANIP_WORDS = {
 };
 
 export function cultureOf(sp) {
-  const level = sp.civilization || 0;
+  const level = BUILD_LEVEL[sp.civilization || 0] || 0; // what it builds with (fauna.mjs)
   if (!level) return null;
   const r = rng(sp.seed, 'culture');
   const opts = MANIP_OPTIONS[sp.plan] || [['tendrils', 1]];
   let roll = r() * opts.reduce((a, o) => a + o[1], 0), manip = opts[0][0];
   for (const [k, w] of opts) { roll -= w; if (roll <= 0) { manip = k; break; } }
   if (sp.plan === 'biped' && sp.arms) manip = 'arms'; // already has them
+  // Style and arms, on their own stream. Bodies with hands lean toward clothing; soft,
+  // radial and drifting bodies toward grown gear or nothing; armoured ones toward grown
+  // plates and implants; fliers toward ornament.
+  const st = rng(sp.seed, 'culture-style'), plan = sp.plan;
+  const sw = { clothed: 1.1, ornamented: .8, painted: .8, bare: .7, grown: .6, implants: .6 };
+  if (plan === 'biped') sw.clothed += 1;
+  if (['floater', 'radial', 'slug', 'serpent', 'swimmer'].includes(plan)) { sw.grown += 1; sw.bare += .6; sw.clothed *= .4; }
+  if (['hexapod', 'arachnid', 'roller'].includes(plan)) { sw.grown += .7; sw.implants += .5; sw.clothed *= .45; }
+  if (plan === 'flyer') { sw.ornamented += .7; sw.clothed *= .5; }
+  sw.ornamented += sp.traits.sociality * .5; sw.bare += (1 - sp.traits.sociality) * .5;
+  const pickW = (w) => { let x = st() * Object.values(w).reduce((a, v) => a + v, 0); for (const [k, v] of Object.entries(w)) if ((x -= v) <= 0) return k; return Object.keys(w)[0]; };
+  const style = pickW(sw), armStyle = pickW({ jointed: 1.4, tentacle: 1, pincer: .7, twin: .6 });
   const clothHue = r.range(0, 360);
   const metal = r.pick(['#b8864a', '#c9a24a', '#a9b4bd', '#8a5a3c', '#d8d2c0']);
   return {
-    level, manip, hasArms: sp.plan === 'biped' && sp.arms,
+    level, manip, hasArms: sp.plan === 'biped' && sp.arms, style, armStyle,
     paint: { color: r.pick(['#f1ece0', '#d9a441', '#b8322a', '#1c1c1e', '#3f7fc0']), style: r.pick(['chevrons', 'dots', 'stripes', 'rings']) },
     cloth: hsl(clothHue, r.range(.35, .7), r.range(.3, .55)), trim: hsl(clothHue + r.pick([150, 180, 40, -40]), r.range(.5, .8), r.range(.45, .65)),
     metal,
@@ -75,7 +101,13 @@ export const tag = (color, kind) => { color.kind = kind; return color; };
 
 export function cultureSkin(c, THREE, pt, ang, sy, color, zone) {
   if (!c) return color;
-  const t = pt.t ?? 0, z = zone ? zone(pt) : 0;
+  const t = pt.t ?? 0, z = zone ? zone(pt) : 0, style = c.style || 'clothed';
+  if (style === 'grown' && c.level >= 3 && sy > .25 && Math.abs(Math.sin(t * 26)) > .55) // grown plates along the back
+    return tag(color.clone().lerp(new THREE.Color(c.trim), .35).multiplyScalar(.8), KIND.gloss);
+  if (style === 'implants' && c.level >= 3 && sy > .35 && Math.sin(t * 17 + ang * 3) > .75) // metal plates fused to the body
+    return tag(new THREE.Color(c.metal), KIND.metal);
+  if (style === 'painted' && paintMask(c, t, ang, sy)) return tag(color.clone().lerp(new THREE.Color(c.paint.color), .92), KIND.skin);
+  if (style !== 'clothed') return style === 'ornamented' && c.level <= 2 && paintMask(c, t, ang, sy) ? color.clone().lerp(new THREE.Color(c.paint.color), .9) : color;
   if (c.level >= 3 && z > 0 && sy > -.75) {
     const k = c.level >= 5 ? KIND.suit : KIND.cloth;
     const cloth = tag(new THREE.Color(c.level >= 5 ? c.suit : c.cloth), k);
@@ -86,18 +118,25 @@ export function cultureSkin(c, THREE, pt, ang, sy, color, zone) {
     if (c.level < 5 && Math.sin(t * 60) > .85) return tag(cloth.clone().lerp(new THREE.Color(c.trim), .6), k);
     return cloth;
   }
-  if (c.level <= 3 && sy > -.2) {
-    const paint = new THREE.Color(c.paint.color);
-    const k = c.paint.style === 'chevrons' ? ((t * 14 + Math.abs(Math.cos(ang)) * 1.4) % 1) < .12
-      : c.paint.style === 'dots' ? Math.sin(t * 90) * Math.sin(ang * 9) > .82
-      : c.paint.style === 'rings' ? Math.abs(Math.sin(t * 9)) > .985
-      : Math.abs(Math.cos(ang)) < .07 && t > .2 && t < .8;
-    if (k) return color.clone().lerp(paint, .9);
-  }
+  if (c.level <= 3 && paintMask(c, t, ang, sy)) return color.clone().lerp(new THREE.Color(c.paint.color), .9);
   return color;
 }
+// Where body paint goes (painted cultures paint far more of themselves).
+function paintMask(c, t, ang, sy) {
+  if (sy <= -.2) return false;
+  const bold = c.style === 'painted';
+  return c.paint.style === 'chevrons' ? ((t * 14 + Math.abs(Math.cos(ang)) * 1.4) % 1) < (bold ? .3 : .12)
+    : c.paint.style === 'dots' ? Math.sin(t * 90) * Math.sin(ang * 9) > (bold ? .5 : .82)
+    : c.paint.style === 'rings' ? Math.abs(Math.sin(t * 9)) > (bold ? .9 : .985)
+    : Math.abs(Math.cos(ang)) < (bold ? .2 : .07) && t > .2 && t < .8;
+}
 export function cultureGlow(c, pt, ang, sy, zone) {
-  if (!c || c.level < 4 || !zone || zone(pt) <= 0) return 0;
+  if (!c || c.level < 4) return 0;
+  const t = pt.t ?? 0, style = c.style || 'clothed';
+  if (style === 'painted') return paintMask(c, t, ang, sy) ? .8 : 0;                        // the paint itself glows
+  if (style === 'grown') return sy > .2 && Math.sin(t * 50) * Math.sin(ang * 7) > .85 ? 1 : 0; // glowing nodules
+  if (style === 'implants') return Math.abs(sy) < .06 || (sy > .35 && Math.sin(t * 17 + ang * 3) > .97) ? .9 : 0; // seams and ports
+  if (style !== 'clothed' || !zone || zone(pt) <= 0) return 0;
   return Math.abs(sy) < .08 ? .9 : 0; // a glowing seam along each flank
 }
 
@@ -143,6 +182,11 @@ export function dress(kit) {
   }
   // A jointed arm from a shoulder, hanging forward, with a hand.
   function arm(sh, side, len, thick, color, phase) {
+    if (c.armStyle === 'tentacle') { // a boneless arm ending in fine fingers
+      const { tip, tipAnim } = tendril(sh, [side * .35, -.6, .75], len * 1.1, thick * .95, color, 1 + hands.length);
+      hands.push({ p: tip, dir: [side * .3, -.5, 1], anim: tipAnim, size: thick });
+      return;
+    }
     const shoulder = sh, elbow = [sh[0] + side * len * .2, sh[1] - len * .45, sh[2] + len * .12], wrist = [sh[0] + side * len * .15, sh[1] - len * .75, sh[2] + len * .42];
     const path = [];
     const pts = [shoulder, elbow, wrist], radii = [thick, thick * .8, thick * .65];
@@ -150,9 +194,15 @@ export function dress(kit) {
     path.push({ p: wrist, rx: radii[2], ry: radii[2], seg: 1 });
     tube(path, 7, () => color, (pt) => A(pt.seg === 0 ? P.ARM : P.FOREARM, shoulder, elbow, phase, 1));
     const anim = A(P.FOREARM, shoulder, elbow, phase, 1), dir = [side * .1, -.35, 1];
-    hand(wrist, dir, thick * 1.3, col.belly, anim, 3 + (c.seed % 2));
+    if (c.armStyle === 'pincer') pincer(wrist, dir, thick * 1.3, col.horn, anim); else hand(wrist, dir, thick * 1.3, col.belly, anim, 3 + (c.seed % 2));
     hands.push({ p: wrist, dir, anim, size: thick * 1.3 });
     anchors.limbs?.push({ a: shoulder, b: elbow, r: thick, anim: A(P.ARM, shoulder, elbow, phase, 1) });
+  }
+  // A claw of two jaws, one with a small thumb-like hook (pincer arms).
+  function pincer(p, dir, size, color, anim) {
+    const d = V(dir).normalize(), side = new THREE.Vector3().crossVectors(d, new THREE.Vector3(0, 1, 0)); if (side.lengthSq() < .01) side.set(1, 0, 0); side.normalize();
+    ellipsoid(p, [size * 1.1, size * .8, size * 1.3], color, anim, 1);
+    for (const k of [-1, 1]) { const b = V(p).addScaledVector(d, size * .8).addScaledVector(side, k * size * .4); spike(b.toArray(), b.clone().addScaledVector(d, size * 2.2).addScaledVector(side, -k * size * .5).toArray(), size * .4, color, anim, { bendDir: side.clone().multiplyScalar(-k).toArray(), bend: size * .3 }); }
   }
   // A curling tendril from a root, ending in small fingers.
   function tendril(root, dir, len, thick, color, i, pivotAnimPart = P.SWAY) {
@@ -171,11 +221,54 @@ export function dress(kit) {
       spike(tip, V(tip).addScaledVector(fd, thick * 2.4).toArray(), thick * .35, col.belly, tipAnim);
     }
     if (i === 0) hands.push({ p: tip, dir: d.toArray(), anim: tipAnim, size: thick * 1.4 });
+    return { tip, tipAnim };
+  }
+
+  // Cultures that do not dress: what they wear or carry instead, by style and level.
+  function unclothed(style) {
+    const t = anchors.torso, hd = anchors.head, back = anchors.back, limbs = (anchors.limbs || []).slice(0, 6);
+    const bead = (p, size, color, anim, glowV = 0) => ellipsoid(p, [size, size, size], color, anim, 0, glowV);
+    const onLimbs = (color, scale, thick, glowV = 0) => { for (const lb of limbs) { const mid = lb.a.map((v, j) => v + (lb.b[j] - v) * .45), axis = lb.b.map((v, j) => v - lb.a[j]); ring({ c: mid, axis, rx: lb.r, ry: lb.r, anim: lb.anim }, color, { scale, thick, glow: glowV }); } };
+    const headTop = hd && !hd.ring ? [hd.p[0], hd.p[1] + hd.size * .42, hd.p[2] - hd.size * .1] : hd ? [hd.p[0], hd.p[1] + hd.size * .3, hd.p[2]] : null;
+    const side = t ? (() => { const axis = V(t.axis).normalize(), out = Math.abs(axis.x) > .9 ? [0, 0, 1] : [1, 0, 0]; return [t.c[0] + out[0] * t.rx * 1.06, t.c[1] - t.ry * .2, t.c[2] + out[2] * t.rx * 1.06]; })() : null;
+    // A hovering device: a glowing orb in a ring, floating beside the body.
+    const orb = () => { const at = back || (t && { p: [t.c[0], t.c[1] + t.ry, t.c[2]], size: s * .25, anim: t.anim }); if (!at) return; const o = [at.p[0] + s * .35, at.p[1] + s * .3, at.p[2] - s * .1];
+      ellipsoid(o, [s * .06, s * .06, s * .06], tech, at.anim, 1, 1.3); ring({ c: o, axis: [0, 1, .3], rx: s * .09, ry: s * .09, anim: at.anim }, metal, { scale: 1, thick: .008, glow: .6 }); };
+    const halo = (scale, glowV) => hd && ring({ c: [hd.p[0], hd.p[1] + hd.size * (hd.ring ? .1 : .2), hd.p[2]], axis: [0, 1, .1], rx: hd.size * .6, ry: hd.size * .6, anim: hd.anim }, tech, { scale, thick: hd.size / s * .03, glow: glowV });
+    if (style === 'ornamented') {
+      if (L >= 2) { onLimbs(L >= 3 ? metal : paint, 1.2, .016); if (anchors.collar) for (let k = 0; k < 12; k++) { const at = anchors.collar, axis = V(at.axis).normalize(), pk = Math.abs(axis.y) > .9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0), uu = new THREE.Vector3().crossVectors(pk, axis).normalize(), vv = new THREE.Vector3().crossVectors(axis, uu).normalize(), a = k / 12 * Math.PI * 2;
+        bead(V(at.c).addScaledVector(uu, Math.cos(a) * at.rx * 1.12).addScaledVector(vv, Math.sin(a) * at.ry * 1.12).toArray(), s * .02, k % 3 ? (L >= 3 ? metal : paint) : tag(C(c.trim), KIND.gloss), at.anim); } }
+      if (L >= 2 && headTop) for (let k = -1; k <= 1; k++) spike(headTop, [headTop[0] + k * hd.size * .4, headTop[1] + hd.size * .8, headTop[2] - hd.size * .4], hd.size * .07, k ? tag(C(c.trim), KIND.gloss) : paint, hd.anim, { bendDir: [0, 0, -1], bend: hd.size * .2 });
+      if (L >= 3 && back) for (let k = 0; k < 5; k++) bead([back.p[0] + (k - 2) * back.size * .25, back.p[1] + back.size * .1, back.p[2] + (k % 2) * back.size * .2], s * .025, metal, back.anim, L >= 4 ? .9 : 0);
+      if (L >= 3 && hd && !hd.ring) ring({ c: [hd.p[0], hd.p[1] + hd.size * .25, hd.p[2]], axis: [0, 1, .15], rx: hd.size * .5, ry: hd.size * .5, anim: hd.anim }, metal, { scale: 1, thick: hd.size / s * .06, glow: L >= 4 ? .5 : 0 });
+      if (L >= 5) { if (hd) ring({ c: [hd.p[0], hd.p[1] + hd.size * 1.1, hd.p[2]], axis: [0, 1, 0], rx: hd.size * .55, ry: hd.size * .55, anim: hd.anim }, tech, { scale: 1, thick: hd.size / s * .05, glow: 1.2 }); if (anchors.collar) ring(anchors.collar, tech, { scale: 1.2, thick: .02, glow: .8 }); }
+    } else if (style === 'grown') {
+      const pods = L >= 3 ? 4 : 2, sac = tag(col.belly.clone().lerp(tech, .25), KIND.gloss);
+      if (L >= 2 && back) for (let k = 0; k < pods; k++) ellipsoid([back.p[0] + (k % 2 ? 1 : -1) * back.size * .4, back.p[1] + back.size * .15, back.p[2] - Math.floor(k / 2) * back.size * .5], [back.size * .28, back.size * .22, back.size * .32], sac, back.anim, 1, L >= 4 ? .6 : 0);
+      if (L >= 2 && headTop) for (let k = 0; k < 4; k++) spike([headTop[0], headTop[1], headTop[2] + hd.size * (.2 - k * .15)], [headTop[0], headTop[1] + hd.size * (.5 - k * .06), headTop[2] + hd.size * (.1 - k * .2)], hd.size * .07, tag(col.horn.clone(), KIND.gloss), hd.anim);
+      if (L >= 3) onLimbs(tag(col.horn.clone().lerp(col.dark, .3), KIND.gloss), 1.25, .02, L >= 4 ? .4 : 0);
+      if (L >= 5 && hd) { ellipsoid([hd.p[0], hd.p[1] + hd.size * .2, hd.p[2]], [hd.size * (hd.ring ? 1.15 : .62), hd.size * .5, hd.size * (hd.ring ? 1.15 : .62)], tag(col.belly.clone().lerp(C('#bfefff'), .35), KIND.gloss), hd.anim, 1, .25);
+        if (back) ellipsoid([back.p[0], back.p[1] + back.size * .5, back.p[2]], [back.size * .4, back.size * .4, back.size * .5], tech, back.anim, 1, 1); }
+    } else if (style === 'implants') {
+      if (L >= 2 && headTop) for (const sd of [-1, 0, 1]) bead([headTop[0] + sd * hd.size * .25, headTop[1] - hd.size * .05, headTop[2]], hd.size * .07, metal, hd.anim);
+      if (L >= 3) onLimbs(metal, 1.15, .03, L >= 4 ? .6 : 0);
+      if (L >= 3 && t) ring(t, metal, { scale: 1.03, thick: .025, glow: L >= 4 ? .7 : 0 });
+      if (L >= 5) { if (hd) { const R = hd.size * (hd.ring ? 1.06 : .56), path = [], arc = hd.ring ? Math.PI : 1.1; for (let k = 0; k <= 10; k++) { const a = -arc + k / 10 * arc * 2; path.push({ p: [hd.p[0] + Math.sin(a) * R, hd.p[1] + hd.size * (hd.ring ? 0 : .12), hd.p[2] + Math.cos(a) * R], rx: hd.size * .04, ry: hd.size * .06 }); } tube(path, 6, () => tech, () => hd.anim, { glowAt: () => 1.1, ref: [0, 1, 0] }); }
+        if (back) { ellipsoid([back.p[0], back.p[1] + back.size * .3, back.p[2]], [back.size * .4, back.size * .2, back.size * .5], metal, back.anim, 1); spike([back.p[0], back.p[1] + back.size * .45, back.p[2]], [back.p[0], back.p[1] + back.size * 1.4, back.p[2] - back.size * .2], s * .008, metal, back.anim); } }
+    } else { // painted and bare
+      if (L >= 2 && side && t) ellipsoid(side, [s * .05, s * .065, s * .06], tag(C('#5a3e26'), KIND.cloth), t.anim, 1); // a carrying pouch, not clothing
+      if (L >= 2 && style === 'painted' && headTop) for (let k = -1; k <= 1; k += 2) spike(headTop, [headTop[0] + k * hd.size * .3, headTop[1] + hd.size * .7, headTop[2] - hd.size * .3], hd.size * .06, paint, hd.anim);
+      if (L >= 3 && hands[1]) ellipsoid(hands[1].p, [hands[1].size * 1.3, hands[1].size * 1.6, hands[1].size * 1.3], metal, hands[1].anim, 1); // a second thing carried: a metal vessel
+      else if (L >= 3 && side && t) ellipsoid([side[0], side[1] - t.ry * .3, side[2]], [s * .04, s * .04, s * .04], metal, t.anim, 1);
+      if (L >= 5) { orb(); halo(1.6, .8); }
+    }
   }
 
   // --- Manipulators ---
   const m = c.manip, sh = anchors.shoulders || [];
   if (m === 'arms' && !c.hasArms) sh.forEach(({ p, side }, i) => arm(p, side, s * .55, s * .045, col.base, i ? Math.PI : 0));
+  // Two pairs: a second, smaller pair of arms below the first.
+  if (c.armStyle === 'twin' && (m === 'arms' || m === 'chest-arms')) sh.forEach(({ p, side }, i) => arm([p[0] * .9, p[1] - s * .12, p[2] - s * .04], side, s * .36, s * .028, col.belly, i ? 0 : Math.PI));
   if (m === 'chest-arms') sh.forEach(({ p, side }, i) => arm(p, side, s * .38, s * .03, col.belly, i ? Math.PI : 0));
   if (m === 'palp-hands') sh.forEach(({ p, side }, i) => arm(p, side, s * .32, s * .025, col.base, i ? Math.PI : 0));
   if (m === 'wing-hands') sh.forEach(({ p, side }) => { hand(p, [side, -.2, .6], s * .04, col.horn, anchors.wingAnim?.(side) || A(P.BODY)); hands.push({ p, dir: [side, -.2, .6], anim: anchors.wingAnim?.(side) || A(P.BODY), size: s * .04 }); });
@@ -204,7 +297,8 @@ export function dress(kit) {
   if (h0) {
     const len = s * (c.tool === 'hammer' ? .4 : .9), d = V([0, 1, .15]).normalize();
     const a = V(h0.p).addScaledVector(d, -len * .35), b = V(h0.p).addScaledVector(d, len * .65);
-    const shaftC = L >= 4 ? tag(metal.clone().lerp(col.dark, .3), KIND.metal) : tag(C('#6b4a2b'), KIND.wood);
+    const grown = c.style === 'grown';
+    const shaftC = grown ? tag(col.horn.clone().lerp(col.dark, .25), KIND.gloss) : L >= 4 ? tag(metal.clone().lerp(col.dark, .3), KIND.metal) : tag(C('#6b4a2b'), KIND.wood);
     tube([{ p: a.toArray(), rx: s * .012, ry: s * .012 }, { p: b.toArray(), rx: s * .012, ry: s * .012 }], 5, () => shaftC, () => h0.anim);
     if (L >= 5) ellipsoid(b.toArray(), [s * .03, s * .03, s * .03], tech, h0.anim, 1, 1.2);
     else if (c.tool === 'hammer') ellipsoid(b.toArray(), [s * .06, s * .035, s * .035], L >= 3 ? metal : tag(C('#7d7a72'), KIND.stone), h0.anim, 0);
@@ -214,6 +308,8 @@ export function dress(kit) {
     if (L >= 4 && hands[1]) ellipsoid(hands[1].p, [hands[1].size * .9, hands[1].size * .5, hands[1].size * .9], tech, hands[1].anim, 1, .9);
   }
 
+  const style = c.style || 'clothed';
+  if (style !== 'clothed') { unclothed(style); return; }
   // --- Level 2: harness, pouch, beads, limb bands, ornament ---
   if (L >= 2) {
     const strapC = tag(L >= 5 ? suit.clone().lerp(col.dark, .4) : L >= 3 ? cloth.clone().lerp(col.dark, .3) : C('#5a3e26'), L >= 5 ? KIND.suit : KIND.cloth);

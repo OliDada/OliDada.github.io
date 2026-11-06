@@ -79,7 +79,8 @@ test('grazers walk to plants and eat; animals drink at the shore and stay dry', 
       for (const c of fauna.creatures) {
         if (c.state === 'drink') drank++;
         if (c.state === 'feed' && c.eco.eatsPlants) fed++;
-        if (!c.hidden && c.sp.altitude[1] === 0) assert.ok(!terrain.isLiquid(c.n), `${c.sp.name} walked into the sea`);
+        if (!c.hidden && c.sp.aquatic && !c.band.dry) assert.ok(terrain.isLiquid(c.n), `${c.sp.name} swam ashore`);
+        else if (!c.hidden && c.sp.altitude[1] === 0) assert.ok((!terrain.isLiquid(c.n) || c.sp.swims || terrain.sea - terrain.height(c.n) < (['serpent', 'slug'].includes(c.sp.plan) ? .12 + c.sp.size * .1 : c.sp.legLength * .6 + .08) + .05), `${c.sp.name} walked into deep water`); // wading is fine
       }
     }
   }
@@ -95,7 +96,7 @@ test('animals sleep outside their time of day and wake when it comes', () => {
   for (let i = 0; i < 20 * 60; i++) fauna.update(.05, i * .05, null, sun);
   const asleep = day.filter(c => c.state === 'sleep' && c.n.dot(sun) < -.08);
   assert.ok(asleep.length >= day.filter(c => c.n.dot(sun) < -.3).length * .5, `${asleep.length} of ${day.length} asleep at night`);
-  for (const c of asleep) assert.ok(c.speed < .05 && (c.sink > 0 || ["serpent", "slug"].includes(c.sp.plan)));
+  for (const c of asleep) assert.ok(c.speed < .05 && (c.sink > 0 || ["serpent", "slug"].includes(c.sp.plan) || c.sp.aquatic)); // swimmers sleep afloat
   for (let i = 0; i < 20 * 3; i++) fauna.update(.05, 60 + i * .05, null, sun.clone().negate());
   assert.ok(day.every(c => c.state !== 'sleep'), 'still asleep at noon');
 });
@@ -193,7 +194,8 @@ test('animals follow you across the world: herds left behind move near you', () 
   const b = living.find(x => x.physics.life === 'complex' && faunaFor(x).species.length >= 3 && terrainFor(x).coverage < .5);
   const { terrain, signal, fauna } = world(b);
   let far = signal.clone().negate();
-  for (let k = 0; terrain.isLiquid(far) && k < 500; k++) far = new THREE.Vector3().randomDirection();
+  const empty = (v) => fauna.creatures.every(c => c.n.angleTo(v) * b.radius > 300);
+  for (let k = 0; (terrain.isLiquid(far) || !empty(far)) && k < 500; k++) far = new THREE.Vector3().randomDirection(); // dry ground, away from every herd
   const cam = far.clone().multiplyScalar(b.radius + terrain.surface(far) + 1.7);
   const near = () => fauna.creatures.filter(c => c.n.angleTo(far) * b.radius < 260).length;
   assert.equal(near(), 0, 'animals were already on the far side');

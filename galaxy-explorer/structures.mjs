@@ -1,3 +1,4 @@
+import { architectureOf, describeArchitecture } from './alien-arch.mjs';
 // Civilizations: what the most advanced species on a world has made. Pure data;
 // structures-mesh.js builds it.
 //
@@ -23,12 +24,14 @@
 // spread roads and towns across the world; spacefarers launch in their own way
 // (rockets, grown launch towers, tethers into orbit, silos, launch rails).
 import { rng } from './rng.mjs';
-import { CIVILIZATION } from './fauna.mjs';
+import { CIVILIZATION, BUILD_LEVEL } from './fauna.mjs';
+import { cultureOf } from './fauna-culture.mjs';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const LEVEL_NAMES = CIVILIZATION;
 
 export function familyOf(s) {
+  if (s.aquatic) return 'tentacles'; // sea builders grow coral and secrete shells, on the sea floor
   if (s.arms) return 'hands';
   return { biped: 'grazers', quadruped: 'grazers', radial: s.form === 'tripod' ? 'tripods' : 'tentacles', floater: 'drifters', hexapod: 'hive', arachnid: 'web',
     serpent: 'burrowers', slug: 'burrowers', flyer: 'nests', roller: 'rollers' }[s.plan] || 'grazers';
@@ -36,6 +39,8 @@ export function familyOf(s) {
 
 // Which cultures a family can have, weighted by the species and its world.
 function cultureWeights(family, s, body) {
+  // Sea builders have cultures of their own: spiral conch shells, colonies of polyp tubes, woven kelp domes.
+  if (s.aquatic) return { conch: s.form === 'squid' ? 1.2 : .8, polyp: 1, kelpweave: s.traits.diet === 'carnivore' ? .5 : 1 };
   const t = s.traits, p = body.physics, wet = body.biome === 'Oceanic' || (p.waterCoverage ?? 0) > .55, lush = body.biome === 'Verdant';
   switch (family) {
     case 'hands': return { timber: lush ? 1.4 : .7, terraced: body.biome === 'Desert' || body.biome === 'Volcanic' ? 1.6 : .8, tents: .5 + (1 - t.sociality) * .9, stilts: wet ? 1.6 : .3 };
@@ -53,7 +58,7 @@ function cultureWeights(family, s, body) {
 }
 
 // Materials: grown cultures build from their own bodies' products; the rest use the world.
-const GROWN = { coral: 'grown', shells: 'shell', silk: 'silk', hive: 'wax', living: 'living', reef: 'grown', tethered: 'membrane' };
+const GROWN = { conch: 'shell', polyp: 'grown', kelpweave: 'living', coral: 'grown', shells: 'shell', silk: 'silk', hive: 'wax', living: 'living', reef: 'grown', tethered: 'membrane' };
 function materialOf(culture, s, body) {
   if (GROWN[culture]) return GROWN[culture];
   if (s.chemistry === 'silicon') return 'glass';
@@ -70,19 +75,29 @@ export function civilizationFor(body, species) {
   if (!civ) return null;
   const r = rng(body.seed, 'civilization', civ.id), p = body.physics;
   const family = familyOf(civ), weights = cultureWeights(family, civ, body);
+  // Builders whose gear is grown (fauna-culture.mjs style) grow their homes too, where their body plan allows.
+  const style = cultureOf(civ)?.style;
+  if (style === 'grown') for (const k of Object.keys(weights)) if (GROWN[k]) weights[k] *= 3;
+  if (style === 'implants' || style === 'clothed') for (const k of Object.keys(weights)) if (GROWN[k]) weights[k] *= .7;
   let roll = r() * Object.values(weights).reduce((a, w) => a + w, 0), culture = Object.keys(weights)[0];
   for (const [k, w] of Object.entries(weights)) { roll -= w; if (roll <= 0) { culture = k; break; } }
-  const level = civ.civilization, material = materialOf(culture, civ, body);
+  // stage: the step of the ladder (fauna.mjs CIVILIZATION); level: what it builds with (BUILD_LEVEL).
+  const stage = civ.civilization, level = BUILD_LEVEL[stage], material = materialOf(culture, civ, body);
+  const civSeed = r.int(0, 2 ** 31);
   return {
-    species: civ, level, family, culture, material,
+    species: civ, level, stage, family, culture, material,
     // legacy name used by older callers
     style: family,
-    unit: clamp(civ.size * 1.1, 1, 3),
-    tall: clamp(1 / Math.sqrt(Math.max(p.gravity, .1)), .85, 1.6),
-    fields: level >= 2 && (civ.traits.diet === 'herbivore' || civ.traits.diet === 'omnivore') && family !== 'drifters',
-    hearths: (civ.chemistry === 'carbon' || civ.chemistry === 'sulfur') && p.pressure > .2 && ['hands', 'grazers', 'tripods', 'tentacles'].includes(family),
-    seed: r.int(0, 2 ** 31),
-    description: describeCivilization(civ, level, culture),
+    // Buildings fit their builders: giants build on a giant scale, tall thin species build
+    // taller and narrower, heavy ones low and broad.
+    unit: clamp(civ.size * 1.1, .55, civ.build === 'giant' ? 9 : 7), // small builders build small, huge ones huge
+    tall: clamp(1 / Math.sqrt(Math.max(p.gravity, .1)), .85, 1.6) * (civ.build === 'lanky' ? 1.3 : civ.build === 'heavy' ? .8 : 1),
+    look: style,
+    underwater: !!civ.aquatic,
+    fields: level >= 2 && (civ.traits.diet === 'herbivore' || civ.traits.diet === 'omnivore') && family !== 'drifters' && !civ.aquatic,
+    hearths: (civ.chemistry === 'carbon' || civ.chemistry === 'sulfur') && p.pressure > .2 && ['hands', 'grazers', 'tripods', 'tentacles'].includes(family) && !civ.aquatic,
+    seed: civSeed,
+    description: describeCivilization(civ, level, culture, stage, family === 'hands' && level >= 2 && !civ.aquatic ? describeArchitecture(architectureOf({ species: civ, level, family, culture, material, seed: civSeed }, body)) : null),
   };
 }
 
@@ -94,6 +109,9 @@ const WORDS = {
   terraced: { village: 'flat-roofed clay houses stacked against each other', city: 'terraced blocks climbing toward a stepped pyramid', launch: 'rockets launched from the summit of a stepped pyramid' },
   tents: { village: 'camps of hide tents and round yurts', city: 'vast many-peaked pavilions of stretched hide', launch: 'rockets from a launch field ringed with tents' },
   stilts: { village: 'houses raised on stilts, joined by walkways', city: 'stilt towns spread across the shallows on raised walkways', launch: 'rockets from a platform on stilts' },
+  conch: { village: 'spiral conch shells they secrete and live inside', city: 'streets of great spiral shells around one towering conch', launch: 'a spiral launch tower that hurls its craft up through the sea' },
+  polyp: { village: 'colonies of soft tubes, each crowned with feeding tentacles', city: 'forests of glowing polyp towers', launch: 'a grown tube that fires seed-like craft up through the water' },
+  kelpweave: { village: 'domes woven from living kelp, buoyed by gas floats', city: 'woven kelp halls and towers swaying in the current', launch: 'a woven tower that lifts its craft to the surface on gas floats' },
   coral: { village: 'branching, coral-like dwellings they grow rather than build', city: 'forests of grown towers and lumpy domes around a great fan', launch: 'a grown launch tower that throws seed-like craft into orbit' },
   shells: { village: 'spiral shells they secrete and live inside', city: 'towering spirals coiled one above another', launch: 'a spiral launch tower capped with a capsule' },
   stiltpods: { village: 'pods raised high on three legs', city: 'clusters of tall-legged pods striding over the ground', launch: 'a giant tripod that cradles a craft for launch' },
@@ -116,15 +134,16 @@ const WORDS = {
 };
 // System-shapers (level 6): what they have built beyond their world (civilizations.mjs fills in the ships).
 export const SYSTEM_TEXT = 'They have made the whole system theirs: a ring circles their world, joined to the ground by elevators, their colonies reach every rocky world and moon, habitats circle the giants and mirrors gather the starlight.';
-function describeCivilization(s, level, culture) {
-  const who = `The ${plural(s.name)}`, w = WORDS[culture];
-  const tier = CIVILIZATION[level];
+function describeCivilization(s, level, culture, stage = level, own = null) {
+  const who = `The ${plural(s.name)}`, w0 = s.aquatic ? Object.fromEntries(Object.entries(WORDS[culture]).map(([k, v]) => [k, `${v} on the sea floor`])) : WORDS[culture];
+  const w = own ? { ...w0, village: `villages of ${own}`, city: `cities of ${own}` } : w0; // hand-builders: their own architecture (alien-arch.mjs)
+  const tier = CIVILIZATION[stage];
   if (level === 1) return `${who} are ${tier}: they stack cairns to mark their range, leave trails of marked stones and make simple shelters.`;
-  if (level === 2) return `${who} are ${tier}: they live in ${w.village}.`;
+  if (level === 2) return `${who} are ${tier}: they live in ${w.village}.${tier === 'metalworkers' ? ' They have learned to work metal: forges glow in every village, and their tools and blades are bronze and iron.' : ''}`;
   const city = `${who} are ${tier}: they live in ${w.city}`;
-  if (level === 3) return `${city}.`;
+  if (level === 3) return `${city}.${tier === 'industrial' ? ' Their machines have arrived: factories and smokestacks crowd the edges of their cities, and the first radio crackles between them.' : ''}`;
   const spread = `${city}, and their roads and towns now reach across the world; from orbit, their lights cover the night side`;
-  if (level === 4) return `${spread}. Their radio chatter can be heard from the next star.`;
+  if (level === 4) return `${spread}. Their radio chatter can be heard from the next star.${tier === 'orbital' ? ` They have just reached orbit: ${w.launch} lofts satellites and a station, though none of them has yet flown.` : ''}`;
   if (level === 5) return `${spread}. They have reached space: ${w.launch}, and satellites and a station circle the world.`;
   return `${spread}. They have reached space: ${w.launch}. ${SYSTEM_TEXT}`;
 }

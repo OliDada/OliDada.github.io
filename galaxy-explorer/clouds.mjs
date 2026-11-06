@@ -13,6 +13,7 @@
 //   cloudDensity(c, dir, angles)  0..1 cloud at a direction (a unit [x, y, z]) right now
 import { rng } from './rng.mjs';
 import { clamp } from './physics.mjs';
+import { terrainFor } from './terrain.mjs';
 
 export const OCTAVES = 5, OCTAVES_LITE = 3;
 // The big systems (first BASE octaves) and the fine detail drift at different rates,
@@ -56,7 +57,9 @@ export function cloudsFor(body) {
   // Thin air holds less, and wispier, cloud.
   cover = clamp((cover + r.range(-0.08, 0.08)) * (0.55 + 0.45 * Math.min(1, air / 0.6)), 0.06, 0.95);
   const opacity = k.opacity * (0.55 + 0.45 * Math.min(1, air / 0.5));
-  const R = body.radius, height = Math.round(clamp(40 + 0.1 * R, 55, 130)); // lower on small worlds
+  // Lower on small worlds; on the new, taller land (terrain.mjs landTop) the deck sits above
+  // most of the land, so you land and walk below it and only the high peaks rise into it.
+  const R = body.radius, height = Math.round(Math.max(clamp(40 + 0.1 * R, 55, 130), body.landStyle === 'classic' ? 0 : Math.min(320, terrainFor(body).landTop + 50)));
   const c = {
     kind, name: k.name, cover: +cover.toFixed(3), opacity: +opacity.toFixed(3),
     color: mixHex(k.color, body.atmosphere || k.color, 0.12), // a touch of the sky's own colour
@@ -88,7 +91,7 @@ function noise(x, y, z) {
 // The detail is swirled around the big systems (turned by how cloudy the big
 // systems are there) and everything is stretched east-west, like weather on a
 // spinning world.
-export function cloudValue(c, dir, angles, octaves = OCTAVES) {
+export function cloudValue(c, dir, angles, octaves = OCTAVES, storms = null) {
   const [x, y, z] = dir, [a1, a2] = angles;
   let sum = 0, amp = 0.5, total = 0, base = 0, baseTotal = 0, a = a1;
   for (let i = 0; i < OCTAVES; i++) {
@@ -102,11 +105,27 @@ export function cloudValue(c, dir, angles, octaves = OCTAVES) {
     } else sum += amp * 0.5;
     amp *= 0.5;
   }
-  return sum / total + BAND * Math.cos(6 * Math.asin(clamp(y, -1, 1)));
+  let v = sum / total + BAND * Math.cos(6 * Math.asin(clamp(y, -1, 1)));
+  if (storms) v = stormBoost(c, v, dir, a1, storms);
+  return v;
+}
+// Storms (weather.mjs) heap cloud up into thick, dark masses. Each storm sits in the
+// frame of the big systems, so it drifts with them: { dir: [x, y, z], cos (cosine of
+// its angular radius), k (0..1 strength) }. At most MAX_STORMS.
+export const MAX_STORMS = 3, STORM_TOP = 3.8; // a storm's heart: at least this many c.soft above the threshold
+export const stormFrame = (dir, a1) => { const cs = Math.cos(a1), sn = Math.sin(a1); return [dir[0] * cs - dir[2] * sn, dir[1], dir[0] * sn + dir[2] * cs]; };
+export function stormReach(dir, s, wide = 1) {
+  const cosR = 1 - (1 - s.cos) * wide, inner = cosR + (1 - cosR) * 0.6;
+  return smooth(cosR, inner, dir[0] * s.dir[0] + dir[1] * s.dir[1] + dir[2] * s.dir[2]);
+}
+function stormBoost(c, v, dir, a1, storms) {
+  const q = stormFrame(dir, a1), top = c.threshold + STORM_TOP * c.soft;
+  for (const s of storms) v += (Math.max(v, top) - v) * s.k * stormReach(q, s);
+  return v;
 }
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
-export function cloudDensity(c, dir, angles, octaves = OCTAVES) {
-  return smooth(c.threshold, c.threshold + c.soft, cloudValue(c, dir, angles, octaves));
+export function cloudDensity(c, dir, angles, octaves = OCTAVES, storms = null) {
+  return smooth(c.threshold, c.threshold + c.soft, cloudValue(c, dir, angles, octaves, storms));
 }
 export function cloudAngles(c, t) {
   const turn = Math.PI * 2;
@@ -134,6 +153,7 @@ function calibrate(c, n = 1200) {
 const WARP_GLSL = WARP.toFixed(2), STRETCH_GLSL = STRETCH.toFixed(2);
 export const CLOUD_GLSL = /* glsl */ `
 uniform vec4 uCloudRot; uniform float uCloudScale, uCloudThreshold, uCloudSoft; uniform vec3 uCloudOffset;
+uniform vec4 uStorm[${MAX_STORMS}]; uniform vec3 uStormK; // storms: direction and cosine of radius; strengths
 float cMod(float x) { return x - floor(x * ${INV.toFixed(10)}) * 289.0; }
 float cPerm(float x) { return cMod((x * 34.0 + 1.0) * x); }
 float cHash(vec3 i) { return cPerm(cPerm(cPerm(cMod(i.x)) + cMod(i.y)) + cMod(i.z)) * ${INV.toFixed(10)}; }
@@ -156,7 +176,13 @@ float cloudValue(vec3 d) {
     } else sum += amp * 0.5;
     amp *= 0.5; f *= 2.0;
   }
-  return sum / total + ${BAND.toFixed(3)} * cos(6.0 * asin(clamp(d.y, -1.0, 1.0)));
+  float v = sum / total + ${BAND.toFixed(3)} * cos(6.0 * asin(clamp(d.y, -1.0, 1.0)));
+  vec3 sq = vec3(d.x * uCloudRot.x - d.z * uCloudRot.y, d.y, d.x * uCloudRot.y + d.z * uCloudRot.x);
+  for (int i = 0; i < ${MAX_STORMS}; i++) {
+    float cosR = uStorm[i].w;
+    v = mix(v, max(v, uCloudThreshold + ${STORM_TOP.toFixed(1)} * uCloudSoft), uStormK[i] * smoothstep(cosR, cosR + (1.0 - cosR) * 0.6, dot(sq, uStorm[i].xyz)));
+  }
+  return v;
 }
 float cloudDensity(vec3 d) { return smoothstep(uCloudThreshold, uCloudThreshold + uCloudSoft, cloudValue(d)); }
 `;

@@ -13,11 +13,11 @@ const ang = (a, b) => Math.acos(Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[
 test('civilizations have a temperament and an extent that grows with tier and ambition', () => {
   for (const { c } of civs) {
     for (const k of ['ambition', 'cohesion', 'harmony']) assert.ok(c[k] >= 0 && c[k] <= 1, k);
-    assert.ok(EXTENT.includes(c.extent));
+    assert.ok(EXTENT.includes(c.extent) || (c.extent === 'space' && c.spaceborne)); // spaceborne: they live on an ark
     if (c.tier === 'tool users') assert.equal(c.extent, 'local');
     if (c.extent === 'system') assert.ok(['spacefarers', 'system-shapers'].includes(c.tier));
     if (c.tier === 'system-shapers') assert.equal(c.extent, 'system');
-    if (c.extent === 'planetary') assert.ok(['planet-shapers', 'spacefarers'].includes(c.tier));
+    if (c.extent === 'planetary') assert.ok(['planet-shapers', 'orbital', 'spacefarers'].includes(c.tier));
   }
   assert.ok(new Set(civs.map(x => x.c.extent)).size >= 4);
 });
@@ -30,10 +30,10 @@ test('every civilization has a capital beside the landing site, on dry ground, a
     assert.deepEqual(networkFor(body, c, t), net);
     const landing = t.landing;
     for (const s of net.settlements) {
-      assert.ok(!t.isLiquid(P(s.n)), `${s.kind} in the sea`);
+      assert.ok(t.isLiquid(P(s.n)) === !!c.underwater, c.underwater ? `${s.kind} of sea builders on land` : `${s.kind} in the sea`);
       assert.ok(ang(s.n, site) * R > 30 && ang(s.n, landing) * R > 25, `${s.kind} on the landing site`);
     }
-    if (!net.capital.far) assert.ok(ang(net.capital.n, site) * R < 300, 'capital too far from the landing site');
+    if (!net.capital.far) assert.ok(ang(net.capital.n, site) * R < 250 + net.capital.radius * .6, 'capital too far from the landing site'); // (giant builders' capitals are bigger)
     // Places never overlap.
     for (let i = 0; i < net.settlements.length; i++) for (let j = i + 1; j < net.settlements.length; j++) {
       const a = net.settlements[i], b = net.settlements[j];

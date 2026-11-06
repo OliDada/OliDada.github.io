@@ -124,7 +124,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .scan-card h3{font:500 24px 'Space Grotesk',sans-serif;letter-spacing:-.5px;margin:8px 0 0;color:var(--ink)}
 .scan-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
 .scan-tags span{font-size:9px;letter-spacing:1px;text-transform:uppercase;border:1px solid #c9f4cc55;color:var(--mint);border-radius:10px;padding:2px 8px}
-.scan-tags .tone-warn{border-color:#ff9a7a88;color:#ffb39a}.scan-tags .tone-gold{border-color:#e8c98f88;color:#f0d49a}
+.scan-tags .tone-uncommon{border-color:#8fe0a488;color:#8fe0a4}.scan-tags .tone-rare{border-color:#7fc3ff88;color:#7fc3ff}.scan-tags .tone-exceptional{border-color:#c79bff88;color:#c79bff}.scan-tags .tone-legendary{border-color:#ffd36b;color:#ffd36b;box-shadow:0 0 10px #ffd36b55}.scan-tags .tone-warn{border-color:#ff9a7a88;color:#ffb39a}.scan-tags .tone-gold{border-color:#e8c98f88;color:#f0d49a}
 .scan-lede{font-size:13px;line-height:1.55;color:#c9dad4;margin:10px 0 12px}
 .scan-card dl{display:grid;grid-template-columns:80px 1fr;gap:6px 12px;margin:0;font-size:11px;border-top:1px solid var(--line);padding-top:12px}
 .scan-card dt{color:var(--muted);letter-spacing:.5px}.scan-card dd{margin:0;color:#dce9e4}
@@ -274,6 +274,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .touch-alt button.on{background:var(--mint);color:#152921;border-color:var(--mint)}
 .touch-alt .look-btn{font-size:10px!important;letter-spacing:1px;font-weight:600}
 body.walking .touch-alt .fly-btn{display:none}
+body.walking.swimming .touch-alt .fly-btn{display:block}
 /* World panel on the map: a facts table, then titled sections. */
 .map-details{display:grid;gap:14px;margin:12px 0 14px}
 .map-section h4{margin:0 0 6px;font-size:9px;font-weight:600;letter-spacing:1.8px;text-transform:uppercase;color:var(--mint)}
@@ -303,3 +304,10 @@ body.walking .touch-alt .fly-btn{display:none}
 .map-rarity.tier-rare{--tier-ink:#a8cdff}
 .map-rarity.tier-very-rare{--tier-ink:#d7b9ff}
 .map-rarity.tier-exceptional{--tier-ink:#ffdf95}
+
+/* Life sonar: the nearest unrecorded plant or animal, marked like the ship's waypoint (game.js). */
+#sonarMark{position:fixed;left:0;top:0;text-align:center;text-shadow:0 2px 10px #000;pointer-events:none;color:#9ff0c0;white-space:nowrap}
+#sonarMark .diamond{font-size:24px;display:block;line-height:26px}
+#sonarMark strong{font-size:9px;letter-spacing:2px;display:block;margin-top:3px}
+#sonarMark .dist{display:block;font-size:10px;margin-top:4px;opacity:.75}
+@media(max-width:700px){#sonarMark .diamond{font-size:20px;line-height:22px}#sonarMark strong{font-size:8px}}

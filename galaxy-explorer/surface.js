@@ -7,10 +7,13 @@ import { terrainFor } from "./terrain.mjs";
 import { buildFlora } from "./flora-mesh.js";
 import { buildFauna, suitUp } from "./fauna-mesh.js";
 import { buildStructures } from "./structures-mesh.js";
+import { civilizationOf } from "./civilizations.mjs";
+import { stanceOf } from "./station-deck.js";
 import { buildGeology, footprint as rockFootprint } from "./geology-mesh.js";
 import { createGroundCover } from "./groundcover.js";
 import { addSurfaceDetail } from "./planet-lod.js";
 import { createScatter, obstacleGrid } from "./scatter.js";
+import { PLANT_STYLE } from "./style.mjs";
 
 const Y = new THREE.Vector3(0, 1, 0);
 const vec = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -73,6 +76,20 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         roughness: 1,
         flatShading: true,
     });
+    // Loose rocks thin out towards the edge of their reach, each at its own distance, and
+    // shrink away smoothly, like plants, so none pop in (rockFade: from, to in metres).
+    const rockCenter = { value: vec(1e9, 0, 0) }, rockFade = { value: new THREE.Vector2(1e9, 1e9 + 1) };
+    rockMaterial.onBeforeCompile = (shader) => {
+        Object.assign(shader.uniforms, { uRockCenter: rockCenter, uRockFade: rockFade });
+        shader.vertexShader = "uniform vec3 uRockCenter; uniform vec2 uRockFade;\n" + shader.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
+        #ifdef USE_INSTANCING
+          vec3 rockAt = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+          float rockT = 1.0 - smoothstep(uRockFade.x, uRockFade.y, distance(rockAt, uRockCenter));
+          float rockR = fract(sin(dot(rockAt, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+          transformed *= smoothstep(rockR * .8, rockR * .8 + .2, rockT);
+        #endif`);
+    };
+    rockMaterial.customProgramCacheKey = () => "rock-fade";
     addSurfaceDetail(rockMaterial, { ground: terrainInfo.ground, airless: terrainInfo.airless, lite: coarse, objects: true });
     // (Loose rocks are scattered further down, once settlements have cleared their ground.)
     // (The standing stones and crystal ring that used to mark the site are gone;
@@ -105,6 +122,8 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         signalNormal,
         budget: coarse ? 50 : 90,
         plants: flora.placed, // grazers walk to these and eat
+        // A spaceborne civilization left its world: its towns stand empty (structures-mesh.js ruins).
+        absent: civilizationOf(body)?.spaceborne ? new Set([civilizationOf(body).species.id]) : null,
     });
     group.add(fauna.group);
 
@@ -118,6 +137,7 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         landingNormal,
         fauna,
         colonist, // a spacefaring civilization from elsewhere in this system that has settled here
+        coarse,
     });
     group.add(structures.group);
     obstacles.push(...structures.obstacles);
@@ -149,9 +169,37 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         clear = structures.clearings.map((c) => ({ n: c.n, angle: c.r / RADIUS }));
     // True if anything within `margin` metres of direction m lies inside cleared ground.
     const cleared = (m, margin = 0) => clear.some((c) => c.n.dot(m) > Math.cos(c.angle + margin / RADIUS));
-    if (clear.length) flora.setBlocked((m) => cleared(m));
+    // A city world's city (urban.mjs) has no wild plants, but in its parks.
+    const city = structures.urban && !structures.ruins ? structures.urban : null, inCity = (m) => city && city.mask(m) > .5 && !city.park(m);
+    if ((clear.length || city) && !structures.ruins) flora.setBlocked((m) => cleared(m) || inCity(m)); // ruins are overgrown
     // Builders stay in their settlements; other animals follow you across the world.
     if (structures.civ?.species) fauna.pin?.(structures.civ.species.id);
+    // ...and go about their lives among their buildings (fauna-mesh.js setTown): work at a
+    // doorstep, talk in the squares, keep watch, and walk round the buildings in between.
+    if (structures.civ?.species && structures.sites.length && !structures.ruins) {
+        const townGrid = obstacleGrid(structures.obstacles);
+        const town = (sp) => ({ spots: townSpots(structures, townGrid, sp, terrainInfo, RADIUS), near: (p) => townGrid.near(p), paths: structures.paths });
+        const native = fauna.species.find((s) => s.id === structures.civ.species.id);
+        const people = structures.civ.colony ? colonist : civilizationOf(body), stance = stanceOf(people);
+        // What the town does together (fauna-mesh.js vignettes): its squares and heart, its fields.
+        const centres = structures.sites.filter((v) => v.angleTo(signalNormal) * RADIUS < 320);
+        const opts = { stance, path: people?.path, centres, fields: structures.fieldsAt || [], hearths: !!structures.civ.hearths, edge: structures.places?.[0]?.r ?? 30 };
+        if (native && !structures.civ.colony) fauna.setTown?.(native.id, town(native), opts);
+        if (fauna.colonists) for (const sp of fauna.colonists.species) fauna.colonists.setTown?.(sp.id, town(sp), opts);
+        // Wild animals keep out of cities and big towns (villages and camps they wander through).
+        const big = structures.civ.level >= 3 ? structures.places : structures.places.filter((p) => p.r >= 18);
+        fauna.keepOut?.(big.map((p) => ({ n: p.n, r: p.r + 15 })), city ? (n) => city.mask(n) > .45 && !city.park(n) : null);
+        // Builders from villages up keep animals: pens round the edge of the nearest town.
+        if (structures.civ.level >= 2 && structures.places?.length && !structures.civ.underwater) {
+            const home = structures.places[0], east = new THREE.Vector3(0, 1, 0).cross(home.n).normalize(), north = home.n.clone().cross(east), pens = [];
+            for (let i = 0; i < 8 && pens.length < 4; i++) {
+                const a = i / 8 * Math.PI * 2 + .3, dir = east.clone().multiplyScalar(Math.cos(a)).addScaledVector(north, Math.sin(a));
+                const n = home.n.clone().addScaledVector(dir, (home.r + 6) / RADIUS).normalize();
+                if (!terrainInfo.isLiquid(n) && n.angleTo(landingNormal) * RADIUS > 20) pens.push({ n, face: dir.clone().negate() });
+            }
+            structures.kept = fauna.keepAnimals?.(pens, { count: 5, builderSize: structures.civ.species.size }) ?? null;
+        }
+    }
 
     // Loose rocks, scattered evenly over the whole world on a fixed grid (scatter.js)
     // and filled in around you as you go: more on rocky and volcanic ground and on
@@ -171,7 +219,12 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         g.computeVertexNormals();
         return g;
     };
-    const BIG_ROCK = 2.5, rockCap = coarse ? 500 : 900, rockReach = coarse ? 200 : 300, ROCK_CELL = 16;
+    // New plant style: rocks are filled as far out as the trees (flora-mesh.js treeReach);
+    // small ones are only drawn within SMALL_REACH, where you could see them.
+    const NEW_REACH = PLANT_STYLE !== "classic";
+    const BIG_ROCK = 2.5, rockCap = coarse ? (NEW_REACH ? 900 : 500) : (NEW_REACH ? 2200 : 900), rockReach = NEW_REACH ? (coarse ? 420 : 720) : coarse ? 200 : 300, ROCK_CELL = 16;
+    const SMALL_REACH = coarse ? 200 : 300;
+    rockFade.value.set(rockReach * .8, rockReach);
     const rocks = new THREE.InstancedMesh(rockShape(coarse ? 0 : 1, 0), rockMaterial, rockCap);
     const bigRocks = new THREE.InstancedMesh(rockShape(coarse ? 1 : 2, 1), rockMaterial, rockCap);
     for (const m of [rocks, bigRocks]) {
@@ -205,7 +258,7 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
                 const ground = terrainInfo.color(rn, terrainInfo.meshHeight(rn));
                 tmpColor.setRGB(ground[0], ground[1], ground[2], THREE.SRGBColorSpace).lerp(rockTint, 0.7).multiplyScalar(0.85 + h(8) * 0.25);
                 items.push({
-                    big: size > BIG_ROCK, m: Float32Array.from(dummy.matrix.elements), c: [tmpColor.r, tmpColor.g, tmpColor.b],
+                    big: size > BIG_ROCK, size, m: Float32Array.from(dummy.matrix.elements), c: [tmpColor.r, tmpColor.g, tmpColor.b],
                     // Local Y is "up" for the rock, so scale.y is its height.
                     ob: { p: dummy.position.clone(), r: Math.max(dummy.scale.x, dummy.scale.z) * 0.8, h: dummy.scale.y * 0.9 + size * 0.25, rock: true },
                 });
@@ -221,12 +274,13 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
             if (!rec.ready) continue;
             if (small >= rockCap && big >= rockCap) break;
             for (const it of rec.items) {
+                if (!it.big && rec.d > SMALL_REACH && it.size < 1.6) continue; // pebble-sized rocks only nearby
                 const mesh = it.big ? bigRocks : rocks, k = it.big ? big : small;
                 if (k >= rockCap) continue;
                 mesh.instanceMatrix.array.set(it.m, k * 16);
                 mesh.instanceColor.array.set(it.c, k * 3);
                 if (it.big) big++; else small++;
-                obs.push(it.ob);
+                if (rec.d < 120) obs.push(it.ob);
             }
         }
         rocks.count = small; bigRocks.count = big;
@@ -242,6 +296,7 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         const altitude = camera.length() - RADIUS - terrainInfo.surface(rockDir);
         rocks.visible = bigRocks.visible = altitude < rockReach;
         if (!rocks.visible) return altitude;
+        rockCenter.value.copy(camera);
         if (rockField.update(rockDir, 1)) rocksDirty = true;
         if (rocksDirty && (--rocksWait <= 0 || !rockField.busy)) { drawRocks(); rocksDirty = false; rocksWait = 8; }
         return altitude;
@@ -265,13 +320,17 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
     }
     // Buildings and formations stay put; plants and rocks come and go as you move.
     const grid = obstacleGrid(obstacles);
+    // Buildings for the ship: a coarse grid by direction, so a tower is found from above
+    // its base as well as beside it.
+    const tallCell = 40 / RADIUS, tallGrid = new Map(), tallKey = (n, dx = 0, dy = 0, dz = 0) => `${Math.floor(n.x / tallCell) + dx},${Math.floor(n.y / tallCell) + dy},${Math.floor(n.z / tallCell) + dz}`;
+    for (const o of structures.obstacles) { const k = tallKey(o.p.clone().normalize()); if (!tallGrid.has(k)) tallGrid.set(k, []); tallGrid.get(k).push(o); }
 
     // Grass tufts, flowers, pebbles and shards in a circle around the player (not inside settlements).
     const groundCover = createGroundCover(THREE, {
         body,
         radius: RADIUS,
         coarse,
-        blocked: (p) => clear.some((c) => c.n.x * p.x + c.n.y * p.y + c.n.z * p.z > c.cos),
+        blocked: (p) => clear.some((c) => c.n.x * p.x + c.n.y * p.y + c.n.z * p.z > (c.cos ??= Math.cos(c.angle))) || inCity(p),
     });
     group.add(groundCover.group);
 
@@ -291,6 +350,12 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         halo: atmosphere.material.uniforms,
         // Everything solid near a point (on foot).
         nearbyObstacles: (p) => rockGrid.near(p, flora.nearbyObstacles(p, grid.near(p))),
+        // Buildings near a point at any height (for the ship): [{ p: base, r, h }].
+        buildingsNear(p, out = []) {
+            const n = p.clone().normalize();
+            for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) { const c = tallGrid.get(tallKey(n, x, y, z)); if (c) out.push(...c); }
+            return out;
+        },
         // Call every frame with the camera position (relative to the world's centre):
         // plants and rocks are filled in around you, and animals follow you about.
         update(camera, time) {
@@ -301,6 +366,46 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
 }
 
 // Frees every geometry, material and instance buffer in a surface group.
+// Places in an intelligent species' settlements to go to: the doorstep of each building
+// (facing it, to work there), places round each square (facing its centre, to talk), and
+// a few by the tallest buildings to keep watch. Kept clear of every building.
+function townSpots(structures, grid, sp, terrain, R) {
+    const spots = [], size = sp.size || 1, room = size * .45 + .25;
+    const tangentOf = (v, n) => v.clone().addScaledVector(n, -v.dot(n)).normalize();
+    const freeAt = (n) => {
+        if (terrain.isLiquid(n)) return false;
+        const p = n.clone().multiplyScalar(R + terrain.surface(n));
+        return grid.near(p).every((o) => { const d = p.clone().sub(o.p); d.addScaledVector(n, -d.dot(n)); return d.length() > o.r + room; });
+    };
+    const sites = structures.sites;
+    // Planned towns (town-plan.mjs) say where their doors are: the townsfolk work and come and go there.
+    for (const d of structures.doorsteps || []) { if (spots.length > 150) break; if (freeAt(d.n)) spots.push({ n: d.n, face: d.face.clone(), kind: 'work', taken: null, door: true }); }
+    const nearestSite = (n) => sites.reduce((best, s) => (s.angleTo(n) < best.angleTo(n) ? s : best), sites[0]);
+    for (const o of structures.obstacles) {
+        if (o.h < 1.4 || o.r < .7 || spots.length > 160) continue;
+        const on = o.p.clone().normalize(), site = nearestSite(on);
+        if (site.angleTo(on) * R > 260) continue;
+        let toward = tangentOf(site.clone().sub(on), on);
+        if (!isFinite(toward.x) || site.angleTo(on) * R < 1) toward = tangentOf(new THREE.Vector3(1, 0, 0), on);
+        for (let k = 0; k < 4; k++) { // the doorstep, or a little round the side if that is taken
+            const dir = toward.clone().applyAxisAngle(on, (k % 2 ? 1 : -1) * Math.ceil(k / 2) * .7);
+            const n = on.clone().addScaledVector(dir, (o.r + size * .5 + .6) / R).normalize();
+            if (!freeAt(n)) continue;
+            spots.push({ n, face: tangentOf(on.clone().sub(n), n), kind: o.h > 9 && spots.length % 5 === 0 ? 'watch' : 'work', taken: null, door: k === 0 });
+            break;
+        }
+    }
+    for (const s of sites) { // the squares
+        const a = tangentOf(Math.abs(s.y) < .9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0), s), b = s.clone().cross(a);
+        for (let k = 0; k < 6; k++) {
+            const ang = k / 6 * Math.PI * 2, d = (3 + size * 1.2) / R;
+            const n = s.clone().addScaledVector(a, Math.cos(ang) * d).addScaledVector(b, Math.sin(ang) * d).normalize();
+            if (freeAt(n)) spots.push({ n, face: tangentOf(s.clone().sub(n), n), kind: 'chat', taken: null });
+        }
+    }
+    return spots;
+}
+
 export function disposeSurface(group) {
     const geometries = new Set(),
         materials = new Set();

@@ -10,10 +10,11 @@
 import * as THREE from "./vendor/three.module.js";
 import { starsNear, starPhysics } from "./galaxy.mjs";
 import { createStarVisual } from "./star-mesh.js";
+import { SIZE, VIEW_RANGE, starGameRadius as starRadius } from "./scale.mjs";
 
 export const ARRIVE_LY = 0.002; // a system's edge, measured from its star
 const SKY_RANGE = 60; // light years of real stars drawn around you
-export const SKY_RADIUS = 80000; // scene distance of the star sphere (inside the far plane)
+export const SKY_RADIUS = VIEW_RANGE * 0.8; // scene distance of the star sphere (inside the far plane, beyond every orbit)
 const MAX_STARS = 3000;
 
 export const toGalaxy = (v) => [v.x, -v.z, v.y];
@@ -27,10 +28,10 @@ export function systemEdge(system) {
         const centre = b.parent ? byId.get(b.parent).orbit : 0;
         reach = Math.max(reach, centre + b.orbit + b.radius);
     }
-    return reach + 8000;
+    return reach + 8000 * SIZE;
 }
 // Game radius of a star's sphere (matches generateSystem).
-export const starGameRadius = (physics) => Math.round(Math.min(1000, Math.max(450, 500 + 250 * physics.radius)));
+export const starGameRadius = starRadius;
 
 // Apparent brightness of a star from distance d (ly): luminosity / d².
 function appearance(physics, d) {
@@ -97,7 +98,7 @@ void main() {
     bgGeo.setAttribute("color", new THREE.Float32BufferAttribute(bgColors, 3));
     const backdrop = new THREE.Points(
         bgGeo,
-        new THREE.PointsMaterial({ size: 30, sizeAttenuation: true, vertexColors: true, transparent: true, opacity: 0.55, depthWrite: false }),
+        new THREE.PointsMaterial({ size: 30 * SKY_RADIUS / 80000, sizeAttenuation: true, vertexColors: true, transparent: true, opacity: 0.55, depthWrite: false }),
     );
     backdrop.frustumCulled = false;
     scene.add(backdrop);

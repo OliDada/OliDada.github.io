@@ -1,4 +1,5 @@
 import * as THREE from "./vendor/three.module.js";
+import { applyLook, createPerf } from "./look.js";
 import {
     damp,
     smoothstep,
@@ -7,8 +8,10 @@ import {
 } from "./flight-math.mjs";
 import { generateSystem, terrainHeight, cruisePoint } from "./system.mjs";
 import { terrainFor } from "./terrain.mjs";
+import { floraFor, plantBiome } from "./flora.mjs";
+import { PLANT_STYLE } from "./style.mjs";
 import { buildSurface, disposeSurface } from "./surface.js";
-import { createKestrel, updateShipEffects } from "./kestrel.js";
+import { createKestrel, updateShipEffects, setShipDesign } from "./kestrel.js";
 import { createSystemView, buildSystemViewGradually } from "./system-view.js";
 import { createTerrainStreamer } from "./planet-lod.js";
 import {
@@ -26,7 +29,17 @@ import { setupInput } from "./input.js";
 import { updateHUD, updateWaypoint } from "./hud.js";
 import { createEngineSound } from "./audio.js";
 import { orbitClock, systemPositions } from "./orbits.mjs";
-import { starById, homeStar } from "./galaxy.mjs";
+import { VIEW_RANGE } from "./scale.mjs";
+import { starById, homeStar, starsNear } from "./galaxy.mjs";
+import { createRelations, canTalk, askOf, valueOf, tradeable, giftsOf, giftWords, keepsakeOf, stepAtLeast, STEPS } from "./contact.mjs";
+import { createContactUI } from "./contact-ui.js";
+import { createVoices } from "./voices.js";
+import { buildInterior, canEnter } from "./interior.js";
+import { GESTURE_WORDS, gestureOf } from "./express.mjs";
+import { rarityOf, rarityAtLeast } from "./rarity.mjs";
+import { createCodexUI } from "./codex-ui.js";
+import { stanceOf } from "./station-deck.js";
+import { plural } from "./structures.mjs";
 import {
     loadGalaxyState,
     saveGalaxyState,
@@ -34,17 +47,22 @@ import {
     playArrival,
 } from "./galaxy-ui.js";
 import { createStarMap } from "./starmap.js";
-import { createCodex, backfill, coreEntry, floraEntry, faunaEntry, formationEntry, settlementEntry, fieldNoteEntry, worldEntry, signalEntry, behaviourEntry, phenomenonEntry } from "./codex.mjs";
+import { seaOnly } from "./codex.mjs";
+import { createCodex, backfill, stationEntry, contactEntry, coreEntry, floraEntry, faunaEntry, formationEntry, settlementEntry, fieldNoteEntry, worldEntry, signalEntry, behaviourEntry, phenomenonEntry } from "./codex.mjs";
 import { coreSample } from "./geology.mjs";
+import { WADE_DEPTH, diveDepth, swimDepth, divesIn } from "./upgrades.mjs";
 import { UPGRADES, completedWorlds, progress, advanced, recordedOn, jumpRange as rangeFor, suitDamageScale, suitRecoveryScale, heatScale, observeTime, behaviourAlerts, hasFieldGlasses, ZOOM_REACH, radioHearing, decodesSignals, landsBesideLava, exposureScale, exposureOf } from "./upgrades.mjs";
 import { BEHAVIOURS, behavioursOf, behaviourNow } from "./ecology.mjs";
 import { forecast, eclipseAt } from "./phenomena.mjs";
 import { createSkyEvents } from "./sky-events.js";
+import { createWeatherFX } from "./weather-fx.js";
+import { PRECIP } from "./weather.mjs";
+import { wind } from "./wind.mjs";
 import { createUpgradeScreen } from "./upgrades-ui.js";
 import { findScanTarget, followTarget, cardFor, wordFor, titleFor, verbFor } from "./scanning.js";
 import { setupDev } from "./dev-panel.js";
 import { createScanUI } from "./scan-ui.js";
-import { civilizationOf, colonistOf } from "./civilizations.mjs";
+import { civilizationOf, colonistOf, arkPosition } from "./civilizations.mjs";
 
 // Surface flight uses coordinates relative to the current world; space travel is continuous.
 const $ = (id) => document.getElementById(id);
@@ -107,16 +125,34 @@ function recordInfo(entry) {
 const record = (entry) => recordInfo(entry).text;
 function applyUpgrade(id) {
     const u = UPGRADES[id];
-    if (id.startsWith("jumpDrive")) starMap?.setRange?.(rangeFor(codex.unlocked));
+    if (id === "petrel") setShipDesign(kestrel, "petrel");
+    if (id.startsWith("jumpDrive")) starMap?.setRange?.(jumpRangeNow());
     updateTally(true);
     toast(u.status === "planned" ? `${u.name} unlocked. Its effect is not built yet (see PROGRESSION.md).` : `${u.name} installed. ${u.effect}`, 6);
 }
 const vec = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+// Contact (contact.mjs, contact-ui.js): relationships with other minds, saved per civilization.
+const relations = createRelations();
+const contactUI = createContactUI({ onClose: () => { keys.clear(); endTalk(); } });
+// Whoever you are talking to: { herd, creature } on a world, { deck, i } on a deck (they face
+// you and attend; the view turns to them and keeps them clear of the panel).
+let talking = null;
+function endTalk() {
+    if (talking?.herd) talking.herd.talkWith(null);
+    if (talking?.deck) talking.deck.talkWith(null);
+    talking = null;
+    if (camera.view?.enabled) { camera.clearViewOffset(); camera.updateProjectionMatrix(); }
+}
+// The codex overview (codex-ui.js): K or the CODEX button.
+const codexUI = createCodexUI({ codex, THREE, onOpen: () => { keys.clear(); if (document.pointerLockElement) document.exitPointerLock?.(); if (upgradeScreen.isOpen) upgradeScreen.close(); } });
+// Jump range: the drive upgrades, plus drive technology from spacefaring friends.
+const jumpRangeNow = () => rangeFor(codex.unlocked) + relations.effects().drive;
 // Where every body is right now (orbits.mjs). Coordinates in the scene are
 // relative to the world you are at (worldOrigin).
 let orbitTime = orbitClock(),
     positions = systemPositions(system, orbitTime);
-const positionOf = (body) => vec(...positions.get(body.id));
+// Worlds, and arks (chosen on the map: { ark: true, civ }), sixty degrees ahead of their builders' worlds.
+const positionOf = (body) => (body.ark ? vec(...arkPosition(system, body.civ, positions)) : vec(...positions.get(body.id)));
 let worldOrigin = positionOf(activeBody);
 let signalNormal = vec(...terrainFor(activeBody).site); // dry, level ground near the signal
 let landingNormal = vec(...terrainFor(activeBody).landing); // the landing pad: dry, level ground beside the site (terrain.mjs)
@@ -126,6 +162,24 @@ const surfacePoint = (n, offset = 0) =>
     n.clone().multiplyScalar(surfaceRadius(n) + offset);
 const tangent = (forward, up) =>
     forward.clone().addScaledVector(up, -forward.dot(up)).normalize();
+// --- Water: wading, swimming and diving -----------------------------------------
+// Seas of water, methane, ammonia or sulfur (terrain liquid 'water'). surfaceRadius is the
+// top of the sea; bedRadius the sea floor under it (the same as surfaceRadius on land).
+const seaTerrain = () => { const t = terrainFor(activeBody); return t.liquid === "water" ? t : null; };
+const depthAt = (n) => { const t = seaTerrain(); return t ? t.sea - t.height(n) : -1; }; // metres of water (negative: dry)
+const bedRadius = (n) => { const t = seaTerrain(); return t ? RADIUS + t.height(n) : surfaceRadius(n); };
+const seaRadius = () => RADIUS + (seaTerrain()?.sea ?? -1e9);
+const solventHere = () => terrainFor(activeBody).solvent ?? "water";
+// Molten sulfur is too hot to wade in; the rest is fine in a suit.
+const wadable = () => !!seaTerrain() && solventHere() !== "sulfur";
+const canSwimHere = () => wadable() && swimDepth(codex.unlocked) > 0 && divesIn(codex.unlocked, solventHere());
+const canDiveHere = () => !!seaTerrain() && codex.unlocked.has("petrel") && diveDepth(codex.unlocked) > 0 && divesIn(codex.unlocked, solventHere());
+let swimming = false, // on foot, in water too deep to stand in (Dive suit)
+    swimD = 0, // how far your eyes are below the surface while swimming (m; negative: just above)
+    shipSubmerged = false; // the Petrel was left parked under water (you swam out)
+// Where you are: your eyes while swimming, your feet otherwise.
+const playerPos = () => (mode === "walk" && swimming ? camera.position.clone() : surfacePoint(playerNormal));
+applyLook(THREE); // the shared stylised look (look.js); before anything is drawn
 let renderer;
 try {
     renderer = new THREE.WebGLRenderer({
@@ -142,17 +196,24 @@ try {
     throw error;
 }
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.8));
+const perf = createPerf(renderer, { maxRatio: 1.8, onChange: () => sky.resize() }); // frame-rate overlay (?perf) and adaptive resolution
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 const scene = new THREE.Scene();
+// Lamplight inside a home (interior.js). Always in the scene (dark until you go in), so
+// going in never makes every material rebuild its shader for one more light.
+const indoorLight = new THREE.PointLight(0xffd9a8, 0, 40, 1.4);
+scene.add(indoorLight);
+let indoor = null; // inside a home: { d (the dwelling), room, x, z, yaw, native (species) }
+let doorCache = { at: -1, d: null };
 scene.background = new THREE.Color("#07101d");
 const camera = new THREE.PerspectiveCamera(
     58,
     innerWidth / innerHeight,
     0.08,
-    90000,
+    VIEW_RANGE,
 );
 const hemi = new THREE.HemisphereLight(0xb6dfdf, 0x4c3844, 2.0);
 scene.add(hemi);
@@ -194,6 +255,7 @@ function makeSite(body) {
     return built;
 }
 function clearSites() {
+    leaveHome(true);
     if (site) scene.remove(site.group);
     for (const s of siteCache.values()) disposeSurface(s.group);
     siteCache.clear();
@@ -226,6 +288,7 @@ function buildSite() {
         old.halo.farFrom.value = oldBody.radius + 3500;
         old.halo.farTo.value = oldBody.radius + 5800;
     }
+    leaveHome(true);
     site = next;
     siteBody = activeBody;
     site.group.position.set(0, 0, 0);
@@ -260,7 +323,7 @@ function advanceOrbits() {
     positions = systemPositions(system, orbitTime);
     const origin = positionOf(activeBody),
         shift = origin.clone().sub(worldOrigin);
-    if (mode === "space" || mode === "transit") {
+    if (mode === "space" || mode === "transit" || (dock?.ark && atStation())) {
         shipPosition.sub(shift);
         camera.position.sub(shift);
     }
@@ -280,7 +343,10 @@ function positionSystem() {
 
 
 const kestrel = createKestrel();
+// Your ship: the Kestrel, until the Petrel upgrade replaces it with its own design.
+const shipName = () => (codex.unlocked.has("petrel") ? "Petrel" : "Kestrel");
 const { ship, shipShadow, dust } = kestrel;
+if (codex.unlocked.has("petrel")) setShipDesign(kestrel, "petrel");
 scene.add(ship, shipShadow, dust);
 
 let verticalSpeed = 0,
@@ -309,6 +375,9 @@ let spaceBlend = 0, // 0 = flying near a world's surface, 1 = in space; eases be
     camBack = null, // the camera's (smoothed) direction behind and ahead of the ship
     camAhead = null;
 const flowVel = new THREE.Vector3(); // ship velocity relative to the world it is near
+// The ship's velocity this frame, unsmoothed: the camera is carried along by exactly
+// this, so how it frames the ship never depends on speed.
+const shipVel = new THREE.Vector3();
 try { invertPitch = localStorage.getItem("elsewhere.invertPitch") === "1"; } catch {}
 {
     const box = document.getElementById("invertPitch");
@@ -460,7 +529,7 @@ function setStage(next) {
             "Investigate the surface",
             "Leave the ship and follow the signal on foot.",
         ],
-        ["Return to Kestrel", "Signal recorded. Your ship is waiting nearby."],
+        [`Return to the ${shipName()}`, "Signal recorded. Your ship is waiting nearby."],
         [
             "A beginning, not an ending",
             `Signal recorded. Open the star map (M) for another world, or zoom out on it (G) to jump to another star.`,
@@ -471,7 +540,7 @@ function setStage(next) {
     void entries;
 }
 function modalOpen() {
-    return $("help").open || $("discovery").open || $("starMap").open || upgradeScreen.isOpen;
+    return $("help").open || $("discovery").open || $("starMap").open || upgradeScreen.isOpen || contactUI.isOpen || codexUI.isOpen;
 }
 function start() {
     if (started) return;
@@ -504,6 +573,9 @@ function act() {
         else openGalaxy();
         return;
     }
+    if ((mode === "flight" || mode === "space") && tryDock()) return;
+    if (mode === "docked") return undock();
+    if (atStation()) return;
     if (mode === "space") {
         cruiseOrAutopilot();
         return;
@@ -572,20 +644,39 @@ function act() {
         };
         mode = "takeoff";
         toast("Lift engines charging. Clearing the surface.");
+    } else if (mode === "walk" && indoor) {
+        const c = householdInReach();
+        if (c) talkTo(civOfSpecies(indoor.native) || stationCiv(), { where: "IN THEIR HOME", waited: footTime, partner: { deck: indoor.room, i: c.i } });
+        else if (nearHomeDoor()) leaveHome();
+    } else if (mode === "walk" && !scanTarget && doorInReach()) {
+        enterHome(doorInReach());
     } else if (mode === "walk") {
         const shipDistance =
-            surfacePoint(playerNormal).distanceTo(shipPosition);
+            playerPos().distanceTo(shipPosition);
         if (distanceToSignal() < 9 && !discovered) {
             discover();
+        } else if (scanTarget?.known && scanTarget.kind === "fauna" && scanTarget.creature?.young && civOfSpecies(scanTarget.ref)) {
+            herdOf(scanTarget.ref)?.gesture(scanTarget.creature, "hop");
+            toast(`A young ${scanTarget.ref.name} stares up at you, hops, and runs back to the grown-ups.`, 4);
+            voices.say(scanTarget.ref, { mood: "happy", young: true });
+        } else if (scanTarget?.known && scanTarget.kind === "fauna" && civOfSpecies(scanTarget.ref)) {
+            talkTo(civOfSpecies(scanTarget.ref), { where: "IN THEIR TOWN", waited: footTime, partner: scanTarget.creature ? { herd: herdOf(scanTarget.ref), creature: scanTarget.creature } : null }); // one of the builders: greet them
         } else if (scanTarget?.known) {
             showScanCard(scanTarget, null);
         } else if (scanTarget) {
             // Something new: holding E scans it (updateScan).
         } else if (shipDistance < 9) {
-            mode = "landed";
             speed = 0;
             verticalSpeed = 0;
-            toast("Back aboard Kestrel. Press L to lift off.");
+            swimming = false;
+            if (shipSubmerged) { // the Petrel waited under water
+                shipSubmerged = false;
+                mode = "dive";
+                toast("Back aboard the Petrel, submerged. Hold R at the surface to fly out.");
+                return;
+            }
+            mode = "landed";
+            toast(`Back aboard the ${shipName()}. Press L to lift off.`);
         } else if (distanceToSignal() < 9) {
             discover();
         }
@@ -612,8 +703,16 @@ function nearLava(n) {
 }
 function interact() {
     if (!started || modalOpen()) return;
+    if (mode === "dive") return diveAct();
+    if (mode === "docked") return leaveShipOnDeck();
+    if (mode === "deck") {
+        const crew = crewInReach();
+        if (crew) talkTo(dock.civ, { where: dock.ark ? `ON ${dock.ark.name.toUpperCase()}` : "ON THEIR STATION", waited: deckTime, stance: dock.deck.stance, partner: { deck: dock.deck, i: crew.i } });
+        else if (nearShipOnDeck()) { mode = "docked"; speed = 0; toast(`Back aboard the ${shipName()}. Press L to undock.`); }
+        return;
+    }
     if (mode === "landed" && afloat) {
-        toast("You are afloat: the water is too deep to walk. Take off and land on shore to go on foot.", 4);
+        toast(canDiveHere() ? "You are afloat. Press F to dive, or take off and land on shore to go on foot." : "You are afloat: the water is too deep to walk. Take off and land on shore to go on foot.", 4);
         return;
     }
     if (mode === "landed") {
@@ -633,6 +732,7 @@ function interact() {
         lookPitch = 0;
         mode = "walk";
         if (stage === 0) setStage(1);
+        footTime = 0;
         jumpHeight = 0;
         jumpVelocity = 0;
     } else if (mode === "walk") act();
@@ -651,7 +751,7 @@ function discover() {
 }
 $("startBtn").onclick = start;
 $("approachBtn").onclick = approach;
-$("actionBtn").onclick = () => (mode === "landed" ? interact() : act());
+$("actionBtn").onclick = () => (mode === "landed" || mode === "dive" || mode === "docked" || mode === "deck" ? interact() : act());
 $("helpBtn").onclick = () => {
     keys.clear();
     $("help").showModal();
@@ -686,7 +786,14 @@ const input = setupInput({
         act,
         interact,
         look(dx, dy, k) {
-            if (mode === "walk") {
+            if (mode === "walk" && indoor) {
+                indoor.yaw += dx * 0.004 * k;
+                lookPitch = clamp(lookPitch - dy * 0.003 * k, -1.15, 1.1);
+            } else if (mode === "deck") {
+                const fine = camera.fov / 70;
+                deckYaw += dx * 0.004 * k * fine;
+                lookPitch = clamp(lookPitch - dy * 0.003 * k * fine, -1.15, 1.1);
+            } else if (mode === "walk") {
                 const fine = camera.fov / 70; // zoomed in (field glasses), the view turns more finely
                 playerForward.applyAxisAngle(playerNormal, -dx * 0.004 * k * fine);
                 lookPitch = clamp(lookPitch - dy * 0.003 * k * fine, -1.15, 1.1);
@@ -706,6 +813,7 @@ const input = setupInput({
         pick: (x, y) => pickAt(x, y),
         cycle: () => cycleTarget(),
         upgrades: () => { if (!$("help").open && !$("discovery").open) upgradeScreen.toggle(); },
+        codex: () => { if (!$("help").open && !$("discovery").open && !upgradeScreen.isOpen && !contactUI.isOpen) codexUI.toggle(); },
     },
 });
 document.addEventListener("visibilitychange", () => (previousTime = performance.now()));
@@ -716,6 +824,7 @@ const engine = createEngineSound({
     label: $("soundLabel"),
     onError: () => toast("Audio is unavailable in this browser."),
 });
+const voices = createVoices(engine.context); // alien voices (voices.js), only with sound on
 
 
 function refreshWorldLabels() {
@@ -815,7 +924,16 @@ function orientSpace(dt) {
     ship.position.copy(shipPosition);
     shipShadow.visible = false;
 }
-const GIANT_CLEARANCE = 250; // closest approach to a giant's cloud tops
+// Closest approach to a giant's cloud tops: 250 m, more on the biggest giants.
+const giantClearance = (body) => Math.max(250, body.radius * 0.02);
+// Space is big and worlds are far apart, so out in the open the engines scale up
+// with the distance to the nearest surface (the star's, a giant's cloud tops or a
+// world's ground): 1x within 900 m, so arrival speeds are unchanged.
+function spaceReach(global) {
+    let clearance = global.length() - system.star.radius;
+    for (const body of system.bodies) clearance = Math.min(clearance, global.distanceTo(positionOf(body)) - body.radius);
+    return clamp(clearance / 900, 1, 150);
+}
 function updateSpace(dt) {
     // A selected world, or else your course star: hold the nose on it whenever
     // you are not steering.
@@ -835,16 +953,18 @@ function updateSpace(dt) {
     shipForward.applyAxisAngle(right, pitch * dt * 0.7 + m.pitch).normalize();
     spaceUp.applyAxisAngle(right, pitch * dt * 0.7 + m.pitch).normalize();
     const boost = keys.has("ShiftLeft") || keys.has("ShiftRight"),
-        brake = keys.has("KeyX");
+        brake = keys.has("KeyX"),
+        reach = spaceReach(shipPosition.clone().add(worldOrigin));
     speed = damp(
         speed,
         brake
             ? 0
             : autoThrust
-              ? shipForward.dot(aim) > 0.97 ? 900 : 60
+              ? shipForward.dot(aim) > 0.97 ? 900 * reach : 60
               : ((keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0)) *
-                  (boost ? 900 : 220),
-        brake ? 4 : 1.4,
+                  (boost ? 900 : 220) * reach,
+        // Spooling up is quick once clear of a world (the engines are far stronger out there).
+        brake ? 4 : reach > 2 ? 2.6 : 1.4,
         dt,
     );
     // Just after breaking orbit the climb carries on and fades, unless you steer
@@ -888,7 +1008,7 @@ function updateSpace(dt) {
         if (body.giant)
             holdOff(
                 positionOf(body),
-                body.radius + GIANT_CLEARANCE,
+                body.radius + giantClearance(body),
                 `${body.name} has no surface: the clouds only thicken into crushing pressure. Its moons are safe to land on.`,
             );
     // Past the outermost orbits lies interstellar space.
@@ -969,8 +1089,14 @@ function cancelCruise() {
 // Where a cruise ends: above the signal, or for giants well above the cloud
 // tops, where the whole planet fills the view. Follows the body along its orbit.
 function cruiseEnd(body) {
+    if (body.ark) { // above the ark, its deck in view
+        const a = systemView.arks().find((x) => x.civ.id === body.civ.id), size = a?.size ?? 2000;
+        return positionOf(body).add(vec(0, size * 0.55 + 260, size * 0.35));
+    }
+    // On rocky worlds, above the landing site itself (on big worlds with wide seas it
+    // can be a few hundred metres from the signal, at the nearest dry land).
     return positionOf(body).addScaledVector(
-        vec(...body.signal),
+        vec(...(body.giant ? body.signal : terrainFor(body).site)),
         body.radius + (body.giant ? body.radius * 0.9 + 500 : 190),
     );
 }
@@ -979,7 +1105,7 @@ function updateCruise(dt) {
     travel.end = cruiseEnd(travel.body).toArray(); // the destination keeps moving
     const t = clamp(travel.time / travel.duration, 0, 1);
     const next = vec(
-        ...cruisePoint(travel.start, travel.departure, travel.end, t),
+        ...cruisePoint(travel.start, travel.departure, travel.end, t, system.star.radius),
     ).sub(worldOrigin);
     const delta = next.clone().sub(shipPosition);
     speed = delta.length() / Math.max(dt, 0.001);
@@ -995,7 +1121,7 @@ function updateCruise(dt) {
     // Build the destination's landing site halfway, not in the frame you arrive.
     if (!travel.prepared && t > 0.5) {
         travel.prepared = true;
-        if (!travel.body.giant && !siteCache.has(travel.body.id)) siteCache.set(travel.body.id, makeSite(travel.body));
+        if (!travel.body.giant && !travel.body.ark && !siteCache.has(travel.body.id)) siteCache.set(travel.body.id, makeSite(travel.body));
     }
     $("transitProgress").style.width = `${t * 100}%`;
     $("transitPercent").textContent = `${Math.round(t * 100)}%`;
@@ -1004,7 +1130,10 @@ function updateCruise(dt) {
             global = next.clone().add(worldOrigin);
         travel = null;
         $("transit").hidden = true;
-        if (destination.giant) arriveAtGiant(destination);
+        if (destination.ark) { // stay in open space beside it: fly down and dock (L)
+            mode = "space"; speed = 0; verticalSpeed = 0; selectedBody = target = null;
+            toast(`${destination.name} fills the view. Fly down over its deck and press L to dock.`, 6);
+        } else if (destination.giant) arriveAtGiant(destination);
         else switchWorld(destination, global);
     }
 }
@@ -1105,7 +1234,7 @@ function startIncoming(star) {
 }
 // The mouse (or a drag on touch) steers while flying, unless Q / the Look button
 // is held for looking around, or an automatic approach is flying the ship.
-const mouseSteers = () => (mode === "flight" || mode === "space" || mode === "deep") && !keys.has("KeyQ") && !autoApproach;
+const mouseSteers = () => (mode === "flight" || mode === "dive" || mode === "space" || mode === "deep") && !keys.has("KeyQ") && !autoApproach;
 // This frame's share of the queued mouse steering, in radians.
 function takeMouseSteer(dt) {
     const f = 1 - Math.exp(-dt * 12);
@@ -1172,7 +1301,7 @@ function showSystemAhead(entry, offset, d) {
     if (view) {
         // The real worlds, as a miniature when far off (see systemView.place).
         const reach = starScene.length(),
-            scale = Math.min(1, 45000 / reach);
+            scale = Math.min(1, (VIEW_RANGE * 0.3) / reach);
         view.visible = true;
         view.place(positions, starScene.clone().negate(), scale);
         view.update(camera.position, streamer);
@@ -1457,6 +1586,10 @@ function updateFlight(dt) {
         if (braking) targetSpeed = 0;
         speed = damp(speed, targetSpeed, braking ? 5 : 1.7, dt);
         const lift = (keys.has("KeyR") ? 1 : 0) - (keys.has("KeyF") ? 1 : 0);
+        // Pressure hull: holding F right down on deep water takes the Petrel under.
+        if (lift < 0 && altitude() < 7 && canDiveHere() && depthAt(shipPosition.clone().normalize()) > 0) {
+            if ((diveHold += dt) > 0.5 && tryDive()) return;
+        } else diveHold = 0;
         const desiredVertical = braking
             ? 0
             : verticalTarget(lift, flightPitch, speed, boost, altitude());
@@ -1476,6 +1609,7 @@ function updateFlight(dt) {
         if (boundedRadius !== radius) verticalSpeed = 0;
         shipPosition.copy(n.multiplyScalar(boundedRadius));
     }
+    collideShip();
     orientShip(dt);
     const global = shipPosition.clone().add(worldOrigin);
     const neighbor = system.bodies
@@ -1509,6 +1643,81 @@ function updateFlight(dt) {
         toast(`Leaving ${activeBody.name}'s orbit. Fly freely, or press M to chart a course.`);
     }
 }
+// --- The Petrel under water (Pressure hull I and II) ----------------------------
+// Fly low over deep water and hold F (or press F while afloat): the hull seals, the wings
+// fold and the Petrel dives. W/S throttle, A/D or the mouse turn, R/F rise and sink, X stops.
+// It keeps clear of the sea floor and no deeper than its hull is rated for. Hold R at the
+// surface to break out and fly. E scans what is in front of you, or (Dive suit) swims out.
+let diveHold = 0, diveRise = 0, lastDiveWarn = -10;
+function tryDive() {
+    if (!canDiveHere()) return false;
+    const n = shipPosition.clone().normalize();
+    if (depthAt(n) < 6) {
+        if (toastTime <= 0) toast("Too shallow to dive here. Find water at least 6 m deep.");
+        return false;
+    }
+    mode = "dive";
+    afloat = false; autoApproach = false; diveHold = diveRise = 0;
+    speed = Math.min(Math.abs(speed), 6); verticalSpeed = -1.5; flightPitch = 0; bankAngle = 0;
+    shipPosition.setLength(Math.min(shipPosition.length(), seaRadius() - 1.5));
+    toast("Hull sealed, wings folded: the Petrel dives. W/S throttle, A/D turn, R/F rise and sink, E to scan" + (swimDepth(codex.unlocked) ? " or swim out." : "."), 6);
+    return true;
+}
+function updateDive(dt) {
+    const up = shipPosition.clone().normalize();
+    const turn = clamp((keys.has("KeyA") ? 1 : 0) - (keys.has("KeyD") ? 1 : 0) + arrowTurn(), -1, 1);
+    turnVelocity = damp(turnVelocity, turn * 0.8, 4, dt);
+    const m = takeMouseSteer(dt);
+    shipForward.applyAxisAngle(up, turnVelocity * dt + m.yaw);
+    bankAngle = damp(bankAngle, clamp(turnVelocity * 0.15, -0.25, 0.25), 3, dt);
+    const boost = keys.has("ShiftLeft") || keys.has("ShiftRight");
+    const throttle = (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0);
+    speed = damp(speed, keys.has("KeyX") ? 0 : throttle * (boost ? 14 : 8), keys.has("KeyX") ? 4 : 1.2, dt);
+    const lift = (keys.has("KeyR") ? 1 : 0) - (keys.has("KeyF") ? 1 : 0) + ((keys.has("ArrowUp") ? 1 : 0) - (keys.has("ArrowDown") ? 1 : 0)) * 0.6;
+    verticalSpeed = damp(verticalSpeed, keys.has("KeyX") ? 0 : lift * 4, 2, dt);
+    flightPitch = damp(flightPitch, clamp(verticalSpeed * 0.08, -0.35, 0.35), 2, dt);
+    const sea = seaRadius(), limit = diveDepth(codex.unlocked);
+    let n = shipPosition.clone().addScaledVector(shipForward, speed * dt).normalize();
+    if (depthAt(n) < 3.5) {
+        n = up; speed *= 0.5;
+        if (toastTime <= 0) toast("Too shallow for the Petrel to go on submerged. Turn back, or rise and fly out (hold R).");
+    }
+    let r = Math.max(shipPosition.length() + verticalSpeed * dt, bedRadius(n) + 2.4);
+    if (sea - r > limit) {
+        r = sea - limit; verticalSpeed = Math.max(0, verticalSpeed);
+        if (animationTime - lastDiveWarn > 6) { lastDiveWarn = animationTime; toast(`The hull groans: ${limit} m is as deep as it is rated for.` + (codex.unlocked.has("pressureHull2") ? "" : " Pressure hull II goes deeper.")); }
+    }
+    if (r >= sea - 0.8) { // at the surface: hold R to break out and fly
+        r = sea - 0.8;
+        diveRise = lift > 0 ? diveRise + dt : 0;
+        if (diveRise > 0.7) {
+            mode = "flight";
+            shipPosition.copy(n).multiplyScalar(sea + 3.6);
+            verticalSpeed = 6; flightPitch = 0;
+            toast("The Petrel breaks the surface, unfolds its wings and lifts off.");
+            orientShip(dt);
+            return;
+        }
+    } else diveRise = 0;
+    shipPosition.copy(n).multiplyScalar(r);
+    collideShip();
+    orientShip(dt);
+    updateScan(dt);
+}
+// E in the Petrel under water: a recorded thing shows its card; with a Dive suit and
+// nothing to scan, you swim out (the Petrel waits where it is).
+function diveAct() {
+    if (scanTarget?.known) return showScanCard(scanTarget, null);
+    if (scanTarget) return; // hold E to scan (updateScan)
+    if (!canSwimHere()) { toast(codex.unlocked.has("diveSuit") ? "Your suit is not sealed for this sea." : "You need a Dive suit to leave the Petrel under water."); return; }
+    const up = shipPosition.clone().normalize(), right = shipForward.clone().cross(up).normalize();
+    playerNormal = shipPosition.clone().addScaledVector(right, 6).normalize(); // out of the side hatch, facing away from the hull
+    playerForward = tangent(right, playerNormal);
+    swimming = true; swimD = Math.max(0, seaRadius() - shipPosition.length()); eyeRadius = null; lookPitch = 0;
+    shipSubmerged = true; speed = 0; verticalSpeed = 0;
+    mode = "walk";
+    toast("You swim out of the Petrel. Space or R to rise, F to sink. Swim back and press E to board.", 5);
+}
 function updateManeuver(dt) {
     maneuver.time += dt;
     const t = clamp(maneuver.time / maneuver.duration, 0, 1);
@@ -1532,7 +1741,8 @@ function updateManeuver(dt) {
             verticalSpeed = 0;
             speed = 0;
             maneuver = null;
-            toast(afloat ? "Splashdown. The Petrel rides the swell. Take off and land on shore to go on foot." : "Touchdown. Engines idle. Press E to leave Kestrel.");
+            toast(afloat ? `Splashdown. The Petrel rides the swell.${canDiveHere() ? " Press F to dive." : " Take off and land on shore to go on foot."}` : `Touchdown. Engines idle. Press E to leave the ${shipName()}.`);
+            if (!afloat) arriveAtTown();
         }
     } else {
         // Charge, lift vertically, then gently hand control back above the terrain.
@@ -1561,9 +1771,10 @@ function updateManeuver(dt) {
 // The ship's velocity relative to the world it is near (for the camera and the
 // dust rushing past), measured from how far it actually moved.
 function updateFlow(dt) {
-    const flying = started && mode !== "deep" && mode !== "walk" && mode !== "landed";
+    const flying = started && mode !== "deep" && mode !== "walk" && mode !== "landed" && mode !== "deck";
     if (!flying || lastBodyId !== activeBody.id || !lastLocal) {
         if (!flying) flowVel.set(0, 0, 0);
+        shipVel.set(0, 0, 0);
         lastLocal = flying ? shipPosition.clone() : null;
         lastBodyId = activeBody.id;
         spaceDust.hide();
@@ -1579,7 +1790,8 @@ function updateFlow(dt) {
         v = shipForward.clone().multiplyScalar(speed * Math.cos(flightPitch)).addScaledVector(shipPosition.clone().normalize(), verticalSpeed);
     else v = shipPosition.clone().sub(lastLocal).divideScalar(Math.max(dt, 1e-3));
     lastLocal.copy(shipPosition);
-    if (v.length() < 30000) flowVel.lerp(v, 1 - Math.exp(-dt * 8));
+    if (v.length() < 400000) { flowVel.lerp(v, 1 - Math.exp(-dt * 8)); shipVel.copy(v); } // (bigger is a jump: a rebase or arrival)
+    else shipVel.set(0, 0, 0);
     const s = flowVel.length();
     const power = clamp((s - 30) / 1000, 0, 1);
     if (power > 0.02)
@@ -1640,11 +1852,15 @@ function updateWalk(dt) {
             (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0),
         );
     const moving = direction.lengthSq() > 0.01;
+    footTime += dt;
+    if (swimming) return updateSwim(dt, direction, moving);
+    // Wading slows you down, more the deeper it gets.
+    const wading = clamp(depthAt(playerNormal) / WADE_DEPTH, 0, 1);
         const walkingSpeed =
-        keys.has("ShiftLeft") || keys.has("ShiftRight") ? 8 : 4.5;
+        (keys.has("ShiftLeft") || keys.has("ShiftRight") ? 8 : 4.5) * (1 - 0.55 * wading);
     // Jumping: gravity follows the world's surface gravity, so moons give floaty leaps.
     const gravity = 9.8 * Math.max(0.15, activeBody.physics?.gravity ?? 1);
-    if (keys.has("Space") && jumpHeight <= 0) jumpVelocity = 4.4;
+    if (keys.has("Space") && jumpHeight <= 0 && wading < 0.5) jumpVelocity = 4.4;
     if (jumpHeight > 0 || jumpVelocity > 0) {
         jumpHeight += jumpVelocity * dt;
         jumpVelocity -= gravity * dt;
@@ -1665,18 +1881,49 @@ function updateWalk(dt) {
                 .addScaledVector(direction, step * uphill)
                 .normalize(),
         );
-        const wet = terrainFor(activeBody).isLiquid(next);
-        if (wet && toastTime <= 0)
-            toast(
-                terrainFor(activeBody).liquid === "lava"
-                    ? "Lava ahead. Too hot to go further."
-                    : "The water is too deep to go further.",
-            );
-        if (!wet) playerNormal.copy(next);
+        // Into the water: wade up to WADE_DEPTH; deeper, swim (Dive suit) or turn back.
+        const lava = terrainFor(activeBody).liquid === "lava" && terrainFor(activeBody).isLiquid(next);
+        const d = depthAt(next), tooDeep = d > WADE_DEPTH, sulfur = d > 0 && !wadable();
+        if (lava || sulfur || (tooDeep && !canSwimHere())) {
+            if (toastTime <= 0)
+                toast(lava ? "Lava ahead. Too hot to go further."
+                    : sulfur ? "Molten sulfur: far too hot to wade into."
+                    : swimDepth(codex.unlocked) > 0 ? "Your suit is not sealed for this sea."
+                    : "The water is too deep to wade further." + (codex.unlocked.has("pressureHull1") ? " A Dive suit would let you swim." : ""));
+        } else {
+            playerNormal.copy(next);
+            if (tooDeep) { swimming = true; swimD = -0.2; jumpHeight = jumpVelocity = 0; toast("You swim out. Space or R to rise, F to sink, look where you want to go.", 4); }
+        }
     }
     playerForward = tangent(playerForward, playerNormal);
             bob += moving && jumpHeight <= 0 ? dt * walkingSpeed * 1.8 : 0;
     speed = moving ? walkingSpeed : 0;
+    updateScan(dt);
+}
+// Swimming (Dive suit): you move where you look; Space or R rises, F sinks. Your eyes
+// stay between the sea floor and just above the surface, no deeper than the suit allows.
+// Back in the shallows, you stand up and wade out.
+function updateSwim(dt, direction, moving) {
+    const fast = keys.has("ShiftLeft") || keys.has("ShiftRight"), v = fast ? 4.5 : 2.6;
+    const rise = (keys.has("Space") || keys.has("KeyR") ? 1 : 0) - (keys.has("KeyF") ? 1 : 0);
+    let climb = rise * 2.2;
+    if (moving) {
+        direction.normalize();
+        const along = direction.dot(playerForward); // forward/back follows the look pitch
+        climb += Math.sin(lookPitch) * along * v;
+        const step = v * dt * (moving ? Math.max(0.35, Math.cos(lookPitch * Math.abs(along))) : 0);
+        const next = resolveCollisions(playerNormal.clone().multiplyScalar(seaRadius()).addScaledVector(direction, step).normalize());
+        if (depthAt(next) > 0.3 || swimD < 0.4) playerNormal.copy(next);
+    }
+    const limit = swimDepth(codex.unlocked);
+    swimD = clamp(swimD - climb * dt, -0.25, limit);
+    if (swimD >= limit - 0.05 && rise < 0 && toastTime <= 0) toast(`Your suit is rated to ${limit} m.`);
+    // Never below the sea floor.
+    swimD = Math.min(swimD, seaRadius() - (bedRadius(playerNormal) + 0.5));
+    // Shallow enough to stand: wade out.
+    if (depthAt(playerNormal) <= WADE_DEPTH && swimD < 0.5) { swimming = false; eyeRadius = null; }
+    playerForward = tangent(playerForward, playerNormal);
+    speed = moving ? v : 0;
     updateScan(dt);
 }
 let jumpHeight = 0,
@@ -1686,9 +1933,9 @@ let jumpHeight = 0,
 // points 0.45 m away), so walking follows the lie of the land rather than every pebble.
 function footHeight(n) {
     const a = tangent(Math.abs(n.y) < 0.9 ? Y.clone() : vec(1, 0, 0), n), b = n.clone().cross(a), e = 0.45 / RADIUS;
-    let sum = surfaceRadius(n) * 2;
+    let sum = bedRadius(n) * 2; // in the shallows, the sea bed (you wade, you don't walk on the water)
     for (const [da, db] of [[1, 0], [-1, 0], [0, 1], [0, -1]])
-        sum += surfaceRadius(n.clone().addScaledVector(a, da * e).addScaledVector(b, db * e).normalize());
+        sum += bedRadius(n.clone().addScaledVector(a, da * e).addScaledVector(b, db * e).normalize());
     return sum / 6;
 }
 const PLAYER_RADIUS = 0.35;
@@ -1697,6 +1944,7 @@ function resolveCollisions(next) {
     const p = next.clone().multiplyScalar(surfaceRadius(next));
     const list = site.nearbyObstacles(p);
     list.push({ p: shipPosition.clone(), r: 3.2, h: 4 }); // the parked ship
+    systemView.obstaclesNear?.(activeBody.id, p).forEach((o) => list.push(o)); // a world-city's towers
     for (let pass = 0; pass < 2; pass++) {
         const up = p.clone().normalize();
         for (const o of list) {
@@ -1709,6 +1957,580 @@ function resolveCollisions(next) {
         }
     }
     return p.normalize();
+}
+// The ship can't fly through what has been built: buildings and towers near the site,
+// the towers of a world-city, space elevators (megastructures.js) and an orbital ring.
+// It slides round the side of a building, or rides up over its roof if it comes in
+// close to the top.
+const SHIP_RADIUS = 3.2;
+function collideShip() {
+    if (!site || altitude() > 400) return;
+    const p = shipPosition, list = site.buildingsNear?.(p) ?? [];
+    systemView.obstaclesNear?.(activeBody.id, p).forEach((o) => list.push(o));
+    for (let pass = 0; pass < 2; pass++) {
+        const up = p.clone().normalize(), alt = p.length();
+        for (const o of list) {
+            const top = o.p.length() + o.h;
+            if (alt > top + SHIP_RADIUS * 0.6 || alt < o.p.length() - SHIP_RADIUS) continue;
+            const d = p.clone().sub(o.p);
+            d.addScaledVector(up, -d.dot(up));
+            const len = d.length(), min = o.r + SHIP_RADIUS;
+            if (len >= min) continue;
+            if (alt > top - 2.5) { p.setLength(top + SHIP_RADIUS * 0.6); verticalSpeed = Math.max(0, verticalSpeed); }
+            else if (len > 1e-6) { p.addScaledVector(d, (min - len) / len); speed *= 0.85; }
+        }
+    }
+    // An orbital ring is a band round the world: go round it, not through it.
+    const ring = systemView.ringOf?.(activeBody.id);
+    if (ring) {
+        const h = p.dot(ring.axis), inPlane = p.clone().addScaledVector(ring.axis, -h), off = inPlane.length() - ring.radius;
+        const halfW = ring.width / 2 + SHIP_RADIUS, halfT = ring.thick + SHIP_RADIUS;
+        if (Math.abs(h) < halfW && Math.abs(off) < halfT) {
+            // out the nearer way: past an edge of the band, or above or below it
+            if (halfW - Math.abs(h) < halfT - Math.abs(off)) p.addScaledVector(ring.axis, (Math.sign(h) || 1) * (halfW - Math.abs(h)));
+            else p.addScaledVector(inPlane.normalize(), (Math.sign(off) || 1) * (halfT - Math.abs(off)));
+            speed *= 0.85;
+        }
+    }
+}
+// --- Stations (station-deck.js) ---------------------------------------------------
+// Orbital, spacefaring and system-shaping civilizations keep a station with a landing
+// deck on top. Fly up to it and press L to dock on the visitors' pad; E steps out onto
+// the deck, where their crew meet you in their own way (welcoming, curious, wary or
+// guarded, from their traits). E beside your ship boards it again; L undocks.
+// Modes: "docking" (the ship settling onto the pad), "docked" (aboard on the pad),
+// "deck" (on foot on the deck) and "undocking" (lifting off it).
+const STATION_MODES = ["docking", "docked", "deck", "undocking"];
+const atStation = () => STATION_MODES.includes(mode);
+const DOCK_REACH = 90, // metres beyond the deck's rim from which you can dock
+    SHIP_REST = 1.7; // the ship's centre above the pad, as on the ground
+const deckM = new THREE.Matrix4(),
+    deckQ = new THREE.Quaternion(),
+    deckInv = new THREE.Matrix4(),
+    tmpQ = new THREE.Quaternion(),
+    tmpS = new THREE.Vector3();
+let dock = null, // { deck, civ, ark } of the station you are at (ark: a spaceborne civilization's, megastation.js)
+    deckX = 0, deckZ = 0, deckYaw = 0, // you, on foot on the deck (its own frame)
+    greeted = new Set(), // stations whose crew have met you (this session)
+    lastDockHint = -100;
+const stationDeck = () => site?.structures?.deck || null;
+const stationCiv = () => { const s = site?.structures; return s?.civ?.colony ? colonistOf(system, activeBody) : s?.civ; };
+// Every deck in reach of this system: the station of the world you are at, and any arks.
+function allDecks() {
+    const out = [], d = stationDeck();
+    if (d) out.push({ deck: d, civ: stationCiv(), ark: null });
+    for (const a of systemView.arks?.() ?? []) out.push({ deck: a.deck, civ: a.civ, ark: a });
+    return out;
+}
+// The deck's frame now (it moves with its station or ark): matrix, rotation and its inverse.
+function deckFrame(deck = dock?.deck, ark = dock?.ark) {
+    if (deck.place) deck.place(animationTime);
+    else ark?.sync?.(systemView.starMesh.position);
+    deck.group.updateWorldMatrix(true, false);
+    deckM.copy(deck.group.matrixWorld);
+    deckM.decompose(tmpS, deckQ, tmpS.clone());
+    deckInv.copy(deckM).invert();
+    return deckM;
+}
+const deckUp = () => vec(0, 1, 0).applyQuaternion(deckQ);
+// The station deck you could dock at from here, with your ship in its frame, or null.
+function dockable() {
+    if (!["flight", "space"].includes(mode)) return null;
+    let best = null;
+    for (const e of allDecks()) {
+        deckFrame(e.deck, e.ark);
+        const local = shipPosition.clone().applyMatrix4(deckInv), reach = Math.hypot(local.x, local.z) - e.deck.radius;
+        if (Math.abs(local.y) < 4000 && (!best || reach < best.reach)) best = { ...e, local, reach, dist: local.length() };
+    }
+    if (best) deckFrame(best.deck, best.ark); // leave the frame on the one chosen
+    return best;
+}
+const padLocal = (deck = dock.deck) => vec(deck.pads[0].x, SHIP_REST, deck.pads[0].z);
+// The ship's rotation on the visitors' pad: level, nose toward the deck's centre (or, lifting off, along +Z).
+function padRotation(deck, alongZ = 0) {
+    const p = deck.pads[0], fwd = vec(-p.x, 0, -p.z).normalize().lerp(vec(0, 0, 1), alongZ).normalize(), up = vec(0, 1, 0);
+    const right = fwd.clone().cross(up).normalize();
+    return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, fwd.clone().negate()));
+}
+function tryDock() {
+    const near = dockable();
+    if (!near || near.reach > DOCK_REACH) return false;
+    const { deck, local } = near;
+    if (local.y < -4) return toast(`Come round above the ${near.ark ? "ark's" : "station's"} deck to dock.`), true;
+    if (Math.abs(speed) > 80) return toast("Slow below 80 m/s to dock (hold X to brake)."), true;
+    dock = { deck, civ: near.civ, ark: near.ark };
+    autoApproach = false;
+    keys.clear();
+    maneuver = { time: 0, duration: 6, start: local.clone(), rot: deckQ.clone().invert().multiply(ship.quaternion) };
+    mode = "docking";
+    toast(dock.ark ? `Docking on ${dock.ark.name}. The visitors' pad is lit for you.` : `Docking at the ${dock.civ?.species ? `${dock.civ.species.name} ` : ""}station. The visitors' pad is lit for you.`);
+    return true;
+}
+// Ship pose from deck-frame position and rotation.
+function placeShipOnDeck(local, rot) {
+    shipPosition.copy(local).applyMatrix4(deckM);
+    ship.position.copy(shipPosition);
+    ship.quaternion.copy(deckQ).multiply(rot);
+    shipForward.set(0, 0, -1).applyQuaternion(ship.quaternion);
+    spaceUp.copy(deckUp());
+}
+function updateDocking(dt) {
+    const deck = dock.deck;
+    deckFrame();
+    maneuver.time += dt;
+    const t = clamp(maneuver.time / maneuver.duration, 0, 1), e = smootherstep(t);
+    // Over the pad first, then straight down onto it.
+    const P0 = maneuver.start, P2 = padLocal(), C = vec(P2.x, Math.max(P0.y, 18), P2.z);
+    const local = P0.clone().multiplyScalar((1 - e) ** 2).addScaledVector(C, 2 * (1 - e) * e).addScaledVector(P2, e * e);
+    const before = shipPosition.clone();
+    placeShipOnDeck(local, maneuver.rot.clone().slerp(padRotation(deck), smoothstep(t * 1.4)));
+    speed = 0;
+    verticalSpeed = before.sub(shipPosition).length() / Math.max(dt, 1e-3) * (t < 1 ? -1 : 0);
+    if (t >= 1) {
+        mode = "docked";
+        maneuver = null;
+        verticalSpeed = 0;
+        toast(`Docked. Press E to step out onto the deck, or L to undock.`, 5);
+    }
+}
+function updateDocked() {
+    deckFrame();
+    placeShipOnDeck(padLocal(), padRotation(dock.deck));
+}
+function undock() {
+    keys.clear();
+    maneuver = { time: 0, duration: 3.5 };
+    mode = "undocking";
+    toast("Releasing the clamps. Lifting clear of the deck.");
+}
+function updateUndocking(dt) {
+    deckFrame();
+    maneuver.time += dt;
+    const t = clamp(maneuver.time / maneuver.duration, 0, 1);
+    const local = padLocal().add(vec(0, 26 * smootherstep(t), 0));
+    placeShipOnDeck(local, padRotation(dock.deck, smoothstep(t)));
+    verticalSpeed = t < 1 ? 7 : 0;
+    if (t < 1) return;
+    // Clear of the deck: fly on as usual, in space or in the world's sky.
+    maneuver = null;
+    speed = verticalSpeed = 0;
+    flightPitch = bankAngle = turnVelocity = 0;
+    dock = null;
+    lastDockHint = animationTime; // no "press L to dock" straight after leaving
+    if (altitude() > 600) {
+        mode = "space";
+        spaceUp.copy(deckUp());
+        toast("Clear of the station. You have control.");
+    } else {
+        mode = "flight";
+        shipForward = tangent(shipForward, shipPosition.clone().normalize());
+        if (shipForward.lengthSq() < 0.1) shipForward = tangent(deckUp(), shipPosition.clone().normalize());
+        toast("Clear of the station. You have control.");
+    }
+}
+// Stepping out onto the deck beside the ship, facing the spire.
+function leaveShipOnDeck() {
+    const p = dock.deck.pads[0], toC = vec(-p.x, 0, -p.z).normalize();
+    deckX = p.x + toC.x * 5.5 - toC.z * 2;
+    deckZ = p.z + toC.z * 5.5 + toC.x * 2;
+    deckYaw = Math.atan2(toC.z, toC.x);
+    lookPitch = 0.05;
+    jumpHeight = jumpVelocity = 0;
+    mode = "deck";
+    deckTime = 0;
+    const key = dock.civ?.id ?? activeBody.id;
+    if (!greeted.has(key)) {
+        greeted.add(key);
+        const home = dock.ark ? system.bodies.find((b) => b.id === dock.civ.home) || activeBody : activeBody;
+        const info = recordInfo(stationEntry(system, home, dock.civ, dock.deck.stance));
+        if (info.added) showScanCard({ kind: "station", ref: dock.civ || {}, deck: dock.deck, ark: dock.ark }, info);
+        setTimeout(() => { if (mode === "deck" && dock?.deck.greeting) toast(dock.deck.greeting, 6); }, 1800);
+    } else toast(dock.ark ? `Back on the deck of ${dock.ark.name}.` : `Back on the deck of the ${dock.civ?.species?.name ?? ""} station.`.replace("  ", " "));
+}
+const shipOnDeck = () => (dock ? { x: dock.deck.pads[0].x, z: dock.deck.pads[0].z, r: 3.4 } : null);
+const nearShipOnDeck = () => dock && Math.hypot(deckX - dock.deck.pads[0].x, deckZ - dock.deck.pads[0].z) < 6.5;
+function updateDeck(dt) {
+    deckTime += dt;
+    deckFrame();
+    placeShipOnDeck(padLocal(), padRotation(dock.deck));
+    deckYaw -= arrowTurn() * dt * 1.6;
+    lookPitch = clamp(lookPitch + ((keys.has("ArrowUp") ? 1 : 0) - (keys.has("ArrowDown") ? 1 : 0)) * dt, -1.15, 1.1);
+    const fx = Math.cos(deckYaw), fz = Math.sin(deckYaw); // forward; right is (-fz, fx)
+    const ahead = (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0), side = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
+    let dx = fx * ahead - fz * side, dz = fz * ahead + fx * side;
+    const len = Math.hypot(dx, dz), moving = len > 0.01;
+    const walkingSpeed = keys.has("ShiftLeft") || keys.has("ShiftRight") ? 8 : 4.5;
+    // The deck keeps a steady 1 g.
+    if (keys.has("Space") && jumpHeight <= 0) jumpVelocity = 4.4;
+    if (jumpHeight > 0 || jumpVelocity > 0) {
+        jumpHeight += jumpVelocity * dt;
+        jumpVelocity -= 9.8 * dt;
+        if (jumpHeight <= 0) jumpHeight = jumpVelocity = 0;
+    }
+    if (moving) {
+        const nx = deckX + (dx / len) * walkingSpeed * dt, nz = deckZ + (dz / len) * walkingSpeed * dt;
+        const [rx, rz] = dock.deck.resolve(deckX, deckZ, nx, nz, PLAYER_RADIUS, jumpHeight), s = shipOnDeck();
+        // Your own ship on its pad is solid too.
+        if (Math.hypot(rx - s.x, rz - s.z) >= s.r + PLAYER_RADIUS || Math.hypot(rx - s.x, rz - s.z) > Math.hypot(deckX - s.x, deckZ - s.z)) { deckX = rx; deckZ = rz; }
+    }
+    bob += moving && jumpHeight <= 0 ? dt * walkingSpeed * 1.8 : 0;
+    speed = moving ? walkingSpeed : 0;
+}
+// What the HUD shows at a station (hud.js applies it over the usual readouts), or null.
+function stationHUD() {
+    if (mode === "walk" && indoor) {
+        const c = householdInReach(), sp = indoor.room.species;
+        return {
+            modeLabel: `${indoor.native?.name?.toUpperCase() ?? ""} ${placeWord(indoor.d).toUpperCase()} / INSIDE`.trim(), status: "INSIDE",
+            action: c ? `${stepAtLeast(relations.step(civOfSpecies(indoor.native)?.id) || "observed", "contact") ? "Talk with" : "Greet"} the ${sp?.name ?? "household"} <kbd>E</kbd>` : nearHomeDoor() ? "Go outside <kbd>E</kbd>" : "",
+            hint: "<kbd>W A S D</kbd> walk <kbd>E</kbd> greet / go outside <span>Click: mouse look · M map · H controls</span>", walking: true,
+        };
+    }
+    if (mode === "walk" && !scanTarget) {
+        const d = doorInReach();
+        if (d) { const ok = canEnter(d, site.structures.civ); return { action: ok.ok ? `Go inside <kbd>E</kbd>` : `Look in at the door <kbd>E</kbd>` }; }
+    }
+    const st = dock?.ark ? dock.ark.name.toUpperCase() : `${dock?.civ?.species?.name ? `${dock.civ.species.name.toUpperCase()} ` : ""}STATION`;
+    if (mode === "deck") {
+        const p = dock.deck.pads[0];
+        return {
+            modeLabel: `${st} / ON DECK`, status: "ON DECK", altLabel: "TO SHIP", altitude: Math.hypot(deckX - p.x, deckZ - p.z),
+            action: crewInReach() ? `${stepAtLeast(relations.step(dock.civ?.id) || "observed", "contact") ? "Talk with" : "Greet"} the ${dock.civ?.species?.name ?? "crew"} <kbd>E</kbd>` : nearShipOnDeck() ? `Board the ${shipName()} <kbd>E</kbd>` : "", approach: null, walking: true,
+            hint: "<kbd>W A S D</kbd> walk <kbd>SPACE</kbd> jump <kbd>E</kbd> greet the crew / board your ship <span>Click: mouse look · M map · H controls</span>",
+        };
+    }
+    if (mode === "docked")
+        return {
+            modeLabel: `DOCKED / ${st}`, status: "DOCKED", action: "Step onto the deck <kbd>E</kbd>", approach: { text: "↑ Undock [L]", onclick: act },
+            hint: "<kbd>E</kbd> step onto the deck <kbd>L</kbd> undock <span>Drag or Q: look around · M map · H controls</span>",
+        };
+    if (mode === "docking" || mode === "undocking")
+        return { modeLabel: mode === "docking" ? "DOCKING / VISITORS' PAD" : "UNDOCKING / LIFTING CLEAR", status: shipName().toUpperCase(), action: mode === "docking" ? "Settling onto the pad…" : "Lifting clear…", busy: true, approach: null };
+    if (mode === "flight" || mode === "space") {
+        const near = dockable();
+        if (near && near.reach < DOCK_REACH) return { action: near.local.y < -4 ? "Fly above the deck to dock" : near.ark ? `Dock on ${near.ark.name} <kbd>L</kbd>` : `Dock at the station <kbd>L</kbd>`, open: true };
+    }
+    return null;
+}
+// The waypoint at a station: your ship on the deck, or the visitors' pad when flying nearby.
+function stationMark() {
+    if (mode === "deck") return { point: shipPosition.clone(), name: shipName().toUpperCase(), distance: Math.hypot(deckX - dock.deck.pads[0].x, deckZ - dock.deck.pads[0].z) };
+    if ((mode !== "flight" && mode !== "space") || selectedBody || deepInfo()) return null;
+    let best = null;
+    for (const e of allDecks()) {
+        deckFrame(e.deck, e.ark);
+        const p = e.deck.pads[0], point = vec(p.x, 0, p.z).applyMatrix4(deckM), d = point.distanceTo(shipPosition);
+        if (d < 40 || d > (e.ark ? 400000 : 4000)) continue;
+        if (!best || d < best.distance) best = { point, name: e.ark ? `${e.ark.name.toUpperCase()} · ARK` : "STATION · VISITORS' PAD", distance: d };
+    }
+    return best;
+}
+// The crew go about their work whether or not you are there (only near the station).
+let scannedToldAt = -100;
+function animateStation(dt) {
+    for (const e of allDecks()) {
+        const deck = e.deck, here = dock?.deck === deck && atStation();
+        deckFrame(deck, e.ark);
+        const centre = vec().setFromMatrixPosition(deckM);
+        if (!here && camera.position.distanceTo(centre) > 2500 + deck.radius) continue;
+        const events = deck.update(dt, animationTime, mode === "deck" && here ? { x: deckX, z: deckZ } : null, here ? shipOnDeck() : null);
+        for (const ev of events)
+            if (ev.type === "scanned" && animationTime - scannedToldAt > 30) {
+                scannedToldAt = animationTime;
+                toast(`A ${deck.species?.name ?? "crew member"} sweeps a scanner over you, the way you scan their world.`, 5);
+            }
+    }
+    if (mode !== "flight" && mode !== "space") return;
+    // Decks and arks are solid: fly round them, over them or under them, not through them.
+    const near = dockable();
+    if (near && near.reach < SHIP_RADIUS) {
+        const l = near.local, r = Math.hypot(l.x, l.z), top = 1.1 + SHIP_RADIUS, bottom = -(near.deck.thickness + 2 + SHIP_RADIUS);
+        if (l.y < top && l.y > bottom) {
+            const up = top - l.y, down = l.y - bottom, out = near.deck.radius + SHIP_RADIUS - r;
+            if (out < up && out < down && r > 1e-3) { l.x *= (r + out) / r; l.z *= (r + out) / r; }
+            else l.y = up < down ? top : bottom;
+            shipPosition.copy(l).applyMatrix4(deckM);
+            speed *= 0.85;
+        }
+    }
+    for (const a of systemView.arks?.() ?? []) {
+        a.group.updateWorldMatrix(true, false);
+        const inv = a.group.matrixWorld.clone().invert(), l = shipPosition.clone().applyMatrix4(inv);
+        if (l.length() > a.size + 50) continue;
+        if (a.collide(l, SHIP_RADIUS)) { shipPosition.copy(l.applyMatrix4(a.group.matrixWorld)); speed *= 0.9; }
+    }
+    // Flying close by: say once in a while that you can dock.
+    if (animationTime - lastDockHint > 25 && near && near.reach < DOCK_REACH * 0.8 && near.local.y > -4) {
+        lastDockHint = animationTime;
+        toast(near.ark ? `${near.ark.name}: a landing deck. Press L to dock.` : `A station with a landing deck. Press L to dock.`, 4);
+    }
+}
+
+// --- Contact --------------------------------------------------------------------
+// E beside one of an intelligent species (a scanned townsperson, or the crew on a deck)
+// opens the exchange (contact-ui.js): greet them, then show them things from your codex.
+// What they value raises their trust; steps on the ladder go into the codex ('contact'
+// entries, which the upgrade line reads) and bring gifts: their charts, where things
+// live on their world, their drive technology, and a keepsake.
+let deckTime = 0, footTime = 0, guideCache = { at: -1, set: new Set() }, chartedCache = { at: -1e9, set: new Set() };
+const guidedHere = () => {
+    if (animationTime - guideCache.at > 1) guideCache = { at: animationTime, set: relations.effects().guides };
+    return guideCache.set.has(`${system.seed}:${activeBody.id}`);
+};
+// The civilization a species of this world belongs to, if it builds here (natives or colonists).
+function civOfSpecies(sp) {
+    const s = site?.structures;
+    if (!s?.civ?.species || s.ruins || !sp) return null;
+    if (s.civ.colony) return sp.id === `${s.civ.species.id}-colonist` ? colonistOf(system, activeBody) : null;
+    return sp.id === s.civ.species.id ? civilizationOf(activeBody) : null;
+}
+// One of the crew close enough to talk to, on the deck you are on.
+function crewInReach() {
+    if (mode !== "deck" || !dock) return null;
+    let best = null, bd = Infinity;
+    for (const c of dock.deck.crew()) { const d = Math.hypot(c.x - deckX, c.z - deckZ) - c.r; if (d < 2.6 && d < bd) { bd = d; best = c; } }
+    return best;
+}
+const KIND_WORDS = { fauna: "Animal", flora: "Plant", formation: "Rock", core: "Core sample", behaviour: "Behaviour", phenomenon: "Sky event", settlement: "Settlement", station: "Station", "field-note": "Signal", world: "World", signal: "Radio source" };
+function entryName(e) {
+    if (e.kind === "behaviour") return `${e.traits?.name ?? "An animal"}: ${e.traits?.behaviour ?? "behaviour"}`;
+    if (e.kind === "phenomenon") return ({ eclipse: "An eclipse", aurora: "An aurora", meteors: "A meteor shower" })[e.traits?.type] || "A sky event";
+    if (e.kind === "settlement") return `${e.traits?.name ?? "A people"} (${e.traits?.tier ?? "builders"})`;
+    if (e.kind === "station") return `${e.traits?.name ?? "A"} station`;
+    if (e.kind === "signal") return `A radio voice (${e.traits?.tier ?? "unknown"})`;
+    if (e.kind === "world") return e.traits?.name || e.world?.name || "A world";
+    return e.traits?.name || e.world?.name || e.id;
+}
+// What you could show them: the things they would value most, and one or two others.
+function offersFor(civ, rel, homeSeed) {
+    const scored = codex.entries.filter(tradeable).map((e) => ({ e, v: valueOf(civ, e, rel, homeSeed) })).filter((x) => x.v > 0);
+    scored.sort((a, b) => b.v - a.v);
+    const top = scored.slice(0, 3), rest = scored.slice(3), r = () => Math.random();
+    const extra = rest.length ? [rest[Math.floor(r() * rest.length)]] : [];
+    return [...top, ...extra].sort(() => r() - 0.5).map(({ e }) => ({ entry: e, name: entryName(e), kind: KIND_WORDS[e.kind] || e.kind, from: e.world?.name ?? "" }));
+}
+// Steps reached: into the codex, and the gifts that come with them. Returns lines to show.
+function applyReached(civ, reached) {
+    const lines = [], home = system.bodies.find((b) => b.id === civ.home) || activeBody;
+    for (const step of reached) {
+        const info = recordInfo(contactEntry(system, home, civ, step));
+        const g = giftsOf(civ);
+        if (step === "contact" && info.text) lines.push(info.text.trim());
+        if (step === "trust") {
+            const granted = {};
+            if (g.guide) granted.guide = true;
+            if (g.charts && !offChart) granted.charted = starsNear(currentStar, g.charts).map((x) => x.star.id);
+            relations.setGranted(civ.id, granted);
+            lines.push(`They trust you. They share ${giftWords({ guide: g.guide, charts: g.charts })}.${info.text}`);
+        }
+        if (step === "friendship") {
+            const keepsake = keepsakeOf(civ);
+            relations.setGranted(civ.id, { keepsake, ...(g.drive ? { drive: g.drive } : {}) });
+            if (g.drive) starMap?.setRange?.(jumpRangeNow());
+            lines.push(`Friendship. They give you ${keepsake}${g.drive ? `, and ${giftWords({ drive: g.drive })}` : ""}.${info.text}`);
+        }
+    }
+    if (reached.length) { upgradeScreen.refresh(); guideCache.at = -1; chartedCache.at = -1e9; }
+    return lines;
+}
+// --- Homes (interior.js) -------------------------------------------------------
+// A house's door within reach on foot; inside, the household within reach, and the way out.
+function doorInReach() {
+    if (mode !== "walk" || indoor || swimming || !site?.structures?.dwellings?.length) return null;
+    if (animationTime - doorCache.at < 0.2) return doorCache.d;
+    const here = playerPos();
+    let best = null, bd = 2.6;
+    for (const d of site.structures.dwellings) { const dd = d.door.distanceTo(here); if (dd < bd) { bd = dd; best = d; } }
+    doorCache = { at: animationTime, d: best };
+    return best;
+}
+function householdInReach() {
+    if (!indoor) return null;
+    let best = null, bd = Infinity;
+    for (const c of indoor.room.crew()) { const d = Math.hypot(c.x - indoor.x, c.z - indoor.z) - c.r; if (d < 2.4 && d < bd) { bd = d; best = c; } }
+    return best;
+}
+const nearHomeDoor = () => indoor && Math.hypot(indoor.x - indoor.room.door.x, indoor.z - indoor.room.door.z) < 1.6;
+function enterHome(d) {
+    const s = site.structures, civ = s.civ, ok = canEnter(d, civ), name = civ.species.name;
+    if (!ok.ok) return toast(ok.why === "small" ? `The doorway is too small for you: the ${plural(name)} build to their own size. Inside, in the half-light, you can make out the shapes of their things.` : `You can't go in here.`, 5);
+    const civF = s.civ.colony ? colonistOf(system, activeBody) : civilizationOf(activeBody), stance = stanceOf(civF);
+    const room = buildInterior(THREE, { dwelling: d, civ, palette: s.palette, stance, ruins: !!s.ruins, seed: `${system.seed}:${activeBody.id}:${s.dwellings.indexOf(d)}`, light: indoorLight });
+    site.group.add(room.group);
+    // Hide the house's own outside within its footprint, so nothing of it shows in the room.
+    s.hideInside?.({ centre: vec().setFromMatrixPosition(d.base), up: d.n.clone(), radius: Math.max(room.radius, d.foot) * 1.08, height: d.h * 2.5 + 4 });
+    const native = s.civ.colony ? site.fauna.colonists?.species[0] : site.fauna.species.find((x) => x.id === civ.species.id);
+    indoor = { d, room, x: room.start.x, z: room.start.z, yaw: room.start.yaw, native: native || civ.species };
+    lookPitch = 0; jumpHeight = 0; keys.clear();
+    indoorLight.intensity = (s.ruins ? 0.4 : 0.8 + civ.level * 0.15) * Math.max(1.5, room.radius * room.radius) * 0.9;
+    indoorLight.distance = room.radius * 4; indoorLight.decay = 2;
+    const who = room.crew().length;
+    toast(s.ruins ? `An empty ${name} home, long abandoned. Plants have found their way in.`
+        : who ? `Inside a ${name} ${placeWord(d)}. ${who > 1 ? `${who} of ${d.kind && !HOMES.includes(d.kind) ? "them" : "the household"} are` : d.kind && !HOMES.includes(d.kind) ? "One of them is" : "One of the household is"} here.` : `Inside a ${name} ${placeWord(d)}. No one is in.`, 4);
+}
+// What a building is, for the words (town-plan.mjs lot kinds; anything else is a home).
+const HOMES = ["house", "row"];
+const placeWord = (d) => ({ shop: "shop", workshop: "workshop", hall: "hall", tower: "flat" })[d?.kind] || "home";
+function leaveHome(quiet = false) {
+    if (!indoor) return;
+    const { d, room } = indoor;
+    if (contactUI.isOpen) contactUI.close();
+    room.dispose();
+    site?.structures?.hideInside?.(null);
+    indoorLight.intensity = 0;
+    indoor = null;
+    if (quiet) return;
+    playerNormal.copy(d.door.clone().normalize().addScaledVector(d.face, 1.4 / RADIUS).normalize());
+    playerForward.copy(d.face).addScaledVector(playerNormal, -d.face.dot(playerNormal)).normalize();
+    eyeRadius = null; lookPitch = 0;
+}
+function updateIndoor(dt) {
+    footTime += dt;
+    indoor.yaw -= arrowTurn() * dt * 1.6;
+    lookPitch = clamp(lookPitch + ((keys.has("ArrowUp") ? 1 : 0) - (keys.has("ArrowDown") ? 1 : 0)) * dt, -1.15, 1.1);
+    const fx = Math.cos(indoor.yaw), fz = Math.sin(indoor.yaw);
+    const ahead = (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0), side = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
+    const dx = fx * ahead - fz * side, dz = fz * ahead + fx * side, len = Math.hypot(dx, dz), moving = len > 0.01, v = 2.6;
+    if (moving) {
+        const nx = indoor.x + (dx / len) * v * dt, nz = indoor.z + (dz / len) * v * dt;
+        // Walking out through the doorway takes you outside.
+        if (nz > indoor.room.door.z - 0.5 && Math.abs(nx) < 0.8 && dz > 0) return leaveHome();
+        [indoor.x, indoor.z] = indoor.room.resolve(indoor.x, indoor.z, nx, nz, PLAYER_RADIUS);
+    }
+    bob += moving ? dt * v * 1.8 : 0;
+    speed = moving ? v : 0;
+}
+// While you talk, the view turns to whoever you are talking to, and the picture is shifted
+// so they stand in the middle of the part of the screen the panel leaves clear.
+function faceTalker(dt) {
+    if (!talking) return;
+    // Stand back far enough to see their face (a giant's is high above you), without looking far up.
+    const backOff = (dist, dy) => { const want = Math.max(1.8, dy * 1.6 + 0.3); return dist < want - 0.2 ? Math.min(want - dist, dt * 1.6) : 0; };
+    const pitchTo = (dy, dist) => clamp(Math.atan2(dy, Math.max(0.5, dist)), -0.6, 0.7);
+    if (indoor && talking.deck === indoor.room) {
+        const c = indoor.room.crew()[talking.i];
+        if (!c) return;
+        const dx = c.x - indoor.x, dz = c.z - indoor.z, dy = c.top * 0.75 - 1.75, dist = Math.hypot(dx, dz), want = Math.atan2(dz, dx), b = backOff(dist, dy);
+        if (b && dist > 0.01) [indoor.x, indoor.z] = indoor.room.resolve(indoor.x, indoor.z, indoor.x - dx / dist * b, indoor.z - dz / dist * b, PLAYER_RADIUS);
+        indoor.yaw += Math.atan2(Math.sin(want - indoor.yaw), Math.cos(want - indoor.yaw)) * Math.min(1, dt * 4);
+        lookPitch = damp(lookPitch, pitchTo(dy, dist), 4, dt);
+    } else if (talking.deck && mode === "deck") {
+        const c = talking.deck.crew()[talking.i];
+        if (!c) return;
+        const dx = c.x - deckX, dz = c.z - deckZ, dy = c.top * 0.75 - 1.75, dist = Math.hypot(dx, dz), b = backOff(dist, dy);
+        if (b && dist > 0.01) [deckX, deckZ] = talking.deck.resolve(deckX, deckZ, deckX - dx / dist * b, deckZ - dz / dist * b, PLAYER_RADIUS, 0);
+        deckYaw += Math.atan2(Math.sin(Math.atan2(dz, dx) - deckYaw), Math.cos(Math.atan2(dz, dx) - deckYaw)) * Math.min(1, dt * 4);
+        lookPitch = damp(lookPitch, pitchTo(dy, dist), 4, dt);
+    } else if (talking.creature && mode === "walk") {
+        const c = talking.creature, eye = playerNormal.clone().multiplyScalar((eyeRadius ?? surfaceRadius(playerNormal) + 1.75));
+        const head = c.pos.clone().addScaledVector(c.n, (c.top ?? c.sp.size) * 0.75 * (c.young ? 0.55 : 1)), d = head.sub(eye);
+        const up = d.dot(playerNormal), flat = d.addScaledVector(playerNormal, -up), across = flat.length();
+        if (across > 0.01) {
+            const dir = flat.normalize(), b = backOff(across, up);
+            if (b) playerNormal.addScaledVector(dir, -b / RADIUS).normalize();
+            playerForward.lerp(dir, Math.min(1, dt * 4)).addScaledVector(playerNormal, -playerForward.dot(playerNormal)).normalize();
+        }
+        lookPitch = damp(lookPitch, pitchTo(up, across), 4, dt);
+    }
+}
+function talkView() {
+    if (!contactUI.isOpen || !talking) { if (camera.view?.enabled) { camera.clearViewOffset(); camera.updateProjectionMatrix(); } return; }
+    const W = innerWidth, H = innerHeight, f = contactUI.free();
+    const ox = Math.round(W / 2 - (f.x + f.w / 2)), oy = Math.round(H / 2 - (f.y + f.h / 2));
+    if (camera.view?.enabled && camera.view.offsetX === ox && camera.view.offsetY === oy && camera.view.fullWidth === W) return;
+    camera.setViewOffset(W, H, ox, oy, W, H);
+    camera.updateProjectionMatrix();
+}
+// Setting down by a town: the townsfolk react as their stance toward you has it (fauna-mesh.js arrive).
+function arriveAtTown() {
+    const s = site?.structures;
+    if (!s?.civ?.species || s.ruins || !site.fauna) return;
+    const herd = s.civ.colony ? site.fauna.colonists : site.fauna, civ = s.civ.colony ? colonistOf(system, activeBody) : civilizationOf(activeBody);
+    if (!herd?.arrive || !civ) return;
+    const stance = stanceOf(civ), came = herd.arrive(shipPosition.clone().normalize(), stance);
+    if (!came) return;
+    const many = plural(civ.species.name);
+    const line = {
+        welcome: `${came > 3 ? "A crowd of" : "Some"} ${many} come out to meet your ship.`,
+        curious: `${came > 1 ? "A few" : "One of the"} ${many} come${came > 1 ? "" : "s"} over to look at your ship.`,
+        wary: `The ${many} stop what they are doing and watch you from their doorways.`,
+        guarded: `Two ${many} walk out and stand a few metres from your ship, watching.`,
+    }[stance];
+    setTimeout(() => { if (mode === "landed" || mode === "walk") toast(line, 5); }, 2600);
+    setTimeout(() => voices.say(herd.species.find((x) => x.id === s.civ.species.id || x.id === `${s.civ.species.id}-colonist`) ?? civ.species, { mood: { welcome: "happy", curious: "curious", wary: "wary", guarded: "guarded" }[stance] }), 4200);
+}
+// What a town near you has started doing together (fauna-mesh.js vignettes), in a line.
+function townNews(watcher) {
+    if (!watcher || indoor || contactUI.isOpen) return;
+    for (const h of [site.fauna, site.fauna.colonists].filter(Boolean)) for (const e of h.events) {
+        if (e.type !== "vignette" || e.at.angleTo(watcher.position.clone().normalize()) * RADIUS > 90) continue;
+        toast(`The ${plural(e.species.name.replace(/-colonist$/, ""))} ${e.words}.`, 5);
+        setTimeout(() => voices.say(e.species, { mood: "happy", volume: 0.6 }), 600);
+    }
+}
+// Now and then, someone near you says something: to whoever they are talking to, or to you.
+let chatterIn = 3;
+function townChatter(dt) {
+    if ((chatterIn -= dt) > 0 || contactUI.isOpen) return;
+    chatterIn = 3.5 + Math.random() * 6;
+    if (mode === "deck" && dock?.deck?.species) {
+        const near = dock.deck.crew().filter((c) => Math.hypot(c.x - deckX, c.z - deckZ) < 14);
+        if (near.length) voices.say(dock.deck.species, { volume: 0.5, length: 2 + Math.floor(Math.random() * 3) });
+        return;
+    }
+    if (mode !== "walk" || !site?.fauna) return;
+    const here = playerPos(), herds = [site.fauna, site.fauna.colonists].filter(Boolean);
+    let best = null, bd = 18;
+    for (const h of herds) for (const c of h.creatures) {
+        if (!c.spots || c.kept || c.hidden || !(c.partner || c.meet || c.duty || c.state === "atSpot" || c.state === "play")) continue;
+        const d = c.pos.distanceTo(here);
+        if (d < bd && Math.random() < 0.6) { bd = d; best = c; }
+    }
+    if (best) voices.say(best.sp, { mood: best.townMood && bd < 10 ? best.townMood : null, volume: 1 - bd / 18, length: 2 + Math.floor(Math.random() * 3), young: best.young });
+}
+// The herd (natives, or a colony's colonists) a species belongs to on this world.
+const herdOf = (sp) => (site?.fauna?.colonists?.species.includes(sp) ? site.fauna.colonists : site?.fauna);
+function talkTo(civ, { where = "", waited = 0, stance = stanceOf(civ), partner = null } = {}) {
+    if (!civ) return;
+    const can = canTalk(civ, codex.unlocked);
+    if (!can.ok) return toast(`You can't make sense of the ${plural(civ.species.name)} yet. ${UPGRADES[can.needs].name}, on the upgrade line, would let you try.`, 5);
+    keys.clear();
+    endTalk();
+    talking = partner;
+    if (partner?.herd) partner.herd.talkWith(partner.creature, stance);
+    if (partner?.deck) partner.deck.talkWith(partner.i);
+    const mood = { welcome: "happy", curious: "curious", wary: "wary", guarded: "guarded" }[stance];
+    const speaker = partner?.creature?.sp ?? partner?.deck?.species ?? civ.species;
+    const gesture = (kind) => { if (partner?.herd) partner.herd.gesture(partner.creature, kind); if (partner?.deck) partner.deck.gesture(partner.i, kind); };
+    setTimeout(() => voices.say(speaker, { mood }), 350);
+    if (document.pointerLockElement) document.exitPointerLock?.();
+    const rel = relations.meet(civ), home = system.bodies.find((b) => b.id === civ.home), homeSeed = String(system.seed);
+    const early = applyReached(civ, relations.settle(civ, stance));
+    contactUI.open({
+        where: `${where}${home ? ` · ${home.name.toUpperCase()}` : ""}`,
+        title: `The ${plural(civ.species.name)}`,
+        sub: `${civ.tier[0].toUpperCase()}${civ.tier.slice(1)}${civ.spaceborne ? " (spaceborne)" : ""} · ${civ.path} · ${{ welcome: "welcoming", curious: "curious", wary: "wary", guarded: "guarded" }[stance]} toward you`,
+        rel, friendAt: stance === "guarded" ? 4.48 : stance === "welcome" ? 2.88 : 3.2,
+        greeted: stepAtLeast(rel.step, "contact"),
+        stanceLine: { welcome: "They seem glad you came.", curious: "They lean in, studying you.", wary: "They keep a careful distance.", guarded: "They are watchful, and slow to warm." }[stance],
+        ask: askOf(civ),
+        offers: offersFor(civ, rel, homeSeed),
+        log: early.map((text) => ({ text, gift: true })),
+        greet: () => {
+            const r = relations.greet(civ, stance, waited);
+            // They answer in their own way (express.mjs), and say something.
+            const g = gestureOf(speaker), answer = r.ok && partner ? `The one before you ${GESTURE_WORDS[g]}.` : null;
+            if (r.ok) gesture(g);
+            voices.say(speaker, { mood: r.ok ? mood : "wary" });
+            return { ...r, text: [r.text, answer, ...applyReached(civ, r.reached)].filter(Boolean).join(" ") };
+        },
+        give: (o) => {
+            const r = relations.give(civ, stance, o.entry, homeSeed, o.name);
+            if (r.value > 0.45) gesture(); // delighted
+            voices.say(speaker, { mood: r.value > 0.45 ? "happy" : r.value > 0.15 ? "curious" : "wary" });
+            return { ...r, gifts: applyReached(civ, r.reached) };
+        },
+    });
 }
 // --- Scanning ----------------------------------------------------------------
 // On foot, the recordable thing nearest the crosshair within reach gets a prompt
@@ -1743,6 +2565,7 @@ const scannedHere = () => ({
 // Behaviours already recorded for a species on this world.
 const seenOf = (sp) => behavioursOf(sp).filter((b) => codex.has(behaviourEntry(system, activeBody, sp, b)));
 function updateScan(dt) {
+    if (indoor) { scanTarget = null; scanProgress = 0; return; } // nothing to scan through the walls
     const held = scanHeld();
     if (!held) scanNeedsRelease = false;
     const scanning = held && !scanNeedsRelease && scanTarget && !scanTarget.known;
@@ -1754,11 +2577,11 @@ function updateScan(dt) {
             ? skyTarget(true)
             : findScanTarget({
                 site,
-                here: surfacePoint(playerNormal),
+                here: mode === "dive" ? shipPosition : playerPos(),
                 eye: camera.position,
                 forward: camera.getWorldDirection(vec()),
                 // Field glasses: zoomed in, you can scan from farther and the aim narrows with the view.
-                reachScale: 1 + (ZOOM_REACH - 1) * smoothstep(zoom),
+                reachScale: (1 + (ZOOM_REACH - 1) * smoothstep(zoom)) * (mode === "dive" ? 2 : 1), // the Petrel's scanner reaches farther
                 aimScale: camera.fov / 70,
                 cores: codex.unlocked.has("deepCoreSampler"),
                 known: scannedHere(),
@@ -1794,10 +2617,28 @@ function completeScan() {
     showScanCard(t, recordInfo(entry));
 }
 // info: what recording it moved forward (recordInfo), or null to show a recorded thing again.
+// The codex entry a scan target makes (for its rarity), or null.
+function entryOfTarget(t) {
+    try {
+        if (t.kind === "fauna") return faunaEntry(system, activeBody, t.ref);
+        if (t.kind === "flora") return floraEntry(system, activeBody, t.ref);
+        if (t.kind === "formation") return formationEntry(system, activeBody, t.ref);
+        if (t.kind === "behaviour") return behaviourEntry(system, activeBody, t.ref, t.behaviour);
+        if (t.kind === "phenomenon") return phenomenonEntry(system, activeBody, t.id, { total: t.ref.total });
+        if (t.kind === "settlement") return settlementEntry(system, activeBody, civilizationOf(activeBody) || t.ref, t.ref?.tier);
+        if (t.kind === "station") return { kind: "station", traits: { tier: t.ref?.tier } };
+    } catch {}
+    return null;
+}
 function showScanCard(t, info) {
     const where = `${wordFor(t).toUpperCase()} · ${activeBody.name.toUpperCase()}`;
+    const card = cardFor(t, site, activeBody, t.kind === "fauna" || t.kind === "behaviour" ? seenOf(t.ref) : []);
+    // Rarity (rarity.mjs): a tag on the card, and a word when you find something rare.
+    const e = entryOfTarget(t), grade = e ? rarityOf(e) : "common";
+    if (grade !== "common") card.tags = [{ text: grade[0].toUpperCase() + grade.slice(1), tone: grade }, ...(card.tags || [])];
+    if (info && rarityAtLeast(grade, "rare")) toast(`${grade === "legendary" ? "A legendary find!" : grade === "exceptional" ? "An exceptional find!" : "A rare find."} It is in your codex (K).`, 5);
     scanUI.card({
-        ...cardFor(t, site, activeBody, t.kind === "fauna" || t.kind === "behaviour" ? seenOf(t.ref) : []),
+        ...card,
         eyebrow: info ? `NEW ${where}` : `RECORDED ${where}`,
         footer: !info
             ? null
@@ -1810,19 +2651,43 @@ function showScanCard(t, info) {
 }
 // The prompt at the crosshair, every frame.
 function drawScanMarker() {
-    if (mode !== "walk" || !scanTarget || modalOpen()) return scanUI.prompt(null);
+    if (mode !== "walk" || indoor || !scanTarget || modalOpen()) return scanUI.prompt(null);
     scanUI.prompt({ title: titleFor(scanTarget), known: scanTarget.known, verb: verbFor(scanTarget) }, scanProgress);
 }
 function updateCamera(dt) {
+    if (mode === "deck") {
+        // On a station's deck: the same eye as on foot, in the deck's own frame.
+        const eye = vec(deckX, 1.75 + jumpHeight + Math.sin(bob) * 0.025, deckZ).applyMatrix4(deckM);
+        const look = vec(Math.cos(deckYaw) * Math.cos(lookPitch), Math.sin(lookPitch), Math.sin(deckYaw) * Math.cos(lookPitch)).applyQuaternion(deckQ);
+        camera.position.copy(eye);
+        camera.up.copy(deckUp());
+        camera.lookAt(eye.add(look));
+        const zooming = hasFieldGlasses(codex.unlocked) && keys.has("KeyZ") && !modalOpen();
+        zoom = damp(zoom, zooming ? 1 : 0, 7, dt);
+        if (zoom < 0.002) zoom = 0;
+        camera.fov = 70 - 56 * smoothstep(zoom);
+        glassesView.style.opacity = zoom.toFixed(3);
+        camera.updateProjectionMatrix();
+        return;
+    }
+    if (mode === "walk" && indoor) {
+        // Inside a home: the eye in the room's own frame.
+        const B = indoor.d.base, eye = vec(indoor.x, 1.75 + jumpHeight + Math.sin(bob) * 0.025, indoor.z).applyMatrix4(B);
+        const look = vec(Math.cos(indoor.yaw) * Math.cos(lookPitch), Math.sin(lookPitch), Math.sin(indoor.yaw) * Math.cos(lookPitch)).transformDirection(B);
+        camera.position.copy(eye); camera.up.copy(indoor.d.n); camera.lookAt(eye.add(look));
+        zoom = 0; glassesView.style.opacity = 0; camera.fov = 70; camera.updateProjectionMatrix();
+        return;
+    }
     if (mode === "walk") {
         // The eye glides over the ground: it follows the average height under your
         // feet (not the exact point), easing up and down, so small bumps and sharp
         // rocky crests don't jolt the view. It never sinks far below standing height.
+        // Swimming, it sits where you swim, rocking gently on the swell near the surface.
         const ground = footHeight(playerNormal);
-        const want = ground + 1.75;
+        const want = swimming ? seaRadius() - swimD + (swimD < 0.3 ? Math.sin(animationTime * 1.3) * 0.06 : 0) : ground + 1.75;
         if (eyeRadius === null || Math.abs(eyeRadius - want) > 4) eyeRadius = want;
-        eyeRadius = damp(eyeRadius, want, want > eyeRadius ? 9 : 6, dt);
-        eyeRadius = Math.max(eyeRadius, surfaceRadius(playerNormal) + 1.35);
+        eyeRadius = damp(eyeRadius, want, swimming ? 5 : want > eyeRadius ? 9 : 6, dt);
+        eyeRadius = Math.max(eyeRadius, swimming ? bedRadius(playerNormal) + 0.45 : bedRadius(playerNormal) + 1.35);
         const eye = playerNormal.clone().multiplyScalar(eyeRadius + jumpHeight + Math.sin(bob) * 0.025);
         camera.position.copy(eye);
         camera.up.copy(playerNormal);
@@ -1848,7 +2713,8 @@ function updateCamera(dt) {
             orbitYaw = THREE.MathUtils.damp(orbitYaw, 0, 2, dt);
             orbitPitch = THREE.MathUtils.damp(orbitPitch, 0.18, 2, dt);
         }
-        const inSpace = mode === "space" || mode === "transit" || mode === "deep";
+        // At a station the deck's own up is the camera's up (as in space).
+        const inSpace = mode === "space" || mode === "transit" || mode === "deep" || atStation();
         // Entering or leaving orbit, the camera eases between its low flying view
         // and its space view over a couple of seconds instead of jumping.
         spaceBlend = damp(spaceBlend, inSpace ? 1 : 0, 1.3, dt);
@@ -1879,19 +2745,33 @@ function updateCamera(dt) {
         }
         const back = camBack;
         const framing = Math.max(1, 0.65 / camera.aspect);
-        const distance = 26 * (1 + 0.28 * rushLevel + 0.9 * pull);
+        // Under water the view is short: the camera follows the Petrel closely, and stays
+        // between the sea floor and the surface.
+        const diving = mode === "dive";
+        const distance = diving ? 12 : 26 * (1 + 0.28 * rushLevel + 0.9 * pull);
         const desired = shipPosition
             .clone()
             .addScaledVector(back, distance * framing * Math.cos(orbitPitch))
-            .addScaledVector(up, (21 - 10 * sb + 14 * pull + 20 * Math.sin(orbitPitch)) * framing);
+            .addScaledVector(up, (diving ? 3.5 + 8 * Math.sin(orbitPitch) : 21 - 10 * sb + 14 * pull + 20 * Math.sin(orbitPitch)) * framing);
         const normal = desired.clone().normalize();
-        const floor = surfaceRadius(normal) + 2;
+        const floor = diving ? bedRadius(normal) + 1.2 : surfaceRadius(normal) + 2;
         if (!inSpace && desired.length() < floor)
             desired.copy(normal.multiplyScalar(floor));
+        if (diving && desired.length() > seaRadius() - 0.4) desired.setLength(seaRadius() - 0.4);
         // Carry the camera along with the ship, so at speed it stays close behind
         // (a little lag is left in, which reads as speed).
-        if (mode !== "deep") camera.position.addScaledVector(flowVel, dt * 0.85);
+        // Carried along by exactly how far the ship moved, then eased toward its place
+        // behind the ship: the easing (and so the swing when you turn) is the same at
+        // any speed. Carrying it by a smoothed velocity left it hundreds of metres off
+        // at high speed, so a small turn or a touch of thrust threw the view about.
+        if (mode !== "deep") camera.position.addScaledVector(shipVel, dt);
         camera.position.lerp(desired, 1 - Math.exp(-dt * (4 - 2.6 * ease)));
+        // The camera trails at most a few metres behind its place (a little lag reads as speed).
+        const along = shipVel.lengthSq() > 1 ? shipVel.clone().normalize() : null;
+        if (along) {
+            const behind = -camera.position.clone().sub(desired).dot(along), most = (3 + 5 * rushLevel) * framing;
+            if (behind > most) camera.position.addScaledVector(along, behind - most);
+        }
         camera.up.lerp(up, 1 - Math.exp(-dt * (4 - 3.2 * ease))).normalize();
         const look = shipPosition
             .clone()
@@ -1899,7 +2779,7 @@ function updateCamera(dt) {
             .addScaledVector(camAhead, 12 + 20 * sb)
             // Near the ground the camera looks down a little; this fades out
             // while climbing, so leaving orbit doesn't jolt the view.
-            .addScaledVector(up, -7 * (1 - smoothstep((altitude() - 120) / 480)) * (1 - sb) - 10 * pull);
+            .addScaledVector(up, (diving ? -1.5 : -7 * (1 - smoothstep((altitude() - 120) / 480))) * (1 - sb) - 10 * pull);
         // A faint shake when really moving (more with boost).
         const shake = Math.max(0, rushLevel - 0.45) / 0.55;
         if (shake > 0) {
@@ -2044,6 +2924,7 @@ function airOf(body) {
     return clamp((Math.log10(Math.max(p, 1e-4)) + 1.5) / 2.5, 0, 1);
 }
 const cloudFog = new THREE.Color();
+let dayNow = 1; // daylight where the camera is, 0..1 (updateAtmosphere)
 let inCloud = 0, // 0..1: how deep in cloud the camera is
     hiddenLayer = null; // the cloud layer faded out while you are inside it
 function updateAtmosphere() {
@@ -2102,6 +2983,7 @@ function updateAtmosphere() {
     if (layer) layer.hide(inCloud);
     sky.setDaylight(Math.max(k * day, inCloud)); // no stars through a cloud
     nightNow = mode === "walk" ? 1 - day : 0;
+    dayNow = day;
 }
 // Night filter: on foot at night the suit's visor brightens the view (glowing species most of all).
 let nightNow = 0,
@@ -2118,6 +3000,167 @@ function updateNightFilter(dt) {
     nightTint.style.opacity = (0.35 * nightFilter).toFixed(3);
 }
 
+// --- Under water ------------------------------------------------------------------
+// When the camera is below the surface of a sea: the view closes in to the water's own
+// colour, light fades with depth (and with night), the surface is seen from below, and
+// the Petrel's lamps come on. Runs last, after the sky, the weather and the night filter.
+const underwaterTint = document.createElement("div");
+underwaterTint.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:1;opacity:0;transition:opacity .4s;background:radial-gradient(ellipse at 50% 0%,rgba(140,210,255,.25),rgba(0,30,50,.55))";
+document.body.append(underwaterTint);
+const waterTint = new THREE.Color();
+let cameraDepth = -1, lastWaterSide = null;
+function updateUnderwater() {
+    const t = onWorld() ? seaTerrain() : null, up = camera.position.clone().normalize();
+    cameraDepth = t ? seaRadius() - camera.position.length() : -1;
+    const under = cameraDepth > 0 && depthAt(up) > 0;
+    const water = systemView.waterOf?.(activeBody.id);
+    const side = under ? THREE.DoubleSide : THREE.FrontSide;
+    if (water && lastWaterSide !== side) { water.side = side; water.needsUpdate = true; lastWaterSide = side; }
+    underwaterTint.style.opacity = under ? "1" : "0";
+    if (!under) { ship.userData.lamp.intensity = 0; return; }
+    const fade = Math.exp(-cameraDepth / 26), light = (0.12 + 0.88 * dayNow) * (0.2 + 0.8 * fade);
+    waterTint.setRGB(...t.waterColor, THREE.SRGBColorSpace);
+    scene.background.copy(waterTint).multiplyScalar(0.05 + 0.6 * light);
+    scene.fog.color.copy(scene.background);
+    scene.fog.density = (t.solvent && t.solvent !== "water" ? 0.045 : 0.022) + cameraDepth * 0.0005;
+    sun.intensity *= 0.25 + 0.75 * fade;
+    hemi.intensity *= 0.35 + 0.65 * fade;
+    sky.setDaylight(0);
+    ship.userData.lamp.intensity = mode === "dive" ? 30 * (1.2 - light) : 0; // the Petrel's lamps
+}
+
+// --- The air of the country you are in (new plant style, style.mjs) ---------------
+// Near the ground each kind of country has its own air. Under the trees of an old
+// forest the light goes dim and green and the distance closes into haze, so a wood feels
+// like a place you could get lost in; an ordinary forest is shaded and a little hazy;
+// wetlands lie under a low mist; dry scrub and deserts shimmer with dust; frozen ground
+// has a white ice haze, volcanic country an ash haze, toxic country a yellow one.
+// fog: added fog density; tint: the haze's colour; sun, sky: how much of the direct and
+// sky light gets through; mix: how far the sky itself takes the haze's colour.
+const LOCAL_AIR = {
+    darkwood: { fog: 0.017, tint: "#1d2c27", sun: 0.42, sky: 0.62, mix: 0.6 },
+    forest: { fog: 0.0085, tint: "#33463a", sun: 0.68, sky: 0.8, mix: 0.35 },
+    wetland: { fog: 0.011, tint: "#6d7a66", sun: 0.85, sky: 0.92, mix: 0.45 },
+    dryland: { fog: 0.0025, tint: "#c9b48a", sun: 1, sky: 1, mix: 0.15 },
+    highland: { fog: 0.0015, tint: "#b9c6d2", sun: 1, sky: 1, mix: 0.08 },
+    grassland: { fog: 0, tint: "#a8b89a", sun: 1, sky: 1, mix: 0 },
+    Desert: { fog: 0.0025, tint: "#d1b27e", sun: 1, sky: 1, mix: 0.25 },
+    Frozen: { fog: 0.005, tint: "#dfe8ee", sun: 0.95, sky: 1, mix: 0.3 },
+    Volcanic: { fog: 0.006, tint: "#4a3e3a", sun: 0.8, sky: 0.9, mix: 0.35 },
+    Toxic: { fog: 0.008, tint: "#a89a4a", sun: 0.85, sky: 0.95, mix: 0.4 },
+};
+const localAir = { fog: 0, sun: 1, sky: 1, mix: 0, tint: new THREE.Color() }, airTint = new THREE.Color(), airWant = { fog: 0, sun: 1, sky: 1, mix: 0, tint: new THREE.Color() };
+let localAirAt = -1, localAirBody = null;
+function updateLocalAir(dt) {
+    if (PLANT_STYLE === "classic" || !onWorld() || indoor || cameraDepth > 0) return;
+    const up = camera.position.clone().normalize(), t = terrainFor(activeBody);
+    // Only near the ground: it fades out as you climb away (gone 140 m up).
+    const height = camera.position.length() - RADIUS - t.surface(up), near = 1 - smoothstep((height - 25) / 115);
+    if (orbitTime - localAirAt > 0.3 || localAirBody !== activeBody) {
+        localAirAt = orbitTime;
+        localAirBody = activeBody;
+        const env = floraFor(activeBody).environment, c = t.climate(up);
+        const biome = env && floraFor(activeBody).species.length > 1 ? plantBiome(c, env) : null;
+        const a = (biome && biome !== "barren" && LOCAL_AIR[biome]) || LOCAL_AIR[activeBody.biome] || null;
+        // A forest's glades let the light back in (the same stand field the trees follow).
+        const open = biome === "darkwood" || biome === "forest" ? smoothstep((c.stand + 0.75) / 0.8) : 1;
+        airWant.fog = a ? a.fog * open : 0;
+        airWant.sun = a ? 1 - (1 - a.sun) * open : 1;
+        airWant.sky = a ? 1 - (1 - a.sky) * open : 1;
+        airWant.mix = a ? a.mix * open : 0;
+        if (a) airWant.tint.set(a.tint);
+    }
+    const k = 1 - Math.exp(-dt / 1.6); // eases over a couple of seconds as you walk in or out
+    localAir.fog += (airWant.fog - localAir.fog) * k;
+    localAir.sun += (airWant.sun - localAir.sun) * k;
+    localAir.sky += (airWant.sky - localAir.sky) * k;
+    localAir.mix += (airWant.mix - localAir.mix) * k;
+    localAir.tint.lerp(airWant.tint, k);
+    const air = airOf(activeBody) * near;
+    if (air <= 0.001) return;
+    // The haze is lit like everything else: dark at night, warm at dusk.
+    airTint.copy(localAir.tint).multiplyScalar(0.06 + 0.94 * dayNow);
+    scene.background.lerp(airTint, localAir.mix * air);
+    scene.fog.color.copy(scene.background);
+    scene.fog.density += localAir.fog * air;
+    sun.intensity *= 1 - (1 - localAir.sun) * near;
+    hemi.intensity *= 1 - (1 - localAir.sky) * near;
+}
+
+// --- Weather (weather.mjs, weather-fx.js, wind.mjs) --------------------------------
+// Below the clouds of the world you are on: rain, snow, ash or dust falling around
+// you, where the cloud overhead is thick; wind that bends the plants; a darker,
+// greyer sky under heavy cloud and storms, and lightning in the worst of them.
+// Above the cloud layer the sky is clear. Runs after the sky, the sky events and the
+// night filter have set this frame's light, and dims it.
+const weatherFX = createWeatherFX(THREE, scene, { lite: coarsePointer });
+const GREY = new THREE.Color(0.32, 0.34, 0.37), FLASH = new THREE.Color(0.85, 0.88, 1);
+const windVec = new THREE.Vector3();
+let windNow = 0, rainNow = 0, gloomNow = 0, flash = 0, nextFlash = 0, weatherHere = null, weatherState = "", weatherToldAt = new Map();
+function updateWeather(dt) {
+    const layer = onWorld() ? systemView.cloudsOf?.(activeBody.id) : null;
+    const up = camera.position.clone().normalize(),
+        height = camera.position.length() - RADIUS;
+    const w = layer?.weatherAt(up) ?? null;
+    weatherHere = w;
+    // Only below the cloud base; fading out as you climb into it.
+    const below = layer ? 1 - smoothstep((height - (layer.c.height - 30)) / 25) : 0;
+    const amount = w && !indoor ? w.precip * below : 0; // no rain indoors
+    rainNow = damp(rainNow, amount, 0.6, dt);
+    windNow = damp(windNow, w ? w.wind : 0, 0.4, dt);
+    // The wind blows along the cloud drift (east or west), swinging round in storms.
+    const east = Y.clone().cross(up);
+    if (east.lengthSq() < 1e-6) east.set(1, 0, 0);
+    east.normalize().multiplyScalar(layer && layer.c.drift < 0 ? -1 : 1);
+    windVec.copy(east).applyAxisAngle(up, (w?.storm ?? 0) * 1.2 + 0.3 * Math.sin(animationTime * 0.05));
+    wind.strength.value = windNow * (layer ? 1 : 0);
+    wind.dir.value = windVec.toArray();
+    weatherFX.update(w && rainNow > 0.003 && cameraDepth <= 0 ? { camera, up, kind: w.kind, amount: rainNow, wind: windVec.clone().multiplyScalar(2 + 14 * windNow), light: dayNow, time: animationTime } : null);
+    // Gloom: thick cloud and storms overhead darken the day and grey the sky.
+    const gloom = w ? clamp(0.5 * w.thick * (0.4 + w.storm) + 0.35 * rainNow, 0, 0.7) * below : 0;
+    gloomNow = damp(gloomNow, gloom, 0.5, dt);
+    if (mode === "deep") return; // deep space: the lights are set elsewhere, and only once
+    if (gloomNow > 0.002) {
+        sun.intensity *= 1 - gloomNow;
+        hemi.intensity *= 1 - 0.45 * gloomNow;
+        GREY.setScalar(scene.background.r * 0.3 + scene.background.g * 0.59 + scene.background.b * 0.11).multiplyScalar(0.8);
+        scene.background.lerp(GREY, gloomNow);
+    }
+    // Falling rain, snow and dust close in the view.
+    const thicken = { rain: 0.004, acid: 0.005, methane: 0.006, snow: 0.012, ash: 0.014, dust: 0.03 }[w?.kind] ?? 0;
+    scene.fog.density += thicken * rainNow;
+    // Lightning: a flash every few seconds in the heart of a storm, lighting the clouds from inside.
+    flash = Math.max(0, flash - dt * 5);
+    if (w?.lightning && below > 0.5 && rainNow > 0.3 && animationTime > nextFlash) {
+        flash = 0.6 + Math.random() * 0.4;
+        nextFlash = animationTime + 1.5 + Math.random() * 7;
+        if (Math.random() < 0.4) nextFlash = animationTime + 0.12; // often a double flash
+    }
+    const f = flash * flash;
+    if (f > 0.001) {
+        hemi.intensity *= 1 + 2.5 * f;
+        scene.background.lerp(FLASH, 0.45 * f);
+    }
+    scene.fog.color.copy(scene.background);
+    layer?.flash(f);
+    // Tell the player when the weather turns where they are (at most once a minute per kind).
+    const state = !w || rainNow < 0.25 ? "" : w.storm > 0.5 ? `${w.kind}-storm` : w.kind;
+    if (started && state && state !== weatherState && orbitTime - (weatherToldAt.get(state) ?? -1e9) > 60) {
+        weatherToldAt.set(state, orbitTime);
+        const p = PRECIP[w.kind], storm = state.endsWith("-storm");
+        toast(storm ? `${p.storm}: ${WEATHER_WORDS[w.kind].storm}` : WEATHER_WORDS[w.kind].calm, 5);
+    }
+    weatherState = state;
+}
+const WEATHER_WORDS = {
+    rain: { calm: "It has started to rain.", storm: "wind, heavy rain and lightning overhead." },
+    snow: { calm: "It has started to snow.", storm: "driving snow and a howling wind." },
+    acid: { calm: "Acid drizzle is falling from the yellow clouds.", storm: "acid rain lashes down and lightning flickers in the cloud." },
+    ash: { calm: "Ash is drifting down from the clouds.", storm: "thick falling ash, and lightning in the clouds." },
+    methane: { calm: "Fat drops of methane rain are drifting down.", storm: "methane rain pours from the orange sky." },
+    dust: { calm: "The wind is lifting dust.", storm: "a wall of dust is blowing through." },
+};
+
 // --- Sky events (phenomena.mjs, sky-events.js) ------------------------------------
 // Eclipses, aurorae and meteor showers. On a world, a forecast for where you are is
 // worked out every few seconds; the HUD tally shows what comes next, a toast says
@@ -2132,7 +3175,7 @@ let eclipseCover = 0,
     skyCastBody = null,
     visibleSky = []; // what can be seen right now
 const announcedSky = new Set();
-const onWorld = () => ["walk", "landed", "flight", "landing", "takeoff"].includes(mode) && !activeBody.giant;
+const onWorld = () => ["walk", "landed", "flight", "landing", "takeoff", "dive"].includes(mode) && !activeBody.giant;
 const skyRecorded = (type) => codex.has({ kind: "phenomenon", seed: String(system.seed), bodyId: activeBody.id, id: type });
 function skyDescription(e) {
     const star = system.star.name, by = system.bodies.find((b) => b.id === e.by)?.name;
@@ -2269,7 +3312,7 @@ function sufferAttacks() {
     for (const e of site.fauna.events) {
         if (e.type === "stalk" && mode === "walk" && animationTime - lastStalkToast > 20) {
             lastStalkToast = animationTime;
-            toast(`A ${e.creature.sp.name} is stalking you. Keep moving, or get back aboard the Kestrel.`, 5);
+            toast(`A ${e.creature.sp.name} is stalking you. Keep moving, or get back aboard the ${shipName()}.`, 5);
         }
         if (e.type !== "attack" || mode !== "walk") continue;
         suit = Math.max(0, suit - e.damage * suitDamageScale(codex.unlocked));
@@ -2285,7 +3328,7 @@ function sufferAttacks() {
         if (suit <= 0) {
             suit = 1;
             recallToShip();
-            toast("Suit integrity failed. Emergency recall: you are back beside the Kestrel.", 6);
+            toast(`Suit integrity failed. Emergency recall: you are back beside the ${shipName()}.`, 6);
         } else toast(`Struck by a ${e.creature.sp.name}! Suit integrity ${Math.round(suit * 100)}%.`, 4);
     }
 }
@@ -2304,13 +3347,13 @@ function updateExposure(dt) {
     if (exposureWarned !== activeBody.id) {
         exposureWarned = activeBody.id;
         const cold = activeBody.physics.temperature < 288;
-        toast(`${cold ? "Extreme cold" : "Extreme heat"}: your suit's heat reserve is running down. Stay near the Kestrel to recharge it${codex.unlocked.has("thermalLining") ? "" : ", or install Thermal lining to stay out longer"}.`, 7);
+        toast(`${cold ? "Extreme cold" : "Extreme heat"}: your suit's heat reserve is running down. Stay near the ${shipName()} to recharge it${codex.unlocked.has("thermalLining") ? "" : ", or install Thermal lining to stay out longer"}.`, 7);
     }
     warmth = Math.max(0, warmth - dt * (1 + 0.65 * severity) / 150 * exposureScale(codex.unlocked));
     if (warmth <= 0) {
         warmth = 1;
         recallToShip();
-        toast("Suit heat reserve empty. Emergency recall: you are back beside the Kestrel.", 6);
+        toast(`Suit heat reserve empty. Emergency recall: you are back beside the ${shipName()}.`, 6);
     }
     return activeBody.physics.temperature < 288 ? "COLD" : "HEAT";
 }
@@ -2326,15 +3369,18 @@ function updateSuit(dt) {
 }
 // Life sonar: on foot, an arrow at the top of the view points to the nearest plant or
 // animal species on this world that you have not recorded yet (within 600 m).
+// Drawn like the ship's waypoint: a marker over the thing itself (clamped to the screen
+// edges), or at the side to turn toward when it is behind you.
 const sonarView = document.createElement("div");
-sonarView.style.cssText =
-    "position:fixed;left:50%;top:112px;transform:translateX(-50%);z-index:3;pointer-events:none;display:none;text-align:center;font:600 9px 'DM Sans',sans-serif;letter-spacing:2px;color:#9ff0c0;text-shadow:0 1px 6px #000";
-sonarView.innerHTML = '<b style="display:block;font-size:20px;line-height:22px;transition:transform .2s">▲</b><span></span>';
+sonarView.id = "sonarMark";
+sonarView.style.display = "none";
+sonarView.innerHTML = '<span class="diamond">◇</span><strong></strong><span class="dist"></span>';
+$("hud").append(sonarView);
 // The suit readouts and the sonar share one column under the header, so they never overlap.
 const topStack = document.createElement("div");
 topStack.style.cssText = "position:fixed;left:50%;top:84px;transform:translateX(-50%);z-index:3;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:8px";
 document.body.append(topStack);
-for (const el of [suitReadout, sonarView]) {
+for (const el of [suitReadout]) {
     el.style.position = "static";
     el.style.transform = "none";
     topStack.append(el);
@@ -2363,7 +3409,7 @@ function nearestUnrecorded() {
     return best;
 }
 function updateSonar(dt) {
-    if (!codex.unlocked.has("lifeSonar") || mode !== "walk" || !site || modalOpen()) {
+    if (!(codex.unlocked.has("lifeSonar") || guidedHere()) || mode !== "walk" || !site || modalOpen()) {
         sonarView.style.display = "none";
         return;
     }
@@ -2378,9 +3424,21 @@ function updateSonar(dt) {
     const here = surfacePoint(playerNormal), to = sonarTarget.point.clone().sub(here);
     const right = playerForward.clone().cross(playerNormal);
     const angle = Math.atan2(to.dot(right), to.dot(playerForward));
+    const mark = sonarTarget.point.clone().addScaledVector(playerNormal, 1.2);
+    const ahead = mark.clone().sub(camera.position).dot(camera.getWorldDirection(vec())) > 0;
+    let x, y;
+    if (ahead) {
+        const p = mark.project(camera);
+        x = clamp((p.x * 0.5 + 0.5) * innerWidth, 55, innerWidth - 55);
+        y = clamp((-p.y * 0.5 + 0.5) * innerHeight, 100, innerHeight - 200);
+    } else {
+        x = angle > 0 ? innerWidth - 70 : 70;
+        y = innerHeight * 0.45;
+    }
     sonarView.style.display = "block";
-    sonarView.firstChild.style.transform = `rotate(${angle.toFixed(3)}rad)`;
-    sonarView.lastChild.textContent = `UNRECORDED ${sonarTarget.kind.toUpperCase()} · ${fmtDistance(to.length())}`;
+    sonarView.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -50%)`;
+    sonarView.children[1].textContent = `${ahead ? "" : angle > 0 ? "" : "↶ "}UNRECORDED ${sonarTarget.kind.toUpperCase()}${ahead || angle <= 0 ? "" : " ↷"}`;
+    sonarView.children[2].textContent = fmtDistance(to.length()) + (ahead ? "" : " · behind you");
 }
 // Back on foot beside the parked ship, facing away from it.
 function recallToShip() {
@@ -2423,11 +3481,20 @@ const hudState = {
     get system() { return system; },
     get deep() { return deepInfo(); },
     get target() { return target; },
+    get swimming() { return mode === "walk" && swimming; },
+    get canSwim() { return canSwimHere(); },
+    // Depth below the surface: the Petrel's while diving, your eyes' while swimming.
+    get depth() { return mode === "dive" ? Math.max(0, seaRadius() - shipPosition.length()) : mode === "walk" && swimming ? Math.max(0, swimD) : 0; },
+    playerPos,
+    get shipName() { return shipName(); },
     get scanLabel() {
-        if (mode !== "walk" || !scanTarget) return null;
+        if ((mode !== "walk" && mode !== "dive") || !scanTarget) return null;
         const verb = verbFor(scanTarget);
+        if (scanTarget.known && scanTarget.kind === "fauna" && civOfSpecies(scanTarget.ref)) return stepAtLeast(relations.step(civOfSpecies(scanTarget.ref).id) || "observed", "contact") ? "Talk with them" : "Greet them";
         return scanTarget.known ? "Details" : scanProgress > 0 ? { scan: "Scanning…", observe: "Observing…", record: "Recording…", sample: "Drilling…" }[verb] : `Hold to ${verb}`;
     },
+    get station() { return stationHUD(); },
+    get stationMark() { return stationMark(); },
     clearTarget,
     camera,
     shipShadow,
@@ -2453,8 +3520,9 @@ function frame(now) {
     previousTime = now;
     if (document.hidden) return;
     advanceOrbits();
-        const paused = modalOpen();
-    if (paused && input.mouseLocked()) document.exitPointerLock?.();
+    // Talking (contact-ui.js) does not stop the world: only you stand still.
+    const talk = contactUI.isOpen, paused = modalOpen() && !talk;
+    if ((paused || talk) && input.mouseLocked()) document.exitPointerLock?.();
     if (!paused) {
         animationTime += dt;
         if (started) {
@@ -2462,14 +3530,25 @@ function frame(now) {
             else if (mode === "space") updateSpace(dt);
             else if (mode === "transit") updateCruise(dt);
             else if (mode === "flight") updateFlight(dt);
+            else if (mode === "dive") updateDive(dt);
+            else if (mode === "landed" && afloat && keys.has("KeyF")) tryDive();
             else if (mode === "landing" || mode === "takeoff")
                 updateManeuver(dt);
-            else if (mode === "walk") updateWalk(dt);
+            else if (mode === "walk") { if (talk) faceTalker(dt); else if (indoor) updateIndoor(dt); else updateWalk(dt); }
+            else if (mode === "docking") updateDocking(dt);
+            else if (mode === "docked") updateDocked();
+            else if (mode === "undocking") updateUndocking(dt);
+            else if (mode === "deck") { if (talk) faceTalker(dt); else updateDeck(dt); }
         } else orientShip();
+        animateStation(dt);
+        if (started) townChatter(dt);
+        if (indoor) indoor.room.update(dt, animationTime, mode === "walk" ? { x: indoor.x, z: indoor.z } : null);
         updateFlow(dt);
         updateApproachSite();
         updateCamera(dt);
+        talkView();
         if (started) updateWaypoint(hudState);
+        $("waypoint").style.visibility = indoor || contactUI.isOpen ? "hidden" : ""; // nothing in the way of who you are with
         if (started) drawScanMarker();
         updateHeat(dt);
         updateSuit(dt);
@@ -2477,12 +3556,15 @@ function frame(now) {
         updateAtmosphere();
         updateSkyEvents(dt);
         updateNightFilter(dt);
+        updateWeather(dt);
+        updateLocalAir(dt);
+        updateUnderwater();
         updateBehaviourAlerts(dt);
         if (site) animateSite(dt);
         if (site?.fauna && mode !== "space" && mode !== "transit" && mode !== "deep") {
             const watcher =
                 mode === "walk"
-                    ? { position: surfacePoint(playerNormal), onFoot: true }
+                    ? { position: playerPos(), onFoot: !indoor }
                     : altitude() < 60
                       ? { position: shipPosition, onFoot: false }
                       : null;
@@ -2490,13 +3572,14 @@ function frame(now) {
             sunDirection.copy(sun.position).normalize();
             if (eclipseCover > 0.9) sunDirection.negate();
             site.fauna.update(dt, animationTime, watcher, sunDirection);
+            townNews(watcher);
             witnessHunts(watcher);
             sufferAttacks();
         }
         updateShipEffects(
             kestrel,
             {
-                mode,
+                mode: { docking: "landing", docked: "landed", deck: "landed", undocking: "takeoff" }[mode] || mode,
                 speed,
                 verticalSpeed,
                 altitude: altitude(),
@@ -2518,7 +3601,7 @@ function frame(now) {
     engine.update(
         !paused &&
             started &&
-            (mode === "flight" || mode === "landing" || mode === "takeoff" || mode === "space" || mode === "transit"),
+            (mode === "flight" || mode === "landing" || mode === "takeoff" || mode === "space" || mode === "transit" || mode === "docking" || mode === "undocking"),
         // In space the engine note climbs with speed too, scaled to space speeds.
         mode === "space" || mode === "transit" ? 30 + Math.min(Math.abs(speed), 1500) * 0.12 : speed,
         verticalSpeed,
@@ -2528,7 +3611,14 @@ function frame(now) {
             systemView.update(camera.position, streamer);
             sky.follow(camera);
         } else streamer.pump(4);
+        perf.beforeRender(); // a resolution change wipes the canvas, so it happens just before drawing
+        // Indoors, the daylight comes in only by the door and windows: the room is lit by its own lamp.
+        // No haze or fog in a room either.
+        const lit = indoor ? [sun.intensity, hemi.intensity, fill.intensity, scene.fog?.density] : null;
+        if (lit) { sun.intensity *= 0.08; hemi.intensity *= 0.3; fill.intensity *= 0.2; if (scene.fog?.density !== undefined) scene.fog.density = 0.0005; }
         renderer.render(scene, camera); // the full-screen map hides the scene
+        if (lit) { [sun.intensity, hemi.intensity, fill.intensity] = lit; if (lit[3] !== undefined) scene.fog.density = lit[3]; }
+        perf.tick(now);
     }
 }
 window.addEventListener("resize", () => {
@@ -2563,19 +3653,22 @@ function updateTally(now = false, dt = 1 / 60) {
     const el = $("worldTally");
     if (!el) return;
     const totals = site && !activeBody.giant ? siteTotals() : null;
-    const on = totals && ["walk", "landed", "flight", "landing", "takeoff"].includes(mode);
+    const on = totals && ["walk", "landed", "flight", "landing", "takeoff", "dive"].includes(mode);
     el.hidden = !on;
     if (!on) return;
     const got = recordedOn(codex.entries, system.seed, activeBody.id);
-    const rows = [["Plants", got.flora, totals.flora], ["Animals", got.fauna, totals.fauna], ["Geology", got.formation, totals.formations]].filter(([, , t]) => t > 0);
+    const rows = [["Plants", got.flora, totals.flora], ["Animals", got.fauna, totals.fauna], ["Geology", got.formation, totals.formations], ["Under water", got.sea, totals.sea]].filter(([, , t]) => t > 0);
     const html = rows.map(([w, g, t]) => `<div class="tally-row${g >= t ? " done" : ""}"><span>${w}</span><b>${Math.min(g, t)} / ${t}</b><i style="--f:${Math.min(1, g / t).toFixed(3)}"></i></div>`).join("") + skyLine();
     if (el.innerHTML !== html) el.innerHTML = html;
 }
 // What the world holds (a formation cleared by builders is not counted).
 function siteTotals() {
+    // Life found only under water is counted apart: a bonus, not needed to complete a world.
+    const flora = site.flora?.species ?? [], fauna = site.fauna?.species ?? [];
     return {
-        flora: site.flora?.species?.length ?? 0, // every species grows somewhere on the world
-        fauna: site.fauna?.species?.length ?? 0,
+        flora: flora.filter((s) => !s.aquatic).length, // every species grows somewhere on the world
+        fauna: fauna.filter((s) => !seaOnly(s)).length,
+        sea: flora.filter((s) => s.aquatic).length + fauna.filter(seaOnly).length,
         formations: site.geology?.placed?.filter((p) => p.scales.some((x) => x > 0)).length ?? 0,
     };
 }
@@ -2585,6 +3678,8 @@ function animateSite(dt) {
     updateTally(false, dt);
     site.update(camera.position, animationTime); // plants, rocks and animals fill in around you
     if (site.structures) site.structures.update(animationTime, structureSun.copy(sun.position).normalize()); // lamps by night, solar wings to the star
+    // Towns built in full near you and as masses far off (structures-mesh.js units), swapped as you go.
+    if (site.structures?.follow && site.group.visible) site.structures.follow(mode === "walk" || mode === "landed" ? playerPos() : shipPosition);
     if (site.groundCover) site.groundCover.update(camera.position, animationTime);
     checkTraces(dt);
 }
@@ -2594,7 +3689,7 @@ function checkTraces(dt) {
     const built = site.structures;
     if (!built?.civ || traces[activeBody.id] || (tracesTimer += dt) < 0.5) return;
     tracesTimer = 0;
-    const here = mode === "walk" ? surfacePoint(playerNormal) : ["flight", "landed", "landing", "takeoff"].includes(mode) && altitude() < 140 ? shipPosition : null;
+    const here = mode === "walk" ? playerPos() : ["flight", "landed", "landing", "takeoff", "dive"].includes(mode) && altitude() < 140 ? shipPosition : null;
     if (!here) return;
     const reach = (mode === "walk" ? 45 : 110) + built.civ.unit * 10;
     if (!built.sites.some((n) => n.clone().multiplyScalar(RADIUS).distanceTo(here) < reach)) return;
@@ -2608,7 +3703,8 @@ requestAnimationFrame(frame);
 let jumping = false;
 let beaconCache = { n: -1, set: null };
 const starMap = createStarMap({
-    jumpRange: () => rangeFor(codex.unlocked),
+    jumpRange: () => jumpRangeNow(),
+    charted: () => { const now = performance.now(); if (now - chartedCache.at > 1000) chartedCache = { at: now, set: relations.effects().charted }; return chartedCache.set; },
     radioHearing: () => radioHearing(codex.unlocked),
     decodes: () => decodesSignals(codex.unlocked),
     orbitalSurvey: () => codex.unlocked.has("orbitalSurvey"),
@@ -2685,7 +3781,7 @@ const starMap = createStarMap({
             return {
                 enabled: false,
                 label: "Take off to travel",
-                note: "Return to Kestrel and lift off to cruise to another world.",
+                note: `Return to the ${shipName()} and lift off to cruise to another world.`,
             };
         return { enabled: true, label: `Cruise to ${body.name} ↗` };
     },
@@ -2724,7 +3820,7 @@ setupDev({
     star: currentStar,
     body: () => activeBody,
     onChange: () => {
-        starMap.setRange(rangeFor(codex.unlocked));
+        starMap.setRange(jumpRangeNow());
         upgradeScreen.refresh();
         updateTally(true);
         refreshHUD();

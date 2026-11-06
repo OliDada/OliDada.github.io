@@ -37,7 +37,7 @@ export const KINDS = {
   camp: { radius: 8 }, village: { radius: 13 }, town: { radius: 18 }, city: { radius: 28 },
   metropolis: { radius: 40 }, capital: { radius: 46 }, megacity: { radius: 66 }, colony: { radius: 14 },
 };
-const CAPITAL = { 'tool users': 'camp', 'village builders': 'village', 'city builders': 'city', 'planet-shapers': 'metropolis', spacefarers: 'capital', 'system-shapers': 'megacity' };
+const CAPITAL = { 'tool users': 'camp', 'village builders': 'village', metalworkers: 'village', 'city builders': 'city', industrial: 'city', 'planet-shapers': 'metropolis', orbital: 'metropolis', spacefarers: 'capital', 'system-shapers': 'megacity' };
 // How many of each kind of place, by extent (before cohesion), and how far they reach (radians).
 const SPREAD = {
   local: { reach: null, city: [0, 0], town: [0, 0], village: [1, 2] },
@@ -48,20 +48,34 @@ const SPREAD = {
 };
 // The best kind a tier can build below its capital.
 const ALLOWED = {
-  'tool users': ['camp'], 'village builders': ['village'], 'city builders': ['town', 'village'],
+  'tool users': ['camp'], 'village builders': ['village'], metalworkers: ['village'], 'city builders': ['town', 'village'], industrial: ['city', 'town', 'village'], orbital: ['city', 'town', 'village'],
   'planet-shapers': ['city', 'town', 'village'], spacefarers: ['city', 'town', 'village'], 'system-shapers': ['city', 'town', 'village'],
 };
 export const MAX_RADIUS = 115; // metres: even giant builders' capitals fit beside the landing site
+const kindsRoomy = (civ) => !['tool users'].includes(civ.tier);
 
+// The world as sea-dwelling builders see it: open water deep enough to build in is their
+// "dry land", and the ground is the sea floor. Everything that places settlements and
+// buildings reads terrain through this, so the same code builds on the sea bed.
+export function seaFloorTerrain(t) {
+  if (t.underwater) return t;
+  if (t.liquid !== 'water') return { ...t, underwater: true, isLiquid: () => true };
+  const deep = (n) => t.sea - t.height(n) > 4.5; // deep enough that their tallest homes stay under water
+  return { ...t, underwater: true, isLiquid: (n) => !deep(n), surface: (n) => t.height(n) };
+}
 const cache = new Map();
 // civ: from civilizations.mjs; terrain: terrainFor(body). A colony (civ.colony) is a
 // single outpost. Returns { capital, settlements: [{ id, kind, n, radius }], roads: [{ a, b }] }.
 export function networkFor(body, civ, terrain, { colony = false } = {}) {
   const key = `${body.seed}:${body.id}:${civ.id}:${colony}`;
   if (cache.has(key)) return cache.get(key);
+  if (civ.underwater) terrain = seaFloorTerrain(terrain);
   const R = body.radius, u = civ.unit, r = rng(body.seed, 'settlements', civ.id, colony ? 'colony' : 'home');
   const site = norm(terrain.site), landing = terrain.landing ? norm(terrain.landing) : landingOf(site, R);
-  const metres = (kind) => Math.min(MAX_RADIUS, KINDS[kind].radius * u * (kind === 'megacity' || kind === 'capital' || kind === 'metropolis' || kind === 'city' ? .85 + .35 * civ.cohesion : 1));
+  // Hand-builders' places are planned street by street (town-plan.mjs) and hold more: twice the room.
+  // Every people that builds on the ground plans its towns (structures-mesh.js units).
+  const planned = civ.family !== 'drifters' && !colony && !civ.underwater && !civ.species?.aquatic, roomy = planned && kindsRoomy(civ);
+  const metres = (kind) => Math.min(roomy ? MAX_RADIUS * 2.2 : MAX_RADIUS, KINDS[kind].radius * u * (roomy ? 2 : 1) * (kind === 'megacity' || kind === 'capital' || kind === 'metropolis' || kind === 'city' ? .85 + .35 * civ.cohesion : 1));
   // How wet and how rough the ground is over a disc (0 = dry and level).
   const ground = (n, rad) => {
     let wet = 0, lo = Infinity, hi = -Infinity, k = 0;

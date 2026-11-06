@@ -41,8 +41,13 @@ test('the signal site is dry, fairly level ground near the generated point', () 
     assert.ok(!t.isLiquid(s), `${b.name} site is under ${t.liquid}`);
     const away = Math.acos(Math.min(1, s.x * b.signal[0] + s.y * b.signal[1] + s.z * b.signal[2])) * b.radius;
     // Ocean worlds (seas over 90% of the surface) take the nearest island, wherever it is;
-    // on bigger worlds that can be farther than 300 m.
-    if (!(t.coverage > .9)) assert.ok(away < 300, `${b.name} site ${away.toFixed(0)} m from the signal point`);
+    // on bigger worlds that can be farther; and seas and coasts grow with the world, so
+    // a signal over water may be some way from the nearest dry, level ground.
+    // With the new land style seas are open water between whole continents, so a signal
+    // point out at sea may be a long way from the coast; one on land stays close.
+    const sig = { x: b.signal[0], y: b.signal[1], z: b.signal[2] }, sl = Math.hypot(sig.x, sig.y, sig.z);
+    const atSea = t.isLiquid({ x: sig.x / sl, y: sig.y / sl, z: sig.z / sl });
+    if (!(t.coverage > .9) && !atSea) assert.ok(away < 600, `${b.name} site ${away.toFixed(0)} m from the signal point`);
     // Level enough to land: the ground rises at most ~1 m per metre around it, on most worlds.
     const e = 4 / b.radius, h = t.height(s);
     const n2 = { x: s.x + e, y: s.y, z: s.z }, l = Math.hypot(n2.x, n2.y, n2.z);
@@ -58,7 +63,7 @@ test('surfaces, colours and seas are consistent', () => {
       const p = unit(i, 200), h = t.height(p), top = t.surface(p);
       assert.ok(Number.isFinite(h) && top >= h - 1e-9);
       if (t.liquid) assert.ok(top >= t.sea - 1e-9);
-      assert.ok(Math.abs(h) < 70, `${b.name} height ${h}`);
+      assert.ok(Math.abs(h) < 420, `${b.name} height ${h}`); // the new land style has mountain ranges a few hundred metres high
       for (const v of t.color(p, t.meshHeight(p))) assert.ok(v >= 0 && v <= 1.1);
     }
     if (b.physics.waterState !== 'liquid' && !b.physics.solvent) assert.notEqual(t.liquid, 'water');

@@ -5,11 +5,12 @@ import { starsInBox, jumpTargets, starPhysics, starDistance, visualTile, glowLev
 import { candidates, scan, HEARD, SCAN_RADIUS } from './signals.mjs';
 import { generateSystem, starName } from './system.mjs';
 import { bodyPosition, orbitClock } from './orbits.mjs';
+import { SIZE } from './scale.mjs';
 import { lifeLabel } from './biomes.mjs';
 import { floraFor } from './flora.mjs';
 import { faunaFor } from './fauna.mjs';
 import { geologyFor } from './geology.mjs';
-import { civilizationOf, tierAtLeast, colonistOf } from './civilizations.mjs';
+import { civilizationOf, tierAtLeast, colonistOf, arksIn } from './civilizations.mjs';
 import { networkFor, describeNetwork } from './settlements.mjs';
 import { plural } from './structures.mjs';
 import { terrainFor } from './terrain.mjs';
@@ -34,7 +35,7 @@ const EXOTIC_RING = 'rgba(205,160,255,.95)';
 // Planet-shapers and spacefarers broadcast: their radio signals reach the long-range scan.
 const SIGNAL_RING = 'rgba(255,210,120,.95)';
 const civOf = civilizationOf;
-const radioWorld = (b) => tierAtLeast(civOf(b)?.tier, 'planet-shapers');
+const radioWorld = (b) => !!HEARD[civOf(b)?.tier];
 const signals = (sys) => sys.bodies.some(radioWorld);
 // Colonists from another world of the system: animals live here, even where nothing native does.
 const colonyOf = (sys, b) => !b.giant && !civOf(b) ? colonistOf(sys, b) : null;
@@ -138,7 +139,7 @@ export function createStarMap(o) {
   const decoded = () => o.decodes?.() ?? true;
   function whoIs(e) {
     const sys = systemOf(e.star), civ = sys.bodies.map(civilizationOf).find(c => c?.id === e.civ), world = civ && sys.bodies.find(b => b.id === civ.home);
-    const intent = e.tier === 'system-shapers' ? 'A chorus from every world and moon of their system, ship traffic between them, and a call repeated outward: they are looking for others.' : e.tier === 'spacefarers' ? 'Ship traffic and orbital beacons, and a call repeated outward: they are listening for others.' : 'Weather control and beacons across their world; nothing aimed at the stars.';
+    const intent = e.tier === 'system-shapers' ? 'A chorus from every world and moon of their system, ship traffic between them, and a call repeated outward: they are looking for others.' : e.tier === 'spacefarers' ? 'Ship traffic and orbital beacons, and a call repeated outward: they are listening for others.' : e.tier === 'orbital' ? 'Beacons from satellites and a station, and nothing yet aimed at the stars.' : e.tier === 'industrial' ? 'Crackling broadcasts between cities, weak and unfocused: a world just learning radio.' : 'Weather control and beacons across their world; nothing aimed at the stars.';
     return `${civ?.species?.name ? `${civ.species.name} ${e.tier}` : cap(e.tier)}${world ? ` on ${world.name}` : ''}. ${intent}`;
   }
   function scanRadio() {
@@ -159,7 +160,7 @@ export function createStarMap(o) {
       (function step() { if (radioFor !== at.id) return; found.push(...scan(list, i, i + 200)); i += 200; if (i < list.length) setTimeout(step, 0); else done(found); })();
     };
     try {
-      const worker = new Worker(new URL('./signals-worker.js', import.meta.url), { type: 'module' });
+      const worker = new Worker(new URL(`./signals-worker.js?size=${SIZE}`, import.meta.url), { type: 'module' }); // same world sizes as the page (scale.mjs)
       worker.onmessage = (e) => { worker.terminate(); done(e.data.sources); };
       worker.onerror = () => { worker.terminate(); sliced(); };
       worker.postMessage({ id: at.id, center });
@@ -173,7 +174,8 @@ export function createStarMap(o) {
   // Orbital survey: every system within jump range shows its worlds (biome, chemistry, life) as if visited.
   // Return beacons: a fully documented system can be jumped to from anywhere (o.beacons(): its seeds).
   const beaconAt = (star) => { const b = o.beacons?.(); return !!b?.size && star.id !== here.id && isVisited(star) && b.has(String(systemOf(star).seed)); };
-  const isSurveyed = (star) => isVisited(star) || (!!o.orbitalSurvey?.() && inRange.has(star.id));
+  // Charted: shared by a friendly civilization (contact.mjs): their region's worlds are known.
+  const isSurveyed = (star) => isVisited(star) || (!!o.orbitalSurvey?.() && inRange.has(star.id)) || !!o.charted?.().has(star.id);
   // Height of a star above (+) or below (-) you, in light years: the one dimension the map cannot show.
   const heightOf = (star) => star.z - (o.deep() ? o.deep().position[2] : here.z);
   const heightWords = (dz) => Math.abs(dz) < 1.5 ? '' : `${Math.round(Math.abs(dz))} ly ${dz > 0 ? 'above' : 'below'}`;
@@ -322,7 +324,7 @@ export function createStarMap(o) {
         if (!known) ctx.setLineDash([3, 5]);
         ctx.beginPath(); ctx.arc(cx, cy, Math.hypot(b.position[0], b.position[2]) * k * s, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
       }
-      const r = clamp(b.radius / 190 * (2.4 + s / 500), 2, 11) * (parent ? .7 : 1);
+      const r = clamp(b.radius / (190 * SIZE) * (2.4 + s / 500), 2, 11) * (parent ? .7 : 1);
       ctx.globalAlpha = alpha;
       if (b.ringed && known) { ctx.strokeStyle = b.atmosphere; ctx.beginPath(); ctx.ellipse(sx, sy, r * 2, r * .7, -.35, 0, Math.PI * 2); ctx.stroke(); }
       // Life, marked as on the galaxy chart: dashed for microbes, bolder for animals, violet if exotic.
@@ -335,6 +337,20 @@ export function createStarMap(o) {
       if (survey && b.id === survey.activeId) { ctx.fillStyle = '#c9f4cc'; diamond(sx, sy - r - 9, 5); }
       if (selected.body && selected.body.id === b.id && selected.star.id === st.id) { ctx.strokeStyle = '#c9f4cc'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(sx, sy, r + 5, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 1; }
       drawn.push({ star: st, body: b, sx, sy, r: Math.max(r + 4, 10) });
+    }
+    // Arks, sixty degrees ahead of their builders' worlds (megastation.js).
+    if (known) for (const civ of arksIn(sys)) {
+      const home = sys.bodies.find(b => b.id === civ.home), anchor = home.parent ? sys.bodies.find(b => b.id === home.parent) : home;
+      const p = bodyPosition(sys, anchor, orbitClock()), c = Math.cos(Math.PI / 3), sn = Math.sin(Math.PI / 3);
+      const [ax, ay] = toScreen(st.x + (p[0] * c - p[2] * sn) * k, st.y - (p[0] * sn + p[2] * c) * k), size = clamp(2 + s / 900, 3, 7);
+      ctx.globalAlpha = alpha; ctx.fillStyle = '#ffd98a'; ctx.strokeStyle = 'rgba(255,217,138,.6)';
+      ctx.save(); ctx.translate(ax, ay); ctx.rotate(Math.PI / 4); ctx.fillRect(-size / 2, -size / 2, size, size); ctx.restore();
+      ctx.beginPath(); ctx.arc(ax, ay, size + 3, 0, Math.PI * 2); ctx.stroke();
+      if (s > 260) { ctx.font = '600 9px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(civ.arkName.replace(/^the /, '').toUpperCase(), ax + size + 6, ay); }
+      // Arks can be chosen like worlds (and cruised to).
+      const ark = arkBodyOf(civ);
+      if (selected.body?.id === ark.id && selected.star.id === st.id) { ctx.strokeStyle = '#c9f4cc'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ax, ay, size + 7, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 1; }
+      drawn.push({ star: st, body: ark, sx: ax, sy: ay, r: Math.max(size + 6, 11) });
     }
     ctx.globalAlpha = 1;
   }
@@ -437,6 +453,11 @@ export function createStarMap(o) {
   const flyToStar = (star) => flyTo(star.x, star.y, systemScale());
   function flyToBody(star, body) { const sys = systemOf(star), [x, y] = bodyXY(star, sys, body); flyTo(x, y, Math.max(view.scale, body.parent ? systemScale() * 6 : systemScale() * 1.6)); }
 
+  const arkBodies = new Map();
+  function arkBodyOf(civ) {
+    if (!arkBodies.has(civ.id)) arkBodies.set(civ.id, { id: `ark:${civ.id}`, ark: true, civ, name: civ.arkName.replace(/^the /, '').replace(/^./, (c) => c.toUpperCase()), type: 'Ark', radius: 0 });
+    return arkBodies.get(civ.id);
+  }
   function select(star, body = null) {
     selected = { star, body };
     if (body && star.id === here.id) o.onSelectBody(body);
@@ -450,7 +471,7 @@ export function createStarMap(o) {
   }
   function tap(sx, sy, double) {
     const d = hit(sx, sy);
-    if (d) { select(d.star, d.body || null); if (double) d.body ? flyToBody(d.star, d.body) : flyToStar(d.star); }
+    if (d) { select(d.star, d.body || null); if (double) d.body && !d.body.ark ? flyToBody(d.star, d.body) : flyToStar(d.star); }
     else if (view.scale < REAL_FROM) { const [x, y] = toWorld(sx, sy); flyTo(x, y, view.scale * 4, 600); }
     else if (double) zoomAt(sx, sy, 2.5);
   }
@@ -524,6 +545,19 @@ export function createStarMap(o) {
   function updatePanel() {
     const { star, body } = selected, sys = systemOf(star), known = isSurveyed(star), isHere = star.id === here.id, p = starPhysics(star);
     const btn = $('mapAction'); let note = '';
+    if (body?.ark) { // an ark: who lives aboard, and a cruise to it
+      const civ = body.civ, home = sys.bodies.find(b => b.id === civ.home);
+      $('mapKicker').textContent = `ARK · ${civ.tier.toUpperCase()}${civ.spaceborne ? ' · SPACEBORNE' : ''}`;
+      $('mapName').textContent = body.name;
+      $('mapDescription').textContent = civ.spaceborne
+        ? `The home of the ${plural(civ.species.name)}, who left ${home?.name ?? 'their world'} generations ago. It holds sixty degrees ahead of their world along its orbit.`
+        : `A vast station of the ${plural(civ.species.name)} of ${home?.name ?? 'this system'}, sixty degrees ahead of their world along its orbit. Many of them live aboard.`;
+      $('mapFacts').textContent = ''; renderDetails([]);
+      if (isHere) { const c = o.cruise(body); btn.disabled = !c.enabled; btn.textContent = c.label; note = c.note || ''; btn.onclick = () => { if (!btn.disabled) o.onCruise(body); }; }
+      else { btn.disabled = true; btn.textContent = 'Jump to this system first'; btn.onclick = null; }
+      $('mapNote').textContent = note; $('mapCourse').hidden = true; btn.hidden = false;
+      return;
+    }
     if (body) {
       const parent = body.parent && sys.bodies.find(b => b.id === body.parent);
       if (known) {

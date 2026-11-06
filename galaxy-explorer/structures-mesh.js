@@ -12,25 +12,34 @@
 // lamplight on the ground): a handful of draw calls however big the city. Footings reach into the ground so nothing floats on a slope. THREE is passed in.
 import { rng } from './rng.mjs';
 import { civilizationOf } from './civilizations.mjs';
-import { networkFor } from './settlements.mjs';
+import { networkFor, seaFloorTerrain } from './settlements.mjs';
 import { shipDesign, buildShip, shipSize } from './ships.js';
 import { plural } from './structures.mjs';
+import { buildStationDeck } from './station-deck.js';
+import { urbanOf } from './urban.mjs';
+import { buildPlannedCity } from './city-plan.js';
+import { planTown, planDistrict, floorH } from './town-plan.mjs';
+import { buildAlien, farShape, sizeOf, farProtos, farMaterial } from './alien-build.js';
+import { architectureOf } from './alien-arch.mjs';
+import { makeKit, buildLot, buildProp, farMasses, farMesh } from './town-build.js';
 
 const SINK = 1.6; // metres every footing reaches below the lowest ground it stands on
 const PORT_DROP = 4; // metres the spaceport apron's rim may stand above a round world (see spaceport)
-const BUDGET = 165000; // vertices in all; far-off towns stop here so phones stay smooth
-const NEAR_BUDGET = 140000; // vertices for the places built in full near the site
-const GROUND_BUDGET = 48000; // vertices of streets, roads and plazas
+// Vertex budgets: laptops and desktops get far more than phones (coarse), which keep
+// the old, lighter city. Far-off towns stop at BUDGET; the places built in full near the
+// site at NEAR; streets, roads and plazas at GROUND.
+const BUDGETS = { full: { BUDGET: 320000, NEAR: 250000, GROUND: 90000, GLOW: 90000 }, coarse: { BUDGET: 150000, NEAR: 124000, GROUND: 48000, GLOW: 22000 } };
 const WALKERS = ['hands', 'grazers', 'rollers', 'tripods', 'tentacles'];
 // Cultures whose buildings have a solid floor on the ground (levelled on a foundation).
-const SOLID = ['timber', 'terraced', 'tents', 'coral', 'shells', 'rings', 'hive', 'mounds', 'silk', 'trapdoor', 'burrows', 'rookery', 'earthworks', 'domes', 'tracks', 'living'];
+const SOLID = ['timber', 'terraced', 'tents', 'coral', 'shells', 'conch', 'polyp', 'kelpweave', 'rings', 'hive', 'mounds', 'silk', 'trapdoor', 'burrows', 'rookery', 'earthworks', 'domes', 'tracks', 'living'];
 
 // colonist: a spacefaring civilization from another world of this system that has
 // settled this one (civilizations.mjs colonistOf); it builds a colony here.
-export function buildStructures(THREE, { body, terrain, radius, signalNormal, landingNormal, fauna, colonist = null }) {
+export function buildStructures(THREE, { body, terrain, radius, signalNormal, landingNormal, fauna, colonist = null, coarse = false }) {
+  const { BUDGET, NEAR: NEAR_BUDGET, GROUND: GROUND_BUDGET, GLOW: GLOW_CAP } = BUDGETS[coarse ? 'coarse' : 'full'];
   THREE_REF = THREE;
   const group = new THREE.Group(), obstacles = [], sites = [];
-  const native = fauna?.species.length ? civilizationOf(body) : null;
+  const native = fauna?.species.length || civilizationOf(body)?.spaceborne ? civilizationOf(body) : null;
   // Colonists live under glass pressure domes, whatever they build at home.
   const civ = native || (colonist ? { ...colonist, colony: true, material: 'glass', culture: 'domes', hearths: false, fields: false,
     description: `A colony of the ${plural(colonist.species.name)} from ${colonist.homeName || 'another world of this system'}.${colonist.suits ? ' The air here is not theirs: they wear pressure suits outside.' : ''} At home, ${colonist.description.replace(/^The /, 'the ')}` } : null);
@@ -40,10 +49,32 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   const none = { group, civ: null, obstacles, sites, clearings: [], pieces: 0, update() {} };
   if (!civ || (native && !homes.length)) return none;
 
-  const r = rng(body.seed, 'structures', civ.species.id), u = civ.unit, tall = civ.tall, level = civ.level;
+  // Sea builders build on the sea floor: open water is their ground (settlements.mjs seaFloorTerrain).
+  if (civ.underwater || civ.species?.aquatic) terrain = seaFloorTerrain(terrain);
+  let r = rng(body.seed, 'structures', civ.species.id); // (let: a planned town's lot builds with its own, so it looks the same each time it is built)
+  const u = civ.unit, tall = civ.tall, level = civ.level;
+  // The in-between steps (fauna.mjs BUILD_LEVEL) build like the step below and add their own.
+  const tier = civ.tier || '', orbital = tier === 'orbital', industrial = tier === 'industrial', metalworkers = tier === 'metalworkers';
+  // Ruins: a spaceborne civilization left its world (civilizations.mjs). Its towns still
+  // stand, weathered and overgrown, dark at night, with nothing in its sky.
+  const ruins = !!civ.spaceborne && !civ.colony;
   const C = colours(THREE, body, civ);
-  const lit = merger(THREE), glow = merger(THREE), ground = merger(THREE); // ground: streets, roads and plazas
+  if (ruins) for (const k of Object.keys(C)) if (!['window', 'beacon', 'ember', 'flame'].includes(k)) C[k] = '#' + new THREE.Color(C[k]).lerp(new THREE.Color(k === 'roof' || k === 'roof2' || k === 'turf' ? '#4f6a38' : '#6f7462'), .38).multiplyScalar(.82).getHexString();
+  if (ruins) C.window = C.ember = C.flame = C.beacon = '#202420';
+  // The world's conditions, read by everything built here: heat, cold, damp, thin air, gravity.
+  const ph = body.physics || {}, tempC = (ph.temperature ?? 288) - 273.15, ramp = (a, b, v) => Math.min(1, Math.max(0, (v - a) / (b - a)));
+  const clime = {
+    hot: ramp(24, 55, tempC), cold: ramp(4, -30, tempC) * (ph.waterState === 'ice' || body.biome === 'Frozen' ? 1 : .8),
+    damp: (body.biome === 'Verdant' || body.biome === 'Oceanic' ? .7 : 0) * ramp(-5, 15, tempC),
+    dry: body.biome === 'Desert' || body.biome === 'Volcanic' ? 1 : 0, thin: ramp(.4, .05, ph.pressure ?? 1), heavy: ramp(1.2, 2.2, ph.gravity ?? 1),
+  };
+  const lit = merger(THREE, { snow: clime.cold, bleach: clime.hot * (clime.dry ? 1 : .6), damp: ruins ? 1 : clime.damp }), glow = merger(THREE), ground = merger(THREE); // ground: streets, roads and plazas
   const blink = merger(THREE), pool = merger(THREE), halos = []; // beacons that blink; lamplight on the ground and around lamps
+  let unitsFollow = null; // (hand-builders' town units: see below)
+  const weatherCfg = { snow: clime.cold, bleach: clime.hot * (clime.dry ? 1 : .6), damp: ruins ? 1 : clime.damp };
+  // Materials shared by everything built here (and by the town units built later, near or far).
+  const litMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .9 }), glowMat = new THREE.MeshBasicMaterial({ vertexColors: true });
+  const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }), blinkMat = new THREE.MeshBasicMaterial({ vertexColors: true });
   const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
   const q = new THREE.Quaternion(), e = new THREE.Euler(), world = new THREE.Matrix4();
   const L = (x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => new THREE.Matrix4().compose(V(x, y, z), q.setFromEuler(e.set(rx, ry, rz)).clone(), V(sx, sy, sz));
@@ -51,6 +82,17 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   const cyl = (rt, rb, h, seg = 8) => new THREE.CylinderGeometry(rt, rb, h, seg, 1).translate(0, h / 2, 0);
   const cone = (rad, h, seg = 8) => new THREE.ConeGeometry(rad, h, seg, 1).translate(0, h / 2, 0);
   const ball = (rad, d = 0) => new THREE.IcosahedronGeometry(rad, d);
+  // A tube through points whose radius changes along it (sea builders' spiral shells).
+  const taperTube = (pts, radii, seg = 10) => {
+    const pos = [], idx = [], up = V(0, 1, 0), t = V(), a = V(), b = V();
+    pts.forEach((p, i) => {
+      t.copy(pts[Math.min(pts.length - 1, i + 1)]).sub(pts[Math.max(0, i - 1)]).normalize();
+      a.crossVectors(Math.abs(t.y) > .9 ? V(1, 0, 0) : up, t).normalize(); b.crossVectors(t, a);
+      for (let k = 0; k < seg; k++) { const w = k / seg * Math.PI * 2; pos.push(p.x + (a.x * Math.cos(w) + b.x * Math.sin(w)) * radii[i], p.y + (a.y * Math.cos(w) + b.y * Math.sin(w)) * radii[i], p.z + (a.z * Math.cos(w) + b.z * Math.sin(w)) * radii[i]); }
+    });
+    for (let i = 0; i < pts.length - 1; i++) for (let k = 0; k < seg; k++) { const p0 = i * seg + k, p1 = i * seg + (k + 1) % seg; idx.push(p0, p0 + seg, p1, p1, p0 + seg, p1 + seg); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); return g;
+  };
   const dome = (rad, seg = 10) => new THREE.SphereGeometry(rad, seg, Math.max(4, seg >> 1), 0, Math.PI * 2, 0, Math.PI / 2);
   const ring = (rad, tube, seg = 12) => new THREE.TorusGeometry(rad, tube, 4, seg).rotateX(Math.PI / 2);
   const sunk = (g) => g.translate(0, -SINK, 0);
@@ -67,7 +109,8 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   // --- Placement -------------------------------------------------------------
   const glows = []; let currentPlace = null;
   const nightLights = [], litPlaces = new Set(); // every lit piece's glow, and the places built (city-lights.js draws these from space)
-  const placed = [], landmarks = { lamps: [], dishes: [], masts: [] }; // where they stand (for previews and tests)
+  const placed = [], landmarks = { lamps: [], dishes: [], masts: [] };
+  const dwellings = [], paths = []; // homes you can go into (interior.js), and the ways along the streets // where they stand (for previews and tests)
   let relief = 0; // how far the ground under the last wide flat piece falls below its top
   function frameAt(home) {
     const east = V(0, 1, 0).cross(home); if (east.lengthSq() < 1e-6) east.set(1, 0, 0).cross(home);
@@ -126,15 +169,24 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
     if (found && relief > .1) addFn(new THREE.CylinderGeometry(foot * .86, foot * .86 + relief * .9, relief + SINK + .1, 12, 1).translate(0, -(relief + SINK) / 2 + .05, 0), new THREE.Matrix4(), C.plinth);
     glows.length = 0;
     build(addFn, gy);
+    for (const sm of smokeFrom) if (!sm.at) sm.at = V(...sm.local).applyMatrix4(base); // smokestacks, now that we know where
     // Where this piece glows at night, for the lights seen from space (city-lights.js):
     // about one in three of its lit parts, up to eight, so a lit tower shows brighter than a lamp.
     if (glows.length && currentPlace) { const n = Math.min(8, Math.ceil(glows.length / 3)); for (let i = 0; i < n; i++) nightLights.push(glows[Math.floor((i + .5) * glows.length / n)]); }
     placed.push({ n, foot, road, base });
+    // A dwelling, with its door on its local +z side (facing the street or the centre).
+    if (build.dwelling && !aloft && currentPlace) dwellings.push({ n, base, foot, k: build.dwelling, h: build.dwellingH ?? 2.8 * u * build.dwelling * tall, ground: lo, door: V(0, 0, foot * .95).applyMatrix4(base), face: fwd.clone() });
     if (build === common.dish || build === common.mast || build === common.light) (build === common.dish ? landmarks.dishes : build === common.mast ? landmarks.masts : landmarks.lamps).push(n.clone());
     if (height > .35) obstacles.push({ p: n.clone().multiplyScalar(radius + lo), r: (aloft ? .3 : foot * .8), h: aloft ? 1 : height });
     return true;
   }
-  const settle = (f, dist, angle, foot, height, build, opts) => { for (let k = 0; k < 7; k++) if (place(f, dist + (k >> 1) * foot * .6, angle + (k % 2 ? 1 : -1) * k * .17, foot, height, build, opts)) return true; return false; };
+  // Tries a few spots near the one asked for; on rugged ground (the new land style is
+  // hillier) then a ring of spots all round the place, a little nearer its centre.
+  const settle = (f, dist, angle, foot, height, build, opts) => {
+    for (let k = 0; k < 7; k++) if (place(f, dist + (k >> 1) * foot * .6, angle + (k % 2 ? 1 : -1) * k * .17, foot, height, build, opts)) return true;
+    for (let k = 1; k < 9; k++) if (place(f, dist * .85, angle + k * Math.PI / 4.5, foot, height, build, opts)) return true;
+    return false;
+  };
 
   // --- Shared pieces ---------------------------------------------------------
   // Footings show as a plinth of darker stone (the colour argument is kept for callers).
@@ -211,24 +263,184 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   // or clusters of hexagonal shafts (hives, spiders, burrowers), banded with lit floors
   // and crowned with beacons. A tower is a few simple prisms, so a skyline of them costs
   // fewer vertices than the dwellings it replaces; the lit bands are what make it a city.
-  const megacity = level >= 6 && !civ.colony;
-  const towerKind = GROWN.includes(civ.material) ? 'grown' : ['hive', 'web', 'burrowers'].includes(civ.family) ? 'comb' : 'spire';
+  // City worlds (urban.mjs): the whole capital is towers, and a planned city covers the land round it.
+  const urban = !civ.colony && !civ.underwater ? urbanOf(body) : null;
+  const megacity = (level >= 5 || !!urban) && !civ.colony; // spacefarers and up build skylines
+  // Hand-builders from villages up: places planned street by street (town-plan.mjs), built near or far alike (town-build.js).
+  const handsTowns = civ.family !== 'drifters' && !civ.colony && !civ.underwater && !civ.species?.aquatic && level >= 2;
+  // Each family raises its own kind of tower: fliers roost towers ringed with landing ledges,
+  // drifters towers that float on their tethers, burrowers domes over deep shafts.
+  const towerKind = civ.family === 'nests' ? 'roost' : civ.family === 'drifters' ? 'floating' : civ.family === 'burrowers' || ['mounds', 'trapdoor', 'burrows'].includes(civ.culture) ? 'burrow'
+    : GROWN.includes(civ.material) ? 'grown' : ['hive', 'web'].includes(civ.family) ? 'comb' : 'spire';
   const mixC = (a, b, t) => '#' + new THREE.Color(a).lerp(new THREE.Color(b), t).getHexString();
-  const glassC = mixC(C.wall, '#8fc9dc', .55), frameC = mixC(C.wall, '#e8ecef', .35);
-  const bands = (add, w, y0, y1, sides, gap = 4.2 * u) => { for (let y = y0 + gap * .6; y < y1 - gap * .3; y += gap) add(new THREE.CylinderGeometry(w * 1.015, w * 1.015, .32 * u, sides, 1, true).translate(0, .16 * u, 0), L(0, y, 0, 0, Math.PI / sides, 0), C.window, true); };
-  const tower = (k, H) => Object.assign((add) => {
-    if (towerKind === 'spire') {
-      const sides = pick(4, 6, 8), tiers = 2 + Math.floor(r() * 3), w0 = 2.1 * u * k;
-      let y = 0, w = w0;
-      for (let i = 0; i < tiers; i++) {
-        const h = H * (i ? .55 : 1) / (tiers * .78);
-        add(i ? cyl(w * .97, w, h, sides) : sunk(cyl(w * .97, w, h + SINK, sides)), L(0, y, 0, 0, Math.PI / sides, 0), i % 2 ? frameC : glassC);
-        bands(add, w, y + (i ? 0 : SINK * 0), y + h, sides);
-        y += h; add(cyl(w * 1.06, w * 1.06, .35 * u, sides), L(0, y, 0, 0, Math.PI / sides, 0), frameC); w *= .72;
+  const glowFor = (c) => mixC(c, '#ffffff', .25);
+  // Glass and frames take the world's own material: icy, sandstone, timber-clad, stone or glass.
+  const glassC = mixC(C.wall, '#8fc9dc', { ice: .25, adobe: .18, wood: .35, stone: .45, glass: .7 }[civ.material] ?? .5), frameC = mixC(C.wall, '#e8ecef', .35);
+  // How each species lights its buildings: not always rows of windows. Some band their
+  // towers with light, some run it in vertical seams, some prick them with round ports,
+  // some wind it up in a spiral, a few use windows much as we would. Fixed per species.
+  const lr = rng(civ.seed ?? 1, 'light-style');
+  const lightStyle = ({ grown: ['dots', 'spiral'], comb: ['dots', 'bands'], roost: ['strips', 'dots'], floating: ['dots', 'bands'], burrow: ['dots'] }[towerKind] || ['bands', 'strips', 'dots', 'spiral', 'strips', 'dots', 'windows'])[Math.floor(lr() * 7) % ({ grown: 2, comb: 2, roost: 2, floating: 2, burrow: 1 }[towerKind] || 7)];
+  const lightC = civ.species.glow ? glowFor(mixC(C.window, civ.species.colors?.glow || C.accent, .5)) : lr() < .5 ? C.window : mixC(C.window, pick(C.accent2, '#9fe3ff', '#c9a0ff'), .45);
+  function lit_(add, w, y0, y1, sides, gap = 4.2 * u) {
+    const H = y1 - y0; if (H <= 0) return;
+    const style = glow.count() > GLOW_CAP ? 'bands' : lightStyle; // past the cap, plain bands, wide apart
+    if (style !== lightStyle) gap *= 2;
+    switch (style) {
+      case 'strips': for (let i = 0; i < sides; i++) { const a = (i + .5) / sides * 6.283; add(box(.22 * u, H * .9, .06 * u), L(Math.sin(a) * w * Math.cos(Math.PI / sides) * 1.01, y0 + H * .05, Math.cos(a) * w * Math.cos(Math.PI / sides) * 1.01, 0, a, 0), lightC, true); } break;
+      case 'dots': { const per = Math.min(10, sides * 2); let n = 0; for (let y = y0 + gap * .5; y < y1 - gap * .3 && n < 60; y += gap * .8) for (let i = 0; i < per; i++, n++) { const a = (i + (Math.round(y / gap) % 2) * .5) / per * 6.283; add(new THREE.CircleGeometry(.28 * u, 6), L(Math.sin(a) * w * .97, y, Math.cos(a) * w * .97, 0, a, 0), lightC, true); } break; }
+      case 'spiral': for (let t = 0, n = Math.max(8, Math.round(H / u * 1.2)); t < n; t++) { const y = y0 + (t + .5) / n * H, a = t * .55; add(box(.9 * u, .22 * u, .06 * u), L(Math.sin(a) * w * 1.0, y, Math.cos(a) * w * 1.0, 0, a, .3), lightC, true); } break;
+      case 'windows': for (let y = y0 + gap * .6; y < y1 - gap * .3; y += gap * .6) for (let i = 0; i < sides; i++) { const a = (i + .5) / sides * 6.283; for (const dx of [-.25, .25]) add(box(.35 * u, .45 * u, .05), L(Math.sin(a) * w * .93 + Math.cos(a) * dx * w, y, Math.cos(a) * w * .93 - Math.sin(a) * dx * w, 0, a, 0), lightC, true); } break;
+      default: for (let y = y0 + gap * .6; y < y1 - gap * .3; y += gap) add(new THREE.CylinderGeometry(w * 1.015, w * 1.015, .32 * u, sides, 1, true).translate(0, .16 * u, 0), L(0, y, 0, 0, Math.PI / sides, 0), lightC, true);
+    }
+  }
+  const bands = lit_;
+  // Spires come in many forms so no two blocks of a skyline look alike, each in its own
+  // glass and trim, and each civilization's path adds forms of its own (farm towers for
+  // the agrarian, cathedral spires for the devotional, observatory crowns for scholars,
+  // bastions for the martial, billboard blades for traders).
+  const GLASS = [glassC, mixC(glassC, '#2b4a5c', .45), mixC(glassC, '#c9a46a', .4), mixC(glassC, '#e9eef2', .45), mixC(glassC, C.accent, .25), mixC(glassC, '#16202a', .55)];
+  // Each culture raises its skyline in its own idiom: timber builders pagodas of flared
+  // roofs, terrace builders ziggurats, tent builders masts hung with fabric, stilt builders
+  // towers striding on legs, and so on. Our own glass forms are only an occasional extra.
+  const CULTURE_FORMS = { timber: ['pagoda', 'pagoda', 'pagoda', 'ringed'], terraced: ['ziggurat', 'ziggurat', 'ziggurat', 'bastion'], tents: ['mast', 'mast', 'mast', 'needle'], stilts: ['legs', 'legs', 'legs', 'twin'],
+    stiltpods: ['legs', 'legs', 'ringed'], rings: ['ringed', 'ringed', 'domed'], earthworks: ['ziggurat', 'domed', 'bastion'], domes: ['domed', 'domed', 'ringed'], tracks: ['ringed', 'ringed', 'domed'] }[civ.culture];
+  const GENERIC = ['stepped', 'twisted', 'twin', 'ringed', 'blade', 'needle', 'garden'];
+  const FORMS = [...(CULTURE_FORMS || GENERIC), GENERIC[Math.floor(lr() * GENERIC.length)],
+    ...(clime.hot > .4 ? ['louvred', 'louvred', 'garden'] : []), ...(clime.cold > .4 ? ['stepped', 'bastion'] : []),
+    ...({ agrarian: ['farm', 'farm'], devotional: ['cathedral', 'cathedral'], scholarly: ['observatory', 'observatory'], martial: ['bastion', 'bastion'], mercantile: ['billboard', 'blade'], expansionist: ['ringed', 'needle'] }[civ.path] || [])];
+  const beacon = (add, y) => { rod(add, [0, y, 0], [0, y + 4 * u, 0], .06 * u, C.metal, false, 4); add(ball(.22 * u, 1), L(0, y + 4.1 * u, 0), C.beacon, 'blink'); };
+  function spire(add, k, H, form = pick(...FORMS)) {
+    const glass = pick(...GLASS), trim = r() < .5 ? frameC : mixC(frameC, C.accent, .35), w0 = 2.1 * u * k, sides = pick(4, 6, 8);
+    const prism = (w, y, h, twist = 0, c = glass, sd = sides, taper = .97) => { add(y ? cyl(w * taper, w, h, sd) : sunk(cyl(w * taper, w, h + SINK, sd)), L(0, y, 0, 0, Math.PI / sd + twist, 0), c); bands(add, w, y, y + h, sd); };
+    switch (form) {
+      case 'twisted': { // stacked slabs, each turned a little further
+        const n = Math.max(5, Math.round(H / (4 * u))), h = H / n;
+        for (let i = 0; i < n; i++) { add(i ? box(w0 * 1.5, h * .92, w0 * .95) : sunk(box(w0 * 1.5, h * .92 + SINK, w0 * .95)), L(0, i * h, 0, 0, i * .16, 0), i % 3 ? glass : trim); add(box(w0 * 1.53, .25 * u, w0 * .98), L(0, i * h + h * .5, 0, 0, i * .16, 0), C.window, true); }
+        beacon(add, H); break;
       }
-      add(cone(w * .9, H * .12, sides), L(0, y + .35 * u, 0, 0, Math.PI / sides, 0), frameC);
-      rod(add, [0, y + H * .1, 0], [0, y + H * .1 + 5 * u, 0], .06 * u, C.metal, false, 4);
-      add(ball(.22 * u, 1), L(0, y + H * .1 + 5.1 * u, 0), C.beacon, 'blink');
+      case 'twin': { // two shafts joined by a sky bridge
+        for (const x of [-1, 1]) { add(sunk(cyl(w0 * .62, w0 * .7, H * (x > 0 ? 1 : .86) + SINK, sides)), L(x * w0 * .95, 0, 0, 0, Math.PI / sides, 0), glass); bands(add, w0 * .7, 0, H * (x > 0 ? 1 : .86), sides); }
+        add(box(w0 * 2, 1.4 * u, w0 * .7), L(0, H * .62, 0), trim); add(box(w0 * 2.02, .3 * u, w0 * .72), L(0, H * .62 + .55 * u, 0), C.window, true);
+        add(cone(w0 * .62, H * .1, sides), L(w0 * .95, H, 0), trim); beacon(add, H * 1.08); break;
+      }
+      case 'ringed': { // a tall shaft wearing halo rings
+        prism(w0 * .8, 0, H, 0, glass, 12, .9);
+        for (let i = 1; i <= 3; i++) add(new THREE.TorusGeometry(w0 * (1.25 + i * .12), .22 * u, 3, 20).rotateX(Math.PI / 2), L(0, H * (.35 + i * .18), 0), i === 3 ? C.window : trim, i === 3);
+        add(cone(w0 * .72, H * .18, 12), L(0, H, 0), trim); beacon(add, H * 1.15); break;
+      }
+      case 'blade': case 'billboard': { // a thin slab with fins down its edges
+        add(sunk(box(w0 * 2.2, H + SINK, w0 * .7)), L(), glass);
+        for (const x of [-1, 1]) add(box(.35 * u, H * 1.04, w0 * .9), L(x * w0 * 1.1, 0, 0), trim);
+        for (let y = 3 * u; y < H; y += 4 * u) add(box(w0 * 2.22, .25 * u, w0 * .72), L(0, y, 0), C.window, true);
+        if (form === 'billboard') for (const z of [-1, 1]) add(box(w0 * 1.6, H * .14, .1 * u), L(0, H * (.55 + r() * .25), z * w0 * .37), pick(C.accent, C.accent2, glowFor(C.window)), true);
+        beacon(add, H); break;
+      }
+      case 'louvred': { // a hot world's tower: deep vertical fins shade the glass
+        prism(w0, 0, H, 0, glass, 4, .95);
+        for (let i = 0; i < 16; i++) { const a = i / 16 * 6.283, x = Math.cos(a) * w0 * .78, z = Math.sin(a) * w0 * .78; add(box(.18 * u, H * .96, w0 * .3), L(x, 0, z, 0, -a, 0), trim); }
+        add(box(w0 * 1.7, .5 * u, w0 * 1.7), L(0, H, 0, 0, Math.PI / 4, 0), trim); beacon(add, H + .5 * u); break;
+      }
+      case 'pagoda': { // stacked storeys, each under a wide flared roof with upturned corners
+        const n = Math.max(4, Math.round(H / (5 * u))), h = H / n, sd = pick(4, 8); let w = w0 * 1.1;
+        for (let i = 0; i < n; i++) {
+          const y = i * h; add(i ? cyl(w * .95, w, h * .72, sd) : sunk(cyl(w * .95, w, h * .72 + SINK, sd)), L(0, y, 0, 0, Math.PI / sd, 0), i % 2 ? glass : mixC(glass, C.wood, .4));
+          bands(add, w * .98, y, y + h * .72, sd, h * .5);
+          add(new THREE.ConeGeometry(w * 1.75, h * .32, sd, 1, true).translate(0, h * .16, 0), L(0, y + h * .7, 0, 0, Math.PI / sd, 0), i % 2 ? C.roof : trim);
+          for (let j = 0; j < sd; j += sd / 4) { const a = (j / sd) * 6.283 + Math.PI / sd; add(cone(.25 * u, .9 * u, 4), L(Math.sin(a) * w * 1.7, y + h * .72, Math.cos(a) * w * 1.7, Math.cos(a) * -.6, 0, Math.sin(a) * .6), trim); }
+          w *= .9;
+        }
+        rod(add, [0, H, 0], [0, H + 5 * u, 0], .1 * u, C.accent, false, 5); for (let i = 0; i < 4; i++) add(new THREE.TorusGeometry(.5 * u, .08 * u, 3, 8).rotateX(Math.PI / 2), L(0, H + 1 * u + i * .9 * u, 0), C.accent);
+        add(ball(.22 * u, 1), L(0, H + 5.2 * u, 0), C.beacon, 'blink'); break;
+      }
+      case 'ziggurat': { // stepped terraces with a stair up one face and a shrine on top
+        const n = 4 + Math.floor(r() * 3), h = H * .82 / n; let w = w0 * 2;
+        for (let i = 0; i < n; i++) { add(i ? box(w, h, w) : sunk(box(w, h + SINK, w)), L(0, i * h, 0), i % 2 ? mixC(glass, C.wall, .5) : C.wall); bands(add, w * .62, i * h, i * h + h, 4, h * .45); add(box(w * 1.03, .3 * u, w * 1.03), L(0, (i + 1) * h - .3 * u, 0), C.turf); w *= .8; }
+        const stair = Math.hypot(H * .82, w0 * .8); add(box(w0 * .5, .5 * u, stair).translate(0, 0, stair / 2), L(0, 0, w0, -Math.atan2(H * .82, w0 * .8) + Math.PI, Math.PI, 0), trim);
+        add(box(w * .9, H * .14, w * .9), L(0, H * .82, 0), trim); add(box(w * .5, H * .1, .1), L(0, H * .82, w * .46), lightC, true); break;
+      }
+      case 'mast': { // a soaring mast hung with tiers of fabric, guyed to the ground
+        add(sunk(cyl(.5 * u * k, .9 * u * k, H * 1.1 + SINK, 6)), L(), C.metal);
+        for (let i = 0, n = 3 + Math.floor(r() * 2); i < n; i++) { const y = H * (.15 + i * .78 / n), w = w0 * (1.6 - i * .25); add(new THREE.ConeGeometry(w, H * .22, 9, 1, true).translate(0, H * .11, 0), L(0, y, 0, 0, i * .3, 0), i % 2 ? C.wall : C.accent); add(new THREE.TorusGeometry(w * .98, .1 * u, 3, 18).rotateX(Math.PI / 2), L(0, y + .1 * u, 0), lightC, true); add(new THREE.CircleGeometry(w * .9, 9).rotateX(Math.PI / 2), L(0, y + .05, 0, 0, i * .3, 0), mixC(C.wall, '#000000', .3)); }
+        for (let i = 0; i < 6; i++) { const a = i / 6 * 6.283; rod(add, [0, H * 1.1, 0], [Math.cos(a) * w0 * 3, 0, Math.sin(a) * w0 * 3], .05 * u, C.line, false, 3); }
+        add(ball(.25 * u, 1), L(0, H * 1.12, 0), C.beacon, 'blink'); break;
+      }
+      case 'legs': { // the tower strides on four great legs, a sky bridge reaching out
+        const lift = H * .3, w = w0 * 1.05;
+        for (let i = 0; i < 4; i++) { const a = i * 1.571 + .785; rod(add, [Math.cos(a) * w * 2.2, -SINK, Math.sin(a) * w * 2.2], [Math.cos(a) * w * .7, lift + 1 * u, Math.sin(a) * w * .7], .5 * u * k, trim, false, 6); }
+        add(cyl(w, w * .6, 2 * u, 8), L(0, lift - 1.5 * u, 0), trim);
+        prism(w, lift, H - lift, 0, glass, 8, .9); add(cone(w * .9, H * .1, 8), L(0, H, 0), trim);
+        add(box(w * 3, 1.2 * u, w * .6), L(w * 1.5, lift + (H - lift) * .5, 0), trim); add(box(w * 3, .25 * u, w * .62), L(w * 1.5, lift + (H - lift) * .5 + .5 * u, 0), lightC, true); break;
+      }
+      case 'domed': { // dome on dome, narrowing as they rise
+        let y = 0, w = w0 * 1.4; const n = 3 + Math.floor(r() * 3);
+        add(sunk(cyl(w, w * 1.05, 1 * u + SINK, 12)), L(), trim);
+        for (let i = 0; i < n; i++) { const h = H / n; add(cyl(w * .9, w, h * .55, 12), L(0, y + 1 * u, 0), glass); bands(add, w * .95, y + 1 * u, y + 1 * u + h * .55, 12, h * .4); add(new THREE.SphereGeometry(w, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, .55, 1), L(0, y + 1 * u + h * .55, 0), i % 2 ? C.wall : trim); y += h * .85; w *= .72; }
+        add(ball(.25 * u, 1), L(0, y + 2 * u, 0), C.beacon, 'blink'); break;
+      }
+      case 'needle': { // one long taper to a point
+        add(sunk(cyl(w0 * .25, w0 * 1.05, H * .9 + SINK, sides)), L(0, 0, 0, 0, Math.PI / sides, 0), glass); bands(add, w0 * .8, 0, H * .6, sides);
+        add(cone(w0 * .25, H * .35, sides), L(0, H * .9, 0, 0, Math.PI / sides, 0), trim); add(ball(.2 * u, 1), L(0, H * 1.25, 0), C.beacon, 'blink'); break;
+      }
+      case 'garden': case 'farm': { // terraces planted with trees (farm towers: green-lit growing floors)
+        let y = 0, w = w0 * 1.15; const tiers = 3 + Math.floor(r() * 3), h = H / tiers;
+        for (let i = 0; i < tiers; i++) {
+          add(i ? box(w * 1.6, h, w * 1.6) : sunk(box(w * 1.6, h + SINK, w * 1.6)), L(0, y, 0, 0, i * .4, 0), form === 'farm' ? mixC(glass, '#6fbf6a', .25) : glass);
+          for (let yy = y + 1.8 * u; yy < y + h - .5 * u; yy += 2.6 * u) add(box(w * 1.62, .22 * u, w * 1.62), L(0, yy, 0, 0, i * .4, 0), form === 'farm' ? '#b8ff8a' : C.window, true);
+          y += h; add(box(w * 1.7, .4 * u, w * 1.7), L(0, y, 0, 0, i * .4, 0), C.turf);
+          for (let j = 0; j < 4; j++) add(ball(.55 * u, 0), L(Math.cos(j * 1.57 + i * .4) * w * .6, y + .8 * u, Math.sin(j * 1.57 + i * .4) * w * .6, 0, 0, 0, 1, 1.3, 1), C.leaf);
+          w *= .78;
+        }
+        beacon(add, y + .4 * u); break;
+      }
+      case 'cathedral': { // a pointed spire flanked by pinnacles, a rose of light high up
+        prism(w0, 0, H * .62, 0, glass, 8, .92);
+        add(cone(w0 * .95, H * .55, 8), L(0, H * .62, 0, 0, Math.PI / 8, 0), trim);
+        for (let i = 0; i < 4; i++) { const a = i * 1.571 + .4; add(sunk(cyl(.3 * u, .45 * u, H * .55 + SINK, 6)), L(Math.cos(a) * w0 * 1.15, 0, Math.sin(a) * w0 * 1.15), trim); add(cone(.45 * u, H * .14, 6), L(Math.cos(a) * w0 * 1.15, H * .55, Math.sin(a) * w0 * 1.15), trim); }
+        for (let i = 0; i < 4; i++) add(new THREE.CircleGeometry(w0 * .5, 12), L(Math.sin(i * 1.571) * w0 * .93, H * .5, Math.cos(i * 1.571) * w0 * .93, 0, i * 1.571, 0), glowFor(C.accent), true);
+        add(ball(.25 * u, 1), L(0, H * 1.18, 0), C.beacon, 'blink'); break;
+      }
+      case 'observatory': { // a stepped tower crowned with a slotted dome
+        prism(w0, 0, H * .7, 0, glass, sides); prism(w0 * .78, H * .7, H * .18, 0, trim, sides);
+        add(dome(w0 * .8, 12), L(0, H * .88, 0, 0, r() * 6, 0), C.metal2);
+        add(box(.5 * u, w0 * .8, w0 * 1.62), L(0, H * .88, 0, 0, r() * 6, 0), C.door);
+        add(new THREE.TorusGeometry(w0 * .82, .12 * u, 3, 16).rotateX(Math.PI / 2), L(0, H * .88, 0), C.window, true); break;
+      }
+      case 'bastion': { // broad, battered walls and a crenellated crown
+        prism(w0 * 1.25, 0, H * .7, 0, mixC(glass, C.stone, .5), 4, .8);
+        for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; add(box(.8 * u, 1.2 * u, .8 * u), L(Math.cos(a) * w0, H * .7, Math.sin(a) * w0), trim); }
+        prism(w0 * .55, H * .7, H * .3, 0, glass, 4); beacon(add, H); break;
+      }
+      default: { // stepped setbacks, each tier narrower
+        const tiers = 2 + Math.floor(r() * 3); let y = 0, w = w0;
+        for (let i = 0; i < tiers; i++) { const h = H * (i ? .55 : 1) / (tiers * .78); prism(w, y, h, 0, i % 2 ? trim : glass); y += h; add(cyl(w * 1.06, w * 1.06, .35 * u, sides), L(0, y, 0, 0, Math.PI / sides, 0), trim); w *= .72; }
+        add(cone(w * .9, H * .12, sides), L(0, y + .35 * u, 0, 0, Math.PI / sides, 0), trim); beacon(add, y + H * .1);
+      }
+    }
+  }
+
+  const tower = (k, H0) => Object.assign((add) => {
+    const H = H0 * Math.min(1.25, tall); // strong gravity keeps towers lower, weak gravity lets them soar
+    if (towerKind === 'roost') { // a slender column spiralled with landing ledges and open arches
+      const w = 1.5 * u * k; add(sunk(cyl(w * .8, w * 1.1, H + SINK, 8)), L(), pick(...GLASS));
+      for (let y = 4 * u, i = 0; y < H; y += 3.4 * u, i++) { const a = i * 1.1; add(cyl(w * 1.6, w * 1.6, .25 * u, 10).translate(w * 1.2, 0, 0), L(0, y, 0, 0, a, 0), frameC); add(box(w * .9, 1.6 * u, .1), L(Math.cos(-a) * w * .82, y + .25 * u, Math.sin(-a) * w * .82, 0, a + Math.PI / 2, 0), C.window, true); }
+      add(cone(w * 1.2, H * .12, 8), L(0, H, 0), frameC); for (let i = 0; i < 4; i++) rod(add, [0, H + H * .1, 0], [Math.cos(i * 1.57) * w * 2.2, H + H * .04, Math.sin(i * 1.57) * w * 2.2], .06 * u, C.metal, false, 3);
+      add(ball(.22 * u, 1), L(0, H + H * .13, 0), C.beacon, 'blink');
+    } else if (towerKind === 'floating') { // a tower afloat on its tether, a gas-bag crown above
+      const lift = 8 * u, w = 1.8 * u * k;
+      add(sunk(cyl(.6 * u, .9 * u, 1 * u + SINK, 6)), L(), C.stone2); rod(add, [0, 1 * u, 0], [0, lift, 0], .08 * u, C.line, false, 4);
+      add(cone(w, 3 * u, 8).rotateX(Math.PI).translate(0, 3 * u, 0), L(0, lift - 3 * u, 0), frameC);
+      add(cyl(w * .9, w, H * .6, 8), L(0, lift, 0), pick(...GLASS)); bands(add, w, lift, lift + H * .6, 8);
+      add(new THREE.SphereGeometry(w * 1.7, 12, 8).scale(1, .75, 1), L(0, lift + H * .6 + w * 1.2, 0), C.bag);
+      for (let i = 0; i < 3; i++) rod(add, [Math.cos(i * 2.09) * w, lift + H * .3, Math.sin(i * 2.09) * w], [Math.cos(i * 2.09) * w * 4, 0, Math.sin(i * 2.09) * w * 4], .04 * u, C.line, false, 3);
+    } else if (towerKind === 'burrow') { // a broad dome over a deep shaft, lit skylights round it, vents smoking
+      const R = 3 * u * k, h = Math.min(H * .3, R * 1.4);
+      add(sunk(cyl(R * 1.1, R * 1.2, .6 * u + SINK, 14)), L(), C.plinth); add(new THREE.SphereGeometry(R, 14, 7, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, h / R, 1), L(0, .6 * u, 0), C.wall);
+      for (let i = 0; i < 6; i++) { const a = i / 6 * 6.283; add(new THREE.CircleGeometry(.5 * u, 8), L(Math.cos(a) * R * .72, .6 * u + h * .62, Math.sin(a) * R * .72, -.9, -a + Math.PI / 2, 0), C.window, true); }
+      add(new THREE.CircleGeometry(R * .3, 12).rotateX(-Math.PI / 2), L(0, .6 * u + h + .02, 0), C.window, true);
+      add(cyl(.35 * u, .45 * u, h + 2.5 * u, 6), L(R * .9, 0, 0), C.metal); if (smokeFrom.length < 24 && r() < .3) smokeFrom.push({ local: [R * .9, h + 2.5 * u, 0], at: null, k: .7 });
+    } else if (towerKind === 'spire') {
+      spire(add, k, H);
     } else if (towerKind === 'grown') {
       let y = 0, w = 2.3 * u * k;
       add(sunk(cyl(w * .8, w * 1.1, SINK + 1.5 * u, 8)), L(), C.wall2);
@@ -250,11 +462,22 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       }
       add(ball(.2 * u, 1), L(0, H + .3 * u, 0), C.beacon, 'blink');
     }
-  }, { found: true });
+  }, { found: true, dwelling: k, dwellingH: 3.4 * u }); // its ground floor is a home you can enter (interior.js)
   // The capital's centrepiece: an arcology, a city in one tower, ringed with lit terraces.
   const arcology = (k) => Object.assign((add) => {
-    const H = 70 * u * k * Math.min(1.3, tall), w0 = 7.5 * u * k, sides = towerKind === 'comb' ? 6 : 12;
-    if (towerKind === 'grown') { tower(k * 2.4, H)(add); return; }
+    const H = 70 * u * k * Math.min(1.3, tall), w0 = 7.5 * u * k * (.8 + lr() * .4), sides = towerKind === 'comb' ? 6 : [6, 8, 12, 5][Math.floor(lr() * 4)];
+    if (towerKind !== 'spire' && towerKind !== 'comb') { tower(k * 2.4, H)(add); return; } // grown, roost, floating and burrow capitals: their own tower, writ large
+    // Cultures with a skyline idiom of their own crown the capital with it, writ large, and
+    // each species adds a crown of its own: a dome, a halo ring, an open frame or a garden.
+    if (CULTURE_FORMS && towerKind === 'spire') {
+      spire(add, k * 3.1, H, CULTURE_FORMS[0]);
+      const crown = ['dome', 'halo', 'frame', 'garden', 'none'][Math.floor(lr() * 5)], top = H * (CULTURE_FORMS[0] === 'ziggurat' ? .98 : CULTURE_FORMS[0] === 'mast' ? 1.12 : 1.02);
+      if (crown === 'dome') add(new THREE.SphereGeometry(4 * u * k, 14, 7, 0, Math.PI * 2, 0, Math.PI / 2), L(0, top, 0), frameC);
+      if (crown === 'halo') for (let i = 0; i < 2; i++) add(new THREE.TorusGeometry((9 + i * 3) * u * k, .3 * u, 3, 32).rotateX(Math.PI / 2 + (i ? .3 : -.2)), L(0, top * (.86 - i * .1), 0), lightC, true);
+      if (crown === 'frame') for (let i = 0; i < 6; i++) { const a = i / 6 * 6.283; rod(add, [Math.cos(a) * 5 * u * k, top * .8, Math.sin(a) * 5 * u * k], [0, top + 12 * u, 0], .2 * u, C.metal, false, 4); }
+      if (crown === 'garden') for (let i = 0; i < 7; i++) add(ball(1.4 * u * k, 0), L(Math.cos(i) * 3 * u * k, top + .6 * u, Math.sin(i) * 3 * u * k, 0, 0, 0, 1, 1.3, 1), C.leaf);
+      return;
+    }
     add(sunk(cyl(w0 * 1.25, w0 * 1.35, 2 * u + SINK, sides)), L(), C.plinth);
     let y = 2 * u, w = w0;
     for (let i = 0; i < 4; i++) {
@@ -271,6 +494,67 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
     add(ball(.4 * u, 1), L(0, y + H * .12 + 9.3 * u, 0), C.beacon, 'blink');
   }, { found: 'always' });
   let skyline = 0; // the tallest tower, so traffic in the air flies above it
+  // --- Every building its own ----------------------------------------------------
+  // A dwelling takes its walls, roof and trim from the culture's palette with a shift of
+  // its own, and beside it something of its owners' life, by their path (flair).
+  const WALLS = [C.wall, mixC(C.wall, '#ffffff', .16), mixC(C.wall, '#000000', .14), mixC(C.wall, C.accent2, .22), mixC(C.wall, body.palette?.[3] || C.stone, .25)];
+  const ROOFS = [C.roof, C.roof2, mixC(C.roof, C.accent, .3), mixC(C.roof, '#000000', .22), mixC(C.roof, '#ffffff', .15)];
+  const TRIMS = [C.accent, C.accent2, mixC(C.accent, '#ffffff', .3), C.trim];
+  const varied = (add) => {
+    const w = pick(...WALLS), map = { [C.wall]: w, [C.wall2]: mixC(w, '#000000', .18), [C.roof]: pick(...ROOFS), [C.accent]: pick(...TRIMS) };
+    return (g, m, c, b) => add(g, m, !b && typeof c === 'string' && map[c] ? map[c] : c, b);
+  };
+  const flair = (add, gy, fp, k) => {
+    if (!gy || civ.colony || level < 2 || k > 1.7 || r() > .4 || civ.family === 'nests' || civ.family === 'drifters') return;
+    const a = Math.PI + (r() - .5) * 1.6, d = fp * (1.05 + r() * .2), x = Math.sin(a) * d, z = Math.cos(a) * d, y = gy(x, z);
+    if (y === null) return;
+    const m = (dx = 0, dy = 0, dz = 0, ry = 0) => L(x, y, z, 0, a, 0).multiply(L(dx, dy, dz, 0, ry, 0));
+    // The climate first: wind towers and shade where it is hot (for those who build), a
+    // banked woodpile where it is cold.
+    if (idiom === 'built' && clime.hot > .5 && r() < .45) {
+      if (r() < .5) { add(sunk(box(.9 * u, 3.4 * u * tall + SINK, .9 * u)), m(), C.wall); for (let i = 0; i < 4; i++) add(box(.5 * u, .9 * u, .05), m(0, 2.6 * u * tall, 0).multiply(L(0, 0, .46 * u, 0, i * 1.571, 0)), C.door); add(box(1.05 * u, .15 * u, 1.05 * u), m(0, 3.4 * u * tall), C.trim); }
+      else { for (const [px, pz] of [[-1, -.7], [1, -.7], [-1, .7], [1, .7]]) add(sunk(box(.08 * u, 1.9 * u + SINK, .08 * u)), m(px * u, 0, pz * u), C.wood); add(box(2.3 * u, .06 * u, 1.7 * u), m(0, 1.95 * u), mixC(C.accent2, '#f3ead8', .4)); }
+      return;
+    }
+    if (idiom === 'built' && clime.cold > .5 && r() < .35) { for (let i = 0; i < 6; i++) add(cyl(.12 * u, .12 * u, 1.2 * u, 6).rotateZ(Math.PI / 2).translate(.6 * u, 0, 0), m(-.6 * u, .12 * u + Math.floor(i / 3) * .24 * u, (i % 3 - 1) * .25 * u), C.wood); add(box(1.5 * u, .06 * u, .9 * u), m(0, .9 * u), C.roof); return; }
+    // Those who grow, secrete or spin their homes keep small things of the same make.
+    if (idiom !== 'built') {
+      const c = { agrarian: C.crop, devotional: C.accent, scholarly: C.window, mercantile: C.accent2, martial: C.accent, expansionist: C.accent2 }[civ.path] || C.accent;
+      if (idiom === 'wax') { for (let i = 0; i < 3; i++) cell(add, 0, 0, 0, .35 * u, (.6 + i * .3) * u, C.wall2); add(new THREE.CircleGeometry(.3 * u, 6).rotateX(-Math.PI / 2), m(0, .62 * u), c, civ.path === 'scholarly' && lights); }
+      else if (idiom === 'silk') { add(sunk(cyl(.05 * u, .05 * u, 1.8 * u + SINK, 4)), m(), C.wood); add(new THREE.SphereGeometry(.3 * u, 7, 5).scale(1, 1.5, 1), m(0, 1.1 * u, .1 * u), c); }
+      else { add(new THREE.SphereGeometry(.45 * u, 8, 6).scale(1, .8, 1), m(0, .3 * u), C.wall2); add(ball(.15 * u, 0), m(0, .75 * u), c, civ.path === 'scholarly' && lights); }
+      return;
+    }
+    switch (civ.path) {
+      case 'agrarian':
+        if (r() < .5) for (let i = 0; i < 2 + Math.floor(r() * 2); i++) add(cyl(.42 * u, .42 * u, .8 * u, 8).rotateZ(Math.PI / 2).translate(.4 * u, .42 * u, 0), m((i - 1) * .9 * u, 0, 0, r() * .3), mixC(C.crop, '#d9c27a', .5));
+        else { add(sunk(cyl(.55 * u, .55 * u, 1.8 * u + SINK, 10)), m(), level >= 3 ? C.metal2 : C.wood); add(cone(.62 * u, .6 * u, 10), m(0, 1.8 * u), C.roof); }
+        break;
+      case 'devotional':
+        if (r() < .5) { add(sunk(box(.8 * u, .7 * u + SINK, .6 * u)), m(), C.stone); add(cone(.55 * u, .7 * u, 4), m(0, .7 * u, 0, Math.PI / 4), C.accent); if (lights) add(ball(.12 * u, 0), m(0, .5 * u, .31 * u), C.flame, true); }
+        else { add(sunk(cyl(.05 * u, .05 * u, 2.4 * u + SINK, 4)), m(), C.wood); for (let i = 0; i < 3; i++) add(box(.04 * u, .9 * u, .25 * u), m(0, 1.3 * u - i * .25 * u, .15 * u, i * 1.2), i % 2 ? C.accent : C.accent2); }
+        break;
+      case 'scholarly':
+        if (level >= 3 && r() < .6) { for (let i = 0; i < 3; i++) rod(add, [x + Math.cos(i * 2.09) * .4 * u, y, z + Math.sin(i * 2.09) * .4 * u], [x, y + 1.1 * u, z], .03 * u, C.wood, false, 3); add(cyl(.12 * u, .18 * u, 1.1 * u, 8).rotateX(-.9), m(0, 1.1 * u, 0), C.metal2); }
+        else { add(sunk(cyl(.5 * u, .55 * u, .5 * u + SINK, 10)), m(), C.stone); add(box(.05 * u, .5 * u, .4 * u).translate(0, .25 * u, 0), m(0, .5 * u, 0, 0), C.metal); }
+        break;
+      case 'mercantile': {
+        for (const [px, pz] of [[-.6, -.4], [.6, -.4], [-.6, .4], [.6, .4]]) add(sunk(box(.07 * u, 1.5 * u + SINK, .07 * u)), m(px * u, 0, pz * u), C.wood);
+        for (let i = 0; i < 4; i++) add(box(.32 * u, .05 * u, 1 * u), m((i - 1.5) * .32 * u, 1.55 * u, 0), i % 2 ? '#f2ede4' : C.accent);
+        add(box(1.1 * u, .5 * u, .6 * u), m(0, 0, 0), C.wood); add(box(.9 * u, .2 * u, .45 * u), m(0, .5 * u, 0), C.crop);
+        break;
+      }
+      case 'martial':
+        for (let i = 0; i < 4; i++) add(sunk(cone(.13 * u, 1.3 * u + SINK, 5)), m((i - 1.5) * .35 * u, 0, 0, 0), C.wood);
+        add(sunk(cyl(.04 * u, .04 * u, 2.2 * u + SINK, 4)), m(.9 * u), C.wood); add(box(.04 * u, .5 * u, .7 * u), m(.9 * u, 1.65 * u, .35 * u), C.accent);
+        break;
+      default: // expansionist: a mast with a pennant (a small dish once they listen to the sky)
+        add(sunk(cyl(.05 * u, .06 * u, 2.6 * u + SINK, 4)), m(), C.metal);
+        if (level >= 4) add(new THREE.SphereGeometry(.45 * u, 8, 3, 0, Math.PI * 2, 0, .8), m(0, 2.2 * u, 0).multiply(L(0, 0, 0, -.9, 0, 0)), C.metal2);
+        else add(box(.04 * u, .35 * u, .8 * u), m(0, 2.3 * u, .4 * u), C.accent);
+    }
+    if (level >= 5 && r() < .35) { add(sunk(cyl(.05 * u, .05 * u, .9 * u + SINK, 4)), m(-1 * u, 0, .4 * u), C.metal); add(box(1.3 * u, .05 * u, .8 * u), m(-1 * u, .95 * u, .4 * u).multiply(L(0, 0, 0, -.5, 0, 0)), '#1d2c55'); }
+  };
   const common = {
     cairn(add) {
       let y = 0; const k = 3 + Math.floor(r() * 3);
@@ -354,7 +638,7 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   // stacks, drying racks, stones, a lamp), on its own ground and never across the door.
   const handy = civ.family === 'hands' || civ.family === 'tentacles', grounded = WALKERS.includes(civ.family) || ['burrowers', 'web', 'hive'].includes(civ.family);
   const yard = (add, gy, fp, k) => {
-    if (!gy || k > 1.6 || civ.colony) return;
+    if (!gy || k > 1.6 || civ.colony || civ.underwater) return; // no pots, racks or stepping stones on the sea floor
     const at = (a, d) => { const x = Math.sin(a) * d, z = Math.cos(a) * d, y = gy(x, z); return y === null ? null : [x, y, z]; };
     if (WALKERS.includes(civ.family) && level >= 2) for (let i = 0; i < 3; i++) { // stepping stones to the door
       const p = at((r() - .5) * .3, fp * (.95 + i * .3)); if (p) add(sunk(cyl(.3 * u, .34 * u, SINK + .07, 6)), L(p[0], p[1], p[2], 0, r() * 3), level >= 3 ? C.plaza : C.stone);
@@ -588,6 +872,69 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       },
       great(add, k) { this.home(add, k * 2.6); },
       small(add) { add(sunk(cyl(1.6 * u, 1.6 * u, SINK)), L(), C.wall2); for (let i = 0; i < 3; i++) add(ring(1.2 * u * (1 - i * .2), .45 * u, 10), L(0, .4 * u + i * .55 * u, 0), C.wall); },
+    },
+    // ---- Sea builders, on the sea floor (no roofs, chimneys or doors to keep weather out) ----
+    conch: {
+      // A real spiral shell standing on its broad last whorl: a tapering tube winding down
+      // from the apex, banded, knobbed along the shoulder, its flared aperture lit from within.
+      home(add, k) {
+        const H = 2.6 * u * k * tall, Rm = 1.3 * u * k, turns = 2.6 + r() * .9, segs = 44, pts = [], radii = [];
+        for (let i = 0; i <= segs; i++) {
+          const t = i / segs, a = t * turns * Math.PI * 2, tr = Rm * (.06 + .52 * t ** 1.1);
+          pts.push(new THREE.Vector3(Math.cos(a) * Rm * .7 * t, H * (1 - t) ** 1.3 + tr * .85, Math.sin(a) * Rm * .7 * t)); radii.push(tr);
+        }
+        // Turn the shell so its aperture faces the street (+z).
+        const end = pts[segs], face = L(0, 0, 0, 0, Math.atan2(end.x, end.z) - Math.PI * .15, 0), at = (m = L()) => face.clone().multiply(m);
+        add(sunk(cyl(Rm * 1.05, Rm * 1.15, SINK + .12 * u, 12)), L(), C.wall2);
+        const bands = 3;
+        for (let b = 0; b < bands; b++) { const i0 = Math.floor(b / bands * segs), i1 = Math.floor((b + 1) / bands * segs); add(taperTube(pts.slice(i0, i1 + 1), radii.slice(i0, i1 + 1), 12), at(), b % 2 ? C.wall2 : C.wall); }
+        for (let i = 6; i < segs - 2; i += 4) { const p = pts[i], out = V(p.x, 0, p.z).normalize(); add(ball(radii[i] * .28, 0), at(L(p.x + out.x * radii[i] * .85, p.y + radii[i] * .45, p.z + out.z * radii[i] * .85)), C.accent2); }
+        const tan = pts[segs].clone().sub(pts[segs - 1]).normalize(), q = new THREE.Quaternion().setFromUnitVectors(V(0, 0, 1), tan), lipM = new THREE.Matrix4().compose(end, q, V(1, 1, 1));
+        add(new THREE.TorusGeometry(radii[segs] * 1.02, radii[segs] * .2, 6, 16), at().multiply(lipM), C.trim);
+        add(new THREE.CircleGeometry(radii[segs] * .95, 14), at().multiply(lipM).multiply(L(0, 0, -.02 * u)), lights ? C.window : C.door, lights);
+        if (lights) for (let i = 10; i < segs - 4; i += 7) { const p = pts[i], out = V(p.x, 0, p.z).normalize(); add(ball(.09 * u * k, 0), at(L(p.x + out.x * radii[i] * .98, p.y, p.z + out.z * radii[i] * .98)), C.window, true); }
+      },
+      great(add, k) { this.home(add, k * 2.6); for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2 + .3, d = 4.2 * u * k; add(ball(.5 * u * k, 1), L(Math.cos(a) * d, .3 * u, Math.sin(a) * d, 0, 0, 0, 1, .6, 1), C.accent2); } },
+      small(add) { add(sunk(cyl(1.4 * u, 1.5 * u, SINK)), L(), C.wall2); add(cone(1.2 * u, 2.4 * u, 10), L(0, 0, 0, 0, 0, .12), C.wall); },
+    },
+    polyp: {
+      // A colony of soft tubes rising from a shared mound, each open at the top, its rim
+      // fringed with feeding tentacles and its throat glowing.
+      home(add, k) {
+        const base = 1.4 * u * k, n = 3 + Math.floor(r() * 4);
+        add(sunk(ball(base * 1.15, 1)), L(0, 0, 0, 0, 0, 0, 1, .4, 1), C.wall2);
+        for (let i = 0; i < n; i++) {
+          const a = i / n * Math.PI * 2 + r() * .5, d = i ? base * (.5 + r() * .25) : 0, x = Math.cos(a) * d, z = Math.sin(a) * d;
+          const h = (1.9 + r() * 1.6) * u * k * tall * (i ? .72 : 1), rad = (.42 + r() * .16) * u * k * (i ? .8 : 1);
+          add(cyl(rad * 1.18, rad * .82, h, 12), L(x, 0, z), i % 2 ? C.wall : C.wall2);
+          add(ring(rad * .95, .05 * u * k, 12), L(x, h * .55, z), C.trim);
+          add(ring(rad * 1.18, .09 * u * k, 12), L(x, h, z), C.trim);
+          add(new THREE.CircleGeometry(rad * 1.05, 12).rotateX(-Math.PI / 2), L(x, h - .15 * u, z), lights ? C.window : C.door, lights);
+          const m = 9 + Math.floor(r() * 5);
+          for (let j = 0; j < m; j++) { const b = j / m * Math.PI * 2; add(cone(.06 * u * k, (.45 + r() * .3) * u * k, 4), L(x + Math.cos(b) * rad * 1.15, h, z + Math.sin(b) * rad * 1.15, Math.sin(b) * .8, 0, -Math.cos(b) * .8), j % 2 ? C.accent : C.accent2); }
+        }
+        add(new THREE.TorusGeometry(.55 * u * k, .14 * u * k, 5, 10, Math.PI), L(0, 0, base * .78), C.trim);
+        add(dome(.48 * u * k, 8), L(0, 0, base * .74, Math.PI / 2, 0, 0, 1, 1, .45), C.door);
+      },
+      great(add, k) { this.home(add, k * 2.4); },
+      small(add) { for (let i = 0; i < 3; i++) add(cyl(.5 * u, .35 * u, (2 + i) * u, 8), L((i - 1) * 1.1 * u, 0, 0), i % 2 ? C.wall : C.wall2); },
+    },
+    kelpweave: {
+      // A dome woven from crossing arches of kelp, a skin of living blades between them,
+      // gas floats clustered on top and long blades streaming up from the crown.
+      home(add, k) {
+        const R = 1.5 * u * k, H = 2 * u * k * tall, ribs = 6;
+        add(sunk(cyl(R * 1.04, R * 1.1, SINK + .1 * u, 12)), L(), C.wall2);
+        add(dome(R * .95, 12), L(0, 0, 0, 0, 0, 0, 1, H / R * .95, 1), C.wall2);
+        for (let i = 0; i < ribs; i++) add(new THREE.TorusGeometry(R, .11 * u * k, 5, 16, Math.PI).scale(1, H / R, 1), L(0, 0, 0, 0, i / ribs * Math.PI, 0), i % 2 ? C.wall : C.leaf);
+        for (let j = 0; j < 5; j++) { const a = j / 5 * Math.PI * 2; add(ball(.3 * u * k, 1), L(Math.cos(a) * R * .3, H + .15 * u, Math.sin(a) * R * .3), C.accent2, lights && j === 0); }
+        for (let j = 0; j < 4; j++) { const a = j / 4 * Math.PI * 2 + .4; add(box(.35 * u * k, 2.2 * u * k, .03 * u), L(Math.cos(a) * .3 * u, H, Math.sin(a) * .3 * u, Math.sin(a) * .35, a, -Math.cos(a) * .35), C.leaf); }
+        add(new THREE.TorusGeometry(.6 * u * k, .12 * u * k, 5, 10, Math.PI), L(0, 0, R * .9), C.wall);
+        add(dome(.52 * u * k, 8), L(0, 0, R * .86, Math.PI / 2, 0, 0, 1, 1, .45), C.door);
+        if (lights) for (let j = 0; j < 4; j++) { const a = j / 4 * Math.PI * 2 + .8; add(ball(.1 * u * k, 0), L(Math.cos(a) * R * .8, H * .45, Math.sin(a) * R * .8), C.window, true); }
+      },
+      great(add, k) { this.home(add, k * 2.5); },
+      small(add) { add(sunk(dome(1.4 * u, 8)), L(0, 0, 0, 0, 0, 0, 1, 1.2, 1), C.wall); },
     },
     stiltpods: {
       home(add, k) { // a pod on three braced legs, a banded rim, a rope ladder and a finial
@@ -1026,7 +1373,7 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       add(box(1.6 * u, 1.2 * u, 4 * u), L(0, .9 * u, 4 * u, -ang, 0, 0), C.hull);
       for (let i = 0; i < 12; i++) add(box(2.4 * u, .1 * u, .3 * u), L(0, .95 * u + (len * i / 12) * Math.sin(ang), (len * i / 12) * Math.cos(ang)), C.window, true);
     },
-  }[{ hands: 'none', tentacles: 'grown', tripods: 'cradle', drifters: 'tether', hive: 'silo', web: 'silo', burrowers: 'silo', nests: 'rail', grazers: 'track', rollers: 'track' }[civ.family]];
+  }[{ hands: orbital ? 'rocket' : 'none', tentacles: 'grown', tripods: 'cradle', drifters: 'tether', hive: 'silo', web: 'silo', burrowers: 'silo', nests: 'rail', grazers: 'track', rollers: 'track' }[civ.family]];
 
   // --- The spaceport ---------------------------------------------------------
   // Each civilization's own ship design (ships.js) on a paved apron: the main ship stands
@@ -1094,7 +1441,8 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   // The capital and up to three more places near the site are built in full.
   const near = [places[0], ...places.slice(1).filter(s => s.v.angleTo(siteV) * radius - s.radius < DETAIL).slice(0, 3)], far = places.filter(s => !near.includes(s));
   // Builders' herds move into the places within walking range (never out to a distant capital).
-  near.filter(s => s.v.angleTo(siteV) * radius < 220).forEach((s, i) => { if (homes[i]) homes[i].copy(s.v); });
+  // (Giants build on a larger scale, so their capital may stand a little farther out.)
+  near.filter(s => s.v.angleTo(siteV) * radius < (s === places[0] ? 300 : 220)).forEach((s, i) => { if (homes[i]) homes[i].copy(s.v); });
   for (const s of near) sites.push(s.v.clone());
   const SIZE = { camp: .45, village: .7, colony: .8, town: .95, city: 1.2, metropolis: 1.55, capital: 1.75, megacity: 2.1 };
 
@@ -1110,9 +1458,10 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
     return out;
   };
   const LANES = [-1, -1 / 3, 1 / 3, 1];
-  const strip = (points0, width, colour, lift = .2) => {
-    if (ground.count() > GROUND_BUDGET) return;
-    const points = resample(points0, 1.4), pos = [], lanes = width > 2.2 ? LANES : [-1, 0, 1];
+  const strip = (points0, width, colour, lift = .2, into = ground, step = 1.4) => {
+    if (points0.length > 1 && into === ground) paths.push(resample(points0, 3).filter((n) => !terrain.isLiquid(n))); // for walking along (fauna-mesh.js)
+    if (into === ground && ground.count() > GROUND_BUDGET) return;
+    const points = resample(points0, step), pos = [], lanes = width > 2.2 && step < 2 ? LANES : [-1, 0, 1];
     let prev = null;
     for (let i = 0; i < points.length; i++) {
       const n = points[i], nxt = points[Math.min(i + 1, points.length - 1)], prv = points[Math.max(i - 1, 0)];
@@ -1124,17 +1473,17 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       if (cur && prev) for (let j = 0; j < lanes.length - 1; j++) pos.push(...prev[j].toArray(), ...prev[j + 1].toArray(), ...cur[j].toArray(), ...prev[j + 1].toArray(), ...cur[j + 1].toArray(), ...cur[j].toArray());
       prev = cur;
     }
-    if (pos.length) ground.add(flatGeometry(pos), new THREE.Matrix4(), colour);
+    if (pos.length) into.add(flatGeometry(pos), new THREE.Matrix4(), colour);
   };
-  const disc = (centre, rad, colour, lift = .18) => {
-    const f = frameAt(centre), pos = [], rings = Math.max(4, Math.ceil(rad / 1.2)), segs = Math.max(18, Math.ceil(rad * Math.PI * 2 / 1.4)), pt = (d, a) => groundPoint(pointAt(f, d, a), lift);
+  const disc = (centre, rad, colour, lift = .18, into = ground) => {
+    const f = frameAt(centre), pos = [], rings = Math.min(10, Math.max(4, Math.ceil(rad / 1.2))), segs = Math.min(56, Math.max(18, Math.ceil(rad * Math.PI * 2 / 1.4))), /* (the ground under towns is levelled, so a coarse disc lies flat on it) */ pt = (d, a) => groundPoint(pointAt(f, d, a), lift);
     for (let i = 0; i < rings; i++) for (let j = 0; j < segs; j++) {
       const d0 = rad * i / rings, d1 = rad * (i + 1) / rings, a0 = j / segs * Math.PI * 2, a1 = (j + 1) / segs * Math.PI * 2;
       const p00 = pt(d0, a0), p01 = pt(d0, a1), p10 = pt(d1, a0), p11 = pt(d1, a1);
       if (!p00 || !p01 || !p10 || !p11) continue;
       pos.push(...p00.toArray(), ...p11.toArray(), ...p10.toArray(), ...p00.toArray(), ...p01.toArray(), ...p11.toArray());
     }
-    if (pos.length) ground.add(flatGeometry(pos), new THREE.Matrix4(), colour);
+    if (pos.length) into.add(flatGeometry(pos), new THREE.Matrix4(), colour);
   };
   const paved = level >= 3, walkers = WALKERS.includes(civ.family);
   const streetColour = paved ? C.road : C.path, streetWidth = (paved ? 2.4 : 1.5) * Math.min(u, 1.6);
@@ -1144,7 +1493,250 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   // them that are bigger and taller toward the core, landmarks in the core of cities,
   // a ring road in big cities, fields beyond the edge, and a spaceport for capitals.
   const foot = (k) => 2 * u * k * (civ.culture === 'terraced' ? 1.2 : 1);
-  const home = (k) => Object.assign((add, gy) => { style.home(add, k); yard(add, gy, foot(k), k); }, { found: true }), great = (k) => Object.assign((add) => style.great(add, k), { found: true });
+  // (chimneys smoke from some homes on cold worlds)
+  const home = (k) => Object.assign((add, gy) => { const own = varied(add); style.home(own, k); yard(own, gy, foot(k), k); flair(own, gy, foot(k), k); if (clime.cold > .4 && civ.hearths && smokeFrom.length < 18 && r() < .3) smokeFrom.push({ local: [foot(k) * .3, 2.9 * u * k * tall, -foot(k) * .2], at: null, k: .45 }); }, { found: true, dwelling: k }), great = (k) => Object.assign((add) => style.great(add, k), { found: true });
+  // --- What each path builds ----------------------------------------------------
+  // Beyond homes, every town of village builders and up shows what its people care about
+  // (civilizations.mjs path): granaries and mills, a temple and wayside shrines, an
+  // observatory and a hall of records, a market round the square and warehouses, a wall
+  // with gates where the streets run out and watchtowers, or a founders' monument.
+  const smokeFrom = []; // tops of smokestacks (industrial), where smoke rises from in update()
+  const P = {
+    forge(add) { // a stone forge: a squat hall, a tall chimney, a furnace glowing in its mouth, an anvil outside
+      const w = 3 * u, d = 2.4 * u, h = 1.9 * u * tall;
+      add(sunk(box(w, h + SINK, d)), L(), C.stone); gable(add, w * 1.05, d * 1.15, h);
+      add(sunk(box(.9 * u, h * 2.1 + SINK, .9 * u)), L(w * .3, 0, -d * .25), C.stone2);
+      add(box(1.1 * u, .9 * u, .1), L(-w * .15, 0, d * .5 + .01), C.door); add(box(.8 * u, .55 * u, .05), L(-w * .15, .1 * u, d * .5 + .06), C.ember, true);
+      add(box(.6 * u, .45 * u, .3 * u), L(w * .25, 0, d * .5 + .9 * u), C.stone2); add(box(.75 * u, .18 * u, .32 * u), L(w * .25, .45 * u, d * .5 + .9 * u), C.metal);
+      smokeFrom.push({ local: [w * .3, h * 2.1, -d * .25], at: null, k: .6 });
+    },
+    factory: Object.assign((add) => { // a long hall under saw-tooth roofs, with banded smokestacks
+      const w = 9 * u, d = 6 * u, h = 3 * u * tall, teeth = 4;
+      add(sunk(box(w, h + SINK, d)), L(), C.wall2);
+      for (let i = 0; i < teeth; i++) { const x = (i + .5) / teeth * w - w / 2; add(new THREE.CylinderGeometry(0, d * .5, w / teeth, 3, 1).rotateZ(Math.PI / 2).rotateY(Math.PI / 2).scale(1, .9, 1), L(x, h + d * .22, 0, 0, Math.PI / 2, 0), C.roof); if (lights) add(box(.1, d * .2, d * .9), L(x - w / teeth * .45, h + d * .1, 0), C.window, true); }
+      for (let i = 0; i < 2 + (r() < .5 ? 1 : 0); i++) {
+        const x = (i - .5) * 2.4 * u, z = -d * .3, sh = (9 + r() * 4) * u * tall;
+        add(cyl(.55 * u, .8 * u, sh, 10), L(x, 0, z), civ.material === 'wood' || civ.material === 'adobe' ? '#9b6a55' : civ.material === 'ice' ? C.metal2 : mixC(C.stone2, C.accent, .2)); // brick, steel or stone, by what this world builds with
+        for (let y = sh * .7; y < sh; y += sh * .12) add(cyl(.6 * u, .6 * u, sh * .05, 10), L(x, y, z), C.trim);
+        add(ball(.14 * u, 0), L(x, sh + .1 * u, z), C.beacon, 'blink');
+        smokeFrom.push({ local: [x, sh, z], at: null, k: 1 });
+      }
+      windows(add, w, h * .55, d / 2 + .02, 6);
+    }, { found: 'always' }),
+    waterTower(add) { const h = 7 * u * tall; for (let i = 0; i < 4; i++) { const a = i * 1.571 + .785; rod(add, [Math.cos(a) * 1.4 * u, -SINK, Math.sin(a) * 1.4 * u], [Math.cos(a) * .9 * u, h, Math.sin(a) * .9 * u], .1 * u, C.metal, false, 4); } add(cyl(1.6 * u, 1.6 * u, 2.2 * u, 12), L(0, h, 0), C.metal2); add(cone(1.7 * u, .9 * u, 12), L(0, h + 2.2 * u, 0), C.metal); },
+    granary(add) { for (let i = 0; i < 3; i++) { const x = (i - 1) * 1.5 * u, h = (3.2 + (i % 2) * .8) * u * tall; add(sunk(cyl(.7 * u, .7 * u, h + SINK, 12)), L(x, 0, 0), level >= 3 ? C.metal2 : C.wall); add(cone(.78 * u, .8 * u, 12), L(x, h, 0), C.roof); for (let y = .9 * u; y < h; y += 1.1 * u) add(cyl(.72 * u, .72 * u, .08 * u, 12), L(x, y, 0), C.wall2); } },
+    windmill(add) {
+      const h = 6 * u * tall; add(sunk(cyl(.9 * u, 1.4 * u, h + SINK, 8)), L(), C.wall); add(cone(1.1 * u, 1.4 * u, 8), L(0, h, 0), C.roof);
+      for (let i = 0; i < 4; i++) add(box(.5 * u, 3.6 * u, .06 * u).translate(0, 1.9 * u, 0), L(0, h - .3 * u, 1.2 * u, 0, 0, i * 1.571 + .3), i % 2 ? '#efe6d4' : C.accent);
+      add(box(.6 * u, 1 * u, .1), L(0, 0, 1.3 * u), C.door);
+    },
+    temple: (k) => Object.assign((add) => {
+      const w = 4.5 * u * k, h = 3.4 * u * k * tall;
+      for (let i = 0; i < 3; i++) add(sunk(box(w * (1.5 - i * .15), .5 * u * k + (i ? 0 : SINK), w * (1.9 - i * .15))), L(0, i * .5 * u * k, 0), i % 2 ? C.stone2 : C.stone);
+      const y0 = 1.5 * u * k;
+      for (let i = 0; i < 6; i++) for (const sx of [-1, 1]) add(cyl(.22 * u * k, .26 * u * k, h, 8), L(sx * w * .55, y0, (i / 5 - .5) * w * 1.35), C.trim);
+      add(box(w * .8, h * .95, w * 1.1), L(0, y0, -w * .05), C.wall);
+      add(box(w * 1.25, .4 * u * k, w * 1.6), L(0, y0 + h, 0), C.stone);
+      if (['domes', 'shells', 'coral', 'burrows', 'rings'].includes(civ.culture)) add(dome(w * .55, 14), L(0, y0 + h + .4 * u * k, 0), C.accent);
+      else gable(add, w * 1.6, w * 1.3, y0 + h + .4 * u * k);
+      add(box(w * .3, h * .7, .1 * u), L(0, y0, w * .51), C.door);
+      for (const sx of [-1, 1]) { add(sunk(cyl(.07 * u, .07 * u, h * 1.6 + SINK, 4)), L(sx * w * .9, 0, w * 1.05), C.wood); add(box(.05 * u, h * .6, .7 * u * k), L(sx * w * .9, h * .9, w * 1.05 + .35 * u * k), C.accent); if (lights) add(ball(.25 * u, 1), L(sx * w * .55, y0 + .1, w * .95), C.flame, true); }
+    }, { found: 'always' }),
+    shrine(add) { add(sunk(box(1.1 * u, 1.1 * u + SINK, .9 * u)), L(), C.stone); add(cone(.85 * u, 1.1 * u, 4), L(0, 1.1 * u, 0, 0, Math.PI / 4, 0), C.accent); add(box(.4 * u, .5 * u, .05), L(0, .3 * u, .46 * u), C.door); if (lights) add(ball(.12 * u, 0), L(0, .5 * u, .5 * u), C.flame, true); },
+    observatory: Object.assign((add) => {
+      const rad = 2.4 * u, h = 3.2 * u * tall, az = r() * 6.28;
+      add(sunk(cyl(rad, rad * 1.05, h + SINK, 14)), L(), C.wall); add(cyl(rad * 1.04, rad * 1.04, .3 * u, 14), L(0, h, 0), C.trim);
+      add(dome(rad, 14), L(0, h + .3 * u, 0, 0, az, 0), level >= 3 ? C.metal2 : C.wall2);
+      add(box(.7 * u, rad * 1.02, rad * 2.02).translate(0, rad * .5, 0), L(0, h + .3 * u, 0, 0, az, 0), C.door);
+      add(cyl(.35 * u, .45 * u, 2.8 * u, 8).rotateX(-.75), L(0, h + .9 * u, 0, 0, az, 0), C.metal);
+      add(box(.8 * u, 1.6 * u, .1), L(0, 0, rad * 1.01), C.door); if (lights) add(box(.5 * u, .4 * u, .05), L(rad * .7, h * .6, rad * .72, 0, .8, 0), C.window, true);
+    }, { found: 'always' }),
+    library(add) {
+      const w = 5 * u, d = 3 * u, h = 2.6 * u * tall;
+      add(sunk(box(w * 1.1, .4 * u + SINK, d * 1.4)), L(), C.stone); add(box(w, h, d), L(0, .4 * u, -d * .15), C.wall);
+      for (let i = 0; i < 7; i++) add(cyl(.18 * u, .2 * u, h, 8), L((i / 6 - .5) * w * .95, .4 * u, d * .52), C.trim);
+      add(box(w * 1.06, .35 * u, d * 1.35), L(0, .4 * u + h, 0), C.stone); gable(add, w * 1.06, d * 1.35, .75 * u + h);
+      windows(add, w, h * .5 + .4 * u, d * .36 - .1, 4);
+    },
+    stall(add) {
+      const c1 = pick(C.accent, C.accent2, '#d8a03a', '#4a8fc9');
+      for (const [px, pz] of [[-1, -.6], [1, -.6], [-1, .6], [1, .6]]) add(sunk(box(.09 * u, 1.9 * u + SINK, .09 * u)), L(px * u, 0, pz * u), C.wood);
+      for (let i = 0; i < 6; i++) add(box(.36 * u, .06 * u, 1.5 * u), L((i - 2.5) * .36 * u, 2 * u, 0, .12, 0, 0), i % 2 ? '#f2ede4' : c1);
+      add(box(2 * u, .8 * u, .7 * u), L(0, 0, .2 * u), C.wood);
+      for (let i = 0; i < 4; i++) add(ball(.18 * u, 0), L((i - 1.5) * .4 * u, .9 * u, .2 * u), pick(C.crop, C.accent2, '#d06a3a'));
+      if (lights) add(ball(.1 * u, 0), L(0, 1.8 * u, .5 * u), C.window, true);
+    },
+    warehouse(add, gy) { const w = 4 * u, l = 7 * u, h = 2.6 * u * tall; add(sunk(box(w, h + SINK, l)), L(), C.wall2); gable(add, l * 1.04, w * 1.12, h); for (const z of [-1, 1]) add(box(1.6 * u, 1.9 * u, .08), L(0, 0, z * l * .5), C.door); },
+    watchtower(add) {
+      const h = 7 * u * tall, w = 1.1 * u;
+      for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) rod(add, [x * w, -SINK, z * w], [x * w * .7, h, z * w * .7], .12 * u, level >= 3 ? C.stone2 : C.wood, false, 4);
+      add(box(w * 2.2, .25 * u, w * 2.2), L(0, h, 0), C.wood); for (let i = 0; i < 4; i++) add(box(w * 2.2, .9 * u, .1 * u), L(0, h, w * 1.1, 0, i * 1.571, 0), level >= 3 ? C.stone : C.wood);
+      add(cone(w * 1.8, 1.4 * u, 4), L(0, h + 1.9 * u, 0, 0, Math.PI / 4, 0), C.roof);
+      add(sunk(cyl(.04 * u, .04 * u, 2 * u + SINK, 3)), L(0, h + 2.9 * u, 0), C.wood); add(box(.04 * u, .5 * u, .8 * u), L(0, h + 4.2 * u, .4 * u), C.accent);
+      if (lights) add(ball(.2 * u, 1), L(0, h + .7 * u, 0), C.flame, true);
+    },
+    wall: (len) => Object.assign((add, gy) => {
+      const gl = (x) => gy?.(x, 0) ?? 0;
+      if (level === 2) { for (let x = -len / 2; x <= len / 2; x += .45 * u) add(sunk(cone(.2 * u, 2.4 * u + SINK, 5)), L(x, gl(x), 0), C.wood); return; }
+      const h = (level >= 5 ? 2.6 : 2) * u * Math.min(1.25, tall), c = level >= 5 ? C.metal2 : C.stone;
+      for (const x of [-len / 4, len / 4]) add(sunk(box(len / 2 + .05, h + SINK + 1.2, .9 * u)).translate(0, -1.2, 0), L(x, gl(x), 0), c);
+      for (let x = -len / 2 + .4 * u; x < len / 2; x += .9 * u) add(box(.45 * u, .5 * u, .95 * u), L(x, gl(x) + h, 0), c);
+      if (level >= 5) add(box(len, .14 * u, .05), L(0, gl(0) + h * .8, .47 * u), C.window, true);
+    }, { found: false }),
+    monument(add) {
+      add(sunk(box(2.4 * u, .8 * u + SINK, 2.4 * u)), L(), C.stone);
+      const h = 9 * u * tall;
+      add(cone(.7 * u, h, 4), L(0, .8 * u, 0, 0, Math.PI / 4, 0), level >= 4 ? C.metal2 : C.stone2);
+      for (let i = 0; i < 2; i++) add(new THREE.TorusGeometry(1.4 * u + i * .5 * u, .07 * u, 3, 20), L(0, h * (.45 + i * .15), 0, 1.2 - i * .5, i, 0), C.accent);
+      add(ball(.3 * u, 1), L(0, h + 1 * u, 0), lights ? C.window : C.accent, lights);
+    },
+  };
+  // --- The same institutions in every builder's own idiom ---------------------------
+  // P above is the version for those who build with stone, timber, adobe, ice or glass.
+  // Those who grow, secrete or spin their homes build the same things their own way
+  // (IDIOMS), and each body family sets them on its own kind of ground (mounted): fliers
+  // raise them on perches, drifters hang them under gas-bags, burrowers sink them into
+  // mounds. Q(name, ...args) gives the right piece.
+  const idiom = civ.material === 'wax' ? 'wax' : civ.material === 'silk' ? 'silk' : civ.material === 'membrane' ? 'membrane' : ['grown', 'living', 'shell'].includes(civ.material) ? 'grown' : 'built';
+  const mountKind = civ.family === 'nests' ? 'perch' : civ.family === 'drifters' ? 'float' : civ.family === 'burrowers' || ['mounds', 'trapdoor', 'burrows'].includes(civ.culture) ? 'sunk' : 'ground';
+  const bulb = (add, x, y, z, rw, rh, c, glowing = false) => add(new THREE.SphereGeometry(rw, 10, 7).scale(1, rh / rw, 1), L(x, y + rh, z), c, glowing);
+  const cell = (add, x, y, z, w, h, c) => add(y ? cyl(w, w, h, 6) : sunk(cyl(w, w, h + SINK, 6)), L(x, y, z), c);
+  const strand = (add, a, b) => rod(add, a, b, .025 * u, C.line === '#3a3330' ? mixC(C.wall, '#ffffff', .4) : C.line, false, 3);
+  const vats = (add, n, shape) => { // a cluster of vessels joined by pipes, venting smoke: grown, secreted or spun works
+    for (let i = 0; i < n; i++) {
+      const a = i / n * 6.283, x = Math.cos(a) * 2.6 * u, z = Math.sin(a) * 2.6 * u, h = (2.4 + (i % 2)) * u * tall;
+      if (shape === 'cell') { cell(add, x, 0, z, 1.3 * u, h, i % 2 ? C.wall : C.wall2); add(new THREE.CircleGeometry(1.05 * u, 6).rotateX(-Math.PI / 2), L(x, h + .02, z), C.ember, true); }
+      else if (shape === 'cone') { add(sunk(cone(1.5 * u, h * 1.4 + SINK, 9)), L(x, 0, z), i % 2 ? C.wall : C.wall2); }
+      else bulb(add, x, -.4 * u, z, 1.4 * u, h * .6, i % 2 ? C.wall : C.wall2);
+      rod(add, [x, h * .5, z], [0, 1.5 * u, 0], .2 * u, C.wall2, false, 5);
+    }
+    add(sunk(cyl(.7 * u, .9 * u, 7 * u * tall + SINK, 8)), L(), C.wall2); add(cyl(.75 * u, .75 * u, .5 * u, 8), L(0, 6.5 * u * tall, 0), C.accent);
+    smokeFrom.push({ local: [0, 7 * u * tall, 0], at: null, k: 1 });
+  };
+  const IDIOMS = {
+    grown: {
+      temple: (k) => Object.assign((add) => { // a great swelling bulb with a glowing heart, ringed by grown pillars
+        for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; add(sunk(cone(.45 * u * k, 5 * u * k * tall + SINK, 6)), L(Math.cos(a) * 4.4 * u * k, 0, Math.sin(a) * 4.4 * u * k, Math.sin(a) * .15, 0, -Math.cos(a) * .15), C.accent2); }
+        bulb(add, 0, -.5 * u, 0, 3.2 * u * k, 3.4 * u * k * tall, C.wall); bulb(add, 0, 5.2 * u * k * tall, 0, 1.7 * u * k, 1.9 * u * k * tall, C.wall2);
+        add(new THREE.SphereGeometry(1.1 * u * k, 10, 7), L(0, 2.6 * u * k * tall, 3.1 * u * k * .82), C.window, true);
+        add(new THREE.TorusGeometry(3.25 * u * k, .14 * u, 3, 20).rotateX(Math.PI / 2), L(0, 2.8 * u * k * tall, 0), C.accent, lights);
+      }, { found: 'always' }),
+      shrine(add) { add(sunk(cone(.25 * u, 1.6 * u + SINK, 6)), L(), C.accent2); bulb(add, 0, 1.4 * u, 0, .45 * u, .55 * u, C.wall); add(ball(.2 * u, 1), L(0, 1.95 * u, .35 * u), C.window, lights); },
+      granary(add) { for (let i = 0; i < 4; i++) bulb(add, (i % 2 - .5) * 2 * u, -.3 * u, (Math.floor(i / 2) - .5) * 2 * u, 1 * u, 1.5 * u * tall, i % 2 ? C.wall : C.wall2); },
+      observatory: Object.assign((add) => { // a great eye: a bulb on a stalk with a glowing lens turned to the sky
+        add(sunk(cyl(.8 * u, 1.3 * u, 4 * u * tall + SINK, 8)), L(), C.wall2); bulb(add, 0, 3.4 * u * tall, 0, 2 * u, 1.7 * u, C.wall);
+        add(new THREE.CircleGeometry(1.2 * u, 16), L(0, 5.4 * u * tall, .9 * u, -1.1, 0, 0), C.window, true);
+      }, { found: 'always' }),
+      library(add) { for (let i = 0; i < 3; i++) bulb(add, (i - 1) * 2.8 * u, -.4 * u, 0, 1.7 * u, 1.9 * u * tall, i === 1 ? C.wall : C.wall2); for (let i = 0; i < 6; i++) add(ball(.22 * u, 0), L((i - 2.5) * 1.3 * u, 1.4 * u, 1.55 * u), C.window, lights); },
+      stall(add) { bulb(add, 0, -.2 * u, 0, 1.2 * u, .9 * u, C.wall); add(box(1.4 * u, .5 * u, .1), L(0, .3 * u, 1.05 * u), C.door); for (let i = 0; i < 3; i++) add(ball(.18 * u, 0), L((i - 1) * .4 * u, .2 * u, 1.3 * u), pick(C.crop, C.accent2)); },
+      warehouse(add) { add(new THREE.SphereGeometry(1, 12, 7).scale(2.2 * u, 1.6 * u * tall, 4 * u), L(0, .6 * u, 0), C.wall2); },
+      watchtower(add) { add(sunk(cone(1.1 * u, 9 * u * tall + SINK, 7)), L(), C.wall2); bulb(add, 0, 7 * u * tall, 0, 1.3 * u, 1.1 * u, C.wall); add(ball(.2 * u, 1), L(0, 9.4 * u * tall, 0), C.flame, lights); },
+      wall: (len) => Object.assign((add, gy) => { for (let x = -len / 2; x <= len / 2; x += .55 * u) add(sunk(cone(.3 * u, (1.6 + r()) * u + SINK, 5)), L(x, gy?.(x, 0) ?? 0, (r() - .5) * .4 * u, (r() - .5) * .4, 0, (r() - .5) * .4), r() < .5 ? C.leaf : C.accent2); }, { found: false }), // a thorn hedge
+      monument(add) { let y = 0, w = 1.2 * u; for (let i = 0; i < 7; i++) { add(new THREE.TorusGeometry(w, w * .35, 5, 12).rotateX(Math.PI / 2), L(i * .15 * u, y, 0, 0, i * .6, 0), i % 2 ? C.wall : C.accent2); y += w * .7; w *= .82; } add(cone(w, 1.5 * u, 8), L(0, y, 0), C.accent); },
+      forge(add) { for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; add(ball(.45 * u, 0), L(Math.cos(a) * 1.4 * u, .1, Math.sin(a) * 1.4 * u), C.stone2); } add(cyl(1.1 * u, 1.1 * u, .12, 10), L(0, .05, 0), C.ember, true); smokeFrom.push({ local: [0, .3 * u, 0], at: null, k: .6 }); },
+      factory: Object.assign((add) => vats(add, 4, 'bulb'), { found: 'always' }),
+      waterTower(add) { add(sunk(cyl(.4 * u, .7 * u, 6 * u * tall + SINK, 7)), L(), C.wall2); bulb(add, 0, 5.4 * u * tall, 0, 1.7 * u, 1.4 * u, C.wall); },
+    },
+    wax: {
+      temple: (k) => Object.assign((add) => { // a great waxen cell crowned by a glowing royal cell, small cells round it
+        cell(add, 0, 0, 0, 3 * u * k, 6 * u * k * tall, C.wall);
+        for (let i = 0; i < 6; i++) { const a = i / 6 * 6.283 + .52; cell(add, Math.cos(a) * 4.6 * u * k, 0, Math.sin(a) * 4.6 * u * k, 1.4 * u * k, 3 * u * k * tall, C.wall2); }
+        add(cyl(1.6 * u * k, 1.9 * u * k, 2.6 * u * k, 6), L(0, 6 * u * k * tall, 0), C.accent); add(new THREE.CircleGeometry(1.4 * u * k, 6).rotateX(-Math.PI / 2), L(0, 8.62 * u * k * tall, 0), C.window, true);
+      }, { found: 'always' }),
+      shrine(add) { cell(add, 0, 0, 0, .6 * u, 1.3 * u, C.wall); add(new THREE.CircleGeometry(.45 * u, 6).rotateX(-Math.PI / 2), L(0, 1.32 * u, 0), C.window, lights); },
+      granary(add) { for (let i = 0; i < 7; i++) { const a = i / 6 * 6.283, d = i ? 1.6 * u : 0; cell(add, Math.cos(a) * d, 0, Math.sin(a) * d, .9 * u, (2.4 + (i % 3) * .5) * u * tall, C.wall); add(cyl(.92 * u, .92 * u, .2 * u, 6), L(Math.cos(a) * d, (2.4 + (i % 3) * .5) * u * tall, Math.sin(a) * d), mixC(C.wall, '#ffcf6a', .4)); } },
+      observatory: Object.assign((add) => { cell(add, 0, 0, 0, 1.6 * u, 6 * u * tall, C.wall2); add(new THREE.CircleGeometry(1.3 * u, 16), L(0, 6.05 * u * tall, 0, -Math.PI / 2 + .5, 0, 0), C.window, true); }, { found: 'always' }),
+      library(add) { for (let i = 0; i < 9; i++) cell(add, (i % 3 - 1) * 1.7 * u, 0, (Math.floor(i / 3) - 1) * 1.5 * u, .85 * u, (1.6 + (i % 2) * .6) * u * tall, i % 2 ? C.wall : C.wall2); },
+      stall(add) { cell(add, 0, 0, 0, 1 * u, 1.4 * u, C.wall2); add(box(1.2 * u, .7 * u, .1), L(0, .3 * u, .85 * u), C.door); },
+      warehouse(add) { for (let i = 0; i < 6; i++) cell(add, (i % 3 - 1) * 1.8 * u, 0, (Math.floor(i / 3) - .5) * 1.6 * u, .95 * u, 2.6 * u * tall, C.wall2); },
+      watchtower(add) { cell(add, 0, 0, 0, 1 * u, 8 * u * tall, C.wall2); add(cyl(1.4 * u, 1.1 * u, 1 * u, 6), L(0, 8 * u * tall, 0), C.wall); add(ball(.2 * u, 1), L(0, 9.2 * u * tall, 0), C.flame, lights); },
+      wall: (len) => Object.assign((add, gy) => { for (let x = -len / 2 + .5 * u; x < len / 2; x += 1 * u) cell(add, x, gy?.(x, 0) ?? 0, 0, .55 * u, 2.2 * u * tall, C.wall2); }, { found: false }),
+      monument(add) { cell(add, 0, 0, 0, .9 * u, 9 * u * tall, C.wall); add(cone(.9 * u, 1.6 * u, 6), L(0, 9 * u * tall, 0), C.accent); },
+      forge(add) { add(dome(1.6 * u, 8), L(), C.wall2); add(box(.7 * u, .5 * u, .1), L(0, .2 * u, 1.55 * u), C.ember, true); smokeFrom.push({ local: [0, 1.6 * u, 0], at: null, k: .6 }); },
+      factory: Object.assign((add) => vats(add, 5, 'cell'), { found: 'always' }),
+      waterTower(add) { cell(add, 0, 0, 0, .5 * u, 6 * u * tall, C.wall2); add(cyl(1.5 * u, 1.5 * u, 2 * u, 6), L(0, 6 * u * tall, 0), C.wall); },
+    },
+    silk: {
+      temple: (k) => Object.assign((add) => { // a silk cathedral: a soaring cone on poles, strands fanning to the ground, a glowing core
+        const H = 9 * u * k * tall, R = 4 * u * k;
+        add(new THREE.ConeGeometry(R, H, 10, 1, true).translate(0, H / 2, 0), L(0, .8 * u, 0), C.wall);
+        for (let i = 0; i < 10; i++) { const a = i / 10 * 6.283; add(sunk(cyl(.08 * u, .1 * u, H * .6 + SINK, 4)), L(Math.cos(a) * R * .95, 0, Math.sin(a) * R * .95), C.wood); strand(add, [0, H + .8 * u, 0], [Math.cos(a) * R * 2, 0, Math.sin(a) * R * 2]); }
+        add(new THREE.SphereGeometry(1.2 * u * k, 10, 7), L(0, H * .4, 0), C.window, true);
+      }, { found: 'always' }),
+      shrine(add) { add(new THREE.ConeGeometry(.8 * u, 1.8 * u, 7, 1, true).translate(0, .9 * u, 0), L(), C.wall); for (let i = 0; i < 4; i++) strand(add, [0, 1.8 * u, 0], [Math.cos(i * 1.57) * 1.6 * u, 0, Math.sin(i * 1.57) * 1.6 * u]); add(ball(.15 * u, 0), L(0, .5 * u, 0), C.window, lights); },
+      granary(add) { add(box(4 * u, .15 * u, .15 * u), L(0, 3 * u * tall, 0), C.wood); for (const x of [-1.9, 1.9]) add(sunk(cyl(.08 * u, .08 * u, 3 * u * tall + SINK, 4)), L(x * u, 0, 0), C.wood); for (let i = 0; i < 5; i++) { const x = (i - 2) * .8 * u; strand(add, [x, 3 * u * tall, 0], [x, 2.2 * u * tall, 0]); add(new THREE.SphereGeometry(.4 * u, 8, 6).scale(1, 1.4, 1), L(x, 1.6 * u * tall, 0), C.wall); } },
+      observatory: Object.assign((add) => { // a great web strung in a ring of poles, tilted to the sky: their radio dish
+        for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; add(sunk(cyl(.1 * u, .12 * u, (3 + Math.sin(a) * 1.5) * u * tall + SINK, 4)), L(Math.cos(a) * 3 * u, 0, Math.sin(a) * 3 * u), C.wood); }
+        add(new THREE.CircleGeometry(3 * u, 16), L(0, 3 * u * tall, 0, -Math.PI / 2 + .45, 0, 0), C.wall);
+        for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; strand(add, [0, 3 * u * tall, 0], [Math.cos(a) * 3 * u, (3 + Math.sin(a) * 1.5) * u * tall, Math.sin(a) * 3 * u]); }
+        add(ball(.25 * u, 1), L(0, 3.2 * u * tall, 0), C.window, true);
+      }, { found: false }),
+      library(add) { add(new THREE.CylinderGeometry(3 * u, 3 * u, 6 * u, 12, 1, true, 0, Math.PI).rotateZ(Math.PI / 2).rotateY(Math.PI / 2), L(0, 0, 0), C.wall); for (let i = 0; i < 4; i++) add(box(.15 * u, 1.4 * u, 2.4 * u), L((i - 1.5) * 1.2 * u, 0, 0), C.wood); },
+      warehouse(add) { add(new THREE.ConeGeometry(3.5 * u, 3.2 * u * tall, 8, 1, true).translate(0, 1.6 * u * tall, 0), L(0, .6 * u, 0), C.wall); for (let i = 0; i < 6; i++) add(new THREE.SphereGeometry(.6 * u, 7, 5), L(Math.cos(i) * 1.6 * u, .5 * u, Math.sin(i) * 1.6 * u), C.wall2); },
+      watchtower(add) { add(sunk(cyl(.15 * u, .2 * u, 8 * u * tall + SINK, 4)), L(), C.wood); add(new THREE.ConeGeometry(1.4 * u, 1.6 * u, 7, 1, true), L(0, 8 * u * tall, 0), C.wall); for (let i = 0; i < 3; i++) strand(add, [0, 8 * u * tall, 0], [Math.cos(i * 2.09) * 4 * u, 0, Math.sin(i * 2.09) * 4 * u]); },
+      wall: (len) => Object.assign((add, gy) => { for (const x of [-len / 2, len / 2]) add(sunk(cyl(.07 * u, .07 * u, 2.4 * u + SINK, 4)), L(x, gy?.(x, 0) ?? 0, 0), C.wood); for (let h = .5; h < 2.4; h += .45) strand(add, [-len / 2, (gy?.(-len / 2, 0) ?? 0) + h * u, 0], [len / 2, (gy?.(len / 2, 0) ?? 0) + h * u, 0]); }, { found: false }), // a web fence
+      monument(add) { add(sunk(cyl(.12 * u, .15 * u, 9 * u * tall + SINK, 4)), L(), C.wood); for (let i = 0; i < 6; i++) { const a = i / 6 * 6.283; strand(add, [0, 9 * u * tall, 0], [Math.cos(a) * 3 * u, 0, Math.sin(a) * 3 * u]); add(box(.04 * u, 2.4 * u, .8 * u), L(Math.cos(a) * .5 * u, 6 * u * tall, Math.sin(a) * .5 * u, 0, -a, 0), C.accent); } },
+      forge(add) { IDIOMS.wax.forge(add); for (let i = 0; i < 4; i++) strand(add, [0, 1.6 * u, 0], [Math.cos(i * 1.57) * 2.5 * u, 0, Math.sin(i * 1.57) * 2.5 * u]); },
+      factory: Object.assign((add) => vats(add, 4, 'cone'), { found: 'always' }),
+      waterTower(add) { IDIOMS.silk.granary(add); },
+    },
+  };
+  IDIOMS.membrane = { ...IDIOMS.grown }; // drifters' grown gas-ships and lanterns read as grown things, hung aloft by their mount
+  // Each family's ground: perches for fliers, gas-bags for drifters, mounds for burrowers.
+  function mounted(build) {
+    if (mountKind === 'ground') return build;
+    const wrapped = (add, gy) => {
+      if (mountKind === 'sunk') { // dug in: an earth bank round it, the piece set down into it
+        add(new THREE.TorusGeometry(3.4 * u, 1.1 * u, 5, 16).rotateX(Math.PI / 2).scale(1, .55, 1), L(0, -.2 * u, 0), C.soil);
+        const n0 = smokeFrom.length; build((g, m, c, b) => add(g, L(0, -.6 * u, 0).multiply(m), c, b), gy); for (const sm of smokeFrom.slice(n0)) sm.local[1] -= .6 * u; return;
+      }
+      const lift = (mountKind === 'perch' ? 5 : 7) * u * tall, R = 3.2 * u;
+      if (mountKind === 'perch') { add(sunk(cyl(.45 * u, .7 * u, lift + SINK, 7)), L(), C.wood); for (let i = 0; i < 3; i++) rod(add, [0, lift * .55, 0], [Math.cos(i * 2.09) * R * .9, lift, Math.sin(i * 2.09) * R * .9], .12 * u, C.wood, false, 4); }
+      else { add(sunk(cyl(.6 * u, .8 * u, .8 * u + SINK, 6)), L(), C.stone2); strand(add, [0, .8 * u, 0], [0, lift, 0]); add(new THREE.SphereGeometry(R * 1.1, 12, 8).scale(1, .7, 1), L(0, lift + 7 * u * tall, 0), C.bag); for (let i = 0; i < 4; i++) strand(add, [Math.cos(i * 1.57) * R * .9, lift, Math.sin(i * 1.57) * R * .9], [Math.cos(i * 1.57) * R * .8, lift + 5.6 * u * tall, Math.sin(i * 1.57) * R * .8]); }
+      add(cyl(R, R * .95, .3 * u, 14), L(0, lift - .3 * u, 0), C.wood);
+      const n0 = smokeFrom.length; build((g, m, c, b) => add(g, L(0, lift, 0).multiply(m), c, b), () => 0); for (const sm of smokeFrom.slice(n0)) sm.local[1] += lift;
+    };
+    return Object.assign(wrapped, { found: false });
+  }
+  const Q = (name, ...args) => { const own = IDIOMS[idiom]?.[name] ?? P[name]; return mounted(typeof own === 'function' && args.length ? own(...args) : own); };
+  function pathPlaces(f, s, big, isCapital, plaza, Rm, lines) {
+    if (level < 2 || s.kind === 'camp' || civ.colony || lit.count() > NEAR_BUDGET * 1.05) return;
+    const a0 = r() * 6.28, edge = (k = 1) => Rm * (.85 + r() * .2) * k;
+    switch (civ.path) {
+      case 'agrarian':
+        settle(f, edge(1.05), a0, 2.6 * u, 5 * u, Q('granary'), { spacing: .7 });
+        if (level <= 4 && idiom === 'built' && mountKind === 'ground') settle(f, edge(1.25), a0 + 2, 1.8 * u, 8 * u, P.windmill, { face: false, spacing: .7 });
+        if (!civ.fields) for (let i = 0; i < Math.round(1 + big * 3); i++) settle(f, Rm + (4 + r() * 8) * u, r() * 6.28, 4, .2, civ.family === 'hands' ? common.fencedField : common.field, { spacing: .9 });
+        break;
+      case 'devotional':
+        settle(f, plaza + 6 * u * big, a0, 4.6 * u * Math.max(.7, big * .7), 6 * u, Q('temple', Math.max(.7, big * .7)), { spacing: .8 });
+        for (const pts of lines.slice(0, 4)) { const end = pts.at(-1); if (end) settle(f, end.d + 3 * u, end.a, 1 * u, 2 * u, Q('shrine'), { spacing: .6 }); }
+        break;
+      case 'scholarly':
+        settle(f, edge(1.1), a0, 2.8 * u, 5 * u, Q('observatory'), { face: false, spacing: .7 });
+        if (level >= 3) settle(f, plaza + 5 * u, a0 + 3, 3.6 * u, 4 * u, Q('library'), { spacing: .8 });
+        break;
+      case 'mercantile':
+        for (let i = 0, n = Math.round(4 + big * 4); i < n; i++) settle(f, plaza * .75 + 1.5 * u, i / n * 6.283, 1.3 * u, 2 * u, Q('stall'), { spacing: .55 });
+        if (level >= 3) settle(f, edge(1.05), a0, 4.5 * u, 4 * u, Q('warehouse'), { spacing: .7 });
+        break;
+      case 'martial': {
+        if (level <= 4 && (mountKind === 'ground' || mountKind === 'sunk')) { // a wall round the town, with gates where the streets run out (fliers and drifters keep watch instead)
+          const Rw = Rm * 1.04 + 3 * u, seg = 3.2 * u, gate = streetWidth * .9 + 1.5 * u;
+          const gates = lines.map(pts => pts.reduce((b, p) => Math.abs(p.d - Rw) < Math.abs(b.d - Rw) ? p : b, pts[0])?.a).filter(x => x !== undefined);
+          let i = 0;
+          for (let a = 0; a < 6.283 - seg / Rw * .5; a += seg / Rw, i++) {
+            if (gates.some(g => Math.abs(((a - g + 9.42) % 6.283) - 3.14) < gate / Rw)) continue;
+            if (i % 7 === 0) settle(f, Rw, a, 1.4 * u, 9 * u, Q('watchtower'), { face: false, spacing: .3 });
+            else place(f, Rw, a, seg * .5, 3 * u, Q('wall', seg), { spacing: .25, faceTo: f.home });
+          }
+        } else settle(f, edge(1.1), a0, 1.6 * u, 9 * u, Q('watchtower'), { face: false, spacing: .7 });
+        break;
+      }
+      default: // expansionist
+        settle(f, plaza + 3 * u, a0, 1.4 * u, 10 * u, Q('monument'), { face: false, spacing: .7 });
+    }
+  }
   function grow(s) {
     currentPlace = s; litPlaces.add(s.id);
     const f = frameAt(s.v), big = SIZE[s.kind], Rm = s.radius, isCapital = s === places[0];
@@ -1155,21 +1747,40 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       return;
     }
     const plaza = Math.min(Rm * .2, 9 * u);
-    if (walkers) disc(s.v, plaza + 1.5 * u, paved ? C.plaza : C.path);
+    // Hand-builders' places are laid out and built by town-plan.mjs / town-build.js (units, below): here only what stands round them.
+    let lines = [];
+    if (!handsTowns) {
+    if (walkers) disc(s.v, paved ? Rm * .98 : plaza + 1.5 * u, paved ? C.plaza : C.path, paved ? .3 : .18); // cities are paved right across
     if (megacity && isCapital) { settle(f, 0, 0, 9.5 * u, 80 * u, arcology(big * .5), { face: false }); skyline = Math.max(skyline, 70 * u * big * .5 * Math.min(1.3, tall) * 1.3 + 10 * u); }
     else settle(f, 0, 0, Math.max(2, 4.2 * u * big * (isCapital ? 1 : .7)), 6 * u, great(big * (isCapital ? .95 : .65)), { face: false, aloft });
     if (civ.hearths && level <= 3) settle(f, plaza * .8, r() * 6, 1.1 * u, .3, common.hearth);
     // Streets: from the plaza edge outward, wandering a little.
     const streets = Math.max(3, Math.min(8, Math.round(2.5 + civ.cohesion * 2 + big * 1.6)));
-    const lines = [];
-    for (let i = 0; i < streets; i++) {
+    lines = [];
+    // Planet-shapers and up plan their cities: a grid of straight streets (the plots below line them).
+    if (level >= 4) {
+      const a0 = r() * Math.PI, pitch = Math.max(18 * u, streetWidth + 14 * u), K = Math.ceil(Rm / pitch);
+      for (const axis of [0, 1]) for (let k = -K; k <= K; k++) {
+        const off = k * pitch, half = Math.sqrt(Math.max(0, Rm * Rm - off * off));
+        if (half < pitch * .6) continue;
+        for (const dir of [-1, 1]) { // each street from the middle outward, so plots sort by distance
+          const pts = [];
+          for (let t = Math.max(0, Math.sqrt(Math.max(0, plaza * plaza - off * off))); t <= half; t += 3 * u) {
+            const x = axis ? off : dir * t, z = axis ? dir * t : off, d = Math.hypot(x, z), a = Math.atan2(z, x) + a0;
+            pts.push({ d, a, n: pointAt(f, d, a) });
+          }
+          if (pts.length > 2) lines.push(pts);
+        }
+      }
+    }
+    for (let i = 0; i < (level >= 4 ? 0 : streets); i++) {
       let a = i / streets * Math.PI * 2 + r() * .5, d = plaza;
       const pts = [];
       while (d < Rm) { pts.push({ d, a, n: pointAt(f, d, a) }); d += 3 * u; a += (r() - .5) * .22 * (6 * u / Math.max(d, 6 * u)); }
       lines.push(pts);
     }
     // A ring road through the middle of big places.
-    if (big >= 1.15) { const rr = Rm * .55, pts = []; for (let a = 0; a <= Math.PI * 2 + .01; a += 2.5 * u / rr) pts.push({ d: rr, a, n: pointAt(f, rr, a), ring: true }); lines.push(pts); }
+    if (big >= 1.15 && level < 4) { const rr = Rm * .55, pts = []; for (let a = 0; a <= Math.PI * 2 + .01; a += 2.5 * u / rr) pts.push({ d: rr, a, n: pointAt(f, rr, a), ring: true }); lines.push(pts); }
     if (walkers) for (const pts of lines) strip(pts.map(p => p.n), streetWidth * (pts[0]?.ring ? 1.1 : 1), streetColour);
     // Plots along the streets, both sides; core first so the best spots go to the biggest buildings.
     const plots = [];
@@ -1190,20 +1801,24 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       const n = p.n.clone().add(sideV).normalize();
       if (r() < .12 && !landmark && !core) continue; // gaps: gardens and yards
       // System-shapers: the core is a skyline, tallest at the centre.
-      if (megacity && t < (isCapital ? .66 : big >= 1.1 ? .42 : 0)) {
-        const kt = .8 + r() * .45, H = Math.min(95 * u, (isCapital ? 52 : 30) * u * (1.05 - t) * (.55 + r() * .65) * (landmark ? 1.45 : 1)), tf = 2.35 * u * kt;
+      if (megacity && t < (isCapital ? (urban ? 1.01 : .66) : big >= 1.1 ? .42 : 0)) {
+        const kt = .8 + r() * .45, H = Math.min(95 * u, (isCapital ? 52 : 30) * u * (1.05 - t) * (.55 + r() * .65) * (landmark ? 1.45 : 1)) * Math.max(.45, Math.min(1, radius / 1200)), tf = 2.35 * u * kt;
         const on = p.n.clone().add(sideV.clone().multiplyScalar((streetWidth / 2 + tf + .6 * u) / off)).normalize();
         if (place(f, 0, 0, tf, H, tower(kt, H), { at: on, faceTo: p.n })) skyline = Math.max(skyline, H * 1.25 + 6 * u);
         if (t < .5) { const H2 = H * (.45 + r() * .3), back = p.n.clone().add(sideV.clone().multiplyScalar((streetWidth / 2 + tf * 3.3 + 1.4 * u) / off)).normalize(); if (place(f, 0, 0, tf, H2, tower(kt * .9, H2), { at: back, faceTo: p.n })) skyline = Math.max(skyline, H2 * 1.25 + 6 * u); }
         continue;
       }
-      if (place(f, 0, 0, fp, (landmark ? 8 : 4) * u, landmark ? great(k) : home(k * (lights && core ? 1.2 : 1)), { aloft, at: n, faceTo: p.n }) && landmark) landmarks++;
+      // Those who reach space live in modern buildings, low towers of their own idiom, not huts.
+      const modern = level >= 5 && !landmark, Hm = (7 + r() * 9) * u * (1.15 - t * .5);
+      if (place(f, 0, 0, modern ? Math.max(fp, 2.6 * u * k) : fp, modern ? Hm : (landmark ? 8 : 4) * u, landmark ? great(k) : modern ? tower(k * .95, Hm) : home(k * (lights && core ? 1.2 : 1)), { aloft, at: n, faceTo: p.n }) && landmark) landmarks++;
       // Cities fill their blocks: a second row of buildings behind the first.
       if (big >= 1.1 && !landmark && t < .85) {
         const k2 = k * .85, fp2 = foot(k2), back = p.n.clone().add(sideV.clone().multiplyScalar((off + fp + fp2 + .8 * u) / off)).normalize();
-        place(f, 0, 0, fp2, 4 * u, home(k2), { aloft, at: back, faceTo: p.n });
+        if (level >= 5) { const H2 = (6 + r() * 7) * u; place(f, 0, 0, Math.max(fp2, 2.4 * u * k2), H2, tower(k2 * .9, H2), { aloft, at: back, faceTo: p.n }); }
+        else place(f, 0, 0, fp2, 4 * u, home(k2), { aloft, at: back, faceTo: p.n });
       }
     }
+    pathPlaces(f, s, big, isCapital, plaza, Rm, lines);
     // Street lamps for those that light their world; small props for those with hands.
     if (walkers && streetLights) for (const pts of lines) for (let i = 2; i < pts.length - 1 && lit.count() < NEAR_BUDGET * 1.08; i += 3) {
       const p = pts[i], along = pts[i + 1].n.clone().sub(pts[i - 1].n); along.addScaledVector(p.n, -along.dot(p.n));
@@ -1212,28 +1827,49 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       place(f, 0, 0, .3 * u, 2.7 * u, common.light, { at: n, faceTo: p.n, spacing: .3 });
     }
     if (civ.family === 'hands') for (let i = 0; i < Math.round(big * 8) && lit.count() < NEAR_BUDGET * 1.1; i++) settle(f, (plaza + r() * (Rm - plaza)), r() * 6.28, .6 * u, .8 * u, common.crates, { spacing: .6 });
+    }
     // Fields beyond the edge, fenced by those with hands.
     if (civ.fields) for (let i = 0, n = Math.round(2 + big * 4); i < n && lit.count() < NEAR_BUDGET * 1.1; i++) if (settle(f, Rm + (4 + r() * 10) * u, r() * 6.28, 4, .2, civ.family === 'hands' ? common.fencedField : common.field, { spacing: .9 })) fieldsAt.push(placed.at(-1).n.clone());
     // The capital's spaceport; radio dishes and beacons for spacefarers.
-    if (isCapital && level >= 5) {
+    if (isCapital && (level >= 5 || orbital)) {
       // The spaceport needs a big, fairly flat, dry apron: search all round the capital, then farther out.
       const a0 = r() * 6.28;
       search: for (const [wet, top] of [[false, SINK * 2.5], [false, SINK + spaceportFoot * .5], [true, SINK * 2.5]]) for (const extra of [4, 14, 28, 46]) for (let j = 0; j < 14; j++) {
         // Last resort on ocean worlds: an offshore platform.
-        if (ship && place(f, Rm + spaceportFoot + extra * u, a0 + j / 14 * Math.PI * 2, spaceportFoot, 10 * u, spaceport, { face: true, wet, top })) { spaceportAt = placed.at(-1).n.clone(); spaceportBase = placed.at(-1).base; break search; }
+        if (ship && place(f, Rm + spaceportFoot + extra * u, a0 + j / 14 * Math.PI * 2, spaceportFoot, 2 * u, spaceport, { face: true, wet, top })) { spaceportAt = placed.at(-1).n.clone(); spaceportBase = placed.at(-1).base; break search; }
       }
       if (launch) settle(f, Rm + spaceportFoot * 2 + 14 * u, r() * 6.28, launchFoot, 12 * u, Object.assign((add, gy) => launch(add, gy), { found: civ.family === 'nests' || civ.family === 'grazers' || civ.family === 'rollers' ? false : 'always' }), { face: false });
     }
-    if (level >= 5) for (let i = 0; i < Math.round(big * 2); i++) settle(f, Rm * (.6 + r() * .4), r() * 6.28, 2 * u, 5 * u, common.dish, { spacing: .8 });
+    if (level >= 5 || orbital) for (let i = 0; i < Math.round(big * 2); i++) settle(f, Rm * (.6 + r() * .4), r() * 6.28, 2 * u, 5 * u, common.dish, { spacing: .8 });
+    // Metalworkers' forges; industrial factories with smoking stacks and a water tower.
+    if (metalworkers || (level === 3 && !industrial && r() < .4)) for (let i = 0; i < (isCapital ? 2 : 1); i++) settle(f, Rm * (.55 + r() * .4), r() * 6.28, 2.2 * u, 4 * u, Q('forge'), { spacing: .7 });
+    if (industrial) { for (let i = 0, n = isCapital ? 3 : big >= 1 ? 2 : 1; i < n; i++) settle(f, Rm + (5 + r() * 8) * u, r() * 6.28, 6 * u, 14 * u, Q('factory'), { spacing: .7 }); settle(f, Rm * .9, r() * 6.28, 1.8 * u, 9 * u, Q('waterTower'), { face: false, spacing: .7 }); }
     if (level >= 4 && (isCapital || big >= 1.1)) settle(f, Rm * (.7 + r() * .3), r() * 6.28, 1.9 * u, 14 * u, common.mast, { face: false, spacing: .8 });
   }
-  for (const s of near) grow(s);
+  for (const s of urban ? [places[0]] : near) grow(s);
   currentPlace = null;
 
   // Roads between places: laid along the ground near the site (walkers pave theirs once
   // they build cities; before that they are earth tracks). Tool users mark trails with stones.
   const placeOf = new Map(places.map(s => [s.id, s]));
-  for (const road of net.roads) {
+  // Planned towns (units, below) are joined by a road wherever two of them are near
+  // enough: winding a little, as roads do, round water, from one town's edge to the other's.
+  const ROAD_MAX = 2600, roadSeen = 3200;
+  if (handsTowns && level >= 2 && (walkers || level <= 3)) for (const road of net.roads) {
+    const a = placeOf.get(road.a), b = placeOf.get(road.b), d = a.v.angleTo(b.v) * radius;
+    if (!a || !b || d > ROAD_MAX || Math.min(a.v.angleTo(siteV), b.v.angleTo(siteV)) * radius > roadSeen) continue;
+    const rr = rng(body.seed, 'road', road.a, road.b), amp = Math.min(d * .07, 60), k1 = 1 + Math.floor(rr() * 2), ph1 = rr() * 6.28;
+    const side = a.v.clone().cross(b.v).normalize(), pts = [], step = 4, near = (n) => n.angleTo(siteV) * radius < 900;
+    const flush = () => { if (pts.length > 1) { const close = pts.some(near); strip(pts, (level >= 3 ? 1.1 : .8) * streetWidth, level >= 3 && paved ? streetColour : C.path, .3, ground, close ? 2 : 5); } pts.length = 0; };
+    for (let s0 = a.radius * .92; s0 <= d - b.radius * .92; s0 += step) {
+      const t = s0 / d, off = Math.sin(t * Math.PI * k1 + ph1) * Math.sin(t * Math.PI) * amp;
+      const n = a.v.clone().lerp(b.v, t).normalize().addScaledVector(side, off / radius).normalize();
+      if (terrain.isLiquid(n)) { flush(); continue; }
+      pts.push(n);
+    }
+    flush();
+  }
+  for (const road of handsTowns ? [] : net.roads) {
     const a = placeOf.get(road.a), b = placeOf.get(road.b), d = a.v.angleTo(b.v) * radius;
     if (!walkers && level > 1) continue; // fliers, drifters, burrowers and hives need no roads
     const pts = [];
@@ -1251,18 +1887,335 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   const cluster = { camp: 2, village: 4, colony: 5, town: 7, city: 12, metropolis: 18, capital: 18, megacity: 24 };
   // Towns you can walk or fly to get full dwellings with yards; distant ones the simple form.
   const farBy = far.map(s => ({ s, dist: s.v.angleTo(siteV) * radius })).sort((a, b) => a.dist - b.dist);
-  for (const { s, dist } of farBy) {
+  // Towns of city builders and up that you can walk or fly to are planned: paved, on a
+  // grid of streets, with a building on each lot facing its street, tallest at the middle.
+  const plannedTowns = [];
+  function plannedTown(s) {
+    const f = frameAt(s.v), Rm = s.radius, a0 = r() * Math.PI, sw = streetWidth;
+    const pt = (x, z) => pointAt(f, Math.hypot(x, z), Math.atan2(z, x) + a0);
+    if (walkers) disc(s.v, Rm * .98, paved ? C.plaza : C.path, .3);
+    const lot = level >= 5 ? 7 * u : 5.5 * u, pitch = sw + lot * 2 + 1.2 * u, K = Math.ceil(Rm / pitch);
+    // The streets: a grid through the middle.
+    for (const axis of [0, 1]) for (let k = -K; k <= K; k++) {
+      const pts = [], off = k * pitch, half = Math.sqrt(Math.max(0, Rm * Rm - off * off));
+      if (half < pitch * .5) continue;
+      for (let t = -half; t <= half; t += 2.5 * u) pts.push(axis ? pt(off, t) : pt(t, off));
+      if (walkers && ground.count() < GROUND_BUDGET * .8) strip(pts, sw, streetColour); else if (pts.length > 1) paths.push(pts);
+    }
+    // The lots: a building in each corner of a block, facing the nearer street.
+    let placedHere = 0;
+    for (let i = -K; i < K; i++) for (let j = -K; j < K; j++) for (const [cx, cz] of [[.25, .25], [.75, .25], [.25, .75], [.75, .75]]) {
+      if (lit.count() > BUDGET * .82) return;
+      const x = (i + cx) * pitch, z = (j + cz) * pitch, d = Math.hypot(x, z);
+      if (d > Rm * .92 || d < lot) continue; // the middle is a square
+      const fx = cx < .5 ? i * pitch : (i + 1) * pitch, fz = cz < .5 ? j * pitch : (j + 1) * pitch;
+      const face = Math.abs(x - fx) < Math.abs(z - fz) ? pt(fx, z) : pt(x, fz);
+      const t = d / Rm, k = (.85 + r() * .25) * (1.1 - t * .3);
+      if (level >= 5) { const H = (8 + 16 * (1 - t)) * u * (.7 + r() * .6); place(f, 0, 0, Math.min(lot * .8, 2.6 * u * k), H, tower(k, H), { at: pt(x, z), faceTo: face, spacing: .5, aloft }); }
+      else place(f, 0, 0, Math.min(lot * .8, foot(k)), 4 * u, home(k), { at: pt(x, z), faceTo: face, spacing: .5, aloft });
+      placedHere++;
+    }
+    if (placedHere) plannedTowns.push(s);
+  }
+  for (const { s, dist } of urban || handsTowns ? [] : farBy) { // (a city world's city is built below instead)
     const f = frameAt(s.v), full = dist < 900;
     if (lit.count() >= BUDGET) break;
     currentPlace = s; litPlaces.add(s.id);
+    if (full && level >= 3 && lit.count() < BUDGET * .8) { plannedTown(s); continue; }
     for (let i = 0, n = cluster[s.kind] || 4; i < n && lit.count() < BUDGET; i++) {
       const d = i ? Math.sqrt(r()) * s.radius * .75 : 0, k = .8 + r() * .3;
-      if (full && lit.count() < BUDGET * .88) place(f, d, r() * 6.28, foot(k), 4 * u, home(k), { face: true, spacing: .7, aloft });
-      else place(f, d, r() * 6.28, 2.2 * u, 0, Object.assign((add) => { style.small(add); if (lights) add(null, L(0, 1.2 * u, 0, 0, 0, 0, u, u, u), C.window, 'light'); }, { found: true }), { face: true, spacing: .45, aloft });
+      if (full && lit.count() < BUDGET * .88) { if (level >= 5) { const Hf = (6 + r() * 10) * u; place(f, d, r() * 6.28, 2.6 * u * k, Hf, tower(k, Hf), { face: true, spacing: .7, aloft }); } else place(f, d, r() * 6.28, foot(k), 4 * u, home(k), { face: true, spacing: .7, aloft }); }
+      else place(f, d, r() * 6.28, 2.2 * u, 0, Object.assign((add) => { if (level >= 5) { const h = (5 + r() * 9) * u; add(sunk(box(2.4 * u, h + SINK, 2.4 * u)), L(), r() < .5 ? C.wall : C.wall2); add(box(1.4 * u, .4 * u, 1.4 * u), L(0, h, 0), C.trim); } else style.small(add); if (lights) add(null, L(0, 1.2 * u, 0, 0, 0, 0, u, u, u), C.window, 'light'); }, { found: true }), { face: true, spacing: .45, aloft }); // spacefarers' distant towns are modern too
     }
   }
   currentPlace = null;
   // Night lights for the whole world are drawn from space by city-lights.js (system-view.js).
+
+  // --- Hand-builders' places: planned (town-plan.mjs) and built (town-build.js) -----------
+  // Every town is a unit, and on a city world the city is cut into district cells on one
+  // grid (so their streets meet). Each unit is built in full near you and as its masses far
+  // off, from the same plan, and swapped as you come and go (follow), a unit at a time.
+  const units = [], doorsteps = [];
+  const NEAR_D = coarse ? 260 : 380, FAR_D = 2600, DATA_D = 1500;
+  if (handsTowns) {
+    const kit = makeKit(THREE, { C, u, level, culture: civ.culture, rng: (seed) => rng(body.seed, 'lot', seed) });
+    const cosOf = (m) => Math.cos(m / radius);
+    const frameOn = (centre, a0) => {
+      const east = V(0, 1, 0).cross(centre); if (east.lengthSq() < 1e-6) east.set(1, 0, 0).cross(centre); east.normalize();
+      const north = centre.clone().cross(east).normalize(), e1 = east.clone().multiplyScalar(Math.cos(a0)).addScaledVector(north, Math.sin(a0)), e2 = centre.clone().cross(e1).normalize();
+      const at = (x, z) => { const d = Math.hypot(x, z); if (d < 1e-6) return centre.clone(); const a = d / radius; return centre.clone().multiplyScalar(Math.cos(a)).addScaledVector(e1, x / d * Math.sin(a)).addScaledVector(e2, z / d * Math.sin(a)).normalize(); };
+      return { centre, at };
+    };
+    const blockedAt = (n, rr) => terrain.isLiquid(n) || (Number.isFinite(terrain.sea) && terrain.height(n) < terrain.sea + .4) || n.dot(landingNormal) > cosOf(30 + rr) || n.dot(signalNormal) > cosOf(18 + rr) || placed.some((p) => !p.road && n.dot(p.n) > cosOf(p.foot + rr));
+    // Towns (outside a city world's city).
+    for (const s of places) {
+      if (urban && urban.mask(s.v) > .5) continue;
+      const fr = frameOn(s.v, r() * Math.PI), seed = `${body.seed}:${s.id}`;
+      units.push({ kind: 'town', place: s, fr, n: s.v, R: s.radius, detail: null, group: null,
+        planOf: () => planTown({ seed, radius: s.radius, level, u, path: civ.path, capital: s === places[0], sw: streetWidth, avoid: (x, z, rr) => blockedAt(fr.at(x, z), rr) || [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => blockedAt(fr.at(x + a * rr, z + b * rr), 0)) }) });
+    }
+    // A city world's city: district cells on one grid round the capital.
+    if (urban) {
+      const fr = frameOn(places[0].v, r() * Math.PI), U = Math.max(.7, u), pitch = (level >= 5 ? 34 : 28) * U + streetWidth, CS = pitch * 4;
+      const Rc = radius * Math.PI * .97, N = Math.ceil(Rc / CS);
+      const inside = (x, z) => { const n = fr.at(x, z); return urban.mask(n) > .5 && !blockedAt(n, 0); };
+      for (let i = -N; i < N; i++) for (let j = -N; j < N; j++) {
+        const x = (i + .5) * CS, z = (j + .5) * CS, d = Math.hypot(x, z);
+        if (d > Rc) continue;
+        const n = fr.at(x, z);
+        if (urban.mask(n) < .45 || terrain.isLiquid(n)) continue;
+        units.push({ kind: 'cell', fr, n, R: CS * .72, detail: null, group: null,
+          planOf: () => planDistrict({ seed: `${body.seed}:cell:${i}:${j}`, x0: i * CS, z0: j * CS, x1: (i + 1) * CS, z1: (j + 1) * CS, level, u, path: civ.path, sw: streetWidth, inside, heart: (x, z) => Math.hypot(x, z) / (Math.min(Rc, 900)) }) });
+      }
+    }
+    units.sort((a, b) => a.n.angleTo(siteV) - b.n.angleTo(siteV));
+    // The ground frame of a lot: its centre on the world, facing its street.
+    const lotFrame = (fr, x, z, ang) => {
+      const n = fr.at(x, z), ax = fr.at(x + 1, z).sub(fr.at(x - 1, z)); ax.addScaledVector(n, -ax.dot(n)).normalize();
+      const az = n.clone().cross(ax); // the plan's +z, on the world
+      const fwd = ax.clone().multiplyScalar(Math.cos(ang)).addScaledVector(az, Math.sin(ang)).normalize(), right = n.clone().cross(fwd).normalize();
+      return { n, fwd, right };
+    };
+    const lotBase = (unit, l) => {
+      const { n, fwd, right } = lotFrame(unit.fr, l.x, l.z, l.ang);
+      let hi = terrain.surface(n);
+      for (const [a, b] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) { const m = n.clone().addScaledVector(fwd, a * l.d / 2 / radius).addScaledVector(right, b * l.w / 2 / radius).normalize(); hi = Math.max(hi, terrain.surface(m)); }
+      return { n, fwd, right, base: new THREE.Matrix4().makeBasis(right, n, fwd).setPosition(n.clone().multiplyScalar(radius + hi)), groundR: radius + hi };
+    };
+    // A few civilizations build in plain blocks (town-build.js); the rest in their own way (cultureLot).
+    const blocks = civ.family === 'hands' && level >= 4 && rng(body.seed, 'blocks', civ.species.id)() < .08;
+    const fillOf = (l) => blocks ? .9 : .62 + (l.seed % 89) / 89 * .18; // how much of its lot a building takes
+    // Their own architecture (alien-arch.mjs): read from their bodies, their ways and their world.
+    const arch = architectureOf(civ, body), archCtx = { THREE, C, U: Math.max(.75, u), fh: floorH(u), lights };
+    let protos = null, farMat = null; // far prototypes and their material, made when first needed
+    const alienLot = (l, add) => buildAlien({ ...archCtx, fill: fillOf(l) }, arch, { ...l, kind: l.kind === 'house' || l.kind === 'row' ? 'home' : l.kind }, add);
+    // gy(x, z) on a lot's own ground: the height there above the lot's base (null over water).
+    const groundOf = (b) => (x, z) => { const m = b.n.clone().addScaledVector(b.right, x / radius).addScaledVector(b.fwd, z / radius).normalize(); return terrain.isLiquid(m) ? null : radius + terrain.surface(m) - b.groundR; };
+    // A unit's plan, once: lots any part of which would stand in water are let go (the
+    // planner looks at a few points; here every lot is sampled corner to corner).
+    const planOf = (unit) => {
+      if (unit.plan) return unit.plan;
+      const plan = unit.planOf();
+      plan.lots = plan.lots.filter((l) => {
+        const { n: n0, fwd, right } = lotFrame(unit.fr, l.x, l.z, l.ang);
+        for (const a of [-.55, 0, .55]) for (const b of [-.55, 0, .55]) { const n = n0.clone().addScaledVector(fwd, a * l.d / radius).addScaledVector(right, b * l.w / radius).normalize(); if (terrain.isLiquid(n)) return false; }
+        return true;
+      });
+      return (unit.plan = plan);
+    };
+    // The plan's data, for every unit near the site: what you collide with, doors, homes to enter, lights, ways to walk.
+    for (const unit of units) {
+      if (unit.n.angleTo(siteV) * radius - unit.R > DATA_D) continue;
+      const plan = planOf(unit), fh = floorH(u);
+      for (const l of plan.lots) {
+        const b = lotBase(unit, l), f = fillOf(l), short = Math.min(l.w, l.d) * f, long = blocks ? Math.max(l.w, l.d) * f : short, along = l.w > l.d ? b.right : b.fwd, k = Math.max(1, Math.round(long / short));
+        const h = l.kind === 'tower' ? l.floors * fh : Math.max(1, l.floors) * fh * (l.kind === 'hall' ? 1.4 : l.kind === 'workshop' ? 1.5 : 1);
+        for (let i = 0; i < k; i++) { const m = b.n.clone().addScaledVector(along, (-long / 2 + (i + .5) * long / k) / radius).normalize(); if (!terrain.isLiquid(m)) obstacles.push({ p: m.multiplyScalar(b.groundR), r: short / 2 * .98, h }); } // (none over a shore's last few centimetres of water)
+        if (l.kind === 'tower' || l.inner) continue;
+        const door = b.n.clone().addScaledVector(b.fwd, ((blocks ? l.d : short) * f / (blocks ? 2 : 2 * f) + .3) / radius).normalize().multiplyScalar(b.groundR);
+        dwellings.push({ n: b.n, base: b.base, foot: short / 2 * .92, blocks, k: 1, h: (l.kind === 'hall' ? 1.4 : 1) * fh * Math.min(2, l.floors), ground: b.groundR - radius, door, face: b.fwd.clone(), kind: l.kind });
+        if (unit.n.angleTo(siteV) * radius < 300) doorsteps.push({ n: b.n.clone().addScaledVector(b.fwd, ((blocks ? l.d * f : short) / 2 + .9 * u) / radius).normalize(), face: b.fwd.clone().negate(), kind: l.kind });
+        if (lights && (l.seed % 3 === 0)) nightLights.push(b.n.clone().multiplyScalar(b.groundR + fh * 1.5));
+      }
+      if (unit.place) litPlaces.add(unit.place.id);
+      if (unit.n.angleTo(siteV) * radius < 900) {
+        // Street lamps: landmarks, and a soft halo round each at night.
+        if (lights) for (const p of plan.props) if (p.kind === 'lamp' || p.kind === 'lamp-tall') {
+          const n = unit.fr.at(p.x, p.z), U = plan.U || 1, tall = p.kind === 'lamp-tall';
+          landmarks.lamps.push(n);
+          halos.push({ p: n.clone().multiplyScalar(radius + terrain.surface(n) + (tall ? 5.95 : 3.6) * U), size: (tall ? 2.6 : 1.8) * U, colour: C.window });
+        }
+        for (const st of plan.streets) paths.push(st.pts.map(([x, z]) => unit.fr.at(x, z)).filter((n) => !terrain.isLiquid(n)));
+        for (const sq of plan.squares) if (sq.kind !== 'court') sites.push(unit.fr.at(sq.x, sq.z));
+      }
+    }
+    // Building a unit's meshes: near, everything (a little at a time, so walking on never
+    // stutters: a job runs a few milliseconds a frame); far, its masses, instanced, at once.
+    const farNight = { value: 1 };
+    const swap = (unit, ug, detail) => {
+      if (unit.group) { unit.group.traverse((o) => { if (o.userData.shared) return o.dispose(); o.geometry?.dispose(); if (o.isInstancedMesh) { o.material.dispose(); o.dispose(); } }); /* (far prototypes and their material are shared) */ group.remove(unit.group); }
+      unit.group = ug; unit.detail = detail; if (ug) group.add(ug);
+    };
+    // --- What stands on a lot: the builders' own architecture -----------------------------
+    // The plan (town-plan.mjs) says where streets, squares and lots are; what is built on a
+    // lot is the culture's own: its homes (K above: round timber halls and gabled longhouses,
+    // stepped pueblos, painted tents and yurts, thatched stilt houses), its great building
+    // for a hall, and for taller buildings its own skyline forms (spire(): pagodas,
+    // ziggurats, fabric masts, striding towers). Each sits inside its lot with ground round
+    // it, so a street is a row of buildings, not a wall. The plain block buildings
+    // (town-build.js) are one style among many: a few civilizations build that way.
+    const measure = (build) => { const bb = new THREE.Box3(), t = new THREE.Box3(); build((g, m) => { if (!g) return; if (!g.boundingBox) g.computeBoundingBox(); t.copy(g.boundingBox).applyMatrix4(m); bb.union(t); }); return bb; };
+    // A builder fitted to a w by d footprint: built once at size 1 to measure, then at the size that fits.
+    const fitted = (seed, make, w, d, kMax = 3) => {
+      const keep = r; r = rng(body.seed, 'lot', seed); const bb = measure((a) => make(a, 1)); r = keep;
+      const sx = Math.max(.5, bb.max.x - bb.min.x), sz = Math.max(.5, bb.max.z - bb.min.z);
+      return Math.max(.45, Math.min(kMax, w / sx, d / sz));
+    };
+    const withSeed = (seed, fn) => { const keep = r; r = rng(body.seed, 'lot', seed); try { fn(); } finally { r = keep; } };
+    const skyForm = (seed) => { const forms = CULTURE_FORMS || GENERIC; return forms[seed % forms.length]; };
+    function cultureLot(l, add, gy) {
+      const fill = fillOf(l), W = l.w * fill, D = l.d * fill, fh = floorH(u);
+      // Halls are the culture's great building (fitted to the lot).
+      if (l.kind === 'hall') { const k = fitted(l.seed, (a, k) => style.great(a, k), W, D, 2.2); withSeed(l.seed, () => style.great(add, k)); return; }
+      // Taller buildings in a city (and every tower) rise in the culture's skyline forms.
+      const storeys = l.kind === 'tower' ? l.floors : l.floors;
+      if (level >= 4 && storeys >= 3) {
+        const H = storeys * fh, form = skyForm(l.seed);
+        const k = fitted(l.seed, (a, k) => spire(a, k, H, form), W, D, 4);
+        withSeed(l.seed, () => spire(add, k, H, form));
+        return;
+      }
+      // Everything else is a home in the culture's own way, with its yard and the small
+      // things of its owners' lives; shops and workshops show their trade at the door.
+      const k = fitted(l.seed, (a, k) => style.home(a, k), W, D, 2.4);
+      withSeed(l.seed, () => {
+        const own = varied(add); style.home(own, k);
+        const fp = Math.min(W, D) / 2;
+        yard(own, gy, fp, Math.min(k, 1.5)); flair(own, gy, fp, Math.min(k, 1.5));
+        if (l.kind === 'shop') stallAt(add, gy, l, fp);
+        else if (l.kind === 'workshop') common.crates((g, m, c, b) => add(g, L(fp * .7, gy(fp * .7, fp * .9) ?? 0, fp * .9).multiply(m), c, b));
+      });
+    }
+    // A shop keeps a stall or an awning of goods out on the street side.
+    function stallAt(add, gy, l, fp) {
+      const x = (r() - .5) * fp * .6, z = Math.min(l.d / 2 - .4 * u, fp + 1.1 * u), y = gy(x, z) ?? 0;
+      const m = (dx = 0, dy = 0, dz = 0) => L(x + dx, y + dy, z + dz);
+      for (const [px, pz] of [[-.9, -.45], [.9, -.45], [-.9, .45], [.9, .45]]) add(sunk(box(.07 * u, 1.9 * u + SINK, .07 * u)), m(px * u, 0, pz * u), C.wood);
+      for (let i = 0; i < 5; i++) add(box(.4 * u, .05 * u, 1.3 * u), m((i - 2) * .4 * u, 1.95 * u), i % 2 ? '#f2ede4' : C.accent);
+      add(box(1.8 * u, .75 * u, .8 * u), m(), C.wood);
+      for (let i = 0; i < 4; i++) add(ball((.14 + r() * .08) * u, 0), m((i - 1.5) * .4 * u, .85 * u), [C.crop, C.pot, C.accent2, C.leaf][i] || C.pot);
+    }
+    // Street trees from this world's own plants' colours, in one of a few alien forms per civilization.
+    const treeForm = Math.floor(rng(body.seed, 'street-trees')() * 4);
+    function streetTree(add, U0, seed) {
+      const tr = rng(body.seed, 'tree', seed), h = (2.6 + tr() * 2.2) * U0, leaf = mixC(C.leaf, body.palette?.[2] || C.crop, tr() * .4), stem = mixC(C.wood, C.leaf, .25);
+      switch (treeForm) {
+        case 0: // a fan of fronds on a ringed stalk
+          add(cyl(.09 * U0, .16 * U0, h, 6), L(), stem);
+          for (let i = 1; i < 4; i++) add(new THREE.TorusGeometry(.17 * U0, .04 * U0, 3, 8).rotateX(Math.PI / 2), L(0, h * i / 4, 0), C.trim || stem);
+          for (let i = 0; i < 7; i++) { const a = i / 7 * 6.283; add(cone(.22 * U0, h * .55, 4).rotateZ(Math.PI / 2 - .5).translate(h * .25, 0, 0), L(0, h, 0, 0, a, 0), leaf); }
+          break;
+        case 1: // a swollen bulb trunk crowned with a cap
+          add(new THREE.SphereGeometry(.45 * U0, 8, 6).scale(1, 1.6, 1), L(0, .6 * U0, 0), stem);
+          add(cyl(.08 * U0, .2 * U0, h * .7, 6), L(0, .9 * U0, 0), stem);
+          add(new THREE.SphereGeometry(h * .32, 10, 6, 0, 6.283, 0, 1.6).scale(1, .55, 1), L(0, h * .85, 0), leaf);
+          add(new THREE.SphereGeometry(.18 * U0, 6, 4), L(h * .18, h * .78, 0), C.accent2 || leaf, lights);
+          break;
+        case 2: // a spiral of stacked discs
+          add(cyl(.07 * U0, .12 * U0, h, 5), L(), stem);
+          for (let i = 0; i < 6; i++) add(cyl(h * (.36 - i * .05), h * (.36 - i * .05), .08 * U0, 7), L(0, h * (.35 + i * .12), 0, 0, i * .7, 0), i % 2 ? leaf : mixC(leaf, '#000000', .15));
+          break;
+        default: // a cluster of drooping stalks, each tipped with a pod
+          for (let i = 0; i < 5; i++) { const a = i * 1.26, lean = .25 + tr() * .2; rod(add, [0, 0, 0], [Math.cos(a) * h * lean, h * (.7 + tr() * .3), Math.sin(a) * h * lean], .06 * U0, stem, false, 4); add(new THREE.SphereGeometry(.25 * U0, 6, 5).scale(1, 1.4, 1), L(Math.cos(a) * h * lean, h * (.7 + .15), Math.sin(a) * h * lean), leaf); }
+      }
+      add(sunk(cyl(.7 * U0, .75 * U0, SINK + .15 * U0, 8)), L(), level >= 3 ? C.stone2 : C.stone);
+    }
+    // Street furniture in the builders' own way (their lamps, their trees); the rest from town-build.js.
+    function cultureProp(pr, add, gy, U0) {
+      if (pr.kind === 'lamp' || pr.kind === 'lamp-tall') return lamp(add, gy, (pr.kind === 'lamp-tall' ? 1.6 : 1.15) * U0 / u);
+      if (pr.kind === 'tree') return streetTree(add, U0, Math.round(pr.x * 31 + pr.z * 17));
+      if (pr.kind === 'bench' && level <= 4) return buildProp(kit, { ...pr, kind: 'log' }, add);
+      return buildProp(kit, pr, add);
+    }
+    function* nearJob(unit) {
+      const plan = planOf(unit), L1 = merger(THREE, weatherCfg), G1 = merger(THREE), Gd = merger(THREE), B1 = merger(THREE);
+      let n = 0;
+      for (const l of plan.lots) {
+        const b = lotBase(unit, l);
+        const addL = (g, m, colour, bright = false) => { if (!g || bright === 'halo' || bright === 'light' || bright === 'pool') return; const mm = new THREE.Matrix4().multiplyMatrices(b.base, m); if (bright === 'blink') B1.add(g, mm, colour); else if (bright) G1.add(g, mm, colour); else L1.add(g, mm, colour, b.groundR, 1.4 * u); };
+        if (blocks) buildLot(kit, l, 'near', addL);
+        else alienLot(l, addL);
+        if (++n % 6 === 0) yield;
+      }
+      for (const st of plan.streets) { strip(st.pts.map(([x, z]) => unit.fr.at(x, z)), st.w, streetColour, .2, Gd); yield; }
+      for (const sq of plan.squares) disc(unit.fr.at(sq.x, sq.z), sq.r, sq.kind === 'park' || sq.kind === 'court' ? C.turf : paved ? C.plaza : C.path, .26, Gd);
+      for (const pr of plan.props) {
+        const b = lotFrame(unit.fr, pr.x, pr.z, pr.ang), gr = radius + terrain.surface(b.n);
+        if (terrain.isLiquid(b.n)) continue;
+        const base = new THREE.Matrix4().makeBasis(b.right, b.n, b.fwd).setPosition(b.n.clone().multiplyScalar(gr));
+        const addP = (g, m, colour, bright = false) => { if (!g || bright === 'halo' || bright === 'light' || bright === 'pool') return; const mm = new THREE.Matrix4().multiplyMatrices(base, m); if (bright === 'blink') B1.add(g, mm, colour); else if (bright) G1.add(g, mm, colour); else L1.add(g, mm, colour, gr, 1.4 * u); };
+        if (blocks) buildProp(kit, pr, addP); else cultureProp(pr, addP, groundOf({ n: b.n, fwd: b.fwd, right: b.right, groundR: gr }), plan.U || 1);
+        if (++n % 20 === 0) yield;
+      }
+      const ug = new THREE.Group();
+      for (const [mg, mat] of [[L1, litMat], [G1, glowMat], [Gd, groundMat], [B1, blinkMat]]) if (mg.count()) { const mesh = new THREE.Mesh(mg.geometry(), mat); mesh.frustumCulled = false; ug.add(mesh); }
+      return ug;
+    }
+    const farGroup = (unit) => {
+      const plan = planOf(unit), items = [];
+      if (!blocks) { // their own buildings, simplified (alien-build.js farProtos), one instanced mesh a prototype
+        protos ??= farProtos(archCtx, arch);
+        const byKey = new Map(), fh = floorH(u);
+        for (const l of plan.lots) {
+          const k = { ...l, kind: l.kind === 'house' || l.kind === 'row' ? 'home' : l.kind }, sz = sizeOf(arch, k, { U: Math.max(.75, u), fh, fill: fillOf(l) }), b = lotBase(unit, l);
+          const pk = k.kind === 'tower' ? 'tower' : 'home', key = protos.has(`${pk}:${sz.mass}:${l.seed % 2}`) ? `${pk}:${sz.mass}:${l.seed % 2}` : `${pk}:${sz.mass}:0`;
+          if (!protos.has(key)) continue;
+          if (!byKey.has(key)) byKey.set(key, []);
+          byKey.get(key).push({ m: b.base.clone().multiply(new THREE.Matrix4().makeScale(sz.R * 2, sz.H, sz.R * 2)), tone: .88 + (l.seed % 7) / 7 * .22 });
+        }
+        if (!byKey.size) return null;
+        farMat ??= farMaterial(THREE, farNight);
+        const ug = new THREE.Group(), c = new THREE.Color();
+        for (const [key, its] of byKey) {
+          const mesh = new THREE.InstancedMesh(protos.get(key), farMat, its.length);
+          its.forEach((it, i) => { mesh.setMatrixAt(i, it.m); mesh.setColorAt(i, c.setScalar(it.tone)); });
+          mesh.instanceMatrix.needsUpdate = true; mesh.frustumCulled = false; mesh.userData.shared = true; ug.add(mesh);
+        }
+        return ug;
+      }
+      for (const mss of farMasses(plan, Math.max(.75, u))) {
+        const b = lotBase(unit, mss);
+        items.push({ matrix: b.base.clone().multiply(new THREE.Matrix4().makeTranslation(0, -1, 0)), w: mss.w, h: mss.h + 1, d: mss.d, seed: mss.seed, colour: kit.walls[mss.seed % kit.walls.length] });
+      }
+      if (!items.length) return null;
+      const ug = new THREE.Group(); ug.add(farMesh(THREE, items, { windowColour: C.window, night: farNight, U: Math.max(.75, u) }));
+      return ug;
+    };
+    const buildUnit = (unit, detail) => {
+      if (detail === 'near') { const job = nearJob(unit); let v; do v = job.next(); while (!v.done); swap(unit, v.value, 'near'); }
+      else swap(unit, detail === 'far' ? farGroup(unit) : null, detail);
+    };
+    const reach = () => FAR_D; // (a city world's city to the horizon: far cells are cheap, one instanced mesh a shape)
+    // At the start: full detail round the site, masses beyond.
+    // (beyond 900 m the rest come in one a frame as you go: unitsFollow)
+    for (const unit of units) { const d = unit.n.angleTo(siteV) * radius - unit.R; buildUnit(unit, d < NEAR_D ? 'near' : d < Math.min(900, reach(unit)) ? 'far' : null); }
+    let job = null, lastHere = null, scanTick = 0; // job: { unit, gen }
+    unitsFollow = (here, night) => {
+      farNight.value = night;
+      if (job) { // keep building, a few milliseconds a frame
+        const t0 = performance.now();
+        let v; do v = job.gen.next(); while (!v.done && performance.now() - t0 < 5);
+        if (v.done) { swap(job.unit, v.value, 'near'); job = null; }
+        return;
+      }
+      // Look again only once you have moved a few metres (or every half second or so).
+      scanTick++;
+      if (lastHere && lastHere.distanceToSquared(here) < 16 && scanTick % 30) return;
+      (lastHere ??= here.clone()).copy(here);
+      const hn = here.clone().normalize();
+      let best = null, bestD = Infinity, want = null;
+      for (const unit of units) {
+        const d = Math.acos(Math.min(1, Math.max(-1, unit.n.dot(hn)))) * radius - unit.R, R2 = reach(unit);
+        const w = d < NEAR_D ? 'near' : unit.detail === 'near' && d < NEAR_D * 1.4 ? 'near' : d < R2 ? 'far' : unit.detail === 'far' && d < R2 * 1.2 ? 'far' : null;
+        if (w !== unit.detail && d < bestD) { bestD = d; best = unit; want = w; }
+      }
+      if (!best) return;
+      lastHere = null; // more may be waiting: look again next frame
+      if (want === 'near') job = { unit: best, gen: nearJob(best) };
+      else buildUnit(best, want);
+    };
+  }
+
+  // A city world: the planned city round the capital, to the horizon (city-plan.js).
+  let planned = null;
+  if (urban && !ruins && !handsTowns) {
+    const cosOf = (m) => Math.cos(m / radius);
+    const occupied = (n, rr) => n.dot(landingNormal) > cosOf(34 + rr) || n.dot(signalNormal) > cosOf(22 + rr) || (n.dot(places[0].v) > cosOf(places[0].radius + 400) && placed.some((p) => n.dot(p.n) > cosOf(p.foot + rr)));
+    planned = buildPlannedCity(THREE, { radius, terrain, urban, centre: places[0].v, capitalR: places[0].radius, u, level, family: civ.family, palette: C, occupied, near: Math.min(520, radius * .6), far: Math.min(6000, radius * Math.PI * .97), coarse, seed: `${body.seed}:${body.id}` });
+    group.add(planned.group);
+    obstacles.push(...planned.obstacles);
+    paths.push(...planned.paths);
+  }
 
   // --- Above the world --------------------------------------------------------
   // Satellites in tidy constellations, a station, and ships with somewhere to go. All in
@@ -1271,9 +2224,10 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   const hullC = ship?.hullColour || C.hull, trimC = ship?.trim || C.accent, glowC = ship?.glow || '#7fd4ff', panelC = tint('#1b2a52', trimC, .05);
   const organic = GROWN.includes(shipCiv.material);
   const M0 = new THREE.Matrix4(), solid = (geo, opts = {}) => new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .55, metalness: .12, ...opts });
-  let sats = null, station = null;
+  let sats = null, station = null, deck = null;
+  const DECK_Z = 9; // the deck's floor, metres above the station's centre along its axis
   const flights = [];
-  if (level >= 5) {
+  if ((level >= 5 || orbital) && !ruins) {
     // Satellites: a body with a dish facing the world, and solar wings that turn to the
     // star (grown cultures: a pod with leaf-sails). Three instanced meshes in all.
     const bus = merger(THREE), wing = merger(THREE), beacon = merger(THREE);
@@ -1308,31 +2262,33 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
     sats.lights = inst(beacon, new THREE.MeshBasicMaterial({ vertexColors: true }));
     for (let i = 0; i < orbits.length; i++) sats.lights.setColorAt(i, new THREE.Color(1, 1, 1));
 
-    // The station: a spinning habitat ring on spokes around a hub with a docking port at
-    // each end (shuttles from the ground dock at one, ships from deep space at the other),
-    // solar wings, and lit windows all round.
-    const RS = level >= 6 ? 17 : 12, sg = merger(THREE), sgl = merger(THREE);
-    sg.add(new THREE.TorusGeometry(RS, 1.7, 8, 32), M0, hullC);
-    sg.add(new THREE.TorusGeometry(RS, 1.75, 3, 32, Math.PI * 2).scale(1, 1, .25), M0, trimC);
-    for (let i = 0; i < 4; i++) sg.add(new THREE.CylinderGeometry(.45, .45, RS * 2, 6), new THREE.Matrix4().makeRotationZ(i * Math.PI / 4), C.metal);
-    sg.add(new THREE.CylinderGeometry(2.6, 2.6, 7, 12).rotateX(Math.PI / 2), M0, trimC);
-    for (const z of [-1, 1]) {
-      sg.add(new THREE.CylinderGeometry(1.3, 1.6, 1.6, 10).rotateX(Math.PI / 2), L(0, 0, z * 4.3), C.metal2);
-      sgl.add(new THREE.TorusGeometry(1.35, .16, 4, 14), L(0, 0, z * 5.15), glowC);
-    }
-    for (const x of [-1, 1]) {
-      sg.add(new THREE.BoxGeometry(5, .35, .35), L(x * (RS + 3.6), 0, 0), C.metal);
-      sg.add(new THREE.BoxGeometry(7, .1, 4.5), L(x * (RS + 8.5), 0, 0), panelC);
-    }
-    sgl.add(new THREE.TorusGeometry(RS + 1.62, .2, 3, 48), M0, C.window);
-    sgl.add(new THREE.TorusGeometry(RS - 1.62, .2, 3, 48), M0, C.window);
-    station = new THREE.Mesh(sg.geometry(), solid(null, { metalness: .2 }));
-    station.add(new THREE.Mesh(sgl.geometry(), new THREE.MeshBasicMaterial({ vertexColors: true })));
-    station.orbit = { axis: V(r() - .5, 1, r() - .5).normalize(), start: V(1, 0, 0), rad: radius * 1.7, speed: .012 };
+    // The station: their own design (station-deck.js): a landing deck you can walk on, in
+    // a shape and size of their own, on top of a core with a spinning habitat ring and a
+    // far port where freighters from deep space dock. It turns with the orbit to keep
+    // facing the world. Bigger stations orbit a little higher.
+    deck = buildStationDeck(THREE, { seed: `${body.seed}:${shipCiv.id || civ.id}`, tier: shipCiv.tier || tier, level, civ: shipCiv, organic, coarse, lift: DECK_Z,
+      colours: { hull: hullC, trim: trimC, glow: glowC, panel: panelC, window: C.window } });
+    deck.lift = DECK_Z;
+    group.add(deck.group);
+    station = new THREE.Group();
+    station.orbit = { axis: V(r() - .5, 1, r() - .5).normalize(), start: V(1, 0, 0), rad: radius * 1.7 + deck.radius * .6, speed: .012 * Math.min(1, 40 / deck.radius) };
     station.orbit.start.addScaledVector(station.orbit.axis, -station.orbit.start.dot(station.orbit.axis)).normalize();
-    station.traverse(c => c.frustumCulled = false); group.add(station);
+    group.add(station);
   }
   const stationAt = (t, out = V()) => { const o = station.orbit; return out.copy(o.start).applyAxisAngle(o.axis, t * o.speed).multiplyScalar(o.rad); };
+  // The deck's frame at time t: +Y the station's axis, +X toward the world, origin on the floor at its centre.
+  if (deck) {
+    const fc = V(), fx = V(), fz = V(), fm = new THREE.Matrix4();
+    deck.frameAt = (t, out = new THREE.Matrix4()) => {
+      const a = station.orbit.axis;
+      stationAt(t, fc); fx.copy(fc).negate().normalize(); fz.crossVectors(fx, a);
+      return out.makeBasis(fx, a, fz).setPosition(fc.addScaledVector(a, DECK_Z));
+    };
+    deck.place = (t) => { deck.frameAt(t, fm); fm.decompose(deck.group.position, deck.group.quaternion, deck.group.scale); deck.group.updateMatrixWorld(true); return fm; };
+    deck.padAt = (t, i, out = V()) => { const p = deck.pads[i]; return out.set(p.x, 0, p.z).applyMatrix4(deck.frameAt(t, fm)); };
+    deck.axis = station.orbit.axis;
+    deck.place(0);
+  }
 
   // --- Flights ------------------------------------------------------------------
   // Every ship in the air is on its way somewhere. A flight is a loop of legs, each a
@@ -1364,7 +2320,8 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
     const axis = station.orbit.axis, PORT = 5.2;
     // Where a ship of this scale rests: its lowest point on the ground, its nose at the port.
     const restLift = (k) => -bb.min.y * k + .05, noseOut = (k) => (ship.stands ? bb.max.y : bb.max.z) * k;
-    const dockAt = (t, side, k, d, out) => stationAt(t, out).addScaledVector(axis, side * (PORT + noseOut(k) + d));
+    // Shuttles from the ground set down on the deck's crew pads (1 and 2); freighters from deep space dock at the far port.
+    const dockAt = (t, side, k, d, out, pad = 0) => deck && side === 1 && pad ? deck.padAt(t, pad, out).addScaledVector(axis, restLift(k) + d) : stationAt(t, out).addScaledVector(axis, side * (PORT + noseOut(k) + d));
     const flight = (o, k, legs, offset = 0) => { const total = legs.reduce((a, l) => a + l.dur, 0); flights.push({ o, k, legs, total, offset, lift: restLift(k), q: null, last: null, yAxis: V(0, 0, 1), heading: null }); };
     const padPoint = (i, k) => { const [x, , z] = PADS[i]; return V(x * portK, .32 * portK, z * portK).applyMatrix4(spaceportBase).addScaledVector(V().setFromMatrixColumn(spaceportBase, 1).normalize(), restLift(k)); };
     const up = (p) => p.clone().normalize();
@@ -1377,15 +2334,16 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       return slerpDir(tmpUp.copy(P).divideScalar(rp), dirB, ease(Math.max(0, (x - .12) / .88)), out).multiplyScalar(rp + (rd - rp) * alt);
     };
     const tmpDir = V(), tmpUp = V();
-    const stationRun = (P, k, side, wait) => {
-      const tmp = V(), face = (t) => axis.clone().multiplyScalar(-side);
+    const deckFace = (t) => ship.stands ? axis.clone() : deck.padAt(t, 0, V()).sub(deck.padAt(t, 1, V())).normalize(); // upright on the deck, or level along it
+    const stationRun = (P, k, side, wait, pad = 0) => {
+      const tmp = V(), onDeck = !!(deck && side === 1 && pad), face = onDeck ? deckFace : (t) => axis.clone().multiplyScalar(-side), H = onDeck ? 14 : 9;
       return [
         { dur: wait, pos: (x, t, out) => out.copy(P), state: 'rest' },
-        { dur: 36, thrust: 1, pos: (x, t, out) => climb(P, dockAt(t, side, k, 9, tmp), x, out) },
-        { dur: 7, thrust: .35, face, pos: (x, t, out) => dockAt(t, side, k, 9 * (1 - ease(x)), out) },
-        { dur: 18, face, pos: (x, t, out) => dockAt(t, side, k, 0, out), state: 'docked' },
-        { dur: 7, thrust: .35, face, pos: (x, t, out) => dockAt(t, side, k, 9 * ease(x), out) },
-        { dur: 36, thrust: .7, pos: (x, t, out) => climb(P, dockAt(t, side, k, 9, tmp), 1 - x, out) },
+        { dur: 36, thrust: 1, pos: (x, t, out) => climb(P, dockAt(t, side, k, H, tmp, pad), x, out) },
+        { dur: 7, thrust: .35, face, deck: onDeck, pos: (x, t, out) => dockAt(t, side, k, H * (1 - ease(x)), out, pad) },
+        { dur: 18, face, deck: onDeck, pos: (x, t, out) => dockAt(t, side, k, 0, out, pad), state: 'docked' },
+        { dur: 7, thrust: .35, face, deck: onDeck, pos: (x, t, out) => dockAt(t, side, k, H * ease(x), out, pad) },
+        { dur: 36, thrust: .7, pos: (x, t, out) => climb(P, dockAt(t, side, k, H, tmp, pad), 1 - x, out) },
       ];
     };
     // From deep space to the station's far port, and away again.
@@ -1408,7 +2366,7 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
         // Progress over the ground is eased but the climb is not, so it leaves and arrives near vertically.
         const e = ease(x), base = hA + (hB - hA) * e, away = Math.min(1, 6 * Math.min(x, 1 - x));
         n.copy(nA).lerp(nB, e).normalize();
-        const clear = radius + terrain.surface(n) + restLift(1) + 6;
+        const clear = radius + terrain.surface(n) + restLift(1) + 6 + (megacity && n.angleTo(places[0].v) * radius < places[0].radius * 1.3 ? skyline : 0); // over a megacity, above its towers
         return out.copy(n).multiplyScalar(Math.max(base + Math.sin(Math.PI * x) * (35 + dist * .12), base + (clear - base) * away));
       } };
     };
@@ -1427,7 +2385,7 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
     };
     const k = .55, dir = (side) => { const d = V(r() - .5, r() - .5, r() - .5).normalize(); return d.addScaledVector(axis, -d.dot(axis)).addScaledVector(axis, side * .5).normalize(); };
     if (spaceportBase) {
-      const shuttle = (i, offset) => flight(make(k), k, stationRun(padPoint(i, k), k, 1, 20), offset);
+      const shuttle = (i, offset) => flight(make(k), k, stationRun(padPoint(i, k), k, 1, 20, i), offset); // spaceport pad i -> deck pad i
       shuttle(1, 0); shuttle(2, 62);
       // The liner: capital to each of the nearest towns in turn and home again.
       const P = padPoint(3, k), stops = places.slice(1).map(s => ({ s, d: s.v.angleTo(places[0].v) })).filter(x => x.d * radius < 1400).sort((a, b) => a.d - b.d).slice(0, 3).map(x => spotBeside(x.s, k)).filter(Boolean);
@@ -1458,6 +2416,15 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
     for (const m of [cars.hull, cars.glow]) { m.frustumCulled = false; group.add(m); }
   }
 
+  // Smoke from forges and smokestacks: puffs that rise, drift and swell, then start again.
+  let smoke = null;
+  if (smokeFrom.length && !civ.underwater && !ruins) { // (no smoke under water)
+    const PUFFS = 6, mat = new THREE.MeshStandardMaterial({ color: industrial ? '#8d8a86' : '#9a948c', roughness: 1, transparent: true, opacity: .55, depthWrite: false, flatShading: true });
+    smoke = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), mat, smokeFrom.length * PUFFS);
+    smoke.frustumCulled = false; smoke.puffs = PUFFS; smoke.drift = V(r() - .5, r() - .5, r() - .5).normalize();
+    group.add(smoke);
+  }
+
   // Night at the site, for lamps, pools of light and halos (0 by day, 1 at night).
   let night = 1;
   const m = new THREE.Matrix4(), p = new THREE.Vector3(), q2 = new THREE.Quaternion(), basis = new THREE.Matrix4(), rot = new THREE.Matrix4();
@@ -1472,7 +2439,7 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
     vel.copy(pB).sub(pA).divideScalar(.05);
     // Which way it points: docked and docking, at the port; otherwise along its motion,
     // upright hulls nose first once moving, level hulls level with the ground below.
-    upv.copy(pA).normalize();
+    if (leg.deck) upv.copy(deck.axis); else upv.copy(pA).normalize(); // on a station's deck, up is off the deck
     const dir = leg.face ? leg.face(t) : null, speed = vel.length();
     if (ship.stands) {
       if (dir) nose.copy(dir); else nose.copy(upv).lerp(speed > .5 ? fwd.copy(vel).normalize() : upv, Math.min(1, Math.max(0, (speed - 2) / 10))).normalize();
@@ -1493,7 +2460,9 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   }
   function update(t, sunDir) {
     if (sunDir) night = Math.min(1, Math.max(0, (.12 - signalNormal.dot(sunDir)) / .24));
-    if (glowMeshRef) glowMeshRef.material.color.setScalar(.7 + .3 * night);
+    if (winNightRef) winNightRef.value = night;
+    planned?.update(night);
+    if (glowMeshRef) glowMeshRef.material.color.setScalar(ruins ? 1 : .7 + .3 * night);
     if (poolMeshRef) { poolMeshRef.visible = night > .02; poolMeshRef.material.opacity = night; }
     if (haloRef) { haloRef.visible = night > .02; haloRef.material.uniforms.night.value = night; }
     if (blinkRef) blinkRef.material.color.setScalar((t * .8) % 1 < .14 ? 1 : .18);
@@ -1513,7 +2482,20 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       sats.lights.instanceColor.needsUpdate = true;
     }
     if (station) { const o = station.orbit; stationAt(t, station.position); station.quaternion.setFromUnitVectors(V(0, 0, 1), o.axis); station.rotateZ(t * .1); }
+    if (deck) { deck.place(t); deck.spin(t); }
     for (const f of flights) fly(f, t);
+    if (smoke) {
+      smokeFrom.forEach((sm, j) => {
+        if (!sm.at) return;
+        const upS = upv.copy(sm.at).normalize(), side = rgt.copy(smoke.drift).addScaledVector(upS, -smoke.drift.dot(upS)).normalize();
+        for (let i = 0; i < smoke.puffs; i++) {
+          const ph = ((t * .09 * (1 + j % 3 * .15)) + i / smoke.puffs) % 1, size = (.5 + ph * 2.4) * u * sm.k * (1 - ph ** 4);
+          pA.copy(sm.at).addScaledVector(upS, (.3 + ph * 12) * u * sm.k).addScaledVector(side, ph * ph * 6 * u * sm.k);
+          smoke.setMatrixAt(j * smoke.puffs + i, basis.makeScale(size, size, size).setPosition(pA));
+        }
+      });
+      smoke.instanceMatrix.needsUpdate = true;
+    }
     if (cars) {
       cars.lanes.forEach((c, i) => {
         const a = t * c.speed + c.phase, wob = (x) => c.rad * (1 + .12 * Math.sin(x * 3 + c.weave));
@@ -1526,22 +2508,61 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       cars.hull.instanceMatrix.needsUpdate = cars.glow.instanceMatrix.needsUpdate = true;
     }
   }
-  let glowMeshRef = null, poolMeshRef = null, haloRef = null, blinkRef = null;
+  let glowMeshRef = null, poolMeshRef = null, haloRef = null, blinkRef = null, winNightRef = null;
 
-  if (!placed.length) return none;
-  const litMesh = new THREE.Mesh(lit.geometry(), new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .9 }));
-  const glowMesh = new THREE.Mesh(glow.geometry(), new THREE.MeshBasicMaterial({ vertexColors: true }));
-  const groundMesh = new THREE.Mesh(ground.geometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }));
+  if (!placed.length && !units.length) return none;
+  const litMesh = new THREE.Mesh(lit.geometry(), litMat);
+  const glowMesh = new THREE.Mesh(glow.geometry(), glowMat);
+  const groundMesh = new THREE.Mesh(ground.geometry(), groundMat);
   const extra = [];
   glowMeshRef = glowMesh;
-  if (blink.count()) extra.push(blinkRef = new THREE.Mesh(blink.geometry(), new THREE.MeshBasicMaterial({ vertexColors: true })));
-  if (pool.count()) extra.push(poolMeshRef = new THREE.Mesh(pool.geometry(), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })));
-  if (halos.length) extra.push(haloRef = haloPoints(THREE, halos));
+  if (!ruins) extra.push(blinkRef = new THREE.Mesh(blink.geometry(), blinkMat)); // (town units blink with the same material)
+  if (pool.count() && !ruins) extra.push(poolMeshRef = new THREE.Mesh(pool.geometry(), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })));
+  if (halos.length && !ruins) extra.push(haloRef = haloPoints(THREE, halos));
   for (const mesh of [litMesh, glowMesh, groundMesh, ...extra]) { mesh.frustumCulled = false; group.add(mesh); }
+  // While you are inside a home (interior.js), its own outside (walls, roof, poles, tent
+  // cone, yard things) is not drawn within its footprint: only the room is there.
+  const hide = { c: { value: new THREE.Vector3() }, up: { value: new THREE.Vector3(0, 1, 0) }, r: { value: -1 }, h: { value: 0 } };
+  // Painted windows (town-build.js facades: aWin), lit here and there by night.
+  const winNight = winNightRef = { value: 1 }, winColour = { value: new THREE.Color(C.window) };
+  {
+    const before = litMat.onBeforeCompile, key = litMat.customProgramCacheKey();
+    litMat.onBeforeCompile = (sh, renderer) => {
+      before.call(litMat, sh, renderer);
+      Object.assign(sh.uniforms, { uWinNight: winNight, uWinColour: winColour });
+      sh.vertexShader = 'attribute vec4 aWin; varying vec4 vWin;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvWin = aWin;');
+      sh.fragmentShader = 'varying vec4 vWin; uniform float uWinNight; uniform vec3 uWinColour;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+  if (vWin.z > 0.0) {
+    vec2 cell = vec2(vWin.x / vWin.z, vWin.y / vWin.w), f = fract(cell), id = floor(cell);
+    float win = step(.22, f.x) * step(f.x, .78) * step(.24, f.y) * step(f.y, .78);
+    float on = step(.62 - .3 * uWinNight, fract(sin(dot(id, vec2(12.9898, 78.233))) * 43758.5453));
+    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * .25 + vec3(.06, .08, .1), win);
+    totalEmissiveRadiance += uWinColour * win * on * (.05 + 1.1 * uWinNight);
+  }`);
+    };
+    litMat.customProgramCacheKey = () => key + '|windows';
+  }
+  for (const mat of [litMat, glowMat, blinkMat, ...extra.filter((m) => m !== blinkRef && m.material).map((m) => m.material)]) {
+    if (!mat.isMeshStandardMaterial && !mat.isMeshBasicMaterial) continue;
+    const before = mat.onBeforeCompile, key = mat.customProgramCacheKey();
+    mat.onBeforeCompile = (sh, renderer) => {
+      before.call(mat, sh, renderer);
+      Object.assign(sh.uniforms, { uHideC: hide.c, uHideUp: hide.up, uHideR: hide.r, uHideH: hide.h });
+      sh.vertexShader = 'varying vec3 vHideW;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\nvHideW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      sh.fragmentShader = 'varying vec3 vHideW; uniform vec3 uHideC; uniform vec3 uHideUp; uniform float uHideR; uniform float uHideH;\n' + sh.fragmentShader.replace('void main() {', `void main() {
+  if (uHideR > 0.0) { vec3 hd = vHideW - uHideC; float hu = dot(hd, uHideUp); if (hu > -0.5 && hu < uHideH && length(hd - uHideUp * hu) < uHideR) discard; }`);
+    };
+    mat.customProgramCacheKey = () => key + '|hide';
+  }
+  // inside: { centre (Vector3, the floor's centre, planet frame), up (unit), radius, height } or null.
+  const hideInside = (inside) => {
+    if (!inside) { hide.r.value = -1; return; }
+    hide.c.value.copy(inside.centre); hide.up.value.copy(inside.up); hide.r.value = inside.radius; hide.h.value = inside.height;
+  };
   update(0);
   // Ground the builders have cleared: their places near the site and each piece's footprint.
-  const clearings = [...placed.filter(p => !p.road).map(p => ({ n: p.n, r: p.foot + 1.5 })), ...near.map(s => ({ n: s.v, r: s.radius + 2 * u }))];
-  return { group, civ, obstacles, sites, clearings, pieces: placed.length, network: net, ship, spaceportAt, spaceportScale: portK, fieldsAt, landmarks, nightLights: { points: nightLights, places: litPlaces, colour: C.window }, flights, station, update };
+  const clearings = [...placed.filter(p => !p.road).map(p => ({ n: p.n, r: p.foot + 1.5 })), ...near.map(s => ({ n: s.v, r: s.radius + 2 * u })), ...plannedTowns.map(s => ({ n: s.v, r: s.radius + 2 * u })), ...units.filter((un) => un.n.angleTo(siteV) * radius - un.R < DATA_D).map((un) => ({ n: un.n, r: un.R + 2 * u })), ...(planned?.obstacles.map(o => ({ n: o.p.clone().normalize(), r: o.r + 1.5 })) ?? [])];
+  return { group, civ, obstacles, sites, clearings, dwellings, paths, palette: C, urban, planned: planned ? { pieces: planned.pieces } : null, places: places.map(s => ({ n: s.v, r: s.radius, kind: s.kind })), pieces: placed.length, network: net, ship, spaceportAt, spaceportScale: portK, fieldsAt, landmarks, nightLights: { points: ruins ? [] : nightLights, places: litPlaces, colour: C.window }, flights, station, deck, ruins, update, hideInside, doorsteps, units: units.length, follow: (here) => unitsFollow?.(here, night) };
 }
 
 // Colours from the world and the builders: stone from its rock, walls from the
@@ -1562,7 +2583,7 @@ function colours(THREE, body, civ) {
     turf: mix(body.palette[1] || '#6b8a4a', '#55703a', .4), leaf, bag: mix(sec, '#ffffff', .35), line: '#3a3330', road: mix(rock, '#6f6b66', .55),
     path: mix(body.palette[2] || '#7a6648', '#8a7356', .45), plaza: mix(rock, '#a39d93', .45), pad: '#5d6266',
     ember: '#ff7a2a', flame: '#ffc46b', window: civ.species.glow ? mix('#ffd98a', sp.glow || prim, .4) : '#ffd98a', beacon: '#ff4a4a',
-    metal: '#9aa5ad', metal2: '#d7dde1', concrete: '#8b8f91', scorch: '#2b2b2b', hull: '#eef1f2',
+    metal: '#9aa5ad', metal2: '#d7dde1', concrete: '#8b8f91', scorch: '#2b2b2b', hull: '#eef1f2', glass: mix(wall, '#7fb0c4', .65),
   };
 }
 
@@ -1601,6 +2622,12 @@ void main() {
 
 // Triangles given as world positions (for ground strips and discs), with normals.
 function flatGeometry(pos) {
+  // Every triangle faces up, away from the planet's centre (strips are laid either way along).
+  for (let i = 0; i < pos.length; i += 9) {
+    const ax = pos[i + 3] - pos[i], ay = pos[i + 4] - pos[i + 1], az = pos[i + 5] - pos[i + 2], bx = pos[i + 6] - pos[i], by = pos[i + 7] - pos[i + 1], bz = pos[i + 8] - pos[i + 2];
+    const nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
+    if (nx * pos[i] + ny * pos[i + 1] + nz * pos[i + 2] < 0) for (let k = 0; k < 3; k++) { const t = pos[i + 3 + k]; pos[i + 3 + k] = pos[i + 6 + k]; pos[i + 6 + k] = t; }
+  }
   const g = new THREE_REF.BufferGeometry();
   g.setAttribute('position', new THREE_REF.Float32BufferAttribute(pos, 3));
   g.computeVertexNormals();
@@ -1609,8 +2636,11 @@ function flatGeometry(pos) {
 let THREE_REF = null;
 
 // Collects geometry pieces (baked into world space with a colour) and merges them.
-function merger(THREE) {
-  const pos = [], nor = [], col = [], tmp = new THREE.Color();
+// weather (lit pieces only): { snow, bleach, damp } 0..1. Snow settles on every face that
+// looks up, a hot sun bleaches every colour, and damp darkens the foot of every wall toward
+// moss, so the same buildings read differently on a frozen, a baking or a dripping world.
+function merger(THREE, weather = null) {
+  const pos = [], nor = [], col = [], win = [], tmp = new THREE.Color(), snowC = new THREE.Color('#eef3f7'), mossC = new THREE.Color('#3d4a2c'), sunC = new THREE.Color('#f3ead8');
   return {
     // ground: distance from the planet's centre to the ground this piece stands on, and
     // shade: the height over which it darkens toward the ground (ambient shadow). Glowing
@@ -1620,6 +2650,7 @@ function merger(THREE) {
       const geo = (g.index ? g.toNonIndexed() : g).applyMatrix4(matrix);
       const P = geo.attributes.position, N = geo.attributes.normal;
       const own = colour === null ? geo.attributes.color : null; // null: the geometry carries its own colours
+      const W = geo.attributes.aWin; // painted windows (town-build.js facades), if any
       if (!own) tmp.set(colour);
       for (let i = 0; i < P.count; i++) {
         const x = P.getX(i), y = P.getY(i), z = P.getZ(i);
@@ -1631,7 +2662,15 @@ function merger(THREE) {
           k *= .7 + .3 * Math.min(1, Math.max(0, h / shade));
         }
         if (own) tmp.setRGB(own.getX(i), own.getY(i), own.getZ(i));
-        pos.push(x, y, z); nor.push(N.getX(i), N.getY(i), N.getZ(i)); col.push(tmp.r * k, tmp.g * k, tmp.b * k);
+        let cr = tmp.r, cg = tmp.g, cb = tmp.b;
+        if (weather && ground) {
+          const rl = Math.hypot(x, y, z), upness = (N.getX(i) * x + N.getY(i) * y + N.getZ(i) * z) / rl;
+          if (weather.bleach) { const b = weather.bleach * .22; cr += (sunC.r - cr) * b; cg += (sunC.g - cg) * b; cb += (sunC.b - cb) * b; }
+          if (weather.damp) { const d = weather.damp * .4 * Math.max(0, 1 - (rl - ground) / (shade * 1.2)); cr += (mossC.r - cr) * d; cg += (mossC.g - cg) * d; cb += (mossC.b - cb) * d; }
+          if (weather.snow && upness > .5) { const sn = weather.snow * Math.min(1, (upness - .5) * 3.5) * .9; cr += (snowC.r - cr) * sn; cg += (snowC.g - cg) * sn; cb += (snowC.b - cb) * sn; }
+        }
+        pos.push(x, y, z); nor.push(N.getX(i), N.getY(i), N.getZ(i)); col.push(cr * k, cg * k, cb * k);
+        if (W) win.push(W.getX(i), W.getY(i), W.getZ(i), W.getW(i)); else win.push(0, 0, 0, 0);
       }
       geo.dispose(); if (g !== geo) g.dispose();
     },
@@ -1641,6 +2680,7 @@ function merger(THREE) {
       geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
       geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
       geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+      geo.setAttribute('aWin', new THREE.Float32BufferAttribute(win, 4));
       return geo;
     },
   };

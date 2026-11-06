@@ -4,13 +4,16 @@
 // reload, and the star map matches the 3D view. Planets obey Kepler's third
 // law (period grows with orbit^1.5); all orbits run the same way round.
 export const EPOCH = Date.UTC(2026, 0, 1);
-export const PLANET_PERIOD = 600; // seconds for one orbit at the innermost slot (3000 m)
-const INNER_ORBIT = 3000;
+import { SIZE } from './scale.mjs';
+// Worlds are big and far apart (scale.mjs), so orbits are slow: what is kept is the
+// speed along the orbit, about 30 m/s close in, so a ship can always catch a world.
+const INNER_ORBIT = 30000 * SIZE; // a typical innermost orbit
+export const PLANET_PERIOD = 2 * Math.PI * INNER_ORBIT / 30; // seconds for one orbit there (30 m/s)
 // Moons of a rocky planet share one period, so moons on neighbouring orbits
 // never pass through each other. Giants' moons are spaced widely enough to
 // follow Kepler's law individually.
-export const MOON_PERIOD = 180;
-const GIANT_MOON_PERIOD = 480; // for the innermost moon of a giant
+export const MOON_PERIOD = 180 * SIZE;
+const GIANT_MOON_SPEED = 55; // m/s along the orbit of a giant's innermost moon
 
 export function orbitClock(now = Date.now()) {
     return (now - EPOCH) / 1000;
@@ -22,7 +25,7 @@ export function angularSpeed(system, body) {
     const parent = system.bodies.find((b) => b.id === body.parent);
     if (!parent.giant) return (2 * Math.PI) / MOON_PERIOD;
     const innermost = Math.min(...system.bodies.filter((b) => b.parent === parent.id).map((b) => b.orbit));
-    return (2 * Math.PI) / (GIANT_MOON_PERIOD * (body.orbit / innermost) ** 1.5);
+    return (2 * Math.PI) / ((2 * Math.PI * innermost / GIANT_MOON_SPEED) * (body.orbit / innermost) ** 1.5);
 }
 
 // Where a body is at time t (seconds since EPOCH), in system coordinates.

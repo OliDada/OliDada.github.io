@@ -14,8 +14,9 @@ test('ground cover fills a grassy landing site and stays put when you walk away 
   const gc = createGroundCover(THREE, { body, radius: body.radius });
   gc.update(at(body, t, n, 1.7), 0, 1e9);
   assert.equal(gc.busy, 0);
-  const [tufts] = gc.group.children.map(m => m.count);
-  assert.ok(tufts > 1000, `expected a meadow, got ${tufts} tufts`);
+  // A meadow's tufts, or (new plant style) a forest floor's ferns and moss.
+  const tufts = gc.group.children.reduce((s, m) => s + m.count, 0);
+  assert.ok(tufts > 1000, `expected a meadow or forest floor, got ${tufts} items`);
   const first = snapshot(gc);
   const side = new THREE.Vector3(1, 0, 0).cross(n).normalize();
   gc.update(at(body, t, n.clone().addScaledVector(side, 60 / body.radius).normalize(), 1.7), 0, 1e9);

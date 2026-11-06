@@ -24,7 +24,7 @@ test('the kind of cloud follows the air and the world', () => {
     kinds.add(c.kind);
     if (b.biome === 'Toxic') assert.equal(c.kind, 'sulfur');
     if (c.kind === 'water') assert.equal(b.physics.waterState, 'liquid');
-    assert.ok(c.height >= 55 && c.height <= 130);
+    assert.ok(c.height >= 55 && c.height <= (b.landStyle === 'classic' ? 130 : 320)); // the new land's deck clears most of its hills
     assert.match(c.color, /^#[0-9a-f]{6}$/);
   }
   for (const k of ['water', 'ice', 'ash', 'dust']) assert.ok(kinds.has(k), k);
