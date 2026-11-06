@@ -57,6 +57,7 @@ export function buildChunk(body, spec) {
   // The sea is a smooth sphere: it gets its own straight-up normals rather than
   // the ground's, which made it look faceted like the sea floor beneath it.
   const waterNormals = wet ? new Float32Array(count * 3) : null;
+  const waterDepth = wet ? new Float32Array(count) : null; // metres of liquid over the ground (the sea's colour, foam at the shore)
   const mid = faceDirection(spec.face, spec.a0 + spec.size / 2, spec.b0 + spec.size / 2);
   const cn = { x: mid[0], y: mid[1], z: mid[2] };
   const cr = R + t.meshHeight(cn);
@@ -129,6 +130,7 @@ export function buildChunk(body, spec) {
       const rw = R + t.sea;
       water[k] = dx * rw - center[0]; water[k + 1] = dy * rw - center[1]; water[k + 2] = dz * rw - center[2];
       waterNormals[k] = dx; waterNormals[k + 1] = dy; waterNormals[k + 2] = dz;
+      waterDepth[k / 3] = t.sea - h;
       if (h < t.sea) anyWet = true;
     }
     maxD = Math.max(maxD, Math.hypot(positions[k], positions[k + 1], positions[k + 2]));
@@ -168,7 +170,8 @@ export function buildChunk(body, spec) {
     if (wet) {
       const wd = drop * .5; water[k] = water[src] - ux * wd; water[k + 1] = water[src + 1] - uy * wd; water[k + 2] = water[src + 2] - uz * wd;
       waterNormals[k] = waterNormals[src]; waterNormals[k + 1] = waterNormals[src + 1]; waterNormals[k + 2] = waterNormals[src + 2];
+      waterDepth[k / 3] = waterDepth[src / 3];
     }
   }
-  return { positions, colors, normals, cover, lodDelta, lodColor, lodNormal, water: anyWet ? water : null, waterDelta: anyWet ? waterDelta : null, waterNormals: anyWet ? waterNormals : null, center, radius: maxD + drop };
+  return { positions, colors, normals, cover, lodDelta, lodColor, lodNormal, water: anyWet ? water : null, waterDelta: anyWet ? waterDelta : null, waterNormals: anyWet ? waterNormals : null, waterDepth: anyWet ? waterDepth : null, center, radius: maxD + drop };
 }

@@ -21,13 +21,19 @@ import { wind, WIND_GLSL } from './wind.mjs';
 import { STRESS } from './look.js';
 import { PLANT_STYLE } from './style.mjs';
 import { FOREST_FORMS, forestDecor } from './flora-forest.js';
+import { leafTexture, leafCards, leafSurface, leavesAvailable, OPAQUE_U } from './flora-leaves.js';
+import { softenNormals } from './soften.js';
+import { UNDERSTORY } from './flora-understory.js';
 
 const CELL = 12, SLOTS = 7 * STRESS; // metres per cell; places a plant may take root in each cell (STRESS: test multiplier, look.js)
 const NEW = PLANT_STYLE !== 'classic';
+let THREE_CHUNKS = null; // three.js's shader chunks (set by buildFlora), for the leaf cards' shading
 // New plant style: how thickly trees stand in each plant biome (share of the nine tree
 // spots in a cell, 4 m apart, that hold a tree). The dark heart of a forest is a tree
 // every 25-30 m², shoulder to shoulder; glades open where the stand thins.
 const WOODS = { darkwood: .97, forest: .7, wetland: .25, highland: .16, grassland: .07, dryland: .03, barren: 0 };
+// Treeless worlds: how thickly their biggest plants stand instead (same spots as trees).
+const BUSHES = { darkwood: 1, forest: .95, wetland: .6, highland: .45, grassland: .55, dryland: .25, barren: .02 };
 const TALL = 4; // metres: plants at least this tall take the tree spots (and get a distant model)
 const triCount = (g) => (g.index ? g.index.count : g.attributes.position.count) / 3;
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -37,16 +43,20 @@ const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t
 // never more than about a million triangles (under half that on coarse devices).
 // coarse: phones and weak laptops (shorter view distance).
 export function buildFlora(THREE, { body, terrain, radius, signalNormal, landingNormal = signalNormal, budget = 1500, coarse = budget < 1200 }) {
+  THREE_CHUNKS = THREE.ShaderChunk;
   const { species, environment: env } = floraFor(body);
   const group = new THREE.Group();
   const time = { value: 0 }, center = { value: new THREE.Vector3(1e9, 0, 0) };
   const placed = [];
   if (!species.length) return { group, species, placed, update() {}, nearbyObstacles: (p, out = []) => out, setBlocked() {}, biomeAt: () => null, busy: 0 };
 
-  const FAR = coarse ? 45 : 70; // metres: beyond this plants use their lighter model
+  const FAR = coarse ? 45 : 75; // metres: beyond this plants use their lighter model
+  // Between models, plants dissolve from one into the other over a band this wide (no
+  // popping): both are drawn there, each covering the share of pixels the other leaves.
+  const BAND = coarse ? 6 : 10, DIST_BAND = coarse ? 14 : 24;
   // New plant style: beyond DISTANT, trees use a third, very light model (a few dozen
   // triangles), which is what lets a whole forest stand around you.
-  const DISTANT = coarse ? 110 : 170, FAR_TREE = coarse ? 30 : 45; // forest trees switch to their lighter model sooner
+  const DISTANT = coarse ? 90 : 120, FAR_TREE = coarse ? 30 : 45; // forest trees switch to their lighter model sooner
   const reach = coarse ? 220 : 320, cap = Math.round(budget * 2 * STRESS), triangles = (coarse ? 4.5e5 : NEW ? .75e6 : 1.1e6) * STRESS;
   // New plant style: trees are filled and drawn much farther out (treeReach, their own grid
   // of cells, filled nearest first like the rest), thinning out towards the horizon, so the
@@ -54,6 +64,10 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
   const treeReach = NEW ? (coarse ? 420 : 720) : reach, treeCap = Math.round(budget * (coarse ? 3 : 6) * STRESS), treeTriangles = (coarse ? 3e5 : 1.1e6) * STRESS;
   const Y = new THREE.Vector3(0, 1, 0);
   const groves = makeNoise(body.seed, 'flora-groves');
+  // Worlds without trees (simple life: shrubs, caps, pillars...): their biggest land plants
+  // take the trees' place, so hills are covered as far as you can see from the air too.
+  const hasTrees = species.some((sp) => !sp.aquatic && sp.height >= TALL);
+  const standsIn = (sp) => NEW && !sp.aquatic && !['mat', 'crust', 'grass'].includes(sp.form) && (sp.height >= TALL || (!hasTrees && sp.height >= .3));
   const kinds = species.map((sp, si) => {
     const r = rng(body.seed, 'plants', sp.id);
     // Several models per species (different branching, lean and twist), one of them in
@@ -64,39 +78,65 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
     const variantRng = (v) => v ? rng(body.seed, 'plants', sp.id, 'v' + v) : rng(body.seed, 'plants', sp.id);
     const geos = [], farGeos = [];
     for (let v = 0; v < V; v++) {
-      geos.push(buildGeometry(THREE, sp, variantRng(v), { bloom: blooming && v === V - 1 }));
+      geos.push(buildGeometry(THREE, sp, variantRng(v), { bloom: blooming && v === V - 1, leaves: leafyForm(sp) && leavesAvailable() }));
       // Plants beyond FAR metres use a lighter model, built from the same random numbers.
-      farGeos.push(buildGeometry(THREE, sp, variantRng(v), { bloom: blooming && v === V - 1, far: true }));
+      farGeos.push(buildGeometry(THREE, sp, variantRng(v), { bloom: blooming && v === V - 1, far: true, leaves: leafyForm(sp) && leavesAvailable() }));
     }
-    const view = sp.height < 1.6 ? reach * .45 : sp.height < 4 ? reach * .75 : NEW && !sp.aquatic ? treeReach : reach;
+    const view = standsIn(sp) ? treeReach : sp.height < 1.6 ? reach * .45 : sp.height < 4 ? reach * .75 : reach;
     const fade = { value: new THREE.Vector2(view * (view > reach ? .82 : .7), view) };
     // One material, so each model is one draw call; only glowing species need a second
     // one for their glowing foliage (the geometry keeps its two groups: stems, foliage).
-    const material = (foliage) => {
-      const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: foliage === null ? .88 : foliage ? .75 : .95 });
+    // Each level of detail (near, far, distant) has its own materials, which say over which
+    // distances that model fades in and out (uLod: in from x to y, out from z to w).
+    const tallK = standsIn(sp), nearOut = tallK ? FAR_TREE : FAR, distantK = tallK && !flat;
+    // (Distance bands in the shader are switched off, all levels always shown: the models are
+    // chosen when the plants are re-sorted, a few times a second, and a band judged by the
+    // shader's live distance hid plants whose other model had not been added yet, so trees
+    // blinked out as you flew toward them. Kept as uniforms for a later, per-plant fade.)
+    const ALWAYS = [-2, -1, 1e9, 2e9], LODS = [ALWAYS, ALWAYS, ALWAYS, ALWAYS];
+    const material = (foliage, level = 0) => {
+      const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: !NEW, roughness: foliage === null ? .88 : foliage ? .75 : .95 }); // (new style: softened facets, soften.js)
       if (foliage && sp.glow > 0) { m.emissive = new THREE.Color(sp.colors.accent).lerp(new THREE.Color(sp.colors.leaf), .4); m.emissiveIntensity = sp.glow * .55; }
-      addPlantShader(m, { time, center, fade }, sp);
+      if (NEW) m.defines = { PLANT_SURFACE: 1, ...(foliage === false ? { PLANT_BARK: 1 } : {}) }; // surface texture (addPlantShader)
+      addPlantShader(m, { time, center, fade, lod: { value: new THREE.Vector4(...LODS[level]) } }, sp);
       return m;
     };
-    const materials = sp.glow > 0 ? [material(false), material(true)] : material(null);
+    // New plant style: leafy forms get leaf cards (flora-leaves.js) on a foliage material of
+    // their own, cut out by the leaf texture and lit softly on both sides.
+    const leafy = leafyForm(sp) && leavesAvailable();
+    const leafMaterial = (level = 0) => {
+      const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .8, map: leafTexture(THREE, sp, body.seed), alphaTest: .42, side: THREE.DoubleSide });
+      m.defines = { ...(m.defines || {}), LEAF_TRANSLUCENT: '' }; // the sun glows through leaves seen against it (look.js)
+      if (sp.glow > 0) { m.emissive = new THREE.Color(sp.colors.accent).lerp(new THREE.Color(sp.colors.leaf), .4); m.emissiveIntensity = sp.glow * .55; }
+      m.userData.cards = true;
+      addPlantShader(m, { time, center, fade, lod: { value: new THREE.Vector4(...LODS[level]) } }, sp);
+      return m;
+    };
+    const matsAt = (l) => leafy ? [material(false, l), leafMaterial(l)] : sp.glow > 0 ? [material(false, l), material(true, l)] : material(null, l);
+    const materials = [matsAt(0), matsAt(1), matsAt(2), matsAt(3)]; // per level of detail
+    // Its shadow (atmosphere.js): drawn with the same sway, and cut out by the leaves.
+    const depthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, ...(leafy ? { map: leafTexture(THREE, sp, body.seed), alphaTest: .42 } : {}) });
+    addPlantShader(depthMaterial, { time, center, fade }, sp);
     // Tall plants also get a distant model (new plant style); for the others it is the far one.
-    const hasDistant = NEW && sp.height >= TALL && !flat;
+    const hasDistant = standsIn(sp) && !flat;
     // (Where the far model is lighter anyway, it serves as the distant one too.)
-    const distantGeos = hasDistant ? geos.map((_, v) => { const g = buildGeometry(THREE, sp, variantRng(v), { bloom: blooming && v === V - 1, distant: true }); if (triCount(g) < triCount(farGeos[v])) return g; g.dispose(); return farGeos[v]; }) : [];
-    const meshes = geos.map((g) => newMesh(THREE, g, materials, 32)), farMeshes = farGeos.map((g) => newMesh(THREE, g, materials, 32)), distantMeshes = distantGeos.map((g) => newMesh(THREE, g, materials, 32));
-    for (const m of [...meshes, ...farMeshes, ...distantMeshes]) group.add(m);
+    const distantGeos = hasDistant ? geos.map((_, v) => { const g = buildGeometry(THREE, sp, variantRng(v), { bloom: blooming && v === V - 1, distant: true, leaves: leafyForm(sp) && leavesAvailable() }); if (triCount(g) < triCount(farGeos[v])) return g; g.dispose(); return farGeos[v]; }) : [];
+    const meshes = geos.map((g) => newMesh(THREE, g, materials[0], 32)), farMeshes = farGeos.map((g) => newMesh(THREE, g, materials[1], 32)), distantMeshes = distantGeos.map((g) => newMesh(THREE, g, materials[2], 32)), standMeshes = distantGeos.map((g) => newMesh(THREE, g, materials[3], 32));
+    for (const m of [...meshes, ...farMeshes, ...distantMeshes, ...standMeshes]) group.add(m);
     return {
-      sp, geos, farGeos, distantGeos, materials, meshes, farMeshes, distantMeshes, V, flat, blooming, view, foot: plantFootprint(sp), tris: geos.map(triCount), farTris: farGeos.map(triCount), distantTris: distantGeos.map(triCount),
-      tall: NEW && sp.height >= TALL && !sp.aquatic,
+      sp, fade, geos, farGeos, distantGeos, materials, depthMaterial, meshes, farMeshes, distantMeshes, standMeshes, V, flat, blooming, view, foot: plantFootprint(sp), tris: geos.map(triCount), farTris: farGeos.map(triCount), distantTris: distantGeos.map(triCount),
+      tall: standsIn(sp),
       spacing: clamp(2.2 / Math.max(sp.height, .5), .22, 1), // big plants stand further apart
       grove: si * 31.7 + 5, groveFloor: sp.form === 'grass' || flat ? .35 : .06,
     };
   });
   // All of a kind's models, in slot order: near 0..V-1, far V..2V-1, distant 2V..
-  const modelsOf = (k) => [...k.meshes, ...k.farMeshes, ...k.distantMeshes];
-  const geoOf = (k, slotV) => slotV < k.V ? k.geos[slotV] : slotV < 2 * k.V ? k.farGeos[slotV - k.V] : k.distantGeos[slotV - 2 * k.V];
-  const setModel = (k, slotV, m) => { if (slotV < k.V) k.meshes[slotV] = m; else if (slotV < 2 * k.V) k.farMeshes[slotV - k.V] = m; else k.distantMeshes[slotV - 2 * k.V] = m; };
-  const trisOf = (k, slotV) => slotV < k.V ? k.tris[slotV] : slotV < 2 * k.V ? k.farTris[slotV - k.V] : k.distantTris[slotV - 2 * k.V];
+  // Slots: near 0..V-1, far V..2V-1, distant 2V..3V-1, and 3V..: distant models standing
+  // in for near or far ones when the budget is short (always shown, no dissolve).
+  const modelsOf = (k) => [...k.meshes, ...k.farMeshes, ...k.distantMeshes, ...k.standMeshes];
+  const geoOf = (k, slotV) => slotV < k.V ? k.geos[slotV] : slotV < 2 * k.V ? k.farGeos[slotV - k.V] : k.distantGeos[(slotV - 2 * k.V) % k.V];
+  const setModel = (k, slotV, m) => { if (slotV < k.V) k.meshes[slotV] = m; else if (slotV < 2 * k.V) k.farMeshes[slotV - k.V] = m; else if (slotV < 3 * k.V) k.distantMeshes[slotV - 2 * k.V] = m; else k.standMeshes[slotV - 3 * k.V] = m; };
+  const trisOf = (k, slotV) => slotV < k.V ? k.tris[slotV] : slotV < 2 * k.V ? k.farTris[slotV - k.V] : k.distantTris[(slotV - 2 * k.V) % k.V];
   for (const k of kinds) placed.push({ species: k.sp, positions: new Float32Array(0), scales: new Float32Array(0), get meshes() { return modelsOf(k); } });
   // Deadwood and stones on the forest floor (new plant style): fallen trunks, stumps and
   // mossy boulders, in the bark of the world's own trees and the colour of its rock.
@@ -105,9 +145,11 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
     bark: treeSp.colors.stem, moss: '#' + new THREE.Color().setRGB(...(terrain.vegetation || [.3, .45, .2])).multiplyScalar(.6).getHexString(),
     rock: '#' + new THREE.Color().setRGB(...(terrain.rockColor || [.45, .43, .4])).getHexString(),
   }).map((d) => {
-    const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .95 });
+    const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: false, roughness: .95 });
+    material.defines = { PLANT_SURFACE: 1 }; // mottled, like the plants' solid parts
     addPlantShader(material, { time, center, fade: { value: new THREE.Vector2(reach * .45, reach * .6) } }, { sway: 0, height: 1 });
     const mesh = newMesh(THREE, d.geo, material, 64);
+    mesh.castShadow = true;
     group.add(mesh);
     return { ...d, material, mesh, tris: triCount(d.geo) };
   }) : [];
@@ -155,7 +197,7 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
     let TW = 0, SW = 0;
     for (let s = 0; s < kinds.length; s++) { const w = weight[s]; tallW[s] = kinds[s].tall ? w : 0; smallW[s] = kinds[s].tall ? 0 : w; TW += tallW[s]; SW += smallW[s]; }
     const glade = biome === 'darkwood' || biome === 'forest' ? smooth(-.75, .05, c.stand) : 1;
-    const woods = (WOODS[biome] ?? .05) * glade * STRESS;
+    const woods = ((hasTrees ? WOODS : BUSHES)[biome] ?? .05) * glade * STRESS;
     // Four tree spots per 12 m cell, 6 m apart and jittered only so far that trees always
     // stand at least about 3 m apart: thick woods you can still walk through.
     if (part !== 'small' && TW > 0 && woods > 0) for (let gx = 0; gx < 2; gx++) for (let gz = 0; gz < 2; gz++) {
@@ -223,7 +265,8 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
       // Each plant its own: young or old, broader or slimmer, a little warmer or cooler in colour.
       let sc = k.flat ? .6 + r() * 1.2 : .7 + r() * .6;
       const age = r();
-      if (k.tall) { // forest trees: mostly grown, saplings where the stand thins, old giants in old forest
+      if (k.tall && !hasTrees) sc = (1.6 + 1.6 * h(9)) * (h(7) < .2 ? .6 : 1); // treeless worlds: their biggest plants grow into thickets you can see from the air
+      else if (k.tall) { // forest trees: mostly grown, saplings where the stand thins, old giants in old forest
         const g = h(7);
         sc = .82 + .36 * h(9);
         if (g < .06 + .3 * (1 - edge)) sc *= .4 + .3 * h(8);
@@ -242,48 +285,76 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
 
   // Draws the filled cells, nearest first, up to the cap; also lists every plant
   // (placed: what the scanner, sonar and grazing animals look at) and the obstacles.
-  let grid = obstacleGrid([]);
+  let grid = obstacleGrid([]), budgetEdge = Infinity, gen = 0;
+  const FADE = .8, fades = []; // seconds to fade between models; the instances fading now
   function rebuild() {
+    gen++; fades.length = 0;
     // Slot v of a species is its near model v; slot V + v is its far model v.
     const counts = kinds.map(k => modelsOf(k).map(() => 0)), chosen = [], decorChosen = [], decorCount = decor.map(() => 0);
     let tris = 0;
-    const lists = treeScatter ? [[scatter.active, cap, triangles], [treeScatter.active, treeCap, treeTriangles]] : [[scatter.active, cap, triangles]];
-    for (const [active, capN, triN] of lists) { let count = 0; tris = 0;
+    const lists = treeScatter ? [[scatter.active, cap, triangles, false], [treeScatter.active, treeCap, treeTriangles, true]] : [[scatter.active, cap, triangles, false]];
+    for (const [active, capN, triN, tallList] of lists) { let count = 0, edge = Infinity; tris = 0;
     for (const rec of active) {
       if (!rec.ready) continue;
-      if (count >= capN || tris >= triN) break;
+      if (count >= capN || tris >= triN) { edge = rec.d; break; }
+      // Trees: once most of the budget is spent, the rest get their distant model whatever
+      // their distance, so the woods carry on to the horizon instead of ending.
+      const spent = tris / triN; // (thrifty below, per plant, with some slack so plants at the line do not flip back and forth)
       // Far trees thin out towards the horizon (fewer and fewer of them drawn).
       const keepShare = rec.d > reach ? 1 - .6 * smooth(reach, treeReach, rec.d) : 1;
       const far = rec.d > FAR, nearTree = rec.d <= FAR_TREE, distant = rec.d > DISTANT;
       for (const it of rec.items) if (rec.d <= it.view && !(it.thin > keepShare)) {
         if (it.decor !== undefined) { decorChosen.push(it); decorCount[it.decor]++; tris += decor[it.decor].tris; continue; }
         count++; it.d = rec.d;
-        const k = kinds[it.s], slotV = distant && k.distantGeos.length ? 2 * k.V + it.variant : far || (k.tall && !nearTree) ? k.V + it.variant : it.variant;
-        chosen.push([it, slotV]); counts[it.s][slotV]++;
-        tris += trisOf(k, slotV);
+        const k = kinds[it.s], v = it.variant, hasD = k.distantGeos.length > 0;
+        // One model per plant, by distance (the stand-in distant model when the budget is short).
+        const thrifty = tallList && hasD && spent > (it.slot === 2 * k.V + v ? .78 : .86);
+        const nearOut = k.tall ? FAR_TREE : FAR, slotV = thrifty ? 2 * k.V + v : hasD && rec.d > DISTANT ? 2 * k.V + v : rec.d > nearOut ? k.V + v : v;
+        // A plant that changes model fades from the old one into the new over FADE seconds
+        // (both drawn meanwhile); one that was not drawn last time just appears.
+        if (it.gen === gen - 1 && it.slot !== undefined && it.slot !== slotV) {
+          // Going back to the model it was fading out of: turn the fade round where it is.
+          if (it.from === slotV && time.value - it.t0 < FADE) it.t0 = time.value - (FADE - (time.value - it.t0));
+          else it.t0 = time.value;
+          it.from = it.slot;
+        }
+        it.slot = slotV; it.gen = gen;
+        const fading = it.from !== undefined && it.from !== slotV && time.value - it.t0 < FADE;
+        if (!fading) it.from = undefined;
+        chosen.push([it, slotV, fading ? 1 : 0]); counts[it.s][slotV]++; tris += trisOf(k, slotV);
+        if (fading) { chosen.push([it, it.from, 2]); counts[it.s][it.from]++; } // (not counted against the budget: that made more plants switch, a loop)
       }
     }
+    // Where the budget ran out, plants fade out a little before it rather than stop dead.
+    // (Small plants only, and the edge eased so it does not jitter as you move: on trees the
+    // jitter made them blink in and out.)
+    if (!tallList) { budgetEdge = Number.isFinite(edge) ? (Number.isFinite(budgetEdge) ? budgetEdge * .7 + edge * .3 : edge) : Infinity;
+      for (const k of kinds) if (!k.tall) k.fade.value.set(Math.min(k.view * .7, budgetEdge * .85), Math.min(k.view, budgetEdge)); }
     }
     kinds.forEach((k, s) => modelsOf(k).forEach((m, slotV) => {
       if (counts[s][slotV] <= m.instanceMatrix.count) return;
-      const grown = newMesh(THREE, geoOf(k, slotV), k.materials, Math.ceil(counts[s][slotV] * 1.5));
+      const grown = newMesh(THREE, geoOf(k, slotV), k.materials[Math.min(3, Math.floor(slotV / k.V))], Math.ceil(counts[s][slotV] * 1.5));
       group.remove(m); m.dispose(); group.add(grown);
       setModel(k, slotV, grown);
     }));
     const at = kinds.map(k => modelsOf(k).map(() => 0)), pos = kinds.map(() => []), scl = kinds.map(() => []), obstacles = [];
-    for (const [it, slotV] of chosen) {
+    for (const [it, slotV, fade] of chosen) {
       const k = kinds[it.s], mesh = modelsOf(k)[slotV], slot = at[it.s][slotV]++;
       mesh.instanceMatrix.array.set(it.m, slot * 16);
       mesh.instanceColor.array.set(it.c, slot * 3);
+      const fk = fade ? Math.min(1, Math.max(0, (time.value - it.t0) / FADE)) : 1;
+      mesh.geometry.attributes.iFade.array[slot] = fade === 2 ? 1 + fk : fk; // (its fade as it stands now, not a frame of both shown)
+      if (fade) fades.push({ it, attr: mesh.geometry.attributes.iFade, slot, out: fade === 2 });
+      if (fade === 2) continue; // (the old model, fading out: not a second plant)
       pos[it.s].push(it.p[0], it.p[1], it.p[2]); scl[it.s].push(it.sc);
       if (k.foot && !(it.d > 90)) obstacles.push({ p: new THREE.Vector3(it.p[0], it.p[1], it.p[2]), r: k.foot.r * it.sc, h: k.foot.h * it.sc }); // grasses and mats are walked over
     }
     kinds.forEach((k, s) => {
-      modelsOf(k).forEach((m, slotV) => { m.count = at[s][slotV]; m.visible = m.count > 0; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; });
+      modelsOf(k).forEach((m, slotV) => { m.castShadow = slotV < k.V && !k.flat && k.sp.height >= 1.2; /* small plants' shadows are not missed, and cost a lot */ m.customDepthMaterial = k.depthMaterial; m.count = at[s][slotV]; m.visible = m.count > 0; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; m.geometry.attributes.iFade.needsUpdate = true; });
       placed[s].positions = new Float32Array(pos[s]); placed[s].scales = new Float32Array(scl[s]);
     });
     decor.forEach((d, q) => {
-      if (decorCount[q] > d.mesh.instanceMatrix.count) { const grown = newMesh(THREE, d.geo, d.material, Math.ceil(decorCount[q] * 1.5)); group.remove(d.mesh); d.mesh.dispose(); group.add(grown); d.mesh = grown; }
+      if (decorCount[q] > d.mesh.instanceMatrix.count) { const grown = newMesh(THREE, d.geo, d.material, Math.ceil(decorCount[q] * 1.5)); grown.castShadow = true; group.remove(d.mesh); d.mesh.dispose(); group.add(grown); d.mesh = grown; }
       d.mesh.count = 0;
     });
     for (const it of decorChosen) {
@@ -307,13 +378,19 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
     // t: animation time; camera: camera position relative to the world's centre.
     update(t, camera) {
       time.value = t;
+      // Plants switching model: advance their fades; when all are done, drop the old models.
+      if (fades.length) {
+        let done = true;
+        for (const f of fades) { const k = Math.min(1, Math.max(0, (t - f.it.t0) / FADE)); if (k < 1) done = false; f.attr.array[f.slot] = f.out ? 1 + k : k; f.attr.needsUpdate = true; }
+        if (done) { dirty = true; wait = 0; fades.length = 0; }
+      }
       if (!camera) return;
       dir.copy(camera).normalize();
       const altitude = camera.length() - radius - terrain.surface(dir);
       group.visible = altitude < treeReach;
       if (!group.visible) return;
       center.value.copy(camera);
-      if (altitude < reach && scatter.update(dir, coarse ? 2 : 3)) dirty = true;
+      if (altitude < reach && scatter.update(dir, coarse ? 2 : 4)) dirty = true;
       if (treeScatter?.update(dir, coarse ? 2 : 3)) dirty = true;
       if (dirty && (--wait <= 0 || !(scatter.busy || treeScatter?.busy))) { rebuild(); dirty = false; wait = 8; }
     },
@@ -332,10 +409,22 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
   };
 }
 
+// Each mesh draws its model through a geometry of its own that shares the model's
+// buffers and adds iFade, a per-plant fade for switching models (see FADE): 0..1 fading
+// in, 1 shown, 1..2 fading out. (The view is never disposed: that would free the shared buffers.)
 function newMesh(THREE, geometry, materials, capacity) {
-  const m = new THREE.InstancedMesh(geometry, materials, capacity);
+  const view = new THREE.BufferGeometry();
+  for (const [name, a] of Object.entries(geometry.attributes)) view.setAttribute(name, a);
+  view.index = geometry.index; view.groups = geometry.groups.map((g) => ({ ...g }));
+  if (!geometry.boundingSphere) geometry.computeBoundingSphere();
+  view.boundingSphere = geometry.boundingSphere;
+  const fade = new THREE.InstancedBufferAttribute(new Float32Array(capacity).fill(1), 1);
+  fade.setUsage(THREE.DynamicDrawUsage);
+  view.setAttribute('iFade', fade);
+  const m = new THREE.InstancedMesh(view, materials, capacity);
   m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
   m.count = 0; m.frustumCulled = false; // instances are spread around you
+  m.receiveShadow = true;
   m.visible = false; // until it has plants: an empty instanced mesh still costs a draw call
   return m;
 }
@@ -369,23 +458,82 @@ export function plantFootprint(sp) {
 // How far a plant's top sways, in metres. New plant style: big trees barely move (a tall
 // trunk only stirs at the top, and slowly; uRate, uPush), so a forest stands still in a breeze.
 const swayAmp = (sp) => sp.sway * (sp.aquatic ? .08 : .045) * (NEW && !sp.aquatic && sp.height > 4 ? 4 * Math.sqrt(sp.height / 4) * .55 : sp.height);
-function addPlantShader(material, { time, center, fade }, sp) {
-  const sway = sp.sway > 0;
+function addPlantShader(material, { time, center, fade, lod = null }, sp) {
+  const sway = sp.sway > 0, dissolve = !!lod && !material.isMeshDepthMaterial;
   material.onBeforeCompile = (shader) => {
     // Sea plants sway slowly with the swell, and the wind does not reach them.
+    if (dissolve) shader.uniforms.uLod = lod;
+    if (dissolve && material.userData.cards) {
+      // Screen-door dissolve (interleaved gradient noise): two models in a band take
+      // complementary pixels, so the switch is never seen as a pop.
+      shader.fragmentShader = 'varying float vPlantVis; varying vec2 vPlantLod; varying float vFade;\n' + shader.fragmentShader.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+      { float dn = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+        if (dn > vPlantLod.x || dn <= vPlantLod.y || dn >= vPlantVis) discard;
+        // Switching model: the leaves of the old and new one take complementary pixels.
+        if (vFade <= 1.0 ? dn >= vFade : dn < vFade - 1.0) discard; }`);
+    }
     Object.assign(shader.uniforms, { uTime: sp.aquatic ? { get value() { return time.value * .45; } } : time, uCenter: center, uFade: fade, uAmp: { value: swayAmp(sp) }, uRate: { value: NEW && sp.height > 4 ? .5 : 1 }, uPush: { value: NEW && sp.height > 4 ? 1.6 : 5 }, uInvH: { value: 1 / sp.height }, uWind: sp.aquatic ? { value: 0 } : wind.strength, uWindDir: wind.dir });
-    shader.vertexShader = 'uniform float uTime; uniform vec3 uCenter; uniform vec2 uFade; uniform float uAmp; uniform float uRate; uniform float uPush; uniform float uInvH; uniform float uWind; uniform vec3 uWindDir;\n' + WIND_GLSL + shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+    // Leaves far off: their texture's smaller mipmaps average the gaps into the leaves, so
+    // they would thin out and vanish under the alpha test; far leaves are made denser.
+    if (material.userData.cards) shader.fragmentShader = 'varying float vPlantDist;\n' + shader.fragmentShader.replace('#include <alphatest_fragment>', 'diffuseColor.a = min(1.0, diffuseColor.a * (1.0 + 1.3 * smoothstep(18.0, 170.0, vPlantDist)));\n#include <alphatest_fragment>');
+    // Surface texture on the solid parts (new plant style): bark streaked and grained along
+    // the stem, caps, bulbs and fleshy leaves softly mottled, in the plant's own colours.
+    // From the rest pose (object space), so it stays on the plant as it sways.
+    if (material.defines?.PLANT_SURFACE) {
+      shader.vertexShader = 'varying vec3 vPlantRest; varying vec3 vPlantRestN;\n' + shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n      vPlantRest = position; vPlantRestN = normal;');
+      shader.fragmentShader = `varying vec3 vPlantRest; varying vec3 vPlantRestN;
+float pHash(vec3 p) { p = fract(p * .3183099 + .1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float pNoise(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(pHash(i), pHash(i + vec3(1, 0, 0)), f.x), mix(pHash(i + vec3(0, 1, 0)), pHash(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(pHash(i + vec3(0, 0, 1)), pHash(i + vec3(1, 0, 1)), f.x), mix(pHash(i + vec3(0, 1, 1)), pHash(i + vec3(1, 1, 1)), f.x), f.y), f.z); }
+` + shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+      {
+        vec3 q = vPlantRest;
+        #ifdef PLANT_BARK
+          // Bark: furrows running up the stem, broken into plates, with fine grain.
+          float furrow = pNoise(vec3(q.x * 9.0, q.y * 1.1, q.z * 9.0)) * 0.7 + pNoise(vec3(q.x * 22.0, q.y * 3.0, q.z * 22.0)) * 0.3;
+          float grain = pNoise(q * 31.0);
+          diffuseColor.rgb *= 0.74 + 0.36 * furrow + 0.1 * (grain - 0.5);
+          // A little lichen on what faces up.
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.05, 1.18, 0.92), smoothstep(0.55, 0.9, vPlantRestN.y) * smoothstep(0.55, 0.75, pNoise(q * 4.0)) * 0.5);
+        #else
+          // Caps, bulbs, fleshy leaves: soft mottling, darker flecks, a paler bloom here and there.
+          float mott = pNoise(q * 3.5) * 0.6 + pNoise(q * 9.0) * 0.4;
+          float fleck = smoothstep(0.7, 0.82, pNoise(q * 26.0));
+          diffuseColor.rgb *= (0.86 + 0.24 * mott) * (1.0 - 0.18 * fleck);
+        #endif
+      }`);
+    }
+    if (material.userData.cards) shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_begin>', THREE_CHUNKS.normal_fragment_begin.replaceAll('normal *= faceDirection;', '').replaceAll('normal = normal * faceDirection;', '')); // leaf cards shade the same on both sides
+    shader.vertexShader = (dissolve ? 'uniform vec4 uLod; varying float vPlantVis; varying vec2 vPlantLod; attribute float iFade; varying float vFade;\n' : '') + (material.userData.cards ? 'varying float vPlantDist;\n' : '') + 'uniform float uTime; uniform vec3 uCenter; uniform vec2 uFade; uniform float uAmp; uniform float uRate; uniform float uPush; uniform float uInvH; uniform float uWind; uniform vec3 uWindDir;\n' + WIND_GLSL + shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
       vec3 plantAt = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-      float plantT = 1.0 - smoothstep(uFade.x, uFade.y, distance(plantAt, uCenter));
+      // Distance along the ground from the point under the camera, the same measure the
+      // plants are chosen by (flora-mesh.js rebuild), so flying over them does not fade
+      // out the ones below you.
+      vec3 plantUp = normalize(uCenter), plantRel = plantAt - uCenter;
+      float plantG = length(plantRel - plantUp * dot(plantRel, plantUp));
+      float plantT = 1.0 - smoothstep(uFade.x, uFade.y, plantG);
       float plantR = fract(sin(dot(plantAt, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-      transformed *= smoothstep(plantR * .8, plantR * .8 + .2, plantT);` + (sway ? `
+      ` + (dissolve ? `
+      // Fading in at the edge of view and between models: dissolved, not grown (no popping).
+      float plantD = plantG;
+      vPlantVis = smoothstep(plantR * .8, plantR * .8 + .2, plantT);
+      vPlantLod = vec2(uLod.x < 0.0 ? 1.0 : smoothstep(uLod.x, uLod.y, plantD), smoothstep(uLod.z, uLod.w, plantD));
+      vFade = iFade;` + (material.userData.cards ? '' : `
+      // Solid parts (stems, caps) switch at the middle of the band, in the vertex shader:
+      // a fragment discard would cost a lot on solid surfaces, and they change little.
+      if ((uLod.x >= 0.0 && plantD < (uLod.x + uLod.y) * .5) || plantD > (uLod.z + uLod.w) * .5) transformed *= 0.0;
+      if (iFade <= 1.0 ? iFade < .5 : iFade - 1.0 >= .5) transformed *= 0.0; // switching model: solid parts swap halfway
+      transformed *= vPlantVis; vPlantVis = 1.0; vPlantLod = vec2(1.0, 0.0);`) : `
+      transformed *= smoothstep(plantR * .8, plantR * .8 + .2, plantT);`) + (material.userData.cards ? `
+      vPlantDist = distance(plantAt, cameraPosition);` : '') + (sway ? `
       float swayK = pow(clamp(transformed.y * uInvH, 0.0, 1.3), 2.0) * uAmp;
       float swayPhase = instanceMatrix[3].x * .37 + instanceMatrix[3].z * .23;
       transformed.x += sin(uTime * 1.7 * uRate + swayPhase) * swayK;
       transformed.z += cos(uTime * 1.3 * uRate + swayPhase * 1.3) * swayK * .6;
       transformed += windPush(swayK * uPush, swayPhase); // the weather's wind (wind.mjs)` : ''));
   };
-  material.customProgramCacheKey = () => (sway ? 'plant-sway' : 'plant'); // same program; uniforms differ
+  material.customProgramCacheKey = () => (sway ? 'plant-sway' : 'plant') + (material.userData.cards ? '-cards' : '') + (dissolve ? '-lod' : ''); // same program; uniforms differ
 }
 
 // --- Geometry: each form assembled from a few primitives, merged into one mesh
@@ -394,7 +542,7 @@ function addPlantShader(material, { time, center, fade }, sp) {
 // numbers): small parts dropped, rounder parts with fewer facets.
 // distant: a very light stand-in for trees far off (new plant style): the trunk and a few
 // crown shapes, or one cone for a spire-shaped crown, in the plant's own colours.
-export function buildGeometry(THREE, sp, r, { bloom = false, far = false, distant = false } = {}) { // exported for previews
+export function buildGeometry(THREE, sp, r, { bloom = false, far = false, distant = false, leaves = false } = {}) { // exported for previews
   const parts = [], H = sp.height, c = sp.colors;
   const M = (x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) =>
     new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz, 'YXZ')), new THREE.Vector3(sx, sy, sz));
@@ -423,6 +571,8 @@ export function buildGeometry(THREE, sp, r, { bloom = false, far = false, distan
   const grow = () => {
   // New plant style: forest trees get their own models (flora-forest.js); the classic ones below stay for ?plants=classic.
   if (PLANT_STYLE !== 'classic' && FOREST_FORMS[sp.form]) FOREST_FORMS[sp.form]({ THREE, add, M, cyl, blob, blade, r, H, c, sp, leaf });
+  // New plant style: the smaller plants grow to their species' plan (flora-understory.js; false for the classic plan).
+  else if (PLANT_STYLE !== 'classic' && UNDERSTORY({ THREE, add, M, cyl, blob, blade, spear, r, H, c, sp, leaf })) { /* built */ }
   else if (sp.form === 'tree') {
     // A trunk in two bent sections with root flares and bark rings, branches with
     // twigs, crowns broken up by smaller clumps, and fruit or blossom on some.
@@ -732,17 +882,59 @@ export function buildGeometry(THREE, sp, r, { bloom = false, far = false, distan
   const twist = sp.growth === 'twisted' ? (.7 + r() * .6) * (r() < .5 ? -1 : 1) : 0, bend = (r() - .5) * .12;
   const PALE = new THREE.Color('#ddd6c8'), tmp = new THREE.Color();
 
-  if (distant) standIn(THREE, parts, H);
+  // (The distant model is the same plant too: the same leaves, every third one, a little
+  // bigger (any bigger and the crown swells past its outline; far off the leaves are drawn
+  // denser anyway), and only its main stems; standIn()
+  // made it of a few big masses, which looked like a different tree.)
+  if (distant) { const thickest = Math.max(0, ...parts.filter((p) => !p.foliage).map(stemThickness)); for (const p of parts) if (p.foliage ? sp.colors?.leaf && fruitish(p.color, sp.colors) : stemThickness(p) < Math.min(H * .025, thickest * .45)) p.dropFar = true; } // (marked, not removed: every part keeps its place, which picks its leaves)
+  // Leaf cards in place of the leafy blobs (crowns, clumps): fewer on the far model.
+  // (A crown of very many small clumps gets fewer leaves on each, so a tree stays within
+  // about a thousand cards.)
+  // The near and far models get the very same leaves: each clump's cards come from a
+  // random stream of its own (by the clump's place in the plant), so a tree does not
+  // change as it switches model; the far model only has plainer stems. (Leaves are a
+  // little fewer and bigger than they were, to pay for the far model keeping them all.)
+  const clumps = leaves ? parts.filter((p) => p.foliage && p.geo.type === 'IcosahedronGeometry').length : 0, budget = Math.min(1, 640 / Math.max(1, clumps * 6));
+  const every = distant ? 3 : 1, cardGrow = 1.1 * (distant ? 1.4 : 1), cardSeed = (sp.seed ^ Math.floor(r() * 1e9)) >>> 0;
+  if (leaves) parts.forEach((p, pi) => { if (!p.foliage && sp.form !== 'mound') return; p.cardRng = rng(cardSeed, 'cards', pi); });
+  if (leaves) for (const p of parts) {
+    // Trees: every other piece of foliage too (fir skirts and boughs, cone- and bowl-shaped
+    // crowns, brushes), as leaves over its own surface, so no crown is a solid shell.
+    if (p.foliage && p.geo.type !== 'IcosahedronGeometry' && (sp.form === 'tree' || sp.form === 'conifer') && !fruitish(p.color, sp.colors)) {
+      const g = p.geo; if (!g.boundingBox) g.computeBoundingBox();
+      const e = p.matrix.elements, sc = Math.sqrt(Math.max(e[0] ** 2 + e[1] ** 2 + e[2] ** 2, e[4] ** 2 + e[5] ** 2 + e[6] ** 2, e[8] ** 2 + e[9] ** 2 + e[10] ** 2));
+      const ext = g.boundingBox.getSize(new THREE.Vector3()), big = Math.max(ext.x, ext.y, ext.z) * sc;
+      if (big < H * .045) continue; // a tiny tip stays solid
+      // Card size from the shape's thinner dimensions; count from its surface area.
+      const dims = [ext.x, ext.y, ext.z].sort((a, b) => a - b), thin = Math.max(dims[0], dims[1] * .35), half = Math.max(H * .012, Math.min(dims[1] * .45, thin * .9 + dims[1] * .12, H * .05 + .2));
+      const area = 2 * (ext.x * ext.y + ext.y * ext.z + ext.x * ext.z) * .55;
+      const k = Math.round(Math.max(3, Math.min(56, area / (half * half * 4) * 1.1)));
+      p.geo = leafSurface(THREE, g, p.cardRng || r, k, half * 1.15, every, cardGrow);
+      continue;
+    }
+    if ((!p.foliage && sp.form !== 'mound') || p.geo.type !== 'IcosahedronGeometry') continue; // (a mound's cushions are leafy too)
+    const e = p.matrix.elements, sc = Math.sqrt(Math.max(e[0] ** 2 + e[1] ** 2 + e[2] ** 2, e[4] ** 2 + e[5] ** 2 + e[6] ** 2, e[8] ** 2 + e[9] ** 2 + e[10] ** 2));
+    const rad = p.geo.parameters.radius, size = rad * sc;
+    if (sp.colors.leaf && fruitish(p.color, sp.colors)) { // fruit, berries and buds: solid, but smaller and round
+      if (p.foliage) p.geo = new THREE.IcosahedronGeometry(rad * .5, 1);
+      continue;
+    }
+    // (Small clumps too: as solid crumbs they read as green stones among the leaves.)
+    p.foliage = true;
+    // Near and far: the same cards, sized by the clump.
+    p.geo = leafCards(THREE, rad, p.cardRng || r, Math.max(size < H * .025 ? 2 : 4, Math.min(32, Math.round(((size < H * .025 ? 0 : 6) + size * 4.2) * (sp.form === 'mound' ? 1.4 : 1) * budget))), 0, every, cardGrow);
+  }
   // Merge: stems first, then foliage, each part non-indexed with its colour baked in.
-  const ordered = [...parts.filter(p => !p.foliage), ...parts.filter(p => p.foliage)].map(far ? (p) => simplerPart(THREE, p, H) : (p) => p).filter(Boolean);
-  const pos = [], nor = [], col = [];
-  let stemVerts = 0;
+  const ordered = [...parts.filter(p => !p.foliage), ...parts.filter(p => p.foliage)].filter((p) => !p.dropFar).map(far || distant ? (p) => simplerPart(THREE, p, H) : (p) => p).filter(Boolean);
+  const pos = [], nor = [], col = [], uvs = [];
+  let stemVerts = 0, cardShade = 1;
   for (const p of ordered) {
     const g = (p.geo.index ? p.geo.toNonIndexed() : p.geo).applyMatrix4(p.matrix);
     // A twisted habit turns the plant about its axis more the higher it goes, with an S-bend.
     if (twist) { const A = g.attributes.position; for (let i = 0; i < A.count; i++) { const y = A.getY(i), t = Math.max(0, y / H), a = twist * t, x = A.getX(i), z = A.getZ(i); A.setXYZ(i, x * Math.cos(a) - z * Math.sin(a) + Math.sin(t * Math.PI) * H * bend, y, x * Math.sin(a) + z * Math.cos(a)); } }
-    g.computeVertexNormals();
-    const P = g.attributes.position.array, N = g.attributes.normal.array;
+    const cards = !!p.geo.userData?.cards, shadeV = p.geo.userData?.shade;
+    if (!cards) { g.computeVertexNormals(); if (NEW) softenNormals(THREE, g, p.foliage ? .6 : .72); } // softened facets (soften.js)
+    const P = g.attributes.position.array, N = g.attributes.normal.array, UV = cards ? g.attributes.uv.array : null;
     // Bark: banded, pale with dark marks, or mottled; colour is set per face so it stays crisp.
     const barked = !p.foliage && sp.bark && sp.bark !== 'plain';
     for (let i = 0; i < P.length; i += 9) {
@@ -753,7 +945,13 @@ export function buildGeometry(THREE, sp, r, { bloom = false, far = false, distan
         else if (sp.bark === 'pale') { tmp.lerp(PALE, .7); if (hsh < .18) tmp.multiplyScalar(.45); }
         else tmp.multiplyScalar(.78 + hsh * .38);
       }
-      for (let k = i; k < i + 9 && k < P.length; k += 3) { pos.push(P[k], P[k + 1], P[k + 2]); nor.push(N[k], N[k + 1], N[k + 2]); col.push(tmp.r, tmp.g, tmp.b); }
+      if (cards && i % 18 === 0) { const h = Math.sin((P[i] + P[i + 6]) * 12.9898 + (P[i + 1] + P[i + 7]) * 78.233 + (P[i + 2] + P[i + 8]) * 37.719) * 43758.5453; cardShade = 1.15 + .4 * (h - Math.floor(h)); } // each card a little lighter or darker (by where it is, so the same card looks the same on near and far models)
+      if (cards) tmp.multiplyScalar(cardShade);
+      for (let k = i; k < i + 9 && k < P.length; k += 3) {
+        const sh = shadeV ? shadeV[k / 3] : 1; // leaves inside and under the crown darker
+        pos.push(P[k], P[k + 1], P[k + 2]); nor.push(N[k], N[k + 1], N[k + 2]); col.push(tmp.r * sh, tmp.g * sh, tmp.b * sh);
+        if (cards) { const q = k / 3 * 2; uvs.push(UV[q], UV[q + 1]); } else uvs.push(OPAQUE_U, .5);
+      }
     }
     if (!p.foliage) stemVerts += P.length / 3;
   }
@@ -761,29 +959,50 @@ export function buildGeometry(THREE, sp, r, { bloom = false, far = false, distan
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geometry.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   geometry.addGroup(0, stemVerts, 0);
   geometry.addGroup(stemVerts, pos.length / 3 - stemVerts, 1);
   geometry.computeBoundingSphere();
   return geometry;
 }
 
+// Which forms grow leaves (flora-leaves.js): trees, spires and bushes.
+const leafyForm = (sp) => NEW && !sp.aquatic && ['tree', 'conifer', 'shrub', 'mound', 'stalk', 'plume', 'palm'].includes(sp.form) && (sp.colors?.leaf ?? null) !== null && (sp.glow || 0) < .5;
+// A part in the species' own leaf colours (not its fruit, berries or flowers)?
+// Fruit, berries, buds or flowers: a part in the accent or bloom colours rather than the leaves'
+// (the leaves themselves may be shaded much darker, deep in a wood).
+const fruitish = (c, colors) => !sameish(c, colors) && ['accent', 'bloom'].some((k) => colors[k] && near(c, colors[k], .3)) || (!sameish(c, colors) && !leafHue(c, colors));
+const near = (c, hex, d) => { const o = new c.constructor(hex); return Math.abs(c.r - o.r) + Math.abs(c.g - o.g) + Math.abs(c.b - o.b) < d; };
+// The same hue as the leaves (any brightness): a darker shade of foliage, not fruit.
+const leafHue = (c, colors) => ['leaf', 'leaf2'].some((k) => { if (!colors[k]) return false; const a = c.getHSL({}), b = new c.constructor(colors[k]).getHSL({}); return Math.abs(((a.h - b.h + 1.5) % 1) - .5) < .09 || a.s < .12; });
+const sameish = (c, colors) => ['leaf', 'leaf2'].some((k) => colors[k] && Math.abs(c.r - new c.constructor(colors[k]).r) + Math.abs(c.g - new c.constructor(colors[k]).g) + Math.abs(c.b - new c.constructor(colors[k]).b) < .35);
+
 // The distant model: the plant itself, simplified hard, so it keeps its own silhouette
 // and colours from afar. Stems under an eighth of the plant's height go and the rest get
 // three sides; the foliage (except very big pieces, which are kept with few facets) is
 // gathered by where it is into a few rounded masses in its own colours, so a crown of
 // many small pieces still reads as that crown.
-function standIn(THREE, parts, H) {
-  const keep = [], buckets = new Map(), cellK = H * .3, tmpB = new THREE.Box3();
+function standIn(THREE, parts, H, sp) {
+  const keep = [], buckets = new Map(), cellK = H * .45, tmpB = new THREE.Box3(); // (big cells: a far crown is a few masses)
+  const thickest = Math.max(0, ...parts.filter((p) => !p.foliage).map(stemThickness)); // the trunk: always kept, however slim
   for (const p of parts) {
+    // Fruit, blossom and pods are left out: gathered into the crown's masses they became huge coloured blobs.
+    if (p.foliage && sp?.colors?.leaf && fruitish(p.color, sp.colors)) continue;
     const g = p.geo; if (!g.boundingSphere) g.computeBoundingSphere();
     const e = p.matrix.elements, scale = Math.sqrt(Math.max(e[0] ** 2 + e[1] ** 2 + e[2] ** 2, e[4] ** 2 + e[5] ** 2 + e[6] ** 2, e[8] ** 2 + e[9] ** 2 + e[10] ** 2));
     const big = g.boundingSphere.radius * scale;
-    if (p.foliage ? big >= H * .32 && !g.userData?.detail : big >= H * .05) {
+    if (p.foliage ? big >= H * .32 && !g.userData?.detail : big >= H * .12 || stemThickness(p) >= Math.min(H * .025, thickest * .45)) {
       const q = g.parameters || {};
       let lite = null;
       if (g.type === 'IcosahedronGeometry') lite = new THREE.IcosahedronGeometry(q.radius, 0);
       else if (g.type === 'CylinderGeometry') lite = new THREE.CylinderGeometry(q.radiusTop, q.radiusBottom, q.height, p.foliage ? 5 : 3, 1, q.openEnded);
-      else if (g.type === 'ConeGeometry') lite = new THREE.ConeGeometry(q.radius, q.height, p.foliage ? 5 : 3, 1, q.openEnded);
+      else if (g.type === 'ConeGeometry' && !p.foliage) lite = new THREE.ConeGeometry(q.radius, q.height, 3, 1, q.openEnded);
+      else if (g.type === 'ConeGeometry') { // a cone of foliage: a rounded mass the same size, not a solid spike
+        if (!g.boundingBox) g.computeBoundingBox();
+        const sz = g.boundingBox.getSize(new THREE.Vector3()), c0 = g.boundingBox.getCenter(new THREE.Vector3());
+        keep.push({ ...p, geo: new THREE.IcosahedronGeometry(.5, 0), matrix: p.matrix.clone().multiply(new THREE.Matrix4().compose(c0, new THREE.Quaternion(), sz.multiplyScalar(.92))) });
+        continue;
+      }
       if (lite) { if (!g.boundingBox) g.computeBoundingBox(); lite.computeBoundingBox(); const a = g.boundingBox.getCenter(new THREE.Vector3()), b = lite.boundingBox.getCenter(new THREE.Vector3()); lite.translate(a.x - b.x, a.y - b.y, a.z - b.z); keep.push({ ...p, geo: lite }); }
       else keep.push(p);
       continue;
@@ -807,13 +1026,21 @@ function standIn(THREE, parts, H) {
   parts.push(...keep);
 }
 
+// How thick a stem part is (its widest radius, in plant metres): trunks and limbs are
+// kept on the lighter models however short each piece is (a trunk built as a chain of
+// short pieces must not lose the short ones and leave the rest floating); only twigs go.
+const stemThickness = (p) => {
+  const q = p.geo.parameters || {}, e = p.matrix.elements, sc = Math.sqrt(Math.max(e[0] ** 2 + e[1] ** 2 + e[2] ** 2, e[8] ** 2 + e[9] ** 2 + e[10] ** 2));
+  return (q.radiusBottom !== undefined ? Math.max(q.radiusTop, q.radiusBottom) : q.radius ?? 0) * sc;
+};
 // For the far model: parts under 6% of the plant's height go (twigs, fruit, small leaves,
 // bark rings), and spheres, cylinders and cones are rebuilt with fewer facets, in place.
 function simplerPart(THREE, p, H) {
   const g = p.geo;
   if (!g.boundingSphere) g.computeBoundingSphere();
   const e = p.matrix.elements, scale = Math.sqrt(Math.max(e[0] ** 2 + e[1] ** 2 + e[2] ** 2, e[4] ** 2 + e[5] ** 2 + e[6] ** 2, e[8] ** 2 + e[9] ** 2 + e[10] ** 2));
-  if (g.boundingSphere.radius * scale < H * .06 || g.userData?.detail) return null;
+  if (g.userData?.detail) return null;
+  if (g.boundingSphere.radius * scale < H * .06 && !g.userData?.cards && !p.foliage && stemThickness(p) < H * .006) return null; // only twigs go: leaves, fruit and pods stay, so the plant looks the same
   const q = g.parameters || {};
   let lite = null;
   if (g.type === 'IcosahedronGeometry' && q.detail > 0) lite = new THREE.IcosahedronGeometry(q.radius, 0);

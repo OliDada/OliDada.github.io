@@ -121,6 +121,7 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
     const mesh = new THREE.InstancedMesh(geometry, material, count);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     mesh.frustumCulled = false;
+    if (!sp.aquatic) { mesh.customDepthMaterial = creatureDepthMaterial(THREE, sp); mesh.castShadow = true; } // shadows that walk with them
     group.add(mesh);
     // Suited colonists wear a glass helmet over the head (found from the model's extent).
     if (sp.suit) {
@@ -942,6 +943,7 @@ export function buildCrew(THREE, sp, count, seed = 'crew') {
   addAnimation(material, sp);
   const group = new THREE.Group(), mesh = new THREE.InstancedMesh(geometry, material, count);
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); mesh.frustumCulled = false; group.add(mesh);
+  if (!sp.aquatic) { mesh.customDepthMaterial = creatureDepthMaterial(THREE, sp); mesh.castShadow = true; }
   let helmet = null, offset = null;
   if (sp.suit) {
     const hr = sp.head * 1.45, upright = sp.plan === 'biped';
@@ -998,10 +1000,7 @@ function randomNear(THREE, r, maxAngle) {
 // from the rest pose so it stays put on moving limbs: soft pores and blotches on skin,
 // a woven weave and drape on cloth, quilted panels on suits, brushed metal, wood
 // grain, gloss on eyes and horn, and the old rocky grain only on stone.
-function addAnimation(material, sp) {
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.uSize = { value: sp.size };
-    shader.vertexShader = `attribute float aPart; attribute vec3 aPivot; attribute vec3 aKnee; attribute vec2 aPhase; /* x: phase, y: bend (packed: WebGL allows only 16 attributes) */ attribute float aGlow; attribute float aKind; attribute vec2 iAnim; attribute vec3 iLook; uniform float uSize; varying float vGlow; flat varying float vKind; varying vec3 vRest; varying vec3 vRestN; // flat: a kind must not blend into another across a triangle
+const CREATURE_POSE = `attribute float aPart; attribute vec3 aPivot; attribute vec3 aKnee; attribute vec2 aPhase; /* x: phase, y: bend (packed: WebGL allows only 16 attributes) */ attribute float aGlow; attribute float aKind; attribute vec2 iAnim; attribute vec3 iLook; uniform float uSize; varying float vGlow; flat varying float vKind; varying vec3 vRest; varying vec3 vRestN; // flat: a kind must not blend into another across a triangle
 mat3 rX(float a) { float c = cos(a), s = sin(a); return mat3(1., 0., 0., 0., c, s, 0., -s, c); }
 mat3 rY(float a) { float c = cos(a), s = sin(a); return mat3(c, 0., -s, 0., 1., 0., s, 0., c); }
 mat3 rZ(float a) { float c = cos(a), s = sin(a); return mat3(c, s, 0., -s, c, 0., 0., 0., 1.); }
@@ -1046,7 +1045,22 @@ void creaturePose(inout vec3 p, inout vec3 n) {
   }
   if (aPart != 2. && (aPart < 10. || aPart == 13.) && aPivot.y >= 0.) p.y += abs(sin(cyc)) * amp * uSize * .025;
 }
-` + shader.vertexShader
+`;
+// Its shadow (atmosphere.js): drawn in the same pose, so the shadow's legs walk with the animal's.
+export function creatureDepthMaterial(THREE, sp) {
+  const m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uSize = { value: sp.size };
+    shader.vertexShader = CREATURE_POSE + shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+vec3 cP = position; vec3 cN = vec3(0., 1., 0.); creaturePose(cP, cN); transformed = cP;`);
+  };
+  m.customProgramCacheKey = () => 'creature-depth';
+  return m;
+}
+function addAnimation(material, sp) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uSize = { value: sp.size };
+    shader.vertexShader = CREATURE_POSE + shader.vertexShader
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nvec3 cP = position; vec3 cN = objectNormal; creaturePose(cP, cN); objectNormal = cN;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
 transformed = cP; vGlow = aGlow * (1. + iLook.z * 2.5) + iLook.z * .12 * step(.01, aGlow); vKind = aKind; vRest = position; vRestN = normal;

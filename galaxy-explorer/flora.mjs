@@ -3,6 +3,7 @@
 // how tall they grow, the star's light decides leaf colour, and dim light makes
 // bioluminescence common. Everything here is plain data; flora-mesh.js builds
 // the 3D models and game.js places them.
+import { planFor, planText } from './understory-plans.mjs';
 import { worldKey, harmonize, tame } from './palette.mjs';
 import { rng } from './rng.mjs';
 import { vegetationShift } from './biomes.mjs';
@@ -10,10 +11,13 @@ import { PLANT_STYLE } from './style.mjs';
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 // A colour with its saturation and lightness scaled (sat, light: factors), as hex.
-function mute(hex, sat, light) {
+// key, pull (optional): the hue is also drawn toward the world's colour key (palette.mjs)
+// and the saturation kept under its ceiling, so one world's foliage shares a few hues.
+function mute(hex, sat, light, key = null, pull = 0) {
   const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255), max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
   let h = 0, sl = 0;
   if (d) { sl = d / (1 - Math.abs(2 * l - 1)); h = (max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60; }
+  if (key && d) { h = harmonize(h, key, pull); sl = Math.min(sl * sat, Math.max(.18, key.vivid * .8)) / sat; }
   return hsl(h, sl * sat, l * light);
 }
 const bell = (v, c, w) => Math.exp(-(((v - c) / w) ** 2));
@@ -158,12 +162,16 @@ export function floraFor(body) {
     s.shape = shapeFor(body, s, e);
     if (!s.shape.earthlike) s.description += ` ${SHAPE_TEXT.trunk[s.shape.trunk]}, ${SHAPE_TEXT.crown[s.shape.crown]}.`;
   }
+  // ...and the smaller plants their growth plan (understory-plans.mjs, flora-understory.js).
+  if (PLANT_STYLE !== 'classic') for (const s of species) { const plan = planFor(s); if (plan && plan !== 'classic') s.description += ` ${planText(plan)}.`; }
   species.push(...seaFloraFor(body, e, veg));
   // Flowers, fruit and accents stay within the world's saturation (palette.mjs); leaves keep theirs.
   if (!CHEM_COLORS[e.chem]) for (const s of species) for (const k of ['accent', 'bloom']) if (s.colors[k]) s.colors[k] = tame(s.colors[k], worldKey(body));
   // New plant style: foliage a little less saturated and less bright, so plants sit with
   // the ground they grow on rather than looking painted on (flowers and fruit keep theirs).
-  if (PLANT_STYLE !== 'classic') for (const s of species) for (const k of ['leaf', 'leaf2', 'stem']) if (s.colors[k]) s.colors[k] = mute(s.colors[k], k === 'stem' ? .85 : .72, k === 'stem' ? .95 : .9);
+  // Restraint in colour (step 4 of the look): leaves and bark are also drawn toward the
+  // world's colour key, so ground, plants and sky read as one small palette.
+  if (PLANT_STYLE !== 'classic') for (const s of species) for (const k of ['leaf', 'leaf2', 'stem']) if (s.colors[k]) s.colors[k] = mute(s.colors[k], k === 'stem' ? .85 : .72, k === 'stem' ? .95 : .9, CHEM_COLORS[e.chem] ? null : worldKey(body), k === 'stem' ? 0 : k === 'leaf' ? .4 : .3); // (bark keeps its hue, only its saturation is capped)
   return { species, environment: e };
 }
 

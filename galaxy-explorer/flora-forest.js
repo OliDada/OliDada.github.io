@@ -9,6 +9,7 @@
 // Each builder adds parts through the same helpers flora-mesh.js uses (add, M, cyl, blob),
 // so the plant is merged, coloured, bloomed, twisted and simplified for distance exactly
 // like the others. g: { THREE, add, M, cyl, blob, blade, r, H, c, sp, leaf }.
+import { softenNormals } from './soften.js';
 
 // A small hash of a vertex position, so a vertex shared by two faces moves the same way.
 const jitterOf = (x, y, z, k) => { const v = Math.sin(x * 127.1 + y * 311.7 + z * 74.7 + k * 19.3) * 43758.5453; return v - Math.floor(v); };
@@ -146,10 +147,14 @@ function alienTree(g) {
   // --- Crown plans: dress one tip (p, d, s) ---
   const R0 = H * .21 * S.spread;
   const CROWNS = {
-    discs({ p, d, s }, i) { // stacked flat discs, evenly spaced, the whole stack at most half the tree's height
-      const L = Math.max(2, Math.min(S.layers, Math.round(S.layers * s * s * 1.4))), R = R0 * s * 1.15, gap = Math.min(R * .42, H * .45 * s / L);
+    discs({ p, d, s }, i) { // tiers of leafy pads round the stem, smaller towards the top (a pagoda of foliage, not slices)
+      const L = Math.max(2, Math.min(S.layers, Math.round(S.layers * s * s * 1.4))), R = R0 * s * 1.15, gap = Math.min(R * .45, H * .45 * s / L);
       limb(p, p.clone().addScaledVector(d, gap * (L - .5)), tr * .3 * s, tr * .1, c.stem, 5);
-      for (let k = 0; k < L; k++) { const f = k / L, q = p.clone().addScaledVector(d, gap * k + R * .05), rr = R * (1 - .6 * f) * (.92 + .16 * r()); put(roughen(new THREE.CylinderGeometry(rr, rr * .9, Math.max(R * .1, gap * .35), 12, 1), .04, k + i), q, d, 1, fol(i + (k % 2))); } },
+      for (let k = 0; k < L; k++) {
+        const f = k / L, q = p.clone().addScaledVector(d, gap * k + R * .05), rr = R * (1 - .6 * f) * (.9 + .2 * r()), n = 4 + Math.round(3 * (1 - f));
+        put(roughen(blob(rr * .45, 1), S.lumpy, k + i * 13), q, d, V(1, .38, 1), fol(i + (k % 2)));
+        for (let j = 0; j < n; j++) { const a = j / n * 6.28 + r() * .6 + k; put(roughen(blob(rr * (.38 + .12 * r()), 1), S.lumpy, j + k * 7), q.clone().addScaledVector(out(a), rr * (.55 + .15 * r())).addScaledVector(d, -rr * .08 * S.droop), d, V(1, .34, 1), fol(i + j + k)); }
+      } },
     globe({ p, d, s }, i) { const k = 2 + Math.floor(r() * 3), R = R0 * s; for (let j = 0; j < k; j++) put(roughen(blob(R * (.7 + .4 * r()), 1), S.lumpy, j + i * 5), p.clone().add(V((r() - .5) * R, (r() - .1) * R * .7, (r() - .5) * R)), d, V(1, .8, 1), fol(j + i)); put(detail(roughen(blob(R * .6, 0), .2, i)), p.clone().addScaledVector(d, -R * .35), d, V(1.2, .5, 1.2), under(i)); },
     umbrella({ p, d, s }, i) { // a wide flat-topped canopy, built of overlapping lumpy pads so its edge is ragged
       const R = R0 * s * 1.6, k = 6 + Math.floor(S.spread * 3);
@@ -165,11 +170,16 @@ function alienTree(g) {
     fan({ p, d, s }, i) { const k = 7 + Math.floor(S.spread * 3); for (let j = 0; j < k; j++) { const a = j / k * 6.28 + r() * .3; put(bough(THREE, R0 * s * (1.8 + .6 * r()), R0 * s * .55, .05 + S.droop * .35), p, out(a).add(V(0, 1.2 - S.droop, 0)), 1, fol(j)); } put(blob(R0 * s * .25, 0), p, d, 1, fol(i)); },
     lanterns({ p, d, s }, i) { const R = R0 * s; put(roughen(blob(R * .7, 1), S.lumpy, i), p, d, V(1.2, .55, 1.2), fol(i)); const k = 4 + Math.floor(S.droop * 5), pod = c.bloom || c.accent;
       for (let j = 0; j < k; j++) { const a = j / k * 6.28 + r() * .5, q = p.clone().addScaledVector(out(a), R * (.5 + .4 * r())), len = R * (.4 + .9 * S.droop); add(new THREE.CylinderGeometry(R * .02, R * .02, len, 3, 1).translate(0, -len / 2, 0), new THREE.Matrix4().makeTranslation(q.x, q.y, q.z), under(j), true); put(roughen(blob(R * .2, 1), .1, j), q.clone().add(V(0, -len - R * .15, 0)), UP, V(1, 1.4, 1), pod); } },
-    invertedCone({ p, d, s }, i) { const R = R0 * s * .9, h = R * 1.7; put(roughen(new THREE.ConeGeometry(R, h, 9, 2).rotateX(Math.PI).translate(0, h / 2, 0), S.lumpy, i, 0), p.clone().addScaledVector(d, -h * .15), d, 1, fol(i)); put(detail(roughen(new THREE.CylinderGeometry(R * 1.05, R * .9, h * .12, 9), .15, i + 1)), p.clone().addScaledVector(d, h * .8), d, 1, under(i)); },
+    invertedCone({ p, d, s }, i) { // a crown that widens upward (a vase of foliage), built of leafy clumps in rings, not a solid cone
+      const R = R0 * s * .9, h = R * 1.7, rings = 3;
+      for (let k = 0; k < rings; k++) { const f = (k + .5) / rings, rr = R * (.3 + .7 * f), n = 3 + k * 2, y = h * (f - .15);
+        for (let j = 0; j < n; j++) { const a = j / n * 6.28 + r() * .5 + k; put(roughen(blob(R * (.3 + .12 * f) * (.85 + .3 * r()), 1), S.lumpy, j + k * 11 + i), p.clone().addScaledVector(d, y).addScaledVector(out(a), rr * .75), d, V(1, .7, 1), fol(i + j + k)); } }
+      put(roughen(blob(R * .55, 1), S.lumpy, i + 3), p.clone().addScaledVector(d, h * .78), d, V(1.5, .4, 1.5), fol(i)); },
     puffs({ p, d, s }, i) { const k = 6 + Math.floor(S.spread * 5), R = R0 * s;
       for (let j = 0; j < k; j++) { const dir = out(j * 2.4 + r()).multiplyScalar(.9).add(V(0, .6 + r() * .6, 0)).normalize(), len = R * (1 + .8 * r()), e = p.clone().addScaledVector(dir, len); limb(p, e, tr * .12 * s, tr * .05, c.stem, 3); put(roughen(blob(R * (.28 + .15 * r()), 1), S.lumpy, j), e, dir, 1, fol(j)); } },
-    shelves({ p, d, s }, i) { const k = S.layers, R = R0 * s;
-      for (let j = 0; j < k; j++) { const f = .3 + .65 * j / k, q = p.clone().multiplyScalar(f), a = j * 2.2 + r(); put(roughen(new THREE.CylinderGeometry(R * (1.1 - .5 * f), R * (1 - .5 * f), R * .12, 8, 1), S.lumpy * .5, j), q.clone().addScaledVector(out(a), R * (.6 - .3 * f)), UP, V(1, 1, .6), fol(j)); }
+    shelves({ p, d, s }, i) { const k = S.layers, R = R0 * s; // leafy brackets stepping up the trunk, each on its own side
+      for (let j = 0; j < k; j++) { const f = .3 + .65 * j / k, q = p.clone().multiplyScalar(f), a = j * 2.2 + r(), rr = R * (1.05 - .5 * f), c0 = q.clone().addScaledVector(out(a), rr * .6);
+        for (let m = 0; m < 3; m++) put(roughen(blob(rr * (.42 + .1 * r()), 1), S.lumpy, j * 5 + m), c0.clone().addScaledVector(out(a + (m - 1) * .7), rr * .3), UP, V(1, .32, .8), fol(j + m)); }
       put(roughen(blob(R * .6, 1), S.lumpy, i), p, d, V(1, .7, 1), fol(i)); },
     ribbons({ p, d, s }, i) { const k = 10 + Math.floor(S.droop * 8), R = R0 * s; put(blob(R * .25, 0), p, d, 1, fol(i));
       for (let j = 0; j < k; j++) put(bough(THREE, R * (1.6 + 1.6 * S.droop) * (.7 + .5 * r()), R * .18, 1 + S.droop * 2), p, out(j * 2.4 + r()).add(V(0, .8, 0)), 1, fol(j)); },
@@ -307,7 +317,7 @@ export function forestDecor(THREE, { bark, moss, rock }) {
     const pos = [], nor = [], col = [];
     for (const { geo, matrix, color, mossy } of parts) {
       const g = (geo.index ? geo.toNonIndexed() : geo).applyMatrix4(matrix);
-      g.computeVertexNormals();
+      g.computeVertexNormals(); softenNormals(THREE, g, .7); // softened facets (soften.js)
       const P = g.attributes.position.array, N = g.attributes.normal.array;
       for (let i = 0; i < P.length; i += 9) {
         const ny = (N[i + 1] + N[i + 4] + N[i + 7]) / 3, j = jitterOf(P[i], P[i + 1], P[i + 2], 5);

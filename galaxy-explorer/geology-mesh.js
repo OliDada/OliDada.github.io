@@ -8,6 +8,7 @@
 import { rng } from './rng.mjs';
 import { geologyFor } from './geology.mjs';
 import { addSurfaceDetail } from './planet-lod.js';
+import { softenNormals } from './soften.js';
 
 const SINK = 1.2;
 const RANGE = 150; // metres from the site for the formations placed near it
@@ -29,7 +30,10 @@ export function buildGeology(THREE, { body, terrain, radius, signalNormal, landi
   for (const f of formations) {
     const r = rng(body.seed, 'geology-place', f.key), want = worldCount(f, radius), nearWant = f.rare ? 0 : NEAR[f.type] ?? 1;
     const { lit, glow, foot, height } = shapeOf(THREE, f, C, r);
-    const litMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: f.glassy || f.shape === 'meteorite' ? .3 : .95, metalness: f.shape === 'meteorite' ? .6 : f.glassy ? .15 : 0 });
+    // Stone gets softened facets (soften.js), the surface style of rocks, trunks and logs; crystal and glass stay crisp.
+    const crisp = !!f.glassy || /crystals|geode|blades|columns/.test(f.shape || '');
+    if (!crisp) softenNormals(THREE, lit, .62);
+    const litMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: crisp, roughness: f.glassy || f.shape === 'meteorite' ? .3 : .95, metalness: f.shape === 'meteorite' ? .6 : f.glassy ? .15 : 0 });
     // Stone formations get the same close-up grain and cracks as the bare ground around them.
     if (!f.glassy && f.shape !== 'meteorite') addSurfaceDetail(litMaterial, { ground: terrain.ground, airless: terrain.airless, lite: coarse, objects: true });
     const meshes = [new THREE.InstancedMesh(lit, litMaterial, want)];

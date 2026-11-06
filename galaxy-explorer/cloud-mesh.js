@@ -107,7 +107,16 @@ export function createCloudLayer(THREE, body, sun, { lite = false, light = '#fff
           float dusk = clamp(1.0 - abs(ndl - 0.03) / 0.24, 0.0, 1.0);
           vec3 col = mix(uColor, uColor * vec3(1.0, 0.6, 0.4), dusk * 0.55) * uLight;
           float shade;
-          if (uInside > 0.5) shade = mix(0.95, 0.4, thick); // grey underneath where thick
+          vec3 view = normalize(vWorld - cameraPosition);
+          if (uInside > 0.5) {
+            // From below: a bank is a soft mass, bright and thin at its edges, blue-grey
+            // and lumpy where it is thick, and where the star is behind it the edges glow.
+            float lumps = cNoise(dir * uCloudScale * 9.0 + uCloudOffset * 1.7) * 0.6 + cNoise(dir * uCloudScale * 23.0 - uCloudOffset) * 0.4;
+            shade = mix(1.0, 0.5, thick) * (0.82 + 0.34 * lumps) * mix(1.0, 1.12, uTop);
+            col = mix(col, col * vec3(0.78, 0.83, 0.92), thick * 0.6);
+            float behind = pow(max(dot(view, toSun), 0.0), 5.0);
+            col += uLight * behind * (1.0 - thick) * 0.55 * lit;
+          }
           else {
             shade = mix(0.72, 1.0, uTop) * mix(0.85, 1.0, sqrt(thick));
             #if SUN_RELIEF
@@ -115,7 +124,7 @@ export function createCloudLayer(THREE, body, sun, { lite = false, light = '#fff
             vec3 side = toSun - up * ndl;
             if (dot(side, side) > 1e-6) {
               float ahead = cloudValue(normalize(dir + normalize(side) * (0.35 / uCloudScale)));
-              shade *= 1.0 + 0.35 * clamp((v - ahead) / uCloudSoft, -1.0, 1.0) * lit;
+              shade *= 1.0 + 0.22 * clamp((v - ahead) / uCloudSoft, -1.0, 1.0) * lit;
             }
             #endif
           }
@@ -127,10 +136,11 @@ export function createCloudLayer(THREE, body, sun, { lite = false, light = '#fff
           float dist = distance(vWorld, cameraPosition);
           if (uInside > 0.5) a *= 1.0 - smoothstep(0.45 * uFar, uFar, dist); // into the haze at the horizon
           else {
-            a *= 0.6 + 0.4 * smoothstep(0.0, 0.4, dot(up, normalize(cameraPosition - vWorld))); // thin at the world's edge
+            a *= smoothstep(0.02, 0.45, dot(up, normalize(cameraPosition - vWorld))); // thin at the world's edge (seen edge-on the shells left a dark, ragged ring round the world)
             a *= 1.0 - smoothstep(14.0, 45.0, vFar); // a distant world: its clouds fade with it
           }
           a *= smoothstep(4.0, 30.0, dist); // passing through, the fog takes over (game.js)
+          if (uInside > 0.5) a *= mix(1.0, 0.75 + 0.25 * thick, uTop); // the higher banks show through gaps, a little softer
           gl_FragColor = vec4(col, a);
           #include <tonemapping_fragment>
           // From below at night, cloud is a little lighter than the sky behind it, never darker.
@@ -146,6 +156,50 @@ export function createCloudLayer(THREE, body, sun, { lite = false, light = '#fff
     group.add(mesh);
     meshes.push(mesh);
   }
+  // Wisps: thin streaks of low cloud, drawn out along the wind, below the deck. Only for
+  // looking at from the ground or low flight (they fade out as you climb); seen only,
+  // never flown through (they are not part of the cloud density).
+  const wisp = new THREE.Mesh(geometry, new THREE.ShaderMaterial({
+    uniforms: { ...shared },
+    defines: { CLOUD_OCT: 2 },
+    vertexShader: /* glsl */ `
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
+      varying vec3 vDir, vWorld, vUp;
+      void main() {
+        vDir = position; vec4 w = modelMatrix * vec4(position, 1.0); vWorld = w.xyz;
+        vUp = w.xyz - (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        gl_Position = projectionMatrix * viewMatrix * w;
+        #include <logdepthbuf_vertex>
+      }`,
+    fragmentShader: /* glsl */ `
+      #include <common>
+      #include <logdepthbuf_pars_fragment>
+      uniform vec3 uCloudSun, uColor, uLight, uSky; uniform float uOpacity, uFar, uHide, uWisp;
+      varying vec3 vDir, vWorld, vUp;
+      ${CLOUD_GLSL}
+      void main() {
+        #include <logdepthbuf_fragment>
+        vec3 d = normalize(vDir), up = normalize(vUp), toSun = normalize(uCloudSun - vWorld);
+        vec3 q = vec3(d.x * uCloudRot.z - d.z * uCloudRot.w, d.y, d.x * uCloudRot.w + d.z * uCloudRot.z) * uCloudScale;
+        float streak = cNoise(q * vec3(1.4, 9.0, 5.0) + uCloudOffset) * 0.65 + cNoise(q * vec3(3.0, 20.0, 11.0) - uCloudOffset) * 0.35;
+        float wPatch = cNoise(q * 0.9 + uCloudOffset * 0.5);
+        float a = smoothstep(0.52, 0.78, streak) * smoothstep(0.42, 0.7, wPatch) * 0.42 * uOpacity * uWisp * (1.0 - uHide);
+        float dist = distance(vWorld, cameraPosition);
+        a *= 1.0 - smoothstep(0.35 * uFar, 0.8 * uFar, dist); // into the haze
+        a *= smoothstep(6.0, 40.0, dist);
+        if (a < 0.003) discard;
+        float lit = smoothstep(-0.14, 0.3, dot(up, toSun));
+        vec3 col = uColor * uLight * (0.95 * lit + 0.06) + uLight * pow(max(dot(normalize(vWorld - cameraPosition), toSun), 0.0), 5.0) * 0.4 * lit;
+        gl_FragColor = vec4(col, a);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+    transparent: true, depthWrite: false, fog: false, side: THREE.BackSide,
+  }));
+  wisp.material.uniforms.uWisp = { value: 0 };
+  wisp.renderOrder = 1; // before the deck: it is below it
+  if (!lite && c.kind !== 'dust') group.add(wisp);
   const dir = new THREE.Vector3();
   return {
     c, mesh: group, uniforms, lite,
@@ -169,12 +223,20 @@ export function createCloudLayer(THREE, body, sun, { lite = false, light = '#fff
       shared.uFar.value = 1.15 * Math.sqrt(base * base - R * R);
       const inside = r < base;
       shared.uInside.value = inside ? 1 : 0;
+      // Wisps halfway between the land and the deck, seen from below them only.
+      const wr = R + Math.max(c.height * .55, c.height - 120);
+      wisp.scale.setScalar(wr);
+      wisp.material.uniforms.uWisp.value = (r < wr - 5 ? 1 : 0) * (1 - k);
+      wisp.visible = wisp.material.uniforms.uWisp.value > 0.01;
       meshes.forEach((m, i) => {
         const radius = base + i * gap;
         m.scale.setScalar(radius);
-        // From below only the cloud base shows; a shell above the camera stays hidden.
-        m.visible = i === 0 || r > radius;
+        // From below the higher shells show too, through the gaps and as the thicker cores
+        // of banks, for depth (drawn first, farthest first, so the base lies over them);
+        // a shell the camera is above shows from outside.
+        m.visible = inside || r > radius || i === 0;
         m.material.side = inside ? THREE.BackSide : THREE.FrontSide;
+        m.renderOrder = inside ? 2 + (meshes.length - 1 - i) : 2 + i;
       });
     },
     hide(k) { shared.uHide.value = k; },
@@ -188,7 +250,7 @@ export function createCloudLayer(THREE, body, sun, { lite = false, light = '#fff
       dir.copy(v).normalize();
       return cloudDensity(c, [dir.x, dir.y, dir.z], angles, OCTAVES, storms);
     },
-    dispose() { geometry.dispose(); for (const m of meshes) m.material.dispose(); },
+    dispose() { geometry.dispose(); for (const m of meshes) m.material.dispose(); wisp.material.dispose(); },
   };
 }
 

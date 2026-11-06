@@ -14,6 +14,7 @@ import { createGroundCover } from "./groundcover.js";
 import { addSurfaceDetail } from "./planet-lod.js";
 import { createScatter, obstacleGrid } from "./scatter.js";
 import { PLANT_STYLE } from "./style.mjs";
+import { softenNormals } from "./soften.js";
 
 const Y = new THREE.Vector3(0, 1, 0);
 const vec = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -21,6 +22,7 @@ const vec = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 // body: the world; signalNormal/landingNormal: unit vectors of the site and pad;
 // surfacePoint(n, offset): point on the ground. Returns the scene group and the
 // animated parts game.js drives.
+const isIn = (o, root) => { for (let p = o; p; p = p.parent) if (p === root) return true; return false; };
 export function buildSurface({ body, radius: RADIUS, signalNormal, landingNormal, surfacePoint, coarse, colonist = null }) {
     const group = new THREE.Group();
     const obstacles = [];
@@ -74,7 +76,7 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
     const rockMaterial = new THREE.MeshStandardMaterial({
         color: 0xffffff,
         roughness: 1,
-        flatShading: true,
+        flatShading: PLANT_STYLE === "classic", // new style: softened facets (soften.js)
     });
     // Loose rocks thin out towards the edge of their reach, each at its own distance, and
     // shrink away smoothly, like plants, so none pop in (rockFade: from, to in metres).
@@ -217,6 +219,7 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
             rp.setXYZ(i, x * k, y * k, z * k);
         }
         g.computeVertexNormals();
+        if (PLANT_STYLE !== "classic") softenNormals(THREE, g, 0.6);
         return g;
     };
     // New plant style: rocks are filled as far out as the trees (flora-mesh.js treeReach);
@@ -231,9 +234,11 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(rockCap * 3), 3);
         m.count = 0; m.frustumCulled = false;
     }
+    for (const m of [rocks, bigRocks]) { m.castShadow = true; m.receiveShadow = true; }
     group.add(rocks, bigRocks);
     const stony = { rocky: 1.6, volcanic: 1.6, ice: .8, toxic: 1, soft: .7, sand: .5 }[terrainInfo.ground] ?? (terrainInfo.airless ? 1.6 : 1);
-    const dummy = new THREE.Object3D(), rn = vec(), side = vec(), tmpColor = new THREE.Color();
+    const dummy = new THREE.Object3D(), rn = vec(), side = vec(), tmpColor = new THREE.Color(), rockInfo = {};
+    const smooth01 = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
     const rockField = createScatter({
         radius: RADIUS, cell: ROCK_CELL, reach: rockReach,
         fill(f, i, j, cell) {
@@ -246,17 +251,21 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
                 if ((terrainInfo.liquid === "water" || terrainInfo.liquid === "lava") && ht < terrainInfo.sea) continue;
                 side.set(Math.abs(rn.x) < 0.9 ? 1 : 0, Math.abs(rn.x) < 0.9 ? 0 : 1, 0).cross(rn).normalize();
                 const slope = Math.abs(terrainInfo.height(side.multiplyScalar(4 / RADIUS).add(rn).normalize()) - ht) / 4;
-                if (h(3) > .15 * stony * (1 + Math.min(1, slope * 2)) * cell.area(u, v)) continue;
-                const size = 0.5 + h(4) ** 3 * 6;
+                // New style: few loose rocks out on grass (they read as scattered debris from the
+                // air), many on bare and steep ground; smaller, half sunk, in the ground's own colours.
+                const rinfo = NEW_REACH ? (terrainInfo.color(rn, ht, { slope: Math.min(1, slope), hollow: 0 }, rockInfo), rockInfo) : null;
+                const where = rinfo ? (.2 + 1.8 * rinfo.bare * (1 - .7 * rinfo.veg)) * (1 - smooth01(.35, .65, slope)) : 1; // (none on steep slopes: they looked stuck to the hillside)
+                if (h(3) > .15 * stony * where * (NEW_REACH ? 1 : 1 + Math.min(1, slope * 2)) * cell.area(u, v)) continue;
+                const size = NEW_REACH ? 0.4 + h(4) ** 4 * 4.5 : 0.5 + h(4) ** 3 * 6;
                 if (rn.distanceTo(signalNormal) < (45 + size) / RADIUS || rn.distanceTo(landingNormal) < (14 + size) / RADIUS) continue;
                 if (clear.length && cleared(rn, size * 1.3)) continue; // any part of it inside cleared ground
-                dummy.position.copy(surfacePoint(rn, size * 0.25));
+                dummy.position.copy(surfacePoint(rn, NEW_REACH ? -size * 0.12 : size * 0.25));
                 dummy.quaternion.setFromUnitVectors(Y, rn);
                 dummy.rotateY(h(5) * 6.28);
                 dummy.scale.set(size * (0.6 + h(6)), size * (0.6 + h(7)), size);
                 dummy.updateMatrix();
                 const ground = terrainInfo.color(rn, terrainInfo.meshHeight(rn));
-                tmpColor.setRGB(ground[0], ground[1], ground[2], THREE.SRGBColorSpace).lerp(rockTint, 0.7).multiplyScalar(0.85 + h(8) * 0.25);
+                tmpColor.setRGB(ground[0], ground[1], ground[2], THREE.SRGBColorSpace).lerp(rockTint, NEW_REACH ? 0.5 : 0.7).multiplyScalar((NEW_REACH ? 1 : 0.85) + h(8) * 0.25);
                 items.push({
                     big: size > BIG_ROCK, size, m: Float32Array.from(dummy.matrix.elements), c: [tmpColor.r, tmpColor.g, tmpColor.b],
                     // Local Y is "up" for the rock, so scale.y is its height.
@@ -338,10 +347,18 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
     // One look for everything on the ground: plants, animals and buildings get the same
     // close-up grain and bump as rocks and the ground (planet-lod.js addSurfaceDetail).
     // Glass, glowing parts and shiny metal are left clean.
+    // Shadows (atmosphere.js): everything on the ground receives them; rocks, formations and
+    // buildings cast them (plants set their own, flora-mesh.js; animals don't yet, since
+    // their shadows would not follow their legs).
+    group.traverse((o) => {
+        if (!o.isMesh) return;
+        o.receiveShadow = true;
+        if (o.parent !== groundCover.group && !o.parent?.userData?.fauna && !(o.material?.transparent)) o.castShadow = o.castShadow || (geology.group.children.includes(o) || (structures && isIn(o, structures.group)));
+    });
     group.traverse((o) => {
         if (!o.isMesh || o.parent === groundCover.group) return; // tufts and pebbles are too small to need it
         for (const m of Array.isArray(o.material) ? o.material : [o.material])
-            if (m.isMeshStandardMaterial && !m.transparent && m.metalness < 0.35)
+            if (m.isMeshStandardMaterial && !m.transparent && !m.map && m.metalness < 0.35)
                 addSurfaceDetail(m, { ground: terrainInfo.ground, airless: terrainInfo.airless, lite: coarse, objects: true });
     });
 

@@ -4,6 +4,7 @@
 // smoothly with closeness, for every body (a nearby moon gets sharper too), and
 // close up the terrain resolves to well under a metre. Tiles are built off the
 // main thread by terrain-worker.js when available. THREE is passed in.
+import { addWaterLook } from './water.js';
 import { buildChunk, chunkIndices, faceDirection } from './chunk-build.mjs';
 import { terrainFor } from './terrain.mjs';
 import { addCloudShadows } from './cloud-mesh.js';
@@ -27,7 +28,7 @@ export function addSurfaceDetail(material, { ground, airless, lite = false, obje
   material.userData.surfaceDetail = true;
   addDetail(material, ground, airless, lite, objects);
 }
-function addDetail(material, ground, airless, lite, objects = false) {
+function addDetail(material, ground, airless, lite, objects = false, wind = null) {
   const style = STYLE[ground] || (airless ? STYLE.rocky : STYLE.soft);
   // The existing cache key, taken now: afterwards the default key would describe this
   // wrapper, and materials with different shaders underneath would share a program.
@@ -35,13 +36,14 @@ function addDetail(material, ground, airless, lite, objects = false) {
   material.onBeforeCompile = (shader, renderer) => {
     before.call(material, shader, renderer);
     shader.uniforms.uStyle = { value: style };
+    shader.uniforms.uRippleDir = { value: wind ? [wind[0], wind[1], wind[2]] : [0, 0, 0] };
     shader.vertexShader = (objects ? '' : 'attribute vec3 cover;\n') + 'varying vec3 vCover; varying vec3 vDetailPos;\n' + shader.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
       vCover = ${objects ? 'vec3(0.0)' : 'cover'};
       ${objects ? `vDetailPos = position; // the rest shape: the grain stays put on the surface as plants sway and animals move
       #ifdef USE_INSTANCING
         vDetailPos *= length(instanceMatrix[0].xyz); // metres, whatever the instance's size
       #endif` : 'vDetailPos = (modelMatrix * vec4(transformed, 1.0)).xyz;'}`);
-    shader.fragmentShader = `uniform vec4 uStyle; varying vec3 vCover; varying vec3 vDetailPos;
+    shader.fragmentShader = `uniform vec4 uStyle; uniform vec3 uRippleDir; varying vec3 vCover; varying vec3 vDetailPos;
       float dHash(vec3 p) { p = fract(p * .3183099 + .1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
       float dNoise(vec3 x) {
         vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -91,30 +93,55 @@ function addDetail(material, ground, airless, lite, objects = false) {
         diffuseColor.rgb *= mix(1.0, f, detailK);
         detailH *= detailK;
       }
+      ${objects ? '' : `// Wind ripples on sand (new land: drawn here, not in the mesh, so they cover all the
+      // sand you can see): a gentle upwind slope and a steep lee, across the wind, bending
+      // with it; fading only once a ripple would be smaller than a few pixels.
+      if (dot(uRippleDir, uRippleDir) > .5) {
+        float sandR = uStyle.y * (1.0 - vCover.x) * (1.0 - vCover.z);
+        float gr = (1.0 - smoothstep(.12, .35, px / 1.6)) * sandR;
+        if (gr > .01) {
+          float al = (dot(P, uRippleDir) / 1.6 + 1.2 * dNoise(P / 7.0) + .7 * dNoise(P / 29.0 + 4.0)) * 6.2832;
+          float rr = .5 + .5 * sin(al + .7 * sin(al)); // a smooth, slightly lopsided wave: no hard edge to catch the light as a line
+          float fadeIn = smoothstep(.25, .65, dNoise(P / 17.0 + 8.0)) * .7 + .3; // ripple fields come and go
+          detailH += gr * fadeIn * rr * .018;
+          diffuseColor.rgb *= 1.0 + gr * fadeIn * (rr - .5) * .05;
+        }
+      }`}
       ${objects ? '' : `// Far detail: broad patches a few metres to a few dozen across (lighter and darker
       // ground, drier and lusher grass, worn rock), kept far beyond the close-up grain so
       // distant country never looks like a smooth wash of colour. Each layer fades only
       // once it is smaller than a few pixels.
       {
         float g1 = 1.0 - smoothstep(.12, .3, px / 3.2), g2 = 1.0 - smoothstep(.12, .3, px / 11.0), g3 = 1.0 - smoothstep(.12, .3, px / 37.0), g4 = 1.0 - smoothstep(.12, .3, px / 120.0);
-        float m = (dNoise(P / 3.2 + 11.0) - .5) * .12 * g1 + (dNoise(P / 11.0 + 3.0) - .5) * .2 * g2 + (dNoise(P / 37.0 + 7.0) - .5) * .2 * g3 + (dNoise(P / 120.0 + 1.0) - .5) * .14 * g4;
+        float m = (dNoise(P / 3.2 + 11.0) - .5) * .06 * g1 + (dNoise(P / 11.0 + 3.0) - .5) * .1 * g2 + (dNoise(P / 37.0 + 7.0) - .5) * .1 * g3 + (dNoise(P / 120.0 + 1.0) - .5) * .08 * g4;
         float lush = vCover.x * (1.0 - vCover.z);
-        float dryPatch = smoothstep(.5, .78, dNoise(P / 23.0 + 17.0)) * g3 * lush;
+        float dryPatch = smoothstep(.55, .8, dNoise(P / 23.0 + 17.0)) * g3 * lush;
         diffuseColor.rgb *= 1.0 + m;
-        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.14, 1.06, .78), dryPatch * .55);
-        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(.82, .92, .84), smoothstep(.55, .8, dNoise(P / 8.0 + 29.0)) * g2 * lush * .5);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.12, 1.05, .82), dryPatch * .3);
+        // Vegetation seen from above: clumps of growth (darker, with a lit top) a metre or two
+        // across in tighter and looser drifts, and a fine speckle of paler blades, so grassy
+        // country reads as a living carpet from the air instead of a smooth wash of green.
+        float g0 = 1.0 - smoothstep(.15, .35, px / 1.4), gc = 1.0 - smoothstep(.15, .35, px / 2.6), gd = 1.0 - smoothstep(.15, .35, px / 7.0);
+        if (lush > .05) {
+          float drift = smoothstep(.3, .7, dNoise(P / 14.0 + 41.0));
+          float c1 = smoothstep(.56 - .12 * drift, .72 - .1 * drift, dNoise(P / 2.6 + 3.7)) * gc;
+          float c2 = smoothstep(.6, .78, dNoise(P / 7.0 + 19.0)) * gd;
+          float top = smoothstep(.75, .9, dNoise(P / 2.6 + 3.7 + vec3(.18, .25, .1))) * gc; // the lit side of a clump
+          float blades = smoothstep(.72, .92, dNoise(P / 1.4 + 9.1)) * g0;
+          diffuseColor.rgb *= 1.0 - lush * (.34 * c1 + .07 * c2) + lush * (.06 * top * c1 + .1 * blades);
+        }
       }`}`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       // Bump: tilt the normal by the slope of detailH across the pixel (slopes taken unconditionally, see above).
       vec3 dpx = dFdx(-vViewPosition), dpy = dFdy(-vViewPosition);
       float hx = dFdx(detailH), hy = dFdy(detailH);
-      if (detailK > 0.0) {
+      if (detailK > 0.0 || abs(hx) + abs(hy) > 0.0) {
         vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx);
         float det = dot(dpx, r1);
         normal = normalize(abs(det) * normal - sign(det) * (hx * r1 + hy * r2) * 2.5);
       }`);
   };
-  material.customProgramCacheKey = () => baseKey + '-detail-' + style.join(',') + (lite ? '-lite' : '') + (objects ? '-objects' : '');
+  material.customProgramCacheKey = () => baseKey + '-detail-' + style.join(',') + (lite ? '-lite' : '') + (objects ? '-objects' : '') + (wind ? '-ripples' : '');
 }
 
 const SPLIT = 2.1; // (1.8 before the new land: its hills and valleys want finer tiles further out)
@@ -216,10 +243,7 @@ export function createPlanet(THREE, streamer, body, { segments = 20, lite = fals
   // blotchy mosaic of light and dark (most visible from the ship, looking down).
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
   const skirtMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
-  // The ground is lit smoothly, not in the stylised steps (look.js STYLE_SMOOTH): on rolling,
-  // hummocky slopes the light's steps traced every little rise and fall, which drew wavy
-  // stripes across whole hillsides. Plants, animals and buildings keep the steps.
-  material.defines = { ...(material.defines || {}), STYLE_SMOOTH: 1 }; skirtMaterial.defines = { ...(skirtMaterial.defines || {}), STYLE_SMOOTH: 1 };
+
   const lava = terrain.liquid === 'lava', wet = lava || terrain.liquid === 'water';
   const liquidColor = new THREE.Color().setRGB(...terrain.waterColor, THREE.SRGBColorSpace);
   const waterMaterial = wet ? new THREE.MeshStandardMaterial(lava
@@ -228,11 +252,12 @@ export function createPlanet(THREE, streamer, body, { segments = 20, lite = fals
   const lodCam = { value: new THREE.Vector3(1e9, 0, 0) }, lodScale = { value: 1 };
   const farBoost = lite ? FAR_BOOST_LITE : FAR_BOOST;
   addMorph(material, true, lodCam, lodScale);
-  addDetail(material, terrain.ground, terrain.airless, lite);
+  addDetail(material, terrain.ground, terrain.airless, lite, false, terrain.windDir);
   if (clouds) addCloudShadows(material, clouds, { lite }); // cloud-mesh.js
   addMorph(skirtMaterial, true, lodCam, lodScale);
   const gridIndexCount = segments * segments * 6;
   if (waterMaterial) addMorph(waterMaterial, false, lodCam, lodScale);
+  if (waterMaterial && !lava) addWaterLook(THREE, waterMaterial, { color: liquidColor, ground: body.palette?.[0] }); // depth-coloured, foam at the shore, small waves (water.js)
   const { indices } = chunkIndices(segments);
   const waterIndices = indices.subarray(0, gridIndexCount);
   const maxLevel = Math.max(2, Math.ceil(Math.log2(R * Math.PI / 2 / segments / FINEST)));
@@ -253,6 +278,7 @@ export function createPlanet(THREE, streamer, body, { segments = 20, lite = fals
     g.setAttribute('normal', new THREE.BufferAttribute(withColor ? data.normals : data.waterNormals, 3));
     if (withColor) { g.setAttribute('color', new THREE.BufferAttribute(data.colors, 3)); g.setAttribute('cover', new THREE.BufferAttribute(data.cover, 3)); g.setAttribute('lodColor', new THREE.BufferAttribute(data.lodColor, 3)); g.setAttribute('lodNormal', new THREE.BufferAttribute(data.lodNormal, 3)); }
     g.setAttribute('lodDelta', new THREE.BufferAttribute(withColor ? data.lodDelta : data.waterDelta, 3));
+    if (!withColor && data.waterDepth) g.setAttribute('waterDepth', new THREE.BufferAttribute(data.waterDepth, 1));
     // Fully blended to the parent's shape by the distance at which the parent would replace this tile.
     const end = node.lodEnd = node.level ? SPLIT * node.arc * 2 * .95 : 1e9, range = new Float32Array(n * 2);
     for (let i = 0; i < n; i++) { range[i * 2] = end * MORPH_START; range[i * 2 + 1] = end; }
@@ -268,6 +294,7 @@ export function createPlanet(THREE, streamer, body, { segments = 20, lite = fals
   function attach(node, data) {
     if (node.disposed) return;
     node.mesh = new THREE.Mesh(geometryFrom(data.positions, data, true, node), [material, skirtMaterial]);
+    node.mesh.receiveShadow = true; // the star's shadows near you (atmosphere.js)
     node.mesh.position.fromArray(data.center); node.mesh.visible = false;
     group.add(node.mesh);
     if (data.water) {

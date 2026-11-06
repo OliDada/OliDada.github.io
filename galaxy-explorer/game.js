@@ -12,6 +12,8 @@ import { floraFor, plantBiome } from "./flora.mjs";
 import { PLANT_STYLE } from "./style.mjs";
 import { buildSurface, disposeSurface } from "./surface.js";
 import { createKestrel, updateShipEffects, setShipDesign } from "./kestrel.js";
+import { createSkyDome, setupShadows, SHADOWS, makeMistFog, installMist, createSunShafts, MIST, BEAMS } from "./atmosphere.js";
+import { WATER } from "./water.js";
 import { createSystemView, buildSystemViewGradually } from "./system-view.js";
 import { createTerrainStreamer } from "./planet-lod.js";
 import {
@@ -180,6 +182,7 @@ let swimming = false, // on foot, in water too deep to stand in (Dive suit)
 // Where you are: your eyes while swimming, your feet otherwise.
 const playerPos = () => (mode === "walk" && swimming ? camera.position.clone() : surfacePoint(playerNormal));
 applyLook(THREE); // the shared stylised look (look.js); before anything is drawn
+installMist(THREE); // valley mist in the fog shader (atmosphere.js); before anything is drawn
 let renderer;
 try {
     renderer = new THREE.WebGLRenderer({
@@ -224,6 +227,16 @@ const sun = new THREE.DirectionalLight(
 );
 sun.position.set(-600, 550, 350);
 scene.add(sun);
+// The star's own light colour, before dusk warms it (updateAtmosphere).
+const sunBase = sun.color.clone();
+// Soft shadows from the star near the ground, and the sky dome (atmosphere.js).
+const shadows = setupShadows(THREE, renderer, scene, sun, { coarse: coarsePointer });
+const skyDome = createSkyDome(THREE);
+scene.add(skyDome.mesh);
+// Shafts of sunlight in the woods (atmosphere.js): strength from updateLocalAir.
+const shafts = createSunShafts(THREE);
+scene.add(shafts.mesh);
+let mistWant = 0; // valley mist for the world you are on (updateAtmosphere)
 const fill = new THREE.DirectionalLight(0x749bd5, 0.65);
 fill.position.set(200, -100, -300);
 scene.add(fill);
@@ -346,6 +359,7 @@ const kestrel = createKestrel();
 // Your ship: the Kestrel, until the Petrel upgrade replaces it with its own design.
 const shipName = () => (codex.unlocked.has("petrel") ? "Petrel" : "Kestrel");
 const { ship, shipShadow, dust } = kestrel;
+ship.traverse((o) => { if (o.isMesh) o.castShadow = true; });
 if (codex.unlocked.has("petrel")) setShipDesign(kestrel, "petrel");
 scene.add(ship, shipShadow, dust);
 
@@ -496,7 +510,7 @@ function orientShip(dt = 1) {
         0.3 - (shipPosition.length() - surfaceRadius(up)) * 0.007,
         0,
         0.25,
-    );
+    ) * (shadows.enabled ? 0.35 : 1); // (a faint blob only, under the real shadow)
 }
 function altitude() {
     const n = shipPosition.clone().normalize();
@@ -593,14 +607,15 @@ function act() {
             toast("Slow below 18 m/s. Release thrust or hold X to brake.");
             return;
         }
-        // A conservative slope check rejects exceptionally steep generated ridges.
+        // The ground under the ship must not be steeper than about 24 degrees, measured
+        // 6 m either side along and across the ship (the old check compared heights over
+        // a span that grew with the world's size: on big worlds almost every hill failed).
         const n = shipPosition.clone().normalize(),
-            side = shipForward.clone().cross(n).normalize();
-        const slope = Math.abs(
-            heightAt(n.clone().addScaledVector(side, 0.018).normalize()) -
-                heightAt(n.clone().addScaledVector(side, -0.018).normalize()),
-        );
-        if (slope > 3.5) {
+            side = shipForward.clone().cross(n).normalize(),
+            ahead = n.clone().cross(side).normalize(),
+            d = 6 / RADIUS;
+        const rise = (dir) => Math.abs(heightAt(n.clone().addScaledVector(dir, d).normalize()) - heightAt(n.clone().addScaledVector(dir, -d).normalize())) / 12;
+        if (Math.max(rise(side), rise(ahead)) > 0.45) {
             toast("Terrain too steep. Move toward flatter ground.");
             return;
         }
@@ -1359,7 +1374,7 @@ function updateDeep(dt) {
     // Light comes from the nearest star.
     const toStar = toScene(starPoint(nearest.star).map((v, i) => v - galactic[i])).normalize();
     sun.position.copy(toStar).multiplyScalar(1000);
-    sun.color.set(nearest.physics.color).lerp(new THREE.Color(0xffffff), 0.45);
+    sun.color.copy(sunBase.set(nearest.physics.color).lerp(new THREE.Color(0xffffff), 0.45));
     sun.intensity = 3.1 * clamp(0.25 + 0.75 * (ARRIVE_LY * 30) / Math.max(d, ARRIVE_LY), 0.25, 1);
     // The star ahead grows into a sphere as you close in.
     const offset = starPoint(nearest.star).map((v, i) => v - galactic[i]);
@@ -1435,7 +1450,7 @@ function arriveInSystem(star, offset) {
     systemView.visible = true;
     if (site) site.group.visible = true;
     sun.intensity = 3.1;
-    sun.color.set(system.star.color).lerp(new THREE.Color(0xffffff), 0.45);
+    sun.color.copy(sunBase.set(system.star.color).lerp(new THREE.Color(0xffffff), 0.45));
     positionSystem();
     sky.update(starPoint(star), camera, star.id);
     selectedBody = null;
@@ -2914,10 +2929,12 @@ function clearTarget() {
 // and haze softens distant land. Thin or no air keeps the black sky of space.
 const SPACE = new THREE.Color("#07101d"),
     DUSK = new THREE.Color("#ff7a45");
+const skyZenith = new THREE.Color(), skyHorizon = new THREE.Color(), fogHorizon = new THREE.Color(), tmpColor = new THREE.Color(), tmpColor2 = new THREE.Color(), hemiSky = new THREE.Color();
+const HEMI_SKY = new THREE.Color(0xb6dfdf), HEMI_GROUND = new THREE.Color(0x4c3844);
 const skyDay = new THREE.Color(),
     skyNow = new THREE.Color(),
     skyNight = new THREE.Color();
-scene.fog = new THREE.FogExp2(SPACE.getHex(), 0);
+scene.fog = makeMistFog(THREE, SPACE.getHex()); // distance fog (fog.density) plus valley mist (fog.mist), atmosphere.js
 function airOf(body) {
     // 0 below ~0.03 bar, about 0.6 at Earth's 1 bar, 1 for very thick air.
     const p = body.physics?.pressure ?? 0;
@@ -2927,6 +2944,28 @@ const cloudFog = new THREE.Color();
 let dayNow = 1; // daylight where the camera is, 0..1 (updateAtmosphere)
 let inCloud = 0, // 0..1: how deep in cloud the camera is
     hiddenLayer = null; // the cloud layer faded out while you are inside it
+// Just before drawing: what came after updateAtmosphere (clouds around you, storms, the
+// local haze, being under water) has reshaped scene.background; the dome and the fog
+// follow it, and the shadows are centred on where you are.
+function finishSky() {
+    const du = skyDome.uniforms;
+    const over = Math.min(1, Math.max(inCloud * 0.95, gloomNow * 0.8, localAir.mix * 0.6, cameraDepth > 0 ? 1 : 0));
+    du.uBack.value.copy(scene.background); du.uOver.value = over;
+    scene.fog.color.copy(fogHorizon).lerp(scene.background, over);
+    if (cameraDepth > 0) skyDome.mesh.visible = false;
+    skyDome.mesh.position.copy(camera.position);
+    const near = onWorld() && !indoor && altitude() < 260;
+    const focus = mode === "walk" ? playerPos() : surfacePoint(shipPosition.clone().normalize());
+    shadows.update(focus, near && dayNow > 0.02);
+    // Valley mist and the water's reflection of the sky follow the fog's final colour.
+    scene.fog.mist = !MIST || indoor || cameraDepth > 0 ? 0 : mistWant * (1 - inCloud) * (1 - over * 0.5);
+    WATER.sky.value.copy(scene.fog.color);
+    const t = performance.now() / 1000;
+    WATER.time.value = t;
+    // Sunbeams: in woods, by day, under a sky that is not overcast, on foot or low down.
+    const beams = BEAMS && near && !indoor && cameraDepth <= 0 ? localAir.woods * dayNow * (1 - gloomNow) * (1 - inCloud) * (1 - smoothstep((altitude() - 20) / 60)) : 0;
+    shafts.update(focus, surfaceRadius, beams, shafts.uniforms.uSunDir.value.copy(sun.position).sub(focus).normalize(), t);
+}
 function updateAtmosphere() {
     // The sky comes from the world nearest the camera, so a world's air fades in
     // as you descend toward it, not all at once when you reach its orbit.
@@ -2960,8 +2999,38 @@ function updateAtmosphere() {
     skyNow.copy(skyDay).lerp(DUSK, dusk * 0.28);
     skyNow.lerp(skyNight, 1 - day);
     scene.background.copy(SPACE).lerp(skyNow, k);
-    scene.fog.color.copy(scene.background);
-    scene.fog.density = k * (0.00012 + 0.00045 * air);
+    // The sky dome (atmosphere.js): a deeper zenith, a paler hazy horizon (thicker air,
+    // paler still), the ground below, and the star's glow; distant land fades into the
+    // horizon's colour, as it does through real air.
+    const lum = skyNow.r * 0.2126 + skyNow.g * 0.7152 + skyNow.b * 0.0722;
+    skyZenith.copy(skyNow).multiplyScalar(0.72).lerp(skyNow.clone().multiplyScalar(0.55), 0.3);
+    skyHorizon.copy(skyNow).lerp(tmpColor.setScalar(lum * 1.25 + 0.04 * day), 0.3 + 0.25 * air).lerp(sun.color, 0.08 * day).multiplyScalar(1.12);
+    // Restraint in colour: the haze takes a little of the land's own colour (at the
+    // horizon's brightness), so sky, distant hills and plants share one palette.
+    const hl = skyHorizon.r * 0.2126 + skyHorizon.g * 0.7152 + skyHorizon.b * 0.0722;
+    const landHaze = tmpColor2.set(body.palette?.[1] || "#556644"), ll = Math.max(0.02, landHaze.r * 0.2126 + landHaze.g * 0.7152 + landHaze.b * 0.0722);
+    skyHorizon.lerp(landHaze.multiplyScalar(hl / ll).lerp(tmpColor.setScalar(hl), 0.4), 0.14);
+    skyZenith.lerp(tmpColor.setScalar(skyZenith.r * 0.2126 + skyZenith.g * 0.7152 + skyZenith.b * 0.0722), 0.1); // a touch less saturated overhead
+    const groundTint = tmpColor2.set(body.palette?.[1] || "#556644").multiplyScalar(0.35 * (0.15 + 0.85 * day));
+    const du = skyDome.uniforms;
+    du.uZenith.value.copy(skyZenith); du.uHorizon.value.copy(skyHorizon); du.uGround.value.copy(skyHorizon).lerp(groundTint, 0.6);
+    du.uSpace.value.copy(SPACE); du.uAir.value = k; du.uUp.value.copy(up);
+    du.uSunDir.value.copy(sun.position).sub(camera.position).normalize();
+    du.uSunColor.value.copy(sun.color).multiplyScalar(day * (0.4 + 0.8 * air) * (1 - eclipseCover));
+    du.uGlow.value = 1;
+    skyDome.mesh.visible = k > 0.003;
+    fogHorizon.copy(SPACE).lerp(skyHorizon, k);
+    scene.fog.color.copy(fogHorizon);
+    scene.fog.density = k * (0.0002 + 0.0007 * air);
+    // Valley mist: wet worlds, thick air, strongest at dawn and dusk, thin by day, gone on dry worlds.
+    const wet = body.physics?.waterState === "liquid" ? Math.min(1, 0.25 + (body.physics.waterCoverage ?? 0.4)) : 0.15;
+    mistWant = k * wet * (0.25 + 0.5 * air) * (0.45 + 0.55 * dusk) * (0.35 + 0.65 * day);
+    // The light takes the world's mood: the star warms at dusk and dims at night, the sky's
+    // fill light is the air's own colour, and the light bounced from below is the ground's.
+    sun.color.copy(sunBase).lerp(DUSK, dusk * 0.4 * k);
+    hemiSky.copy(HEMI_SKY).lerp(tmpColor.copy(skyDay).multiplyScalar(0.75 / Math.max(0.05, skyDay.r * 0.2126 + skyDay.g * 0.7152 + skyDay.b * 0.0722)).lerp(HEMI_SKY, 0.35), k);
+    hemi.color.copy(hemiSky).multiplyScalar(1 - k * 0.6 * (1 - day));
+    hemi.groundColor.copy(HEMI_GROUND).lerp(tmpColor2.set(body.palette?.[1] || "#4c3844").multiplyScalar(0.55), k).multiplyScalar(1 - k * 0.7 * (1 - day));
     // Inside a cloud (clouds.mjs, cloud-mesh.js) the view closes in to a few dozen
     // metres of grey-white, lit like the cloud is; in a gap the air stays clear.
     const layer = mode !== "deep" && systemView.cloudsOf?.(body.id);
@@ -2995,9 +3064,21 @@ function updateNightFilter(dt) {
     const want = codex.unlocked.has("nightFilter") ? smoothstep((nightNow - 0.3) / 0.5) : 0;
     nightFilter = damp(nightFilter, want, 1.5, dt);
     if (nightFilter < 0.002) nightFilter = 0;
-    if (mode !== "deep") hemi.intensity = 2.0 * (1 - 0.55 * eclipseCover) * (1 + 2.2 * nightFilter); // set (not scaled) every frame, so it never compounds
-    renderer.toneMappingExposure = 1.15 * (1 + 0.6 * nightFilter);
+    if (mode !== "deep") hemi.intensity = 2.0 * (shadows.enabled ? 1.2 : 1) * (1 - 0.55 * eclipseCover) * (1 + 2.2 * nightFilter); // (a little more sky light where the sun is shadowed) // set (not scaled) every frame, so it never compounds
+    renderer.toneMappingExposure = 1.15 * (1 + 0.6 * nightFilter) * worldExposure();
     nightTint.style.opacity = (0.35 * nightFilter).toFixed(3);
+}
+
+// Dim stars and thick hazy air make a darker, moodier world; harsh light a brighter one.
+let exposureFor = null, exposureValue = 1;
+function worldExposure() {
+    if (exposureFor !== activeBody) { exposureFor = activeBody; const e = floraEnvironmentLight(activeBody); exposureValue = 0.88 + 0.12 * clamp(e, 0, 1.4); }
+    return onWorld() ? exposureValue : 1;
+}
+function floraEnvironmentLight(body) {
+    const p = body.physics; if (!p) return 1;
+    const irr = p.equilibrium ? (p.equilibrium / (1 - (p.albedo ?? .3)) ** 0.25 / 278) ** 4 : 1;
+    return irr * ((body.starTemperature || 5600) < 4000 ? 0.7 : 1) / Math.max(1, (p.pressure ?? 1) / 3);
 }
 
 // --- Under water ------------------------------------------------------------------
@@ -3038,8 +3119,8 @@ function updateUnderwater() {
 // fog: added fog density; tint: the haze's colour; sun, sky: how much of the direct and
 // sky light gets through; mix: how far the sky itself takes the haze's colour.
 const LOCAL_AIR = {
-    darkwood: { fog: 0.017, tint: "#1d2c27", sun: 0.42, sky: 0.62, mix: 0.6 },
-    forest: { fog: 0.0085, tint: "#33463a", sun: 0.68, sky: 0.8, mix: 0.35 },
+    darkwood: { fog: 0.017, tint: "#1d2c27", sun: 0.55, sky: 0.82, mix: 0.6 }, // (shadows now do much of the darkening)
+    forest: { fog: 0.0085, tint: "#33463a", sun: 0.8, sky: 0.92, mix: 0.35 },
     wetland: { fog: 0.011, tint: "#6d7a66", sun: 0.85, sky: 0.92, mix: 0.45 },
     dryland: { fog: 0.0025, tint: "#c9b48a", sun: 1, sky: 1, mix: 0.15 },
     highland: { fog: 0.0015, tint: "#b9c6d2", sun: 1, sky: 1, mix: 0.08 },
@@ -3049,7 +3130,7 @@ const LOCAL_AIR = {
     Volcanic: { fog: 0.006, tint: "#4a3e3a", sun: 0.8, sky: 0.9, mix: 0.35 },
     Toxic: { fog: 0.008, tint: "#a89a4a", sun: 0.85, sky: 0.95, mix: 0.4 },
 };
-const localAir = { fog: 0, sun: 1, sky: 1, mix: 0, tint: new THREE.Color() }, airTint = new THREE.Color(), airWant = { fog: 0, sun: 1, sky: 1, mix: 0, tint: new THREE.Color() };
+const localAir = { fog: 0, sun: 1, sky: 1, mix: 0, woods: 0, tint: new THREE.Color() }, airTint = new THREE.Color(), airWant = { fog: 0, sun: 1, sky: 1, mix: 0, woods: 0, tint: new THREE.Color() };
 let localAirAt = -1, localAirBody = null;
 function updateLocalAir(dt) {
     if (PLANT_STYLE === "classic" || !onWorld() || indoor || cameraDepth > 0) return;
@@ -3068,6 +3149,8 @@ function updateLocalAir(dt) {
         airWant.sun = a ? 1 - (1 - a.sun) * open : 1;
         airWant.sky = a ? 1 - (1 - a.sky) * open : 1;
         airWant.mix = a ? a.mix * open : 0;
+        // Sunbeams (atmosphere.js) where trees stand thick enough to break the light up, but not so thick it is dark.
+        airWant.woods = biome === "forest" || biome === "darkwood" ? (biome === "darkwood" ? 0.8 : 1) * (1 - 0.6 * Math.abs(open - 0.5) * 2) : 0;
         if (a) airWant.tint.set(a.tint);
     }
     const k = 1 - Math.exp(-dt / 1.6); // eases over a couple of seconds as you walk in or out
@@ -3075,6 +3158,7 @@ function updateLocalAir(dt) {
     localAir.sun += (airWant.sun - localAir.sun) * k;
     localAir.sky += (airWant.sky - localAir.sky) * k;
     localAir.mix += (airWant.mix - localAir.mix) * k;
+    localAir.woods += (airWant.woods - localAir.woods) * k;
     localAir.tint.lerp(airWant.tint, k);
     const air = airOf(activeBody) * near;
     if (air <= 0.001) return;
@@ -3612,6 +3696,7 @@ function frame(now) {
             sky.follow(camera);
         } else streamer.pump(4);
         perf.beforeRender(); // a resolution change wipes the canvas, so it happens just before drawing
+        finishSky();
         // Indoors, the daylight comes in only by the door and windows: the room is lit by its own lamp.
         // No haze or fog in a room either.
         const lit = indoor ? [sun.intensity, hemi.intensity, fill.intensity, scene.fog?.density] : null;

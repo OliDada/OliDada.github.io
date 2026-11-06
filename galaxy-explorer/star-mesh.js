@@ -43,13 +43,17 @@ void main() {
   vec3 p = vObj * 7.0 + vec3(seed);
   // Granulation: small convection cells drifting slowly.
   float g = n(p * 3.0 + vec3(time * 0.05, 0.0, time * 0.03)) * 0.55 + n(p * 7.0 - vec3(0.0, time * 0.08, 0.0)) * 0.3 + n(p * 15.0) * 0.15;
-  // A few dark sunspots.
-  float spots = smoothstep(0.72, 0.8, n(vObj * 2.3 + vec3(seed * 3.0, time * 0.004, 0.0)));
+  // A few small sunspots, in the active belts either side of the equator (they were huge
+  // dark blotches): a dark core in a paler penumbra, only where a broad active region is.
+  float belt = smoothstep(0.08, 0.25, abs(vObj.y)) * (1.0 - smoothstep(0.45, 0.6, abs(vObj.y)));
+  float region = smoothstep(0.55, 0.75, n(vObj * 2.0 + vec3(seed * 3.0, time * 0.004, 0.0)));
+  float sn = n(vObj * 11.0 + vec3(seed, 0.0, time * 0.006));
+  float spots = belt * region * (smoothstep(0.7, 0.78, sn) * 0.45 + smoothstep(0.78, 0.84, sn) * 0.55);
   // Limb darkening: the edge of a star is cooler and dimmer than its centre.
   float mu = clamp(dot(normalize(vNormalView), normalize(vView)), 0.0, 1.0);
   float limb = 0.35 + 0.65 * pow(mu, 0.55);
   vec3 hot = mix(tint, vec3(1.0), 0.55);
-  vec3 col = mix(tint * 0.9, hot, g) * limb * (1.0 - spots * 0.55);
+  vec3 col = mix(tint * 0.9, hot, g) * limb * (1.0 - spots * 0.6);
   gl_FragColor = vec4(col * 1.35, 1.0);
 }`;
 

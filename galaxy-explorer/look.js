@@ -2,8 +2,8 @@
 //
 // applyLook(THREE) restyles every lit material in the game at once: it swaps three.js's
 // physically based lighting (used by every MeshStandardMaterial: terrain, plants,
-// animals, buildings, the ship) for a stylised model. Light falls off in soft bands
-// instead of a smooth gradient, a thin rim catches the sun on silhouettes, shiny
+// animals, buildings, the ship) for a stylised model. Light falls off smoothly, wrapping
+// a little past the terminator (shadows come from atmosphere.js), a thin rim catches the sun on silhouettes, shiny
 // surfaces (water, glass, hulls) get a small crisp highlight instead of a blurry
 // one, and the reflected-environment pass is skipped. Colour is graded once, after
 // tone mapping, for every material that tone-maps (including the custom shaders).
@@ -31,13 +31,10 @@ export const ADAPTIVE = setting('adaptive', 'elsewhere-adaptive', '1') !== '0';
 
 // --- Tunables: the whole look is these few numbers. ---
 export const STYLE = {
-  bands: [0.02, 0.42], // where light steps up: just past the terminator, then into full sun
-  mid: 0.55, // brightness of the middle band (0 dark side, 1 full sun)
-  top: 0.88, // brightness of the full-sun band
-  blend: 0.25, // how much of the smooth falloff is kept under the bands (0 pure bands)
-  soft: 0.07, // width of each step: 0 is hard cel shading, 0.2 is almost smooth
-  wrap: 0.18, // a little light wraps past the terminator, so shadows aren't flat black
+  top: 1.0, // brightness in full sun
+  wrap: 0.22, // a little light wraps past the terminator, so the shaded side isn't flat black
   rim: 0.16, // strength of the sunlit rim on silhouettes
+  translucency: 0.75, // sunlight glowing through leaves seen against the sun
   gloss: 0.9, // strength of the highlight on smooth surfaces
   saturation: 1.12, // grade after tone mapping
   lift: [0.012, 0.010, 0.022], // shadows lean slightly cool
@@ -48,15 +45,12 @@ export function applyLook(THREE) {
   const C = THREE.ShaderChunk, S = STYLE, f = (x) => x.toFixed(4);
   const lighting = /* glsl */ `
 float styleRamp( const in float NdL ) {
-	#ifdef STYLE_SMOOTH
-		// A smooth falloff of about the same overall brightness as the steps (the ground).
-		return max( ${f(S.mid)} * smoothstep( -0.04, 0.3, NdL ) + ${f(S.top - S.mid)} * smoothstep( 0.1, 0.85, NdL ), smoothstep( -${f(S.wrap)}, 0.0, NdL ) * ${f(S.wrap)} );
-	#endif
-	float s = ${f(S.soft)};
-	float w = smoothstep( -${f(S.wrap)}, 0.0, NdL ) * ${f(S.wrap)};
-	float b = ${f(S.mid)} * smoothstep( ${f(S.bands[0])} - s, ${f(S.bands[0])} + s, NdL )
-		+ ${f(S.top - S.mid)} * smoothstep( ${f(S.bands[1])} - s, ${f(S.bands[1])} + s, NdL );
-	return max( mix( b, saturate( NdL ), ${f(S.blend)} ), w );
+	// One smooth lighting model for everything (the stepped bands are gone): light wraps
+	// a little past the terminator, so the shaded side is soft rather than black, and
+	// shadows (atmosphere.js) do the rest.
+	float w = ${f(S.wrap)};
+	float l = saturate( ( NdL + w ) / ( 1.0 + w ) );
+	return ${f(S.top)} * l * ( 0.6 + 0.4 * l );
 }
 void RE_Direct_Stylised( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight ) {
 	float NdL = dot( geometryNormal, directLight.direction );
@@ -66,6 +60,13 @@ void RE_Direct_Stylised( const in IncidentLight directLight, const in vec3 geome
 	float NdV = saturate( dot( geometryNormal, geometryViewDir ) );
 	float rim = smoothstep( 0.62, 0.9, 1.0 - NdV ) * smoothstep( -0.1, 0.35, NdL );
 	reflectedLight.directDiffuse += rim * ${f(S.rim)} * directLight.color * ( material.diffuseColor + 0.15 );
+	#ifdef LEAF_TRANSLUCENT
+	// Leaves (flora-mesh.js leaf cards): light comes through them. Looking toward the sun
+	// through a crown, its edge and its shaded side glow with the leaves' own colour.
+	float through = pow( saturate( dot( -geometryViewDir, directLight.direction ) ), 3.0 );
+	float shaded = 0.35 + 0.65 * ( 1.0 - saturate( NdL * 1.5 + 0.2 ) );
+	reflectedLight.directDiffuse += through * shaded * ${f(S.translucency)} * directLight.color * material.diffuseColor * vec3( 0.9, 1.05, 0.7 );
+	#endif
 	// Gloss: one crisp highlight, only on smooth surfaces.
 	float glossy = 1.0 - material.roughness;
 	if ( glossy > 0.25 ) {

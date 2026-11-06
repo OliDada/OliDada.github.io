@@ -65,7 +65,9 @@ export function cloudsFor(body) {
     color: mixHex(k.color, body.atmosphere || k.color, 0.12), // a touch of the sky's own colour
     height, // metres above sea level
     thickness: 18, // the layer you fly through, metres either side of height
-    scale: (R + height) / r.range(80, 120), // cloud systems about a hundred metres across
+    // Cloud systems a few hundred metres across (they were about a hundred: from orbit that
+    // read as a mottle of tiny puffs; bigger systems give broad banks with soft, broken edges).
+    scale: (R + height) / (body.landStyle === 'classic' ? r.range(80, 120) : r.range(260, 420)),
     drift: ((1.5 + 3 * air) / (R + height)) * (r() < 0.5 ? -1 : 1), // radians a second: a few metres a second
     offset: [r.range(0, 40), r.range(0, 40), r.range(0, 40)],
   };
@@ -142,7 +144,7 @@ function calibrate(c, n = 1200) {
   values.sort((a, b) => a - b);
   const mean = values.reduce((a, b) => a + b, 0) / n;
   const sd = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / n);
-  const soft = 1.15 * sd;
+  const soft = 1.4 * sd; // a soft edge: banks fade out rather than end in a hard line
   // A pixel counts as half cloud at threshold + soft / 2: put that at the cover quantile.
   const at = values[Math.min(n - 1, Math.floor((1 - c.cover) * n))];
   return { threshold: +(at - soft / 2).toFixed(5), soft: +soft.toFixed(5) };

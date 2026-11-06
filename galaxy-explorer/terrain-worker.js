@@ -9,7 +9,7 @@ self.onmessage = (e) => {
   if (m.type === 'chunk') {
     const out = buildChunk(bodies.get(m.key), m.spec);
     const transfer = [out.positions.buffer, out.colors.buffer, out.normals.buffer, out.cover.buffer, out.lodDelta.buffer, out.lodColor.buffer, out.lodNormal.buffer];
-    if (out.water) transfer.push(out.water.buffer, out.waterDelta.buffer, out.waterNormals.buffer);
+    if (out.water) transfer.push(out.water.buffer, out.waterDelta.buffer, out.waterNormals.buffer, out.waterDepth.buffer);
     self.postMessage({ id: m.id, ...out }, transfer);
   }
 };

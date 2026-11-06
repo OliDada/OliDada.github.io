@@ -206,7 +206,9 @@ function buildTerrain(body) {
   const M = Math.min(scaleR * reliefK, Math.max(.12, RM / 2300));
   // Heights in metres added by the landforms at a point (n on the unit sphere); s: mesh spacing.
   // d: the continent field less its sea level (> 0 on land).
+  let calm = 0; // how much of a point is mountain massif (set by landforms(), read by micro())
   function landforms(x, y, z, d, s) {
+    calm = 0;
     const inland = smooth(.02, .32, d), coast = smooth(-.04, .06, d);
     // The shelf: land rises gently inland, the sea floor drops away beyond the coast.
     let h = L.shelf * (d * 30 * M + 16 * M * smooth(0, .07, d) + 16 * M * Math.pow(smooth(.05, .45, d), .8) - 30 * M * smooth(0, -.08, d));
@@ -225,6 +227,7 @@ function buildTerrain(body) {
       // ridges scale with it and a sharp edge made sheer walls.)
       const bf = L.beltFreq * 1.6, massV = fbm(nF, x * bf + 17, y * bf, z * bf, 2);
       const belt = smooth(-.1, .5, massV), mass = belt * smooth(0, .45, inland);
+      calm = mass;
       if (mass > 0) {
         // Ridges branching off a main crest, from ridged noise on a warped domain: the warp
         // bends the ridgelines and splits them into spurs, and each octave is weighted by the
@@ -238,9 +241,14 @@ function buildTerrain(body) {
       h += sridged(nE, x + 9, y + 2, z, RM / 320, 3, 2, 14 * M * L.ranges, s) * inland * (.3 + .7 * belt); // foothills, mostly near the ranges
     }
     // Mesas: flat-topped tablelands with cliff edges and a terraced fringe.
-    if (L.mesas > 0 && bw(40, s) > 0) {
-      const m = fbm(nF, x * RM / 420 + 51, y * RM / 420, z * RM / 420, 3), top = smooth(.12, .2, m) * coast;
-      if (top > 0) h += bw(40, s) * L.mesas * 38 * M * (top + .35 * smooth(.2, .45, m));
+    // The cliff is wide enough to stay under about 50 degrees, and wider still on coarse
+    // (distant) tiles, so its edge never zig-zags along the grid of vertices; mesas no
+    // longer vanish from afar either.
+    if (L.mesas > 0) {
+      const m = fbm(nF, x * RM / 420 + 51, y * RM / 420, z * RM / 420, 3), w = Math.min(.12, s * .012);
+      const top = smooth(.08 - w, .24 + w, m) * coast;
+      calm = Math.max(calm, 1 - Math.abs(top - .5) * 2); // the cliff band
+      if (top > 0) h += L.mesas * 38 * M * (top + .35 * smooth(.24, .5, m));
     }
     return h;
   }
@@ -313,13 +321,15 @@ function buildTerrain(body) {
     const x = n.x, y = n.y, z = n.z;
     const cont = fbm(nA, x * 1.25 + off[0], y * 1.25 + off[1], z * 1.25 + off[2], 5);
     const cd = LAND ? contAt(x, y, z) - contSea : 0; // the new continents: > 0 on land
+    const lf = LAND ? landforms(x, y, z, cd, s) : 0; // first, so calm (mountain and cliff) is known to the dunes below
     // Heights in metres from here on.
     let h = sfbm(nA, x, y, z, 1.25, 5, shape.continents * amp * (LAND ? .35 : 1), s, off)
       + sridged(nB, x, y, z, 2.4, 5, shape.sharp || 2, shape.mountains * amp, s) * smooth(-.15, .45, cont) * (LAND ? .25 + .75 * smooth(-.03, .12, cd) : 1) // new land: the classic ridges mostly kept to land
       + sfbm(nC, x, y, z, 9, 5, shape.detail * 2 * amp, s); // fine octaves matter once close-up detail can show them
     if (shape.dunes) {
       const along = (x * duneDir[0] + y * duneDir[1] + z * duneDir[2]) * 70 + 4 * fbm(nC, x * 3, y * 3, z * 3, 2);
-      h += bw(TAU * RM / 70, s) * shape.dunes * amp * (1 - Math.abs(Math.sin(along))) * smooth(.25, -.1, cont);
+      const sn = Math.sin(along), crest = LAND ? 1 - Math.sqrt(sn * sn + .04) + .2 : 1 - Math.abs(sn); // (new land: rounded crests; a cusp on a grid of vertices drew saw teeth)
+      h += bw(TAU * RM / 70, s) * shape.dunes * amp * crest * smooth(.25, -.1, cont) * (LAND ? 1 - smooth(.05, .4, calm) : 1);
     }
     // Frozen worlds: broad, gentle grooves (narrow trenches came out as sawtooth steps on the mesh).
     if (shape.cracks) h -= bw(TAU * RM / 70, s) * shape.cracks * amp * .7 * (1 - smooth(0, .22, Math.abs(nC(x * 7, y * 7, z * 7))));
@@ -337,7 +347,7 @@ function buildTerrain(body) {
       const d = Math.sqrt(Math.max(0, 2 * (1 - (x * v.c[0] + y * v.c[1] + z * v.c[2])))) / v.r;
       if (d < 1) h += Math.min(v.height * amp * (LAND ? 1 + 3 * scaleR : 1), v.r * RM * (LAND ? .32 : .5)) * ((1 - d) ** 1.6 - (d < .16 ? (.16 - d) * 3.5 : 0));
     }
-    if (LAND) h = rivers(x, y, z, h + landforms(x, y, z, cd, s), s);
+    if (LAND) h = rivers(x, y, z, h + lf, s);
     return micro(x * RM, y * RM, z * RM, h, s);
   }
   // Small-scale relief, in metres: the shapes you notice on foot. Soft ground gets
@@ -366,10 +376,14 @@ function buildTerrain(body) {
   }
   function micro(X, Y, Z, h, s = 0) {
     if (ground === 'soft') {
+      // (New land: mountainsides lose the meadow's hummocks and banks. On steep faces those
+      // small bumps drew wavy ripples across the whole slope.)
+      const k = LAND ? 1 - smooth(.05, .5, calm) : 1;
+      if (k <= 0) return h + bfbm(X, Y, Z, 48, 2, s, 31, 1.2);
       const hummock = bfbm(X, Y, Z, 6, 3, s, 0, .5) + bfbm(X, Y, Z, 2.4, 2, s, 9, .12);
       const swale = bfbm(X, Y, Z, 48, 2, s, 31, 1.2);
       const bank = bw(26, s) * ridged(nD, X / 26 + 7, Y / 26, Z / 26, 2, 2) * cap(1.2, 26 / 2) * smooth(.1, .5, nD(X / 90, Y / 90 + 5, Z / 90));
-      return h + hummock + swale + bank;
+      return h + (hummock + bank) * k + swale;
     }
     if (airless) h += smallCraters(X, Y, Z, s);
     if (ground === 'sand') {
@@ -381,7 +395,10 @@ function buildTerrain(body) {
       }
       const drift = bfbm(X, Y, Z, 14, 2, s, 11, .35);
       const outcrop = bw(20, s) * smooth(.5, .9, ridged(nD, X / 20 + 5, Y / 20, Z / 20, 2, 2)) * 1.2 * smooth(.3, .7, nD(X / 70, Y / 70 + 9, Z / 70));
-      return h + ripple * .16 + drift + outcrop;
+      const still = LAND ? 1 - smooth(.05, .4, calm) : 1; // no wind ripples on mountains and mesa walls (they showed as saw teeth on steep faces)
+      // (New land: the ripples are drawn by the ground shader instead, planet-lod.js, so they
+      // reach as far as you can see rather than only the finest tiles around you.)
+      return h + (LAND ? 0 : ripple * .16) + drift + outcrop * still;
     }
     if (ground === 'ice') {
       // Pressure ridges, soft snow drifts and wind-cut grooves.
@@ -516,13 +533,15 @@ function buildTerrain(body) {
     if (weight) vegetation = mix(baseVegetation, sum.map(v => v / weight * .82), .7);
   }
   const forest = vegetation.map(v => v * .72);
+  // Only worlds with trees get a dark forest floor (new land); elsewhere it was dark blotches with nothing growing on them.
+  const hasTrees = lush && floraFor(body).species.some((sp) => !sp.aquatic && sp.height >= 4);
   // Forest floor (new land): fallen needles and leaves, and deep moss in the hollows.
   const floorLitter = mix(rgb('#4a3826'), vegetation, .18), forestMoss = mix(vegetation, rgb('#2f4a24'), .5).map(v => v * .7);
   const sand = mix(rgb({ methane: '#7a5230', sulfur: '#d6c25a' }[solvent] || '#d8c79c'), pal[3], .3), snow = rgb(solvent === 'methane' ? '#c9a77c' : '#edf3f6'), iceColor = mix(rgb('#d6e8f1'), rgb(body.atmosphere), .12);
   const crust = rgb('#2b2020'), mats = mix(pal[1], rgb('#6c7a52'), .5);
   // Bare rock (cliffs, steep banks) and dry grass for patchy meadows.
   const rock = body.rock ? rgb(body.rock) : pal[0].map(v => v * .8);
-  const cliff = (ground === 'rocky' ? mix(rock, pal[1], .2) : mix(rock, pal[1], .4)).map(v => v * .85);
+  const cliff = (ground === 'rocky' ? mix(rock, pal[1], .2) : mix(rock, pal[1], .4)).map(v => v * .85).map((v, i) => body.landStyle !== 'classic' && ground === 'soft' ? v * .6 + [.58, .55, .5][i] * .4 : v); // (new land: earthy, paler banks on soft ground, not dark slate)
   // The rock of high mountains (new land): the world's rock, paler and nearer grey.
   const mountainRock = mix(rock, rgb('#a39d92'), .7).map(v => Math.min(1, v * 1.25));
   const dry = mix(vegetation, chem === 'carbon' ? rgb('#b8a660') : pal[2], .55);
@@ -579,17 +598,24 @@ function buildTerrain(body) {
       if (lush && localT > vegT[0] && localT < vegT[3]) {
         // Grass thins out on steep banks; drier patches, lusher hollows.
         const v = vegAmount = smooth(.35, .62, moist) * smooth(vegT[0], vegT[1], localT) * smooth(vegT[3], vegT[2], localT) * (1 - (LAND ? smooth(.1, .5, slope) : smooth(.14, .32, slope)));
-        let g = mix(vegetation, dry, w22 > 0 ? smooth(0, .6, nD(X / 22, Y / 22, Z / 22)) * .85 * w22 : 0);
-        if (w5 > 0) g = mix(g, vegetation.map(x => x * 1.25), smooth(.2, .8, nD(X / 5 + 50, Y / 5, Z / 5)) * .6 * w5);
-        g = mix(g, forest.map(x => x * .85), smooth(0, .2, hollow) * .85);
-        c = mix(c, moist > .7 ? mix(g, forest, .65) : g, v * .9);
+        let g = mix(vegetation, dry, w22 > 0 ? smooth(0, .6, nD(X / 22, Y / 22, Z / 22)) * (LAND ? .4 : .85) * w22 : 0); // (new land: gentler dry patches; the shader adds finer variety)
+        if (w5 > 0) g = mix(g, vegetation.map(x => x * 1.25), smooth(.2, .8, nD(X / 5 + 50, Y / 5, Z / 5)) * (LAND ? .22 : .6) * w5); // (new land: subtler, so hills don't read as blotches from afar)
+        g = mix(g, forest.map(x => x * .85), smooth(0, LAND ? .35 : .2, hollow) * (LAND ? .45 : .85));
+        // New land: meadows vary in hue over tens of metres (sunburnt, golden, cool and
+        // lush), the way real grassland does, rather than one even green.
+        if (LAND) {
+          const warm = smooth(-.1, .5, nB(X / 70 + 13, Y / 70, Z / 70)), cool = smooth(.1, .6, nC(X / 40 - 7, Y / 40, Z / 40 + 3));
+          g = mix(g, [g[0] * 1.2 + .02, g[1] * 1.07, g[2] * .72], warm * .45);
+          g = mix(g, [g[0] * .82, g[1] * .98, g[2] * 1.1], cool * .3 * (1 - warm));
+        }
+        c = mix(c, LAND ? mix(g, forest, (hasTrees ? .55 : .25) * smooth(.6, .8, moist)) : moist > .7 ? mix(g, forest, .65) : g, v * .9); // (new land: no hard edge where it turns wet)
         // New land: under the woods (flora.mjs plantBiome) the floor is dark moss and
         // fallen needles and leaves, not meadow; darkest in the old heart of a forest.
-        if (LAND && chem === 'carbon') {
+        if (LAND && chem === 'carbon' && hasTrees) {
           const wood = woodAmount = smooth(.53, .6, moist + .09 * clim.stand) * (.55 + .45 * smooth(.62, .72, moist + .09 * clim.stand)) * smooth(-.85, -.1, clim.stand) * smooth(vegT[0], vegT[1] + 6, localT) * smooth(.66, .6, clim.altitude);
           if (wood > 0) {
-            const litter = w5 > 0 ? smooth(-.1, .5, nD(X / 6 + 20, Y / 6, Z / 6)) * w5 : .4;
-            const floor = mix(mix(forest.map(x => x * .55), floorLitter, litter * .55), forestMoss, smooth(.1, .45, hollow + .15) * .5);
+            const litter = w5 > 0 ? .4 + (smooth(-.1, .5, nD(X / 6 + 20, Y / 6, Z / 6)) - .4) * w5 * .6 : .4; // (patches of litter, gentle: seen from the air they must not blotch)
+            const floor = mix(mix(forest.map(x => x * .62), floorLitter, litter * .4), forestMoss, smooth(.1, .45, hollow + .15) * .3);
             c = mix(c, floor, wood * .92 * (1 - smooth(.25, .5, slope)));
           }
         }
@@ -752,5 +778,5 @@ function buildTerrain(body) {
     }
   } catch (e) { /* no civilization to level for */ }
   // rockColor: bare rock as it shows on cliffs (sRGB), for rocks and formations to match.
-  return { raw, height, surface, meshHeight, isLiquid, color, climate, sea, liquid, solvent, coverage, minH, maxH, waterColor, site, landing, lush, ground, airless, rockColor: cliff, vegetation, landform: LAND ? L : null, landTop };
+  return { raw, height, surface, meshHeight, isLiquid, color, climate, sea, liquid, solvent, coverage, minH, maxH, waterColor, site, landing, lush, ground, airless, rockColor: cliff, vegetation, landform: LAND ? L : null, landTop, windDir: ground === 'sand' && LAND ? windDir : null };
 }
