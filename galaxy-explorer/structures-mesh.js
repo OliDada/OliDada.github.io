@@ -11,6 +11,9 @@
 // Everything is merged into a few meshes (lit, glowing, blinking beacons, the pools of
 // lamplight on the ground): a handful of draw calls however big the city. Footings reach into the ground so nothing floats on a slope. THREE is passed in.
 import { rng } from './rng.mjs';
+import { softenNormals } from './soften.js';
+import { hullDetail } from './kestrel.js';
+import { PLANT_STYLE } from './style.mjs';
 import { civilizationOf } from './civilizations.mjs';
 import { networkFor, seaFloorTerrain } from './settlements.mjs';
 import { shipDesign, buildShip, shipSize } from './ships.js';
@@ -2302,6 +2305,8 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
     const shipGeo = g.geometry(), glowGeo = gl.geometry(); shipGeo.computeBoundingBox();
     const bb = shipGeo.boundingBox, hover = ['saucer', 'ring', 'wheel'].includes(ship.hull), gas = ['bladder', 'lantern'].includes(ship.hull);
     const shipMat = solid(null, { roughness: .45, metalness: .2 }), shipGlow = new THREE.MeshBasicMaterial({ vertexColors: true });
+    // New look: their ships in the same surface style as yours (kestrel.js): softened facets, panel seams and wear.
+    if (PLANT_STYLE !== 'classic') { softenNormals(THREE, shipGeo, .6); shipMat.flatShading = false; hullDetail(shipMat); }
     const plumeMat = new THREE.MeshBasicMaterial({ color: glowC, transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false });
     // The exhaust: a cone out of the engines (down from the hull for those that hover).
     const plumeGeo = new THREE.ConeGeometry(.5, 1, 10, 1, true).rotateX(Math.PI).translate(0, -.5, 0); // apex at -1

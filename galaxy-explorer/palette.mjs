@@ -65,3 +65,16 @@ export function tame(hex, key, extra = 0) {
   const k = vivid / s;
   return '#' + [r, g, b].map(v => Math.round(Math.min(1, Math.max(0, l + (v - l) * k)) * 255).toString(16).padStart(2, '0')).join('');
 }
+
+// A colour with its saturation and lightness scaled (hue kept): hex in, hex out.
+export function muted(hex, sat = 1, light = 1) {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+  const L = Math.min(1, l * light);
+  if (!d) return '#' + [L, L, L].map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
+  const S = Math.min(1, d / (1 - Math.abs(2 * l - 1)) * sat), h = (max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60;
+  const c = (1 - Math.abs(2 * L - 1)) * S, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = L - c / 2;
+  const [R, G, B] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return '#' + [R, G, B].map(v => Math.round(Math.min(1, Math.max(0, v + m)) * 255).toString(16).padStart(2, '0')).join('');
+}

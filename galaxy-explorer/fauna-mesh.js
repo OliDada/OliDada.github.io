@@ -14,6 +14,8 @@
 // from you, curious ones come closer, fliers and floaters drift overhead and fliers
 // swoop on prey. THREE is passed in.
 import { rng } from './rng.mjs';
+import { softenNormals } from './soften.js';
+import { PLANT_STYLE } from './style.mjs';
 import { faunaFor, habitatFit } from './fauna.mjs';
 import { isAwake } from './ecology.mjs';
 import { cultureOf, cultureSkin, cultureGlow, dress, KIND, tag } from './fauna-culture.mjs';
@@ -2208,7 +2210,11 @@ function buildGeometry(THREE, sp, r) {
   out.setAttribute('aPhase', new THREE.Float32BufferAttribute(phase.flatMap((v, i) => [v, bend[i]]), 2)); // phase, bend
   out.setAttribute('aGlow', new THREE.Float32BufferAttribute(glow, 1));
   out.setAttribute('aKind', new THREE.Float32BufferAttribute(kind, 1));
+  // New look: the same softened facets as rocks, trunks and plants (soften.js): smooth bodies
+  // show their planes a little, and faceted (silicon) ones are no longer hard-edged.
+  if (PLANT_STYLE !== 'classic') softenNormals(THREE, out, sp.facets ? .45 : .62);
   out.computeBoundingSphere();
   out.userData.headPivot = headPivotOut;
   return out;
 }
+export { buildGeometry as buildAnimalGeometry, addAnimation as addAnimalShader }; // (previews, tools/)

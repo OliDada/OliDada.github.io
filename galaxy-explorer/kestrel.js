@@ -2,6 +2,8 @@
 // effects that follow the flight state (gear, lift jets, engine glow).
 import * as THREE from "./vendor/three.module.js";
 import { damp, smoothstep } from "./flight-math.mjs";
+import { softenNormals } from "./soften.js";
+import { PLANT_STYLE } from "./style.mjs";
 
 const Y = new THREE.Vector3(0, 1, 0);
 const clamp = THREE.MathUtils.clamp;
@@ -165,10 +167,10 @@ function makePetrel() {
     // Hull: a lathe along z, pointed at the nose (-z), tapering to the stern.
     const prof = [];
     for (let i = 0; i <= 16; i++) { const t = i / 16; prof.push(new THREE.Vector2(Math.max(0.02, 0.95 * Math.sin(Math.PI * Math.pow(t, 0.75)) * (t > 0.8 ? 1 - (t - 0.8) * 1.6 : 1)), -4.6 + t * 9)); }
-    const hull = new THREE.Mesh(new THREE.LatheGeometry(prof, 10), white);
+    const hull = new THREE.Mesh(new THREE.LatheGeometry(prof, 16), white);
     hull.rotation.x = -Math.PI / 2; hull.scale.set(1, 1, 0.82);
     group.add(hull);
-    const stripe = new THREE.Mesh(new THREE.LatheGeometry(prof.map((v) => new THREE.Vector2(v.x * 1.02, v.y)), 10, Math.PI * 0.62, Math.PI * 0.76), teal);
+    const stripe = new THREE.Mesh(new THREE.LatheGeometry(prof.map((v) => new THREE.Vector2(v.x * 1.02, v.y)), 16, Math.PI * 0.62, Math.PI * 0.76), teal);
     stripe.rotation.x = -Math.PI / 2; stripe.scale.set(1, 1, 0.82); stripe.position.y = -0.05;
     group.add(stripe);
     const keel = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 5.2), teal);
@@ -243,8 +245,52 @@ export function setShipDesign(kestrel, design) {
     kestrel.design = design;
 }
 
+// New look (style.mjs): the ships in the world's surface style. Facets softened like rocks
+// and trunks (soften.js), and on the painted hull panels: fine panel seams, a little
+// streaky weathering and wear, drawn in the shader from each part's own coordinates.
+const PANELS = new WeakSet();
+export function hullDetail(material) {
+    if (PANELS.has(material)) return;
+    PANELS.add(material);
+    const glossy = material.roughness < 0.3;
+    material.onBeforeCompile = (shader) => {
+        shader.vertexShader = "varying vec3 vShipP;\n" + shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n vShipP = position;");
+        shader.fragmentShader = `varying vec3 vShipP;
+float sHash(vec3 p) { p = fract(p * .3183099 + .1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float sNoise(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(sHash(i), sHash(i + vec3(1, 0, 0)), f.x), mix(sHash(i + vec3(0, 1, 0)), sHash(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(sHash(i + vec3(0, 0, 1)), sHash(i + vec3(1, 0, 1)), f.x), mix(sHash(i + vec3(0, 1, 1)), sHash(i + vec3(1, 1, 1)), f.x), f.y), f.z); }
+` + shader.fragmentShader.replace("#include <color_fragment>", `#include <color_fragment>
+      {
+        vec3 q = fract(vShipP * vec3(0.9, 0.75, 0.6) + 0.37);
+        vec3 e = min(q, 1.0 - q);
+        vec3 w = fwidth(vShipP * vec3(0.9, 0.75, 0.6)) * 1.1 + 0.004;
+        vec3 l = 1.0 - smoothstep(vec3(0.0), w, e);
+        float seam = max(max(l.x, l.y), l.z);
+        float streak = sNoise(vec3(vShipP.x * 7.0, vShipP.y * 7.0, vShipP.z * 0.9)) * 0.6 + sNoise(vShipP * 3.0) * 0.4;
+        float wear = smoothstep(0.62, 0.8, sNoise(vShipP * 11.0));
+        diffuseColor.rgb *= (1.0 - 0.18 * seam) * (0.9 + 0.12 * streak);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.82 + 0.04, wear * 0.35);
+      }`).replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
+      roughnessFactor = clamp(roughnessFactor + (sNoise(vShipP * 5.0) - 0.5) * ${glossy ? "0.05" : "0.2"}, 0.05, 1.0);`);
+    };
+    material.customProgramCacheKey = () => "ship-hull";
+}
+function stylise(model) {
+    if (PLANT_STYLE === "classic") return;
+    const done = new Map();
+    model.traverse((o) => {
+        if (!o.isMesh || !o.material?.isMeshStandardMaterial) return;
+        const m = o.material;
+        m.flatShading = false; m.needsUpdate = true;
+        if (!done.has(o.geometry)) { const g = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry); softenNormals(THREE, g, 0.6); done.set(o.geometry, g); }
+        o.geometry = done.get(o.geometry);
+        if (m.metalness < 0.7) hullDetail(m); // painted parts; glass and bare metal stay plain
+    });
+}
 export function createKestrel() {
     const models = { kestrel: makeShip(), petrel: makePetrel() };
+    stylise(models.kestrel); stylise(models.petrel);
     const ship = new THREE.Group();
     ship.add(models.kestrel, models.petrel);
     models.petrel.visible = false;

@@ -7,7 +7,8 @@
 //      colours and patterns, behaviour, herd size, speed, and a civilization
 //      level for species intelligent and social enough to build or travel.
 // Plain data, deterministic per world. fauna-mesh.js builds and animates it.
-import { worldKey, harmonize, tame } from './palette.mjs';
+import { worldKey, harmonize, tame, muted } from './palette.mjs';
+import { PLANT_STYLE } from './style.mjs';
 import { rng } from './rng.mjs';
 import { environment, CHEM_COLORS, CHEM_TEXT } from './flora.mjs';
 import { ecologyFor, describeEcology } from './ecology.mjs';
@@ -257,6 +258,9 @@ function rollLook(plan, form, t, e, r, camo, key) {
   }
   // Within the world's saturation (palette.mjs); warning colours are allowed a little more.
   if (!cc) for (const k of ['base', 'belly', 'accent', 'shimmer']) colors[k] = tame(colors[k], key, scheme === 'warning' ? .22 : 0);
+  // New look (style.mjs): animals as restrained as the plants they live among, a little less
+  // saturated (warning colours keep more of their bite).
+  if (PLANT_STYLE !== 'classic') for (const k of ['base', 'belly', 'accent', 'shimmer']) colors[k] = muted(colors[k], scheme === 'warning' && k === 'accent' ? .85 : k === 'accent' ? .75 : .64, .96);
   const glow = e.chem === 'silicon' ? (r() < .6 ? r.range(.4, .9) : 0) : (e.dim > .35 || plan === 'floater') && r() < (plan === 'floater' ? .6 : .35) + e.dim * .3 ? r.range(.5, 1) : 0;
   const pattern = scheme === 'warning' ? r.pick(['bands', 'stripes', 'rings', 'spots']) : scheme === 'camouflage' ? r.pick(['mottled', 'spots', 'stripes', 'plain', 'dapple'])
     : r.pick(['plain', 'saddle', 'spots', 'stripes', 'gradient', 'rings']);
