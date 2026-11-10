@@ -81,7 +81,10 @@ function alienTree(g) {
 
   // --- Trunk plans ---
   const TRUNKS = {
-    column() { const t = V(lean.x * H * .4, top, lean.z * H * .4); limb(V(), t.clone().multiplyScalar(.5), tr, tr * .8); limb(t.clone().multiplyScalar(.5), t, tr * .8, tr * .5); roots(4); return [{ p: t, d: UP, s: 1 }]; },
+    column() { // one trunk, tapering through five pieces that wander a little (by the species' seed, so no random numbers are spent)
+      const t = V(lean.x * H * .4, top, lean.z * H * .4), N = 5, w = (i, k) => (jitterOf(sp.seed % 977, i, k, 3) - .5) * tr * .9;
+      let prev = V(); for (let i = 1; i <= N; i++) { const f = i / N, p = t.clone().multiplyScalar(f).add(i < N ? V(w(i, 1), 0, w(i, 2)) : V()); limb(prev, p, tr * (1 - .5 * (i - 1) / N), tr * (1 - .5 * f)); prev = p; }
+      roots(4); return [{ p: t, d: UP, s: 1 }]; },
     bottle() {
       const prof = [1, 1.9, 2.5, 2.2, 1.3, .6], seg = top / (prof.length - 1);
       for (let i = 0; i < prof.length - 1; i++) limb(V(0, i * seg, 0), V(0, (i + 1) * seg, 0), tr * prof[i], tr * prof[i + 1], c.stem, 8);
@@ -142,7 +145,12 @@ function alienTree(g) {
     },
   };
   // Roots flaring out into the ground from the foot of the trunk.
-  function roots(k) { for (let i = 0; i < k; i++) { const a = i / k * 6.28 + r() * .6, len = tr * (2 + r()); add(new THREE.ConeGeometry(tr * .5, len, 4).translate(0, len / 2, 0), new THREE.Matrix4().makeTranslation(Math.cos(a) * tr * .5, tr * .5, Math.sin(a) * tr * .5).multiply(new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(-Math.sin(a), 0, Math.cos(a)), -1.7)), c.stem, false); } }
+  // (The foot of the trunk flares into the ground first, so the tree grips it instead of
+  // standing on it like a post; the roots are long enough to read from a few metres off.)
+  function roots(k) {
+    add(new THREE.CylinderGeometry(tr * 1.02, tr * 1.75, tr * 2.4, 8, 1).translate(0, tr * .9, 0), new THREE.Matrix4(), c.stem, false);
+    for (let i = 0; i < k; i++) { const a = i / k * 6.28 + r() * .6, len = tr * (3.2 + 1.6 * r()); add(new THREE.ConeGeometry(tr * .62, len, 5).translate(0, len / 2, 0), new THREE.Matrix4().makeTranslation(Math.cos(a) * tr * .6, tr * .75, Math.sin(a) * tr * .6).multiply(new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(-Math.sin(a), 0, Math.cos(a)), -1.82)), c.stem, false); }
+  }
 
   // --- Crown plans: dress one tip (p, d, s) ---
   const R0 = H * .21 * S.spread;
@@ -152,14 +160,15 @@ function alienTree(g) {
       limb(p, p.clone().addScaledVector(d, gap * (L - .5)), tr * .3 * s, tr * .1, c.stem, 5);
       for (let k = 0; k < L; k++) {
         const f = k / L, q = p.clone().addScaledVector(d, gap * k + R * .05), rr = R * (1 - .6 * f) * (.9 + .2 * r()), n = 4 + Math.round(3 * (1 - f));
-        put(roughen(blob(rr * .45, 1), S.lumpy, k + i * 13), q, d, V(1, .38, 1), fol(i + (k % 2)));
-        for (let j = 0; j < n; j++) { const a = j / n * 6.28 + r() * .6 + k; put(roughen(blob(rr * (.38 + .12 * r()), 1), S.lumpy, j + k * 7), q.clone().addScaledVector(out(a), rr * (.55 + .15 * r())).addScaledVector(d, -rr * .08 * S.droop), d, V(1, .34, 1), fol(i + j + k)); }
+        put(roughen(blob(rr * .45, 1), S.lumpy, k + i * 13), q, d, V(1, .5, 1), fol(i + (k % 2)));
+        for (let j = 0; j < n; j++) { const a = j / n * 6.28 + r() * .6 + k; put(roughen(blob(rr * (.38 + .12 * r()), 1), S.lumpy, j + k * 7), q.clone().addScaledVector(out(a), rr * (.55 + .15 * r())).addScaledVector(d, -rr * .08 * S.droop), d, V(1, .46, 1), fol(i + j + k)); }
       } },
     globe({ p, d, s }, i) { const k = 2 + Math.floor(r() * 3), R = R0 * s; for (let j = 0; j < k; j++) put(roughen(blob(R * (.7 + .4 * r()), 1), S.lumpy, j + i * 5), p.clone().add(V((r() - .5) * R, (r() - .1) * R * .7, (r() - .5) * R)), d, V(1, .8, 1), fol(j + i)); put(detail(roughen(blob(R * .6, 0), .2, i)), p.clone().addScaledVector(d, -R * .35), d, V(1.2, .5, 1.2), under(i)); },
     umbrella({ p, d, s }, i) { // a wide flat-topped canopy, built of overlapping lumpy pads so its edge is ragged
       const R = R0 * s * 1.6, k = 6 + Math.floor(S.spread * 3);
-      put(roughen(blob(R * .55, 1), S.lumpy * .6, i), p.clone().addScaledVector(UP, R * .1), UP, V(1, .32, 1), fol(i));
-      for (let j = 0; j < k; j++) { const a = j / k * 6.28 + r() * .5, q = p.clone().addScaledVector(out(a), R * (.45 + .2 * r())).add(V(0, R * (.02 + .06 * r()), 0)); put(roughen(blob(R * (.38 + .14 * r()), 1), S.lumpy * .7, j + i * 9), q, UP, V(1, .3 + .1 * r(), 1), fol(j + i)); }
+      put(roughen(blob(R * .55, 1), S.lumpy * .6, i), p.clone().addScaledVector(UP, R * .1), UP, V(1, .5, 1), fol(i));
+      put(roughen(blob(R * .34, 1), S.lumpy * .6, i + 5), p.clone().addScaledVector(UP, R * .3), UP, V(1, .6, 1), fol(i + 1)); // the crown of the dome
+      for (let j = 0; j < k; j++) { const a = j / k * 6.28 + r() * .5, q = p.clone().addScaledVector(out(a), R * (.45 + .2 * r())).add(V(0, R * (.02 + .06 * r()), 0)); put(roughen(blob(R * (.38 + .14 * r()), 1), S.lumpy * .7, j + i * 9), q.add(V(0, -R * .06, 0)), UP, V(1, .44 + .12 * r(), 1), fol(j + i)); }
       put(detail(roughen(blob(R * .8, 0), .12, i + 3)), p.clone().addScaledVector(UP, -R * .04), UP, V(1, .12, 1), under(i)); },
     weeping({ p, d, s }, i) { const R = R0 * s; put(roughen(blob(R, 1), S.lumpy, i), p, d, V(1, .6, 1), fol(i)); const k = 16 + Math.floor(S.droop * 14);
       for (let j = 0; j < k; j++) { const a = j / k * 6.28 + r() * .4, q = p.clone().addScaledVector(out(a), R * .85), len = R * (1.2 + 2 * S.droop) * (.7 + .5 * r()); add(new THREE.CylinderGeometry(R * .03, R * .008, len, 3, 1).translate(0, -len / 2, 0), new THREE.Matrix4().makeTranslation(q.x + (r() - .5) * R * .3, q.y, q.z + (r() - .5) * R * .3), j % 2 ? fol(j) : under(j), true); } },
@@ -168,8 +177,9 @@ function alienTree(g) {
     bottlebrush({ p, d, s }, i) { const len = Math.min(R0 * s * 3, H * .55 * s), tipP = p.clone().addScaledVector(d, len); limb(p, tipP, tr * .25 * s, tr * .05, c.stem, 4); const k = Math.round((26 + S.layers * 3) * Math.min(1, s * 1.2));
       for (let j = 0; j < k; j++) { const f = j / k, q = p.clone().addScaledVector(d, len * (.08 + .9 * f)), bl = R0 * s * (.55 + .5 * Math.sin(f * Math.PI)) * (.8 + .4 * r()); put(new THREE.ConeGeometry(bl * .1, bl, 3).translate(0, bl / 2, 0), q, out(j * 2.4 + r()).add(V(0, .15 - S.droop * .4, 0)), 1, fol(j)); } },
     fan({ p, d, s }, i) { const k = 7 + Math.floor(S.spread * 3); for (let j = 0; j < k; j++) { const a = j / k * 6.28 + r() * .3; put(bough(THREE, R0 * s * (1.8 + .6 * r()), R0 * s * .55, .05 + S.droop * .35), p, out(a).add(V(0, 1.2 - S.droop, 0)), 1, fol(j)); } put(blob(R0 * s * .25, 0), p, d, 1, fol(i)); },
+    // (The hanging pods are small, so they are twenty facets each, not eighty.)
     lanterns({ p, d, s }, i) { const R = R0 * s; put(roughen(blob(R * .7, 1), S.lumpy, i), p, d, V(1.2, .55, 1.2), fol(i)); const k = 4 + Math.floor(S.droop * 5), pod = c.bloom || c.accent;
-      for (let j = 0; j < k; j++) { const a = j / k * 6.28 + r() * .5, q = p.clone().addScaledVector(out(a), R * (.5 + .4 * r())), len = R * (.4 + .9 * S.droop); add(new THREE.CylinderGeometry(R * .02, R * .02, len, 3, 1).translate(0, -len / 2, 0), new THREE.Matrix4().makeTranslation(q.x, q.y, q.z), under(j), true); put(roughen(blob(R * .2, 1), .1, j), q.clone().add(V(0, -len - R * .15, 0)), UP, V(1, 1.4, 1), pod); } },
+      for (let j = 0; j < k; j++) { const a = j / k * 6.28 + r() * .5, q = p.clone().addScaledVector(out(a), R * (.5 + .4 * r())), len = R * (.4 + .9 * S.droop); add(new THREE.CylinderGeometry(R * .02, R * .02, len, 3, 1).translate(0, -len / 2, 0), new THREE.Matrix4().makeTranslation(q.x, q.y, q.z), under(j), true); put(roughen(blob(R * .2, 0), .1, j), q.clone().add(V(0, -len - R * .15, 0)), UP, V(1, 1.4, 1), pod); } },
     invertedCone({ p, d, s }, i) { // a crown that widens upward (a vase of foliage), built of leafy clumps in rings, not a solid cone
       const R = R0 * s * .9, h = R * 1.7, rings = 3;
       for (let k = 0; k < rings; k++) { const f = (k + .5) / rings, rr = R * (.3 + .7 * f), n = 3 + k * 2, y = h * (f - .15);

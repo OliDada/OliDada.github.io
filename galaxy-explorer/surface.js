@@ -99,6 +99,7 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
 
     // Geology: rock and ice formations to find and record, chosen from the world's physics.
     const geology = buildGeology(THREE, { body, terrain: terrainInfo, radius: RADIUS, signalNormal, landingNormal, coarse });
+    geology.group.userData.perf = 'rocks';
     group.add(geology.group);
 
     // Plant life: species generated from this world's environment, growing all over it in
@@ -112,6 +113,7 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         budget: coarse ? 900 : 1600,
         coarse,
     });
+    flora.group.userData.perf = 'plants'; // (flora-mesh.js labels each model: trees or plants, near, far or distant)
     group.add(flora.group);
 
     // Animal life: species generated from this world's environment, living around you (they
@@ -127,6 +129,7 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         // A spaceborne civilization left its world: its towns stand empty (structures-mesh.js ruins).
         absent: civilizationOf(body)?.spaceborne ? new Set([civilizationOf(body).species.id]) : null,
     });
+    fauna.group.userData.perf = 'animals';
     group.add(fauna.group);
 
     // What an intelligent species has built: its capital beside the landing site, towns and
@@ -141,6 +144,7 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         colonist, // a spacefaring civilization from elsewhere in this system that has settled here
         coarse,
     });
+    structures.group.userData.perf = 'buildings';
     group.add(structures.group);
     obstacles.push(...structures.obstacles);
 
@@ -235,6 +239,7 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         m.count = 0; m.frustumCulled = false;
     }
     for (const m of [rocks, bigRocks]) { m.castShadow = true; m.receiveShadow = true; }
+    rocks.userData.perf = bigRocks.userData.perf = 'rocks';
     group.add(rocks, bigRocks);
     const stony = { rocky: 1.6, volcanic: 1.6, ice: .8, toxic: 1, soft: .7, sand: .5 }[terrainInfo.ground] ?? (terrainInfo.airless ? 1.6 : 1);
     const dummy = new THREE.Object3D(), rn = vec(), side = vec(), tmpColor = new THREE.Color(), rockInfo = {};
@@ -341,6 +346,7 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         coarse,
         blocked: (p) => clear.some((c) => c.n.x * p.x + c.n.y * p.y + c.n.z * p.z > (c.cos ??= Math.cos(c.angle))) || inCity(p),
     });
+    groundCover.group.userData.perf = 'ground cover';
     group.add(groundCover.group);
 
     // Rings are drawn once, by system-view.js, for every world (including this one).

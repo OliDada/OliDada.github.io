@@ -15,8 +15,12 @@ export const PLANET_PERIOD = 2 * Math.PI * INNER_ORBIT / 30; // seconds for one 
 export const MOON_PERIOD = 180 * SIZE;
 const GIANT_MOON_SPEED = 55; // m/s along the orbit of a giant's innermost moon
 
+// A survey switch (?time=, quality.mjs) can shift the clock, so a world's landing site
+// is at a chosen time of day; everything that reads the clock moves with it.
+let clockShift = 0;
+export const setClockShift = (seconds) => { clockShift = seconds; };
 export function orbitClock(now = Date.now()) {
-    return (now - EPOCH) / 1000;
+    return (now - EPOCH) / 1000 + clockShift;
 }
 
 // Angular speed (radians per second) of a body around whatever it orbits.

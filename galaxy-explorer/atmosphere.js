@@ -11,7 +11,8 @@
 //                          the ship cast them; everything on the ground receives them.
 //
 // Test switches, remembered in the browser: ?shadows=0 off, ?shadows=1 on (default);
-// ?mist=0 / ?beams=0 turn off the valley mist and the sunbeams in the woods.
+// ?mist=0 / ?beams=0 turn off the valley mist and the sunbeams in the woods; ?air=0 goes
+// back to the thinner haze, paler dusk and darker nights.
 const params = new URLSearchParams((globalThis.location?.search ?? '').replace(/(?!^)\?/g, '&'));
 function setting(name, key, fallback) {
   const v = params.get(name);
@@ -24,6 +25,8 @@ function setting(name, key, fallback) {
 export const SHADOWS = setting('shadows', 'elsewhere-shadows', '1') !== '0';
 export const MIST = setting('mist', 'elsewhere-mist', '1') !== '0'; // ?mist=0: no valley mist
 export const BEAMS = setting('beams', 'elsewhere-beams', '1') !== '0'; // ?beams=0: no sunbeams in the woods
+// ?air=0: the thinner haze, paler dusk and darker nights from before the cinematic pass (game.js updateAtmosphere).
+export const AIR = setting('air', 'elsewhere-air', '1') !== '0';
 
 export function createSkyDome(THREE) {
   const uniforms = {
@@ -61,13 +64,14 @@ void main() {
   return { mesh, uniforms };
 }
 
-// sun: the DirectionalLight (its position is the star, far away); coarse: phones.
-export function setupShadows(THREE, renderer, scene, sun, { coarse = false } = {}) {
+// sun: the DirectionalLight (its position is the star, far away); size: the shadow map's
+// width in texels; half: half the width of the box, in metres (both from the quality tier).
+// every: the shadow map is redrawn once in this many frames.
+export function setupShadows(THREE, renderer, scene, sun, { size = 2048, half = 70, every = 2 } = {}) {
   if (!SHADOWS) return { update() {}, enabled: false };
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   sun.castShadow = true;
-  const size = coarse ? 1024 : 2048, half = coarse ? 42 : 70;
   sun.shadow.mapSize.set(size, size);
   const cam = sun.shadow.camera;
   cam.left = -half; cam.right = half; cam.top = half; cam.bottom = -half;
@@ -82,11 +86,12 @@ export function setupShadows(THREE, renderer, scene, sun, { coarse = false } = {
     // focus: the point on the ground to centre the shadows on (world space); on: whether
     // shadows are worth drawing now (near the ground, on a world, in daylight).
     update(focus, on) {
-      // The shadow map is redrawn every other frame (half the cost; the sway of a shadow at
-      // 30 a second is not noticed). The box only moves on those frames, so map and box agree.
+      // The shadow map is redrawn every other frame, or every third on the medium quality tier
+      // (drawing it is the dearest single thing in a wood; the sway of a shadow at 20 or 30 a
+      // second is not noticed). The box only moves on those frames, so map and box agree.
       renderer.shadowMap.autoUpdate = false;
       if (!on) return;
-      if (frame++ % 2) return;
+      if (frame++ % every) return;
       renderer.shadowMap.needsUpdate = true;
       // The box is moved in whole shadow-map texels (in the light's own frame), so the
       // shadows do not crawl as you walk.

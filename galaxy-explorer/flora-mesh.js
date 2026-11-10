@@ -19,6 +19,7 @@ import { makeNoise } from './terrain.mjs';
 import { createScatter, obstacleGrid } from './scatter.js';
 import { wind, WIND_GLSL } from './wind.mjs';
 import { STRESS } from './look.js';
+import { Q } from './quality.mjs';
 import { PLANT_STYLE } from './style.mjs';
 import { FOREST_FORMS, forestDecor } from './flora-forest.js';
 import { leafTexture, leafCards, leafSurface, leavesAvailable, OPAQUE_U } from './flora-leaves.js';
@@ -56,12 +57,12 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
   const BAND = coarse ? 6 : 10, DIST_BAND = coarse ? 14 : 24;
   // New plant style: beyond DISTANT, trees use a third, very light model (a few dozen
   // triangles), which is what lets a whole forest stand around you.
-  const DISTANT = coarse ? 90 : 120, FAR_TREE = coarse ? 30 : 45; // forest trees switch to their lighter model sooner
-  const reach = coarse ? 220 : 320, cap = Math.round(budget * 2 * STRESS), triangles = (coarse ? 4.5e5 : NEW ? .75e6 : 1.1e6) * STRESS;
+  const DISTANT = coarse ? 90 : 120, FAR_TREE = Q.nearTree; // forest trees switch to their lighter model sooner
+  const reach = coarse ? 220 : 320, cap = Math.round(budget * 2 * STRESS * Q.plants), triangles = (coarse ? 4.5e5 : NEW ? .75e6 : 1.1e6) * STRESS * Q.plants; // (Q: the quality tier's share, quality.mjs)
   // New plant style: trees are filled and drawn much farther out (treeReach, their own grid
   // of cells, filled nearest first like the rest), thinning out towards the horizon, so the
   // country is wooded as far as you can see and from the air too.
-  const treeReach = NEW ? (coarse ? 420 : 720) : reach, treeCap = Math.round(budget * (coarse ? 3 : 6) * STRESS), treeTriangles = (coarse ? 3e5 : 1.1e6) * STRESS;
+  const treeReach = NEW ? Q.treeReach : reach, treeCap = Math.round(budget * (coarse ? 3 : 6) * STRESS), treeTriangles = (coarse ? 3e5 : 1.1e6) * STRESS * Q.trees;
   const Y = new THREE.Vector3(0, 1, 0);
   const groves = makeNoise(body.seed, 'flora-groves');
   // Worlds without trees (simple life: shrubs, caps, pillars...): their biggest land plants
@@ -350,7 +351,7 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
       if (k.foot && !(it.d > 90)) obstacles.push({ p: new THREE.Vector3(it.p[0], it.p[1], it.p[2]), r: k.foot.r * it.sc, h: k.foot.h * it.sc }); // grasses and mats are walked over
     }
     kinds.forEach((k, s) => {
-      modelsOf(k).forEach((m, slotV) => { m.castShadow = slotV < k.V && !k.flat && k.sp.height >= 1.2; /* small plants' shadows are not missed, and cost a lot */ m.customDepthMaterial = k.depthMaterial; m.count = at[s][slotV]; m.visible = m.count > 0; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; m.geometry.attributes.iFade.needsUpdate = true; });
+      modelsOf(k).forEach((m, slotV) => { m.userData.perf = (k.tall ? 'trees ' : 'plants ') + (slotV < k.V ? 'near' : slotV < 2 * k.V ? 'far' : 'distant'); m.castShadow = slotV < k.V && !k.flat && k.sp.height >= Q.shadowHeight; /* small plants' shadows are not missed, and cost a lot */ m.customDepthMaterial = k.depthMaterial; m.count = at[s][slotV]; m.visible = m.count > 0; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; m.geometry.attributes.iFade.needsUpdate = true; });
       placed[s].positions = new Float32Array(pos[s]); placed[s].scales = new Float32Array(scl[s]);
     });
     decor.forEach((d, q) => {
@@ -895,7 +896,8 @@ export function buildGeometry(THREE, sp, r, { bloom = false, far = false, distan
   // change as it switches model; the far model only has plainer stems. (Leaves are a
   // little fewer and bigger than they were, to pay for the far model keeping them all.)
   const clumps = leaves ? parts.filter((p) => p.foliage && p.geo.type === 'IcosahedronGeometry').length : 0, budget = Math.min(1, 640 / Math.max(1, clumps * 6));
-  const every = distant ? 3 : 1, cardGrow = 1.1 * (distant ? 1.4 : 1), cardSeed = (sp.seed ^ Math.floor(r() * 1e9)) >>> 0;
+  // (A lower quality tier keeps fewer cards, each grown only a little more: Q.leafEvery, quality.mjs.)
+  const every = distant ? Q.leafEvery : 1, cardGrow = 1.1 * (distant ? 1.4 * (Q.leafEvery / 3) ** .25 : 1), cardSeed = (sp.seed ^ Math.floor(r() * 1e9)) >>> 0;
   if (leaves) parts.forEach((p, pi) => { if (!p.foliage && sp.form !== 'mound') return; p.cardRng = rng(cardSeed, 'cards', pi); });
   if (leaves) for (const p of parts) {
     // Trees: every other piece of foliage too (fir skirts and boughs, cone- and bowl-shaped

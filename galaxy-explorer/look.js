@@ -12,7 +12,8 @@
 //
 // URL switches (each one is remembered in this browser until switched back):
 //   ?look=classic   the original physical lighting      ?look=new   the stylised look
-//   ?perf           frame rate, draw calls and triangles ?perf=0     hide it
+//   ?perf           frame rate, script time, draw calls and triangles, and what the
+//                   triangles are (plants, ground cover, terrain...)   ?perf=0   hide it
 //   ?stress=3       plants 3x as dense, with 3x budget  ?stress=0   normal
 //   ?adaptive=0     fixed resolution                     ?adaptive   resolution adapts (default)
 
@@ -104,16 +105,46 @@ void RE_IndirectSpecular_Stylised( const in vec3 radiance, const in vec3 irradia
 // resizes the canvas, which wipes it, so a change is only ever applied right before a
 // render (never after one, which would show a black frame), and only after two slow
 // (or two fast) checks in a row, at most once every two seconds, so it doesn't hunt.
-export function createPerf(renderer, { maxRatio, onChange = () => {} }) {
-  let el = null, frames = 0, worst = 0, last = performance.now(), lastFrame = last, scale = 1, want = 1, slow = 0, fast = 0, changed = 0;
+// What is in the scene, by kind, for the overlay: triangles and draw calls of every
+// visible mesh, grouped by the nearest ancestor that carries userData.perf (surface.js
+// labels plants, ground cover, animals and so on; the rest is "other"). It counts what
+// is handed to the graphics card (instanced meshes are not culled one by one), so the
+// kinds add up to a little more than the "triangles" line when shadows are off, and to
+// less when they are on: the shadow pass draws its casters a second time.
+function breakdown(scene) {
+  const kinds = new Map();
+  (function walk(o, kind) {
+    if (!o.visible) return;
+    kind = o.userData.perf || kind;
+    if ((o.isMesh || o.isPoints) && o.geometry) {
+      const g = o.geometry, n = Math.min(g.drawRange.count, g.index ? g.index.count : g.attributes.position?.count ?? 0);
+      const inst = o.isInstancedMesh ? o.count : g.isInstancedBufferGeometry ? Math.min(g.instanceCount, g._maxInstanceCount ?? Infinity) : 1;
+      const k = kinds.get(kind) || kinds.set(kind, { tris: 0, calls: 0 }).get(kind);
+      if (inst > 0 && n > 0) { k.tris += (o.isPoints ? 0 : n / 3) * inst; k.calls += Array.isArray(o.material) ? Math.max(1, g.groups.length) : 1; }
+    }
+    for (const c of o.children) walk(c, kind);
+  })(scene, 'other');
+  return [...kinds].filter(([, k]) => k.calls).sort((a, b) => b[1].tris - a[1].tris)
+    .map(([name, k]) => `  ${name.padEnd(14)} ${(k.tris / 1000).toFixed(0).padStart(5)}k ${String(k.calls).padStart(4)}`).join('\n');
+}
+
+export function createPerf(renderer, { maxRatio, onChange = () => {}, scene = () => null, note = () => '' }) {
+  let el = null, frames = 0, worst = 0, last = performance.now(), lastFrame = last, scale = 1, want = 1, slow = 0, fast = 0, changed = 0, began = 0, drawAt = 0, script = 0, draw = 0;
   if (SHOW_PERF) {
+    globalThis.__elsewhere = { renderer, get scene() { return scene(); } }; // for experiments from the console while measuring
     el = document.createElement('div');
     el.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:50;pointer-events:none;font:11px/1.35 ui-monospace,Menlo,monospace;color:#cfe;background:#000a;padding:6px 8px;border-radius:6px;white-space:pre';
     document.body.appendChild(el);
   }
   const target = () => Math.min(devicePixelRatio, maxRatio) * scale;
   return {
+    // Call first thing in a frame: the time from here to tick() is the script's share of
+    // the frame (game logic and handing the scene to the graphics card). A frame that
+    // takes much longer than its script is waiting on the graphics card.
+    begin() { began = performance.now(); },
+    get scale() { return scale; },
     beforeRender() {
+      drawAt = performance.now(); // from here to tick() is drawing (three.js walking the scene and issuing draw calls)
       if (want === scale) return;
       scale = want;
       renderer.setPixelRatio(target());
@@ -121,6 +152,7 @@ export function createPerf(renderer, { maxRatio, onChange = () => {} }) {
     },
     tick(now = performance.now()) {
       frames++;
+      if (began) { const t = performance.now(); script += t - began; draw += t - drawAt; }
       worst = Math.max(worst, now - lastFrame);
       lastFrame = now;
       const span = now - last;
@@ -136,13 +168,14 @@ export function createPerf(renderer, { maxRatio, onChange = () => {} }) {
       }
       if (el) {
         const r = renderer.info.render, m = renderer.info.memory;
-        el.textContent = `${fps.toFixed(0)} fps   worst ${worst.toFixed(0)} ms\n` +
+        el.textContent = `${fps.toFixed(0)} fps   worst ${worst.toFixed(0)} ms   script ${(script / frames).toFixed(1)} ms (update ${((script - draw) / frames).toFixed(1)} + draw ${(draw / frames).toFixed(1)})\n` +
           `draw calls ${r.calls}\ntriangles  ${(r.triangles / 1000).toFixed(0)}k\n` +
           `geometries ${m.geometries}   shaders ${renderer.info.programs?.length ?? '?'}\n` +
           `resolution ${(renderer.getPixelRatio()).toFixed(2)}x${ADAPTIVE ? ' (adaptive)' : ''}\n` +
-          `look ${LOOK}${STRESS > 1 ? `   stress ${STRESS}x` : ''}`;
+          `look ${LOOK}${STRESS > 1 ? `   stress ${STRESS}x` : ''}${note()}` +
+          (scene() ? `\nin the scene:   tris calls\n${breakdown(scene())}` : '');
       }
-      frames = 0; worst = 0; last = now;
+      frames = 0; worst = 0; script = 0; draw = 0; last = now;
     },
     ratio: target,
   };

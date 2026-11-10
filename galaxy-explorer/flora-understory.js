@@ -8,6 +8,10 @@
 import { planFor } from './understory-plans.mjs';
 
 export function UNDERSTORY(g) {
+  // Tall sails (4 m and up) are trees in all but name, and the small plans (fans and frills
+  // spread from the ground) turned into slabs many metres across at that size. They grow
+  // as masts instead, whatever their plan (the plan and its description are unchanged).
+  if (g.sp.form === 'sheet' && g.sp.height >= 4) { sailMast(g, tools(g)); return true; }
   const plan = planFor(g.sp), build = plan && BUILD[g.sp.form]?.[plan];
   if (!build) return false;
   build(g, tools(g));
@@ -29,6 +33,45 @@ function tools({ THREE }) {
     geo.computeVertexNormals(); return geo;
   };
   return { V, UP, segM, out, lumpy };
+}
+
+// A sail tree: a slender, slightly leaning mast with a flared foot, carrying two to four
+// tall membranes like a ship's sails, each pointed at head and foot, broadest low down,
+// bellied by the wind and sagging at its free edge, and held out by a few thin spars.
+// From far off it reads as a rig of dark masts and pale sails against the sky.
+function sailMast(g, T) {
+  const { THREE, H, r, c, add, M, cyl, blob, sp } = g, { V, out } = T;
+  const tr = Math.max(.06, H * .022), leanA = r() * 6.28, lean = .03 + .05 * r();
+  // The mast's centre at height y: it leans a little more the higher it goes.
+  const mast = (y) => { const f = y / H; return V(Math.cos(leanA) * lean * H * f * f, y, Math.sin(leanA) * lean * H * f * f); };
+  const pts = []; for (let i = 0; i <= 6; i++) pts.push(mast(H * i / 6));
+  stem(g, T, pts, tr, tr * .3, c.stem, false, 6);
+  add(cyl(tr, tr * 2.1, tr * 2.6, 7), M(0, -tr * .3, 0), c.stem, false); // the flared foot
+  for (let i = 0; i < 4; i++) { const a = i * 1.57 + leanA; add(new THREE.ConeGeometry(tr * .55, tr * 3.4, 4).translate(0, tr * 1.7, 0), new THREE.Matrix4().makeTranslation(Math.cos(a) * tr, tr * .5, Math.sin(a) * tr).multiply(new THREE.Matrix4().makeRotationAxis(V(-Math.sin(a), 0, Math.cos(a)), -1.75)), c.stem, false); }
+  const n = 2 + Math.floor(r() * 3), turn = r() * 6.28, NU = 4, NV = 8;
+  for (let i = 0; i < n; i++) {
+    const a = turn + i / n * 6.28 + (r() - .5) * .5, o = out(a), side = V(-o.z, 0, o.x);
+    const y0 = H * (.1 + .16 * i / n + .05 * r()), y1 = H * (.7 + .27 * r()), W = H * (.17 + .09 * r()) * Math.min(1.3, Math.max(.8, sp.leafSize || 1));
+    const belly = (.22 + .2 * r()) * (i % 2 ? -1 : 1);
+    // The sail's surface: u runs out from the mast, v up it.
+    const at = (u, v) => {
+      const w = W * Math.pow(Math.sin(Math.PI * Math.min(1, Math.pow(v, .62) * .96 + .02)), .75), x = u * w;
+      return mast(y0 + (y1 - y0) * v).addScaledVector(o, x + tr * .4).addScaledVector(side, belly * W * Math.sin(Math.PI * u * .85) * Math.sin(Math.PI * v) + u * u * W * .12).add(V(0, -u * u * w * .22, 0));
+    };
+    const front = [], back = [];
+    for (let iv = 0; iv < NV; iv++) for (let iu = 0; iu < NU; iu++) {
+      const A = at(iu / NU, iv / NV), B = at((iu + 1) / NU, iv / NV), C = at(iu / NU, (iv + 1) / NV), D = at((iu + 1) / NU, (iv + 1) / NV);
+      front.push(A, B, C, B, D, C); back.push(A, C, B, B, C, D);
+    }
+    for (const [tri, col] of [[front, g.leaf(i)], [back, g.leaf(i + 1)]]) {
+      const geo = new THREE.BufferGeometry().setFromPoints(tri);
+      geo.computeVertexNormals();
+      add(geo, M(), col, true);
+    }
+    // Spars from the mast to the sail's free edge.
+    for (const v of [.2, .5, .8]) { const a0 = mast(y0 + (y1 - y0) * v), b0 = at(1, v), { len, m } = T.segM(a0, b0); const sg = cyl(tr * .08, tr * .16, len, 3); sg.userData.detail = true; add(sg, m, c.stem, false); }
+  }
+  add(blob(tr * .9, 0), new THREE.Matrix4().makeTranslation(...mast(H).toArray()), c.accent || c.leaf2, true); // a bud at the masthead
 }
 
 // Adds a curved stem as a chain of segments through pts; returns the last point.

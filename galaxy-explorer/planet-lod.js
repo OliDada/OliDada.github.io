@@ -4,6 +4,7 @@
 // smoothly with closeness, for every body (a nearby moon gets sharper too), and
 // close up the terrain resolves to well under a metre. Tiles are built off the
 // main thread by terrain-worker.js when available. THREE is passed in.
+import { GROUND_PATCHES } from './quality.mjs';
 import { addWaterLook } from './water.js';
 import { buildChunk, chunkIndices, faceDirection } from './chunk-build.mjs';
 import { terrainFor } from './terrain.mjs';
@@ -93,6 +94,14 @@ function addDetail(material, ground, airless, lite, objects = false, wind = null
         diffuseColor.rgb *= mix(1.0, f, detailK);
         detailH *= detailK;
       }
+      ${objects || lite || !GROUND_PATCHES ? '' : `// Broad patches, tens to hundreds of metres across: no hillside is one flat colour.
+      // Lighter and darker ground, the lighter patches a little warmer, the darker a little
+      // cooler. Too big to shimmer, so they need no fading (?ground=0 turns them off).
+      {
+        float m1 = dNoise(P * .045), m2 = dNoise(P * .011 + 7.0);
+        float broad = (m1 - .5) * .2 + (m2 - .5) * .26;
+        diffuseColor.rgb *= (1.0 + broad) * mix(vec3(.95, 1.0, 1.07), vec3(1.07, 1.0, .9), smoothstep(.3, .7, m2));
+      }`}
       ${objects ? '' : `// Wind ripples on sand (new land: drawn here, not in the mesh, so they cover all the
       // sand you can see): a gentle upwind slope and a steep lee, across the wind, bending
       // with it; fading only once a ripple would be smaller than a few pixels.
@@ -296,10 +305,12 @@ export function createPlanet(THREE, streamer, body, { segments = 20, lite = fals
     node.mesh = new THREE.Mesh(geometryFrom(data.positions, data, true, node), [material, skirtMaterial]);
     node.mesh.receiveShadow = true; // the star's shadows near you (atmosphere.js)
     node.mesh.position.fromArray(data.center); node.mesh.visible = false;
+    node.mesh.userData.perf = 'terrain';
     group.add(node.mesh);
     if (data.water) {
       node.water = new THREE.Mesh(geometryFrom(data.water, data, false, node), waterMaterial);
       node.water.position.fromArray(data.center); node.water.visible = false; node.water.renderOrder = 1;
+      node.water.userData.perf = 'water';
       group.add(node.water);
     }
     node.state = 'ready';

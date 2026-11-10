@@ -12,7 +12,7 @@ import { floraFor, plantBiome } from "./flora.mjs";
 import { PLANT_STYLE } from "./style.mjs";
 import { buildSurface, disposeSurface } from "./surface.js";
 import { createKestrel, updateShipEffects, setShipDesign } from "./kestrel.js";
-import { createSkyDome, setupShadows, SHADOWS, makeMistFog, installMist, createSunShafts, MIST, BEAMS } from "./atmosphere.js";
+import { createSkyDome, setupShadows, SHADOWS, makeMistFog, installMist, createSunShafts, MIST, BEAMS, AIR } from "./atmosphere.js";
 import { WATER } from "./water.js";
 import { createSystemView, buildSystemViewGradually } from "./system-view.js";
 import { createTerrainStreamer } from "./planet-lod.js";
@@ -30,7 +30,8 @@ import {
 import { setupInput } from "./input.js";
 import { updateHUD, updateWaypoint } from "./hud.js";
 import { createEngineSound } from "./audio.js";
-import { orbitClock, systemPositions } from "./orbits.mjs";
+import { orbitClock, systemPositions, bodyPosition, angularSpeed, setClockShift } from "./orbits.mjs";
+import { TIER, TIER_AUTO, Q, TIME_OF_DAY, HIDE_HUD, SPOT } from "./quality.mjs";
 import { VIEW_RANGE } from "./scale.mjs";
 import { starById, homeStar, starsNear } from "./galaxy.mjs";
 import { createRelations, canTalk, askOf, valueOf, tradeable, giftsOf, giftWords, keepsakeOf, stepAtLeast, STEPS } from "./contact.mjs";
@@ -68,7 +69,9 @@ import { civilizationOf, colonistOf, arkPosition } from "./civilizations.mjs";
 
 // Surface flight uses coordinates relative to the current world; space travel is continuous.
 const $ = (id) => document.getElementById(id);
-const coarsePointer = matchMedia("(pointer: coarse)").matches; // phones and tablets
+const coarsePointer = matchMedia("(pointer: coarse)").matches; // phones and tablets: touch controls and a simpler HUD
+// How much is drawn follows the quality tier (quality.mjs), which is "low" on phones unless forced.
+const lite = Q.lite;
 const clamp = THREE.MathUtils.clamp;
 const Y = new THREE.Vector3(0, 1, 0);
 // Which star are we at? ?star= (galaxy chart), ?seed= (off-chart system), else the saved position or home.
@@ -151,6 +154,22 @@ const codexUI = createCodexUI({ codex, THREE, onOpen: () => { keys.clear(); if (
 const jumpRangeNow = () => rangeFor(codex.unlocked) + relations.effects().drive;
 // Where every body is right now (orbits.mjs). Coordinates in the scene are
 // relative to the world you are at (worldOrigin).
+// ?time= (quality.mjs): worlds do not spin, so a place's day is its world's trip round the
+// star. Find when the star stands highest over the landing site (noon) during the next
+// orbit, then shift the clock to the hour asked for. It applies to the world you load on.
+function solarShift(hour) {
+    const body = activeBody, around = body.parent ? system.bodies.find((b) => b.id === body.parent) : body;
+    const period = (2 * Math.PI) / angularSpeed(system, around), t0 = orbitClock(), up = terrainFor(body).landing;
+    let best = -Infinity, noon = 0;
+    for (let i = 0; i < 1440; i++) {
+        const dt = (period * i) / 1440, p = bodyPosition(system, body, t0 + dt), l = Math.hypot(...p);
+        const elevation = -(p[0] * up[0] + p[1] * up[1] + p[2] * up[2]) / l;
+        if (elevation > best) { best = elevation; noon = dt; }
+    }
+    return noon + ((hour - 12) / 24) * period;
+}
+if (TIME_OF_DAY !== null) setClockShift(solarShift(TIME_OF_DAY));
+if (HIDE_HUD) document.body.classList.add("nohud");
 let orbitTime = orbitClock(),
     positions = systemPositions(system, orbitTime);
 // Worlds, and arks (chosen on the map: { ark: true, civ }), sixty degrees ahead of their builders' worlds.
@@ -198,8 +217,8 @@ try {
         "This browser could not create a WebGL renderer. Try a browser with hardware acceleration enabled.";
     throw error;
 }
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.8));
-const perf = createPerf(renderer, { maxRatio: 1.8, onChange: () => sky.resize() }); // frame-rate overlay (?perf) and adaptive resolution
+renderer.setPixelRatio(Math.min(devicePixelRatio, Q.ratio));
+const perf = createPerf(renderer, { maxRatio: Q.ratio, onChange: () => sky.resize(), scene: () => scene, note: () => `   quality ${TIER}${TIER_AUTO ? " (auto)" : ""}` }); // frame-rate overlay (?perf) and adaptive resolution
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -230,7 +249,7 @@ scene.add(sun);
 // The star's own light colour, before dusk warms it (updateAtmosphere).
 const sunBase = sun.color.clone();
 // Soft shadows from the star near the ground, and the sky dome (atmosphere.js).
-const shadows = setupShadows(THREE, renderer, scene, sun, { coarse: coarsePointer });
+const shadows = setupShadows(THREE, renderer, scene, sun, { size: Q.shadowMap, half: Q.shadowHalf, every: Q.shadowEvery });
 const skyDome = createSkyDome(THREE);
 scene.add(skyDome.mesh);
 // Shafts of sunlight in the woods (atmosphere.js): strength from updateLocalAir.
@@ -260,7 +279,7 @@ function makeSite(body) {
         signalNormal: signal,
         landingNormal: vec(...t.landing),
         surfacePoint: (n, offset = 0) => n.clone().multiplyScalar(R + t.surface(n) + offset),
-        coarse: coarsePointer,
+        coarse: lite,
         colonist: colonistOf(system, body),
     });
     // From now on its lights seen from space are the real ones (city-lights.js).
@@ -314,7 +333,7 @@ function buildSite() {
 // Every world and the star of the system you are in (system-view.js). Terrain
 // tiles for every system are built by one shared pool of background threads.
 const streamer = createTerrainStreamer();
-let systemView = createSystemView(scene, system, streamer, { coarse: coarsePointer });
+let systemView = createSystemView(scene, system, streamer, { coarse: lite });
 // Sites built before the view existed: light them from space where their lights really are.
 for (const [id, built] of siteCache) { const b = system.bodies.find((x) => x.id === id); if (b && built.structures?.nightLights) systemView.useSiteLights(b, built.structures.nightLights); }
 let edge = systemEdge(system); // beyond this (metres from the star) is interstellar space
@@ -570,6 +589,19 @@ function start() {
             activeBody.name +
             ".",
     );
+    // ?spot (quality.mjs): skip the descent. The ship stands on the landing pad and you
+    // are on foot beside it, facing the signal, some metres on toward it if asked.
+    if (SPOT !== null && mode === "flight" && !activeBody.giant) {
+        shipPosition.copy(landingNormal).multiplyScalar(surfaceRadius(landingNormal) + 1.7);
+        speed = 0; verticalSpeed = 0; autoApproach = false;
+        mode = "landed";
+        interact();
+        if (mode === "walk" && SPOT > 0) {
+            playerNormal = playerNormal.clone().multiplyScalar(RADIUS).addScaledVector(playerForward, SPOT).normalize();
+            const ahead = tangent(signalNormal.clone().sub(playerNormal), playerNormal);
+            if (ahead.lengthSq() > 0.1) playerForward = ahead;
+        }
+    }
 }
 function approach() {
     if (mode !== "flight") return;
@@ -1240,7 +1272,7 @@ const towardStar = (star) => toScene(starPoint(star).map((v, i) => v - viewer()[
 function startIncoming(star) {
     if (incoming?.view) incoming.view.dispose();
     const job = (incoming = { star, system: generateSystem(star.seed), view: null, ready: false });
-    buildSystemViewGradually(scene, job.system, streamer, { coarse: coarsePointer }).then((view) => {
+    buildSystemViewGradually(scene, job.system, streamer, { coarse: lite }).then((view) => {
         if (incoming === job) {
             job.view = view;
             job.ready = true;
@@ -2994,9 +3026,10 @@ function updateAtmosphere() {
         dusk = clamp(1 - Math.abs(elevation - 0.03) / 0.22, 0, 1);
     // The air's own colour, slightly tinted by the star and brighter in thick air.
     skyDay.set(body.atmosphere).lerp(sun.color, 0.12).multiplyScalar(0.95 + 0.5 * air);
-    skyNight.copy(skyDay).multiplyScalar(0.06);
+    skyNight.copy(skyDay).multiplyScalar(AIR ? 0.11 : 0.06);
+    if (AIR) skyNight.lerp(tmpColor.set(0x1a2a52).multiplyScalar(0.5 + 0.5 * air), 0.35); // nights lean blue, and can be seen in
     // Sunrise and sunset: a gentle warm shift, then dimming into night.
-    skyNow.copy(skyDay).lerp(DUSK, dusk * 0.28);
+    skyNow.copy(skyDay).lerp(DUSK, dusk * (AIR ? 0.45 : 0.28));
     skyNow.lerp(skyNight, 1 - day);
     scene.background.copy(SPACE).lerp(skyNow, k);
     // The sky dome (atmosphere.js): a deeper zenith, a paler hazy horizon (thicker air,
@@ -3021,16 +3054,19 @@ function updateAtmosphere() {
     skyDome.mesh.visible = k > 0.003;
     fogHorizon.copy(SPACE).lerp(skyHorizon, k);
     scene.fog.color.copy(fogHorizon);
-    scene.fog.density = k * (0.0002 + 0.0007 * air);
+    // Atmospheric depth: haze thick enough to part near, middle and far ground into layers
+    // (and to hide the edge of what is drawn), thicker in thick air and a little at dusk.
+    scene.fog.density = AIR ? k * (0.0005 + 0.0015 * air) * (1 + 0.35 * dusk) : k * (0.0002 + 0.0007 * air);
     // Valley mist: wet worlds, thick air, strongest at dawn and dusk, thin by day, gone on dry worlds.
     const wet = body.physics?.waterState === "liquid" ? Math.min(1, 0.25 + (body.physics.waterCoverage ?? 0.4)) : 0.15;
     mistWant = k * wet * (0.25 + 0.5 * air) * (0.45 + 0.55 * dusk) * (0.35 + 0.65 * day);
     // The light takes the world's mood: the star warms at dusk and dims at night, the sky's
     // fill light is the air's own colour, and the light bounced from below is the ground's.
-    sun.color.copy(sunBase).lerp(DUSK, dusk * 0.4 * k);
+    sun.color.copy(sunBase).lerp(DUSK, dusk * (AIR ? 0.62 : 0.4) * k);
     hemiSky.copy(HEMI_SKY).lerp(tmpColor.copy(skyDay).multiplyScalar(0.75 / Math.max(0.05, skyDay.r * 0.2126 + skyDay.g * 0.7152 + skyDay.b * 0.0722)).lerp(HEMI_SKY, 0.35), k);
-    hemi.color.copy(hemiSky).multiplyScalar(1 - k * 0.6 * (1 - day));
-    hemi.groundColor.copy(HEMI_GROUND).lerp(tmpColor2.set(body.palette?.[1] || "#4c3844").multiplyScalar(0.55), k).multiplyScalar(1 - k * 0.7 * (1 - day));
+    hemi.color.copy(hemiSky).multiplyScalar(1 - k * (AIR ? 0.42 : 0.6) * (1 - day));
+    if (AIR) hemi.color.lerp(tmpColor.set(0x6f8fd8), 0.45 * k * (1 - day)); // moonless starlight: cool, dim, readable
+    hemi.groundColor.copy(HEMI_GROUND).lerp(tmpColor2.set(body.palette?.[1] || "#4c3844").multiplyScalar(0.55), k).multiplyScalar(1 - k * (AIR ? 0.5 : 0.7) * (1 - day));
     // Inside a cloud (clouds.mjs, cloud-mesh.js) the view closes in to a few dozen
     // metres of grey-white, lit like the cloud is; in a gap the air stays clear.
     const layer = mode !== "deep" && systemView.cloudsOf?.(body.id);
@@ -3177,7 +3213,7 @@ function updateLocalAir(dt) {
 // greyer sky under heavy cloud and storms, and lightning in the worst of them.
 // Above the cloud layer the sky is clear. Runs after the sky, the sky events and the
 // night filter have set this frame's light, and dims it.
-const weatherFX = createWeatherFX(THREE, scene, { lite: coarsePointer });
+const weatherFX = createWeatherFX(THREE, scene, { lite });
 const GREY = new THREE.Color(0.32, 0.34, 0.37), FLASH = new THREE.Color(0.85, 0.88, 1);
 const windVec = new THREE.Vector3();
 let windNow = 0, rainNow = 0, gloomNow = 0, flash = 0, nextFlash = 0, weatherHere = null, weatherState = "", weatherToldAt = new Map();
@@ -3603,6 +3639,7 @@ function frame(now) {
     const dt = Math.min((now - previousTime) / 1000, 0.05);
     previousTime = now;
     if (document.hidden) return;
+    perf.begin();
     advanceOrbits();
     // Talking (contact-ui.js) does not stop the world: only you stand still.
     const talk = contactUI.isOpen, paused = modalOpen() && !talk;

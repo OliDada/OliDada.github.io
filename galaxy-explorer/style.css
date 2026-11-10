@@ -311,3 +311,6 @@ body.walking.swimming .touch-alt .fly-btn{display:block}
 #sonarMark strong{font-size:9px;letter-spacing:2px;display:block;margin-top:3px}
 #sonarMark .dist{display:block;font-size:10px;margin-top:4px;opacity:.75}
 @media(max-width:700px){#sonarMark .diamond{font-size:20px;line-height:22px}#sonarMark strong{font-size:8px}}
+
+/* ?hud=0 (quality.mjs): clean screenshots. The view, its vignette and the perf overlay stay. */
+body.nohud header,body.nohud #hud,body.nohud #devBtn{display:none!important}

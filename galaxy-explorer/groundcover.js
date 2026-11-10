@@ -11,6 +11,7 @@ import { wind, WIND_GLSL } from './wind.mjs';
 import { terrainFor } from './terrain.mjs';
 import { FACES } from './chunk-build.mjs';
 import { PLANT_STYLE } from './style.mjs';
+import { Q } from './quality.mjs';
 
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 function hash(f, i, j, k) {
@@ -34,13 +35,14 @@ export function createGroundCover(THREE, { body, radius: R, coarse = false, bloc
   // New plant style: a thicker, wider carpet (grass in clumps of several tufts, gravel and
   // flat stones on bare ground) out to a wider circle.
   const DENSE = PLANT_STYLE !== 'classic';
-  const reach = coarse ? (DENSE ? 32 : 26) : DENSE ? 58 : 42, cell = coarse ? 1.25 : .95; // metres
+  const reach = DENSE ? Q.coverReach : coarse ? 26 : 42, cell = coarse ? 1.25 : .95; // metres
   const caps = coarse ? (DENSE ? { tuft: 6000, head: 500, pebble: 2600, shard: 300 } : { tuft: 2600, head: 300, pebble: 1300, shard: 250 })
     : DENSE ? { tuft: 34000, head: 2600, pebble: 10000, shard: 1400 } : { tuft: 11000, head: 1400, pebble: 5000, shard: 900 };
   // New plant style: the woods get their own floor (terrain.mjs color() info.wood): ferns,
   // cushions of moss, fallen twigs and branches and small mushrooms, instead of meadow grass.
   const woods = PLANT_STYLE !== 'classic' && ['simple', 'complex'].includes(body.physics?.life) && (body.physics?.biochemistry || 'carbon') === 'carbon';
-  if (woods) Object.assign(caps, coarse ? { fern: 900, moss: 900, twig: 220 } : { fern: 3600, moss: 3800, twig: 900 });
+  if (woods) Object.assign(caps, coarse ? { fern: 900, moss: 900, twig: 220 } : { fern: 4200, moss: 6500, twig: 900 });
+  for (const k in caps) caps[k] = Math.round(caps[k] * Q.cover); // the quality tier's share (quality.mjs)
   const bare = BARE[t.ground] || (t.airless ? BARE.rocky : BARE.soft);
   const flowers = body.physics?.life === 'complex' ? 1 : body.physics?.life === 'simple' ? .4 : 0;
   const mossTint = [.24, .36, .16], twigTint = [.33, .25, .17];
@@ -51,10 +53,13 @@ export function createGroundCover(THREE, { body, radius: R, coarse = false, bloc
   // --- Models ---
   function tuftGeometry() {
     const pos = [], col = [];
-    for (let b = 0; b < 5; b++) {
-      const a = b * 2.4 + .3, lean = .25 + (b % 3) * .12, w = .05, h = .75 + (b % 2) * .3;
+    // A clump, not a spike: nine broad blades rooted over a disc about half a metre across
+    // (at full size), tall ones in the middle and short ones leaning out round the edge, so
+    // neighbouring tufts close into a sward instead of standing apart on bare ground.
+    for (let b = 0; b < 9; b++) {
+      const a = b * 2.4 + .3, ring = b < 3 ? .06 : .16 + (b % 3) * .07, lean = (b < 3 ? .2 : .42) + (b % 3) * .12, w = .085, h = (b < 3 ? .85 : .5) + (b % 2) * .3;
       const cx = Math.cos(a), cz = Math.sin(a), px = -cz * w, pz = cx * w;
-      const ox = cx * .05, oz = cz * .05, tx = ox + cx * lean * h, tz = oz + cz * lean * h;
+      const ox = cx * ring, oz = cz * ring, tx = ox + cx * lean * h, tz = oz + cz * lean * h;
       pos.push(ox - px, 0, oz - pz, ox + px, 0, oz + pz, tx, h, tz);
       col.push(.7, .7, .7, .7, .7, .7, 1.15, 1.15, 1.15); // darker at the base, light at the tip
     }
@@ -197,14 +202,17 @@ export function createGroundCover(THREE, { body, radius: R, coarse = false, bloc
     const lin = (rgb, k = 1) => { tint.setRGB(rgb[0] * k, rgb[1] * k, rgb[2] * k, THREE.SRGBColorSpace); return [tint.r, tint.g, tint.b]; };
     const roll = r(3);
     const wood = woods ? info.wood : 0;
-    const grass = info.veg * Math.max(0, 1 - info.snow * 2.5) * (1 - wood * .88); // frost and snow thin out the grass, and so does a forest's shade
+    let grass = info.veg * Math.max(0, 1 - info.snow * 2.5) * (1 - wood * .88); // frost and snow thin out the grass, and so does a forest's shade
+    // Green ground with nothing growing on it looks painted. On a living world, where the
+    // land's own colour is green, grass grows (more thinly) even where the climate gave none.
+    if (flowers > 0) { const green = Math.max(0, Math.min(1, (ground[1] - Math.max(ground[0], ground[2]) * 1.12) * 6)); grass = Math.max(grass, green * .55 * Math.max(0, 1 - info.snow * 2.5) * (1 - wood * .88)); }
     if (wood > .15 && info.snow < .4) {
       // The forest floor: ferns in drifts, moss cushions, fallen twigs, the odd mushroom.
       const drift = smooth(-.2, .5, Math.sin(n.x * R / 7.3 + 1.3 * Math.sin(n.z * R / 5.1)) * Math.cos(n.y * R / 6.7 + n.x * R / 9.1));
-      const fernK = wood * (.08 + .3 * drift), mossK = wood * .22, twigK = wood * .05;
+      const fernK = wood * (.12 + .36 * drift), mossK = wood * .34, twigK = wood * .05; // a floor of fern drifts and moss, with little bare earth between
       const w = r(15);
       if (w < fernK) place('fern', .45 + .6 * r(4) * (.5 + drift * .7), .03, .35, lin(t.vegetation || ground, .7 + .45 * r(5)), (r(12) - .5) * cell * .5, (r(13) - .5) * cell * .5);
-      else if (w < fernK + mossK) place('moss', .12 + .3 * r(4) ** 1.5, .42, .5, lin(mossTint, .75 + .4 * r(5)));
+      else if (w < fernK + mossK) place('moss', .2 + .45 * r(4) ** 1.5, .42, .5, lin(mossTint, .75 + .4 * r(5)));
       else if (w < fernK + mossK + twigK) place('twig', .5 + .9 * r(4), .01, .15, lin(twigTint, .7 + .4 * r(5)));
       else if (w > 1 - .012 * wood) place('head', .1 + .12 * r(4), .02, .3, lin([[.85, .78, .6], [.75, .25, .18], [.92, .9, .85], [.55, .4, .28]][Math.floor(r(14) * 4)]));
     }

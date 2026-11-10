@@ -28,6 +28,7 @@ function buildWorld(system, body, streamer, coarse, gradual, sun) {
         // Grid points per terrain tile: finer on laptops; phones get a lighter grid.
         : createPlanet(THREE, streamer, body, { segments: coarse ? 24 : 32, lite: coarse, clouds });
     if (clouds) {
+        clouds.mesh.userData.perf = 'clouds';
         planet.group.add(clouds.mesh);
         planet.clouds = clouds;
         const dispose = planet.dispose;
