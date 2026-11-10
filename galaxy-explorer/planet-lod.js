@@ -29,7 +29,9 @@ export function addSurfaceDetail(material, { ground, airless, lite = false, obje
   material.userData.surfaceDetail = true;
   addDetail(material, ground, airless, lite, objects);
 }
-function addDetail(material, ground, airless, lite, objects = false, wind = null) {
+// land: { centre: { value: Vector3 } (the world's centre in the scene), base, span } (metres from the centre of the
+// lowest land, or the sea, and the height of the relief above it), for the land's zones by height.
+function addDetail(material, ground, airless, lite, objects = false, wind = null, land = null) {
   const style = STYLE[ground] || (airless ? STYLE.rocky : STYLE.soft);
   // The existing cache key, taken now: afterwards the default key would describe this
   // wrapper, and materials with different shaders underneath would share a program.
@@ -38,13 +40,15 @@ function addDetail(material, ground, airless, lite, objects = false, wind = null
     before.call(material, shader, renderer);
     shader.uniforms.uStyle = { value: style };
     shader.uniforms.uRippleDir = { value: wind ? [wind[0], wind[1], wind[2]] : [0, 0, 0] };
+    shader.uniforms.uLandC = land ? land.centre : { value: [0, 0, 0] };
+    shader.uniforms.uLandH = { value: land ? [land.base, Math.max(1, land.span)] : [0, 1e9] };
     shader.vertexShader = (objects ? '' : 'attribute vec3 cover;\n') + 'varying vec3 vCover; varying vec3 vDetailPos;\n' + shader.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
       vCover = ${objects ? 'vec3(0.0)' : 'cover'};
       ${objects ? `vDetailPos = position; // the rest shape: the grain stays put on the surface as plants sway and animals move
       #ifdef USE_INSTANCING
         vDetailPos *= length(instanceMatrix[0].xyz); // metres, whatever the instance's size
       #endif` : 'vDetailPos = (modelMatrix * vec4(transformed, 1.0)).xyz;'}`);
-    shader.fragmentShader = `uniform vec4 uStyle; uniform vec3 uRippleDir; varying vec3 vCover; varying vec3 vDetailPos;
+    shader.fragmentShader = `uniform vec4 uStyle; uniform vec3 uRippleDir; uniform vec3 uLandC; uniform vec2 uLandH; varying vec3 vCover; varying vec3 vDetailPos;
       float dHash(vec3 p) { p = fract(p * .3183099 + .1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
       float dNoise(vec3 x) {
         vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -94,13 +98,53 @@ function addDetail(material, ground, airless, lite, objects = false, wind = null
         diffuseColor.rgb *= mix(1.0, f, detailK);
         detailH *= detailK;
       }
-      ${objects || lite || !GROUND_PATCHES ? '' : `// Broad patches, tens to hundreds of metres across: no hillside is one flat colour.
-      // Lighter and darker ground, the lighter patches a little warmer, the darker a little
-      // cooler. Too big to shimmer, so they need no fading (?ground=0 turns them off).
+      ${objects || lite || !GROUND_PATCHES ? '' : `// The land's own character, drawn per pixel so it holds at any distance and whatever
+      // the mesh's detail (?ground=0 turns it off). Q is the point from the world's centre.
       {
-        float m1 = dNoise(P * .045), m2 = dNoise(P * .011 + 7.0);
-        float broad = (m1 - .5) * .2 + (m2 - .5) * .26;
+        vec3 Q = P - uLandC, upW = normalize(Q);
+        float hgt = length(Q), alt = clamp((hgt - uLandH.x) / uLandH.y, 0.0, 1.0);
+        float bare = 1.0 - vCover.z, grow = vCover.x * bare;
+        // Broad patches, tens to hundreds of metres across: no hillside is one flat colour.
+        float m1 = dNoise(Q * .045), m2 = dNoise(Q * .011 + 7.0);
+        float broad = (m1 - .5) * .3 + (m2 - .5) * .34;
         diffuseColor.rgb *= (1.0 + broad) * mix(vec3(.95, 1.0, 1.07), vec3(1.07, 1.0, .9), smoothstep(.3, .7, m2));
+        // Country changes with height, so valleys, hills and mountains of one world are
+        // different places: deep, damp lowlands and valley floors; sun-dried hills above
+        // them; thin soil and grey-brown stone on the high ground; pale bare summits. The
+        // lines between them wander.
+        float wander = (dNoise(Q * .012 + 3.0) - .5) * .18 + (dNoise(Q * .05 + 9.0) - .5) * .06;
+        float low = 1.0 - smoothstep(.015, .15, alt + wander), high = smoothstep(.3, .6, alt + wander), top = smoothstep(.62, .88, alt + wander);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * mix(vec3(.78, .82, .78), vec3(.66, .88, .64), grow), low * .8 * bare);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.14, 1.07, .88), (1.0 - low) * (1.0 - high) * .55 * bare);
+        float l2 = dot(diffuseColor.rgb, vec3(.3, .55, .15));
+        diffuseColor.rgb = mix(diffuseColor.rgb, mix(diffuseColor.rgb, vec3(l2) * vec3(1.06, 1.0, .92), .78) * .9, high * .75 * bare);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(l2 * .5 + .34) * vec3(1.03, 1.0, .96), top * .65 * bare);
+        // Steep ground shows rock in level beds, broken along their length and cut by gullies
+        // that run downhill; gentle ground gets a dappling of hummocks.
+        vec3 nV = normalize(vNormal), upV = normalize((viewMatrix * vec4(upW, 0.0)).xyz);
+        float steep = 1.0 - clamp(dot(nV, upV), 0.0, 1.0);
+        float bedK = smoothstep(.1, .34, steep), far = 1.0 - smoothstep(.25, .6, px * 1.2);
+        float wob = dNoise(Q * .06) * 7.0 + dNoise(Q * .31) * 1.6;
+        float beds = dNoise(vec3(0.0, (hgt + wob) * .55, 0.0) + Q * .02) * .6 + dNoise(vec3(0.0, (hgt + wob) * 1.7, 0.0) + Q * .05) * .4 * far;
+        vec3 side = normalize(cross(upW, vec3(.31, .87, .39)));
+        float gully = dNoise(vec3(dot(Q, side) * .45, dot(Q, cross(upW, side)) * .45, hgt * .04)) * far;
+        float lum = dot(diffuseColor.rgb, vec3(.3, .55, .15));
+        vec3 rockTone = mix(diffuseColor.rgb, vec3(lum) * vec3(1.06, 1.0, .92), .55);
+        diffuseColor.rgb = mix(diffuseColor.rgb, rockTone * (.62 + .7 * beds) * (.8 + .34 * gully), bedK * .9);
+        // One side of every hill is the damp, shaded side: darker and greener where things grow.
+        float aspect = dot(nV, normalize((viewMatrix * vec4(.5, .3, .81, 0.0)).xyz));
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * mix(vec3(.86), vec3(.74, .92, .72), grow), smoothstep(.05, .5, aspect) * smoothstep(.03, .2, steep) * .7 * bare);
+        // Beyond where plants are drawn, growth still shows: dark clumps the size of bushes
+        // and stands on ground that bears plants, gathered in drifts.
+        float farGrow = smoothstep(240.0, 430.0, length(vViewPosition)) * grow;
+        if (farGrow > .01) {
+          float drift = smoothstep(.3, .62, dNoise(Q * .017 + 11.0));
+          float clump = smoothstep(.5, .68, dNoise(Q * .15) * .6 + dNoise(Q * .43) * .4);
+          clump = mix(.24, clump, 1.0 - smoothstep(1.2, 3.5, px));
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(.46, .6, .42), clump * (.35 + .65 * drift) * farGrow * .85);
+        }
+        float hum = dNoise(Q * .23) * .6 + dNoise(Q * .71) * .4 * far;
+        diffuseColor.rgb *= 1.0 + (hum - .5) * .2 * (1.0 - bedK);
       }`}
       ${objects ? '' : `// Wind ripples on sand (new land: drawn here, not in the mesh, so they cover all the
       // sand you can see): a gentle upwind slope and a steep lee, across the wind, bending
@@ -261,7 +305,8 @@ export function createPlanet(THREE, streamer, body, { segments = 20, lite = fals
   const lodCam = { value: new THREE.Vector3(1e9, 0, 0) }, lodScale = { value: 1 };
   const farBoost = lite ? FAR_BOOST_LITE : FAR_BOOST;
   addMorph(material, true, lodCam, lodScale);
-  addDetail(material, terrain.ground, terrain.airless, lite, false, terrain.windDir);
+  const landBase = Number.isFinite(terrain.sea) ? terrain.sea : terrain.minH, landCentre = { value: new THREE.Vector3() };
+  addDetail(material, terrain.ground, terrain.airless, lite, false, terrain.windDir, { centre: landCentre, base: R + landBase, span: terrain.maxH - landBase });
   if (clouds) addCloudShadows(material, clouds, { lite }); // cloud-mesh.js
   addMorph(skirtMaterial, true, lodCam, lodScale);
   const gridIndexCount = segments * segments * 6;
@@ -364,6 +409,7 @@ export function createPlanet(THREE, streamer, body, { segments = 20, lite = fals
   // instant: skip the easing after a jump (tests, or when a hard cut is wanted).
   // away: this is not the world the camera is on (system-view.js decides).
   function update(realCam, { instant = false, away = false } = {}) {
+    group.getWorldPosition(landCentre.value); // (for the land's zones by height, addDetail)
     const now = performance.now(), dt = Math.min(.1, (now - lastLag) / 1000); lastLag = now;
     if (!seen) { lastCam.copy(realCam); seen = true; }
     // A jump is a sudden move, much bigger than the frame before. Flying fast moves

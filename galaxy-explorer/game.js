@@ -529,7 +529,7 @@ function orientShip(dt = 1) {
         0.3 - (shipPosition.length() - surfaceRadius(up)) * 0.007,
         0,
         0.25,
-    ) * (shadows.enabled ? 0.35 : 1); // (a faint blob only, under the real shadow)
+    ) * (shadows.enabled ? 0 : 1); // (no blob where the star casts the ship's real shadow; it stays for ?shadows=0)
 }
 function altitude() {
     const n = shipPosition.clone().normalize();
@@ -797,6 +797,10 @@ function discover() {
     $("discovery").showModal();
 }
 $("startBtn").onclick = start;
+// Enter starts from the title screen too.
+addEventListener("keydown", (e) => {
+    if (!started && e.key === "Enter" && !e.repeat && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName) && !modalOpen()) { e.preventDefault(); start(); }
+});
 $("approachBtn").onclick = approach;
 $("actionBtn").onclick = () => (mode === "landed" || mode === "dive" || mode === "docked" || mode === "deck" ? interact() : act());
 $("helpBtn").onclick = () => {
@@ -880,7 +884,7 @@ function refreshWorldLabels() {
         activeBody.type + " · " + system.name + " system";
     $("seedInput").value = system.seed;
     $("introDescription").textContent =
-        `${system.bodies.length} worlds orbit ${system.star.name}, a ${system.star.physics.spectralClass} star. Start above ${activeBody.name}, or open your map and chart a different course.`;
+        `${system.star.name} · class ${system.star.physics.spectralClass} star · ${system.bodies.length} worlds`;
     $("systemCoordinates").textContent = offChart
         ? `${system.name.toUpperCase()} SYSTEM / OFF-CHART SEED ${system.seed}`
         : `${system.name.toUpperCase()} SYSTEM / ${(Math.hypot(currentStar.x, currentStar.y) / 1000).toFixed(1)}K LY FROM THE CORE`;
@@ -2967,6 +2971,8 @@ const skyDay = new THREE.Color(),
     skyNow = new THREE.Color(),
     skyNight = new THREE.Color();
 scene.fog = makeMistFog(THREE, SPACE.getHex()); // distance fog (fog.density) plus valley mist (fog.mist), atmosphere.js
+const plantWorlds = new Map();
+const hasPlants = (body) => { if (!plantWorlds.has(body.id + ":" + body.seed)) plantWorlds.set(body.id + ":" + body.seed, floraFor(body).species.some((sp) => !sp.aquatic)); return plantWorlds.get(body.id + ":" + body.seed); };
 function airOf(body) {
     // 0 below ~0.03 bar, about 0.6 at Earth's 1 bar, 1 for very thick air.
     const p = body.physics?.pressure ?? 0;
@@ -2996,7 +3002,7 @@ function finishSky() {
     WATER.time.value = t;
     // Sunbeams: in woods, by day, under a sky that is not overcast, on foot or low down.
     const beams = BEAMS && near && !indoor && cameraDepth <= 0 ? localAir.woods * dayNow * (1 - gloomNow) * (1 - inCloud) * (1 - smoothstep((altitude() - 20) / 60)) : 0;
-    shafts.update(focus, surfaceRadius, beams, shafts.uniforms.uSunDir.value.copy(sun.position).sub(focus).normalize(), t);
+    shafts.update(focus, surfaceRadius, beams * (AIR ? 1.8 : 1), shafts.uniforms.uSunDir.value.copy(sun.position).sub(focus).normalize(), t);
 }
 function updateAtmosphere() {
     // The sky comes from the world nearest the camera, so a world's air fades in
@@ -3057,6 +3063,11 @@ function updateAtmosphere() {
     // Atmospheric depth: haze thick enough to part near, middle and far ground into layers
     // (and to hide the edge of what is drawn), thicker in thick air and a little at dusk.
     scene.fog.density = AIR ? k * (0.0005 + 0.0015 * air) * (1 + 0.35 * dusk) : k * (0.0002 + 0.0007 * air);
+    // On a world with plants the haze near the ground is never thinner than it takes to
+    // hide the far edge of what is planted (five sixths gone at the distance trees are
+    // drawn to, Q.treeReach): things then gain detail inside the haze as you come up to
+    // them and are never seen to appear. It lifts as you climb, and the view opens out.
+    if (AIR && air > 0.03 && body === activeBody && mode !== "deep" && hasPlants(body)) scene.fog.density = Math.max(scene.fog.density, (1.35 / Q.treeReach) * (1 - smoothstep((height - 250) / 700)));
     // Valley mist: wet worlds, thick air, strongest at dawn and dusk, thin by day, gone on dry worlds.
     const wet = body.physics?.waterState === "liquid" ? Math.min(1, 0.25 + (body.physics.waterCoverage ?? 0.4)) : 0.15;
     mistWant = k * wet * (0.25 + 0.5 * air) * (0.45 + 0.55 * dusk) * (0.35 + 0.65 * day);
@@ -3166,6 +3177,15 @@ const LOCAL_AIR = {
     Volcanic: { fog: 0.006, tint: "#4a3e3a", sun: 0.8, sky: 0.9, mix: 0.35 },
     Toxic: { fog: 0.008, tint: "#a89a4a", sun: 0.85, sky: 0.95, mix: 0.4 },
 };
+// The cinematic air (?air=0 for the old): under trees the sky's fill light drops a long way
+// and turns a cool blue-green, while the star keeps nearly all its strength and warms a
+// little. The floor is dim and cool, and where the sun gets through it burns warm: the
+// contrast that makes a wood feel deep.
+if (AIR) {
+    Object.assign(LOCAL_AIR.darkwood, { fog: 0.017, tint: "#1b2e2b", sun: 0.9, sky: 0.74, mix: 0.6 });
+    Object.assign(LOCAL_AIR.forest, { fog: 0.0105, tint: "#2c4640", sun: 1, sky: 0.88, mix: 0.4 });
+}
+const WOOD_FILL = new THREE.Color(0x5f9c94), WOOD_SUN = new THREE.Color(0xffdfae);
 const localAir = { fog: 0, sun: 1, sky: 1, mix: 0, woods: 0, tint: new THREE.Color() }, airTint = new THREE.Color(), airWant = { fog: 0, sun: 1, sky: 1, mix: 0, woods: 0, tint: new THREE.Color() };
 let localAirAt = -1, localAirBody = null;
 function updateLocalAir(dt) {
@@ -3205,6 +3225,11 @@ function updateLocalAir(dt) {
     scene.fog.density += localAir.fog * air;
     sun.intensity *= 1 - (1 - localAir.sun) * near;
     hemi.intensity *= 1 - (1 - localAir.sky) * near;
+    if (AIR) {
+        const shade = Math.min(1, (1 - localAir.sky) / 0.26) * near; // how far under the canopy you are
+        hemi.color.lerp(WOOD_FILL, 0.62 * shade);
+        sun.color.lerp(WOOD_SUN, 0.3 * shade * dayNow);
+    }
 }
 
 // --- Weather (weather.mjs, weather-fx.js, wind.mjs) --------------------------------
@@ -3795,14 +3820,27 @@ function siteTotals() {
     };
 }
 const structureSun = new THREE.Vector3();
+// Where you will be in a couple of seconds, as an offset from the camera: plants and
+// ground cover are filled in around that point, not around where you are, so what lies
+// ahead is already there when it comes into view (flying, it used to appear on screen).
+const leadAhead = new THREE.Vector3(), leadPrev = new THREE.Vector3(), leadStep = new THREE.Vector3();
+let leadKnown = false;
+function updateLead(dt) {
+    leadStep.copy(camera.position).sub(leadPrev); leadPrev.copy(camera.position);
+    if (!leadKnown || dt <= 0 || leadStep.length() > 60) { leadKnown = true; leadAhead.set(0, 0, 0); return; } // (a jump: landing, boarding, a new world)
+    leadStep.multiplyScalar(2.4 / dt); // metres travelled in the next 2.4 seconds at this speed
+    if (leadStep.length() > 170) leadStep.setLength(170);
+    leadAhead.lerp(leadStep, Math.min(1, dt * 3));
+}
 function animateSite(dt) {
     upgradeScreen.setMode(mode);
     updateTally(false, dt);
-    site.update(camera.position, animationTime); // plants, rocks and animals fill in around you
+    updateLead(dt);
+    site.update(camera.position, animationTime, leadAhead); // plants, rocks and animals fill in around you
     if (site.structures) site.structures.update(animationTime, structureSun.copy(sun.position).normalize()); // lamps by night, solar wings to the star
     // Towns built in full near you and as masses far off (structures-mesh.js units), swapped as you go.
     if (site.structures?.follow && site.group.visible) site.structures.follow(mode === "walk" || mode === "landed" ? playerPos() : shipPosition);
-    if (site.groundCover) site.groundCover.update(camera.position, animationTime);
+    if (site.groundCover) site.groundCover.update(camera.position, animationTime, undefined, leadAhead);
     checkTraces(dt);
 }
 // Seeing a settlement (on foot nearby, or flying low over it) records who built it.
@@ -3898,7 +3936,7 @@ const starMap = createStarMap({
                 note: "Press T to disengage.",
             };
         if (!started)
-            return { enabled: false, label: "Begin expedition first" };
+            return { enabled: false, label: "Start the game first" };
         if (!["flight", "space"].includes(mode))
             return {
                 enabled: false,

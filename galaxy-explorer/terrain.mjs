@@ -114,7 +114,7 @@ const capClassic = capWith(3);
 // The new land style holds big features to half that steepness: its ranges are far taller,
 // and at four times they made faces of 60-80 degrees, which a height grid draws as
 // stretched, striped walls.
-const capLand = capWith(1.2);
+const capLand = capWith(.7); // (1.2 before: lone hills stood up as steep cones; ranges keep their height from their breadth)
 
 // Which kind of small-scale ground each biome gets (others are unchanged for now).
 const GROUND = { Verdant: 'soft', Oceanic: 'soft', Barren: 'rocky', Amethyst: 'rocky', Volcanic: 'volcanic', Desert: 'sand', Frozen: 'ice', Toxic: 'toxic' };
@@ -281,7 +281,11 @@ function buildTerrain(body) {
     const side = smooth(plain, valleyW * 1.3, d);
     out = bank + Math.max(0, h - bank) * side + Math.min(0, h - bank);
     // The channel.
-    const ch = (1 - smooth(half * .6, half * 1.25, d)) * bw(half * 3, s);
+    // (Drawn coarsely, far off, the channel is widened to the mesh's own spacing and kept
+    // far longer than other detail its size: where it faded out, the next coarser tile had
+    // no channel and no water, and the river ended in a straight wall at the tile's edge.)
+    const halfS = Math.max(half, (s || 0) * 1.4);
+    const ch = (1 - smooth(halfS * .6, halfS * 1.25, d)) * bw(half * 14, s);
     out += (Math.min(floor, out) - out) * ch;
     return h + (out - h) * L.rivers * source;
   }
@@ -510,7 +514,13 @@ function buildTerrain(body) {
   const meshHeight = liquid === 'ice' ? (n, s = FINE) => Math.max(raw(n, Math.max(s, FINE)), sea) : (n, s = FINE) => raw(n, Math.max(s, FINE));
 
   // --- Colours ---
-  const pal = body.palette.map(rgb);
+  // The world's palette, as the land's own colours. On a world with seas of water, a palette
+  // band as blue as the sea is the sea's colour, not the ground's: land in it could not be
+  // told from water (blue hills, blue cliffs). Those bands become earth and pale rock,
+  // keeping a fifth of the palette's tint. (body.palette itself is unchanged: sky, haze and
+  // the colours of life still take the world's own key from it.)
+  const EARTH = ['#75694f', '#8f8566', '#a39a84', '#bcb5a2'];
+  const pal = body.palette.map(rgb).map((c, i) => liquid === 'water' && solvent === 'water' && c[2] > c[0] * 1.25 && c[2] > c[1] * 1.02 ? mix(rgb(EARTH[i]), c, .2) : c);
   const vegShift = vegetationShift(body.starTemperature || 5600);
   const lush = ph.life === 'simple' || ph.life === 'complex';
   const chem = ph.biochemistry || 'carbon';
@@ -590,7 +600,14 @@ function buildTerrain(body) {
     // square-root-like curve) to keep the lowlands as varied as the gentler classic land was.
     let c = ramp(LAND ? Math.pow(Math.min(1, Math.max(0, (h - lo) / span)), .45) : (h - lo) / span);
     if (info) { info.veg = info.bare = info.snow = info.wood = 0; info.climate = null; info.shore = (liquid === 'water' || liquid === 'lava') && above < 1.2; }
-    if (liquid === 'water' && h < sea) return mix(mix(pal[0], sand, .4), waterColor, Math.min(.7, (sea - h) / 8)).map(v => v * .85);
+    // Dry country on a living world: sunburnt grass and bare earth in broad patches, so
+    // land without thick growth is not one flat colour.
+    if (LAND && lush && liquid === 'water') {
+      const p1 = smooth(-.25, .45, nB(X / 120 + 9, Y / 120, Z / 120 + 2)), p2 = smooth(-.2, .5, nC(X / 45 - 3, Y / 45 + 6, Z / 45));
+      c = mix(c, dry, .55 * p1); c = mix(c, c.map(v => v * .8), .45 * p2);
+    }
+    // (The bed just under the waterline is nearly the beach's own sand, so the colour does not jump at the shore.)
+    if (liquid === 'water' && h < sea) return mix(mix(pal[0], sand, .8), waterColor, Math.min(.7, (sea - h) / 8)).map(v => v * .9);
     if (liquid === 'water' && above < .9 && !LAND) c = sand; // (new land: a soft beach, below)
     else if (liquid === 'lava' && above < 1.2) c = mix(crust, rgb('#7a2a14'), smooth(1.2, 0, above));
     else if (liquid === 'ice' && h <= sea + .01) c = iceColor;
@@ -655,7 +672,10 @@ function buildTerrain(body) {
     // banks and cliffs get none.
     if (LAND && liquid === 'water') {
       const reach = 1.1 + .8 * nB(X / 90 + 4, Y / 90, Z / 90) + (w5 > 0 ? .35 * w5 * nD(X / 4 + 13, Y / 4, Z / 4) : 0);
-      const sandK = smooth(reach, reach * .45, above) * (1 - smooth(.3, .6, slope));
+      // (The band from sand to land is at least a couple of mesh cells wide on the slope it
+      // lies on: narrower than that, the mesh drew its edge as a row of saw teeth.)
+      const grad = Math.sqrt(Math.max(0, 1 / Math.max(.05, 1 - slope) ** 2 - 1)), wide = Math.min(7, 2.2 * sp * grad);
+      const sandK = smooth(reach + wide, reach * .45, above) * (1 - smooth(.3, .6, slope));
       if (sandK > 0) { c = mix(c, sand, sandK); vegAmount *= 1 - sandK; woodAmount *= 1 - sandK; }
     }
     // Ground-specific touches in cracks and hollows.

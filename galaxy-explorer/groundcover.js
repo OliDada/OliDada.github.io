@@ -310,16 +310,25 @@ export function createGroundCover(THREE, { body, radius: R, coarse = false, bloc
   return {
     group,
     // p: camera position relative to the world's centre; call every frame.
-    update(p, animationTime, budgetMs = coarse ? 2 : 3) {
+    // lead: an offset from p to the point to fill around (where you are heading), at most
+    // 60% of the reach, so the ground under you stays covered too.
+    update(p, animationTime, budgetMs = coarse ? 2 : 3, lead = null) {
       time.value = animationTime;
       const ground = R + t.surface({ x: p.x / p.length(), y: p.y / p.length(), z: p.z / p.length() });
-      const near = p.length() - ground < 90;
+      // Grass and pebbles are for the ground: they shrink away to nothing as you climb (all
+      // there below 10 m, gone by 30 m) and grow back as you come down. Seen from the air,
+      // the circle of cover showed as a disc of grass travelling under the ship.
+      const height = p.length() - ground, low = 1 - Math.min(1, Math.max(0, (height - 10) / 20));
+      const near = low > 0;
       group.visible = near;
       if (!near) return;
+      fadeR.value.set(reach * .3 * low, Math.max(.5, reach * low));
       center.value.copy(p);
-      if (!lastAnchor || lastAnchor.distanceTo(p) > cell * 2) { lastAnchor = p.clone(); enumerate(p); }
+      const at = p.clone(); let hurry = 1;
+      if (lead && lead.lengthSq() > 1) { const l = Math.min(lead.length(), reach * .6); at.addScaledVector(lead, l / lead.length()); hurry = 1 + Math.min(1, lead.length() / 40); }
+      if (!lastAnchor || lastAnchor.distanceTo(at) > cell * 2) { lastAnchor = at; enumerate(at); }
       const t0 = performance.now();
-      while (pending.length && performance.now() - t0 < budgetMs) { const rec = pending.shift(); if (!rec.ready) { fill(rec); dirty = true; } }
+      while (pending.length && performance.now() - t0 < budgetMs * hurry) { const rec = pending.shift(); if (!rec.ready) { fill(rec); dirty = true; } }
       rebuildTimer -= 1;
       if (dirty && (rebuildTimer <= 0 || !pending.length)) { rebuild(); rebuildTimer = 6; }
     },

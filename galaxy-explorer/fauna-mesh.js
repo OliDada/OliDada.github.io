@@ -1053,6 +1053,8 @@ export function creatureDepthMaterial(THREE, sp) {
   const m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uSize = { value: sp.size };
+    shader.uniforms.cSize = { value: sp.size };
+    { let h = 0; for (const ch of String(sp.name || sp.id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; shader.uniforms.cPattern = { value: [h % 4, (h >>> 4) % 97] }; } // markings by the species' name: no random numbers drawn
     shader.vertexShader = CREATURE_POSE + shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
 vec3 cP = position; vec3 cN = vec3(0., 1., 0.); creaturePose(cP, cN); transformed = cP;`);
   };
@@ -1062,6 +1064,8 @@ vec3 cP = position; vec3 cN = vec3(0., 1., 0.); creaturePose(cP, cN); transforme
 function addAnimation(material, sp) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uSize = { value: sp.size };
+    shader.uniforms.cSize = { value: sp.size };
+    { let h = 0; for (const ch of String(sp.name || sp.id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; shader.uniforms.cPattern = { value: [h % 4, (h >>> 4) % 97] }; } // markings by the species' name: no random numbers drawn
     shader.vertexShader = CREATURE_POSE + shader.vertexShader
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nvec3 cP = position; vec3 cN = objectNormal; creaturePose(cP, cN); objectNormal = cN;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
@@ -1072,6 +1076,8 @@ vRest *= length(instanceMatrix[0].xyz); // metres, whatever the instance's size
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
 varying float vGlow; flat varying float vKind; varying vec3 vRest; varying vec3 vRestN; // flat: a kind must not blend into another across a triangle
+uniform float cSize; // the animal's size in metres (its markings are sized to it)
+uniform vec2 cPattern; // x: the species' markings (0 plain, 1 bands, 2 spots, 3 saddle), y: where in the noise they are cut from
 float cHash(vec3 p) { p = fract(p * .3183099 + .1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float cNoise(vec3 x) {
   vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -1087,10 +1093,23 @@ float cNoise(vec3 x) {
       int kind = int(vKind + .5);
       float cH = 0.0, cF = 1.0, cRough = .7, cMetal = 0.0;
       if (kind == 0) {        // skin: faint blotches and soft pores, a slight sheen
-        float blot = cNoise(P * 5.0), pore = cNoise(P * 70.0);
-        cF = 1.0 + (blot - .5) * .12 + (pore - .5) * .06 * fine;
+        // A hide, not a moulded toy: broad blotches and smaller dapples sized to the animal
+        // (seen at any distance, so it never reads as one flat colour), a darker back and a
+        // paler underside, fine pores close up, and little sheen.
+        float sz = max(.15, cSize);
+        float blot = cNoise(P * (3.2 / sz)), dapple = cNoise(P * (11.0 / sz) + 7.0), pore = cNoise(P * 70.0);
+        float shadeUp = normalize(vRestN).y;
+        cF = (1.0 + (blot - .5) * .3 + (smoothstep(.45, .75, dapple) - .3) * .16 + (pore - .5) * .06 * fine) * (1.0 - .13 * smoothstep(0.1, .9, shadeUp) + .1 * smoothstep(0.2, .9, -shadeUp));
+        // The species' own markings, on its back and flanks (the underside stays plain):
+        // bands across the body that bend as they go, spots, or a dark saddle with a broken edge.
+        vec3 Q = P / sz + cPattern.y;
+        float mark = cPattern.x < .5 ? 0.0
+          : cPattern.x < 1.5 ? smoothstep(.1, .5, sin(Q.z * 8.0 + (cNoise(Q * 2.0) - .5) * 5.0))
+          : cPattern.x < 2.5 ? smoothstep(.6, .72, cNoise(Q * 6.5))
+          : smoothstep(.15, .7, shadeUp) * smoothstep(.3, .55, cNoise(Q * 2.2 + 3.0)) * 1.2;
+        cF *= 1.0 - .34 * mark * smoothstep(-.45, .15, shadeUp);
         cH = blot * .0012 * mid - pore * .0004 * fine;
-        cRough = .58;
+        cRough = .72;
       } else if (kind == 1) { // woven cloth: threads over and under, and a soft drape
         vec3 an = abs(normalize(vRestN));
         vec2 uv = an.x > an.y && an.x > an.z ? P.yz : an.y > an.z ? P.xz : P.xy;
@@ -1916,9 +1935,9 @@ function buildGeometry(THREE, sp, r) {
     // Neck and head.
     const neckLen = (sp.neck || 0) * (form === 'browser' ? 1.7 : 1);
     const headUp = neckLen * (biped ? .9 : .75), headFwd = neckLen * (biped ? .25 : .6);
-    const hd = sp.head * (form === 'browser' ? .8 : 1), snout = sp.snout || 1, shape = flyer && form === 'bird' ? 'beaked' : sp.headShape || 'round';
+    const hd = sp.head * (form === 'browser' ? .8 : 1) * (biped ? 1.22 : 1), snout = sp.snout || 1, shape = flyer && form === 'bird' ? 'beaked' : sp.headShape || 'round';
     const headless = sp.alien === 'headless' && !serp && !slug && !bug;
-    const neck = serp || slug || bug || headless ? [] : neckLen > 0 ? [{ p: [0, neckBase[1] + headUp * .55, L / 2 + headFwd * .5], rx: s * .07 + W * .1, ry: s * .07 + H * .1 }] : [];
+    const neck = serp || slug || bug || headless ? [] : neckLen > 0 ? [{ p: [0, neckBase[1] + headUp * .55, L / 2 + headFwd * .5], rx: (s * .07 + W * .1) * (biped ? 1.45 : 1.15), ry: (s * .07 + H * .1) * (biped ? 1.45 : 1.15) }] : []; // (sturdier necks, most of all on two-legged walkers, whose heads sat on sticks)
     const front = serp || slug ? body[body.length - 1].p : bug ? body[body.length - 1].p : null;
     const hz = front ? front[2] + hd * .35 : L / 2 + headFwd + hd * .3, hy = front ? front[1] + (slug ? hd * .2 : 0) : neckBase[1] + headUp;
     // Head shapes: [forward offset, half-width, half-height, drop] for skull, mid-head, snout and tip.
@@ -2109,7 +2128,7 @@ function buildGeometry(THREE, sp, r) {
       for (const side of [-1, 1]) {
         const ly = legY * (hopperHind ? 1.35 : hopperFront ? .8 : 1);
         const hipY = bodyY + lift(z) - H * .15, hipX = side * W * .3;
-        const thick = s * (bug ? .03 : .06) * (biped ? 1.35 : 1) * (tr.diet === 'herbivore' ? 1.1 : .95) * (form === 'tank' ? 1.5 : form === 'harvestman' ? .5 : 1) * (hopperHind ? 1.5 : 1)
+        const thick = s * (bug ? .052 : .078) * (biped ? 1.35 : 1) * (tr.diet === 'herbivore' ? 1.1 : .95) * (form === 'tank' ? 1.5 : form === 'harvestman' ? .62 : 1) * (hopperHind ? 1.5 : 1) // (sturdier legs: at .03 and .06 of the body they were wires, and the animal read as a body on threads)
           * Math.sqrt(sp.bulk || 1) * (sp.build === 'giant' ? 1.25 : sp.build === 'lanky' ? .8 : 1);
         // Centipede legs step in a wave that runs along the body.
         const phase = form === 'centipede' ? i * .85 + (side > 0 ? Math.PI : 0) : ((i + (side > 0 ? 1 : 0)) % 2) * Math.PI;
@@ -2139,7 +2158,7 @@ function buildGeometry(THREE, sp, r) {
     // Arms with hands, for species clever enough to use them.
     if (sp.arms) for (const side of [-1, 1]) {
       const sz = L * .42, shY = bodyY + lift(sz) + H * .1, sx = side * W * .42, armL = sp.legLength * .65;
-      const shoulder = [sx * .8, shY, sz], elbow = [sx * 1.15, shY - armL * .5, sz + armL * .08], hand = [sx * 1.1, shY - armL * .95, sz + armL * .25];
+      const shoulder = [sx * .8, shY, sz], elbow = [sx * 1.15, Math.max(s * .12, shY - armL * .5), sz + armL * .08], hand = [sx * 1.1, Math.max(s * .07, shY - armL * .95), sz + armL * .25]; // (never below the ground: a low-slung body's arms reached through it)
       // Builders' arms vary (fauna-culture.mjs armStyle): boneless tentacles, pincers, or jointed arms with fingers.
       if (cult?.armStyle === 'tentacle') {
         const path2 = [];
@@ -2186,6 +2205,8 @@ function buildGeometry(THREE, sp, r) {
   // get their own normals.
   const pos = [], colr = [], part = [], pivot = [], knee = [], phase = [], bend = [], normal = [], glow = [], kind = [];
   const bodyKind = sp.suit ? KIND.suit : sp.aquatic ? KIND.gloss : KIND.skin; // a suited colonist's body is all suit; sea life is wet and shiny
+  // Arms and hands never reach below the ground (a low-slung body's would otherwise go through it).
+  for (const p of parts) for (let i = 0; i < p.an.length; i++) if ((p.an[i].part === ARM || p.an[i].part === FOREARM) && p.pos[i * 3 + 1] < s * .02) p.pos[i * 3 + 1] = s * .02;
   for (const p of parts) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(p.pos, 3));

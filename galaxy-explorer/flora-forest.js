@@ -66,10 +66,37 @@ function alienTree(g) {
   const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z), UP = V(0, 1, 0), ONE = V(1, 1, 1);
   const qOf = (d) => new THREE.Quaternion().setFromUnitVectors(UP, d.clone().normalize());
   // A tapering limb from a to b (radii r0 at a, r1 at b).
+  // Trunks start below the ground (sink): a tree on a slope stands in the hillside, with no
+  // gap under its downhill side.
+  const sink = Math.max(.6, H * .05);
   const limb = (a, b, r0, r1, col = c.stem, seg = r0 > H * .02 ? 8 : 5) => {
+    if (a.lengthSq() < 1e-8) a = V(0, -sink, 0);
     const d = b.clone().sub(a), len = d.length();
     if (len < 1e-4) return;
     add(new THREE.CylinderGeometry(Math.max(.01, r1), Math.max(.01, r0), len, seg, 1).translate(0, len / 2, 0), new THREE.Matrix4().compose(a, qOf(d), ONE), col, false);
+  };
+  // A trunk or limb through several points, as one smooth tube: the points are joined by
+  // a curve and the tube is swept along it, tapering from r0 to r1, so a bending trunk is
+  // one growing thing and not straight pieces stacked at angles.
+  const tube = (pts, r0, r1, col = c.stem, sides = 7, sub = 3) => {
+    if (pts[0].lengthSq() < 1e-8) pts = [V(0, -sink, 0), V(0, -sink * .5, 0), ...pts.slice(1)];
+    const path = pts.length > 2 && sub > 1 ? new THREE.CatmullRomCurve3(pts, false, 'centripetal').getPoints((pts.length - 1) * sub) : pts, m = path.length, rings = [], pos = [], nor = [];
+    let N = null;
+    for (let i = 0; i < m; i++) {
+      const T = path[Math.min(m - 1, i + 1)].clone().sub(path[Math.max(0, i - 1)]).normalize();
+      if (!N) N = (Math.abs(T.y) < .9 ? V(0, 1, 0) : V(1, 0, 0)).cross(T).normalize(); else N.addScaledVector(T, -N.dot(T)).normalize();
+      const B = T.clone().cross(N), rad = Math.max(.01, r0 + (r1 - r0) * i / (m - 1)), row = [];
+      for (let s = 0; s < sides; s++) { const a = s / sides * 6.2832, d = N.clone().multiplyScalar(Math.cos(a)).addScaledVector(B, Math.sin(a)); row.push([path[i].clone().addScaledVector(d, rad), d]); }
+      rings.push(row);
+    }
+    for (let i = 0; i < m - 1; i++) for (let s = 0; s < sides; s++) {
+      const a = rings[i][s], b = rings[i][(s + 1) % sides], e = rings[i + 1][s], f = rings[i + 1][(s + 1) % sides];
+      for (const v of [a, b, e, b, f, e]) { pos.push(v[0].x, v[0].y, v[0].z); nor.push(v[1].x, v[1].y, v[1].z); }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.parameters = { radius: Math.max(r0, r1) }; // how thick it is, so the distant model knows a trunk from a twig (flora-mesh.js stemThickness)
+    add(g, new THREE.Matrix4(), col, false);
   };
   // A geometry at p, its +y turned to d, scaled.
   const put = (geo, p, d, sc, col, foliage = true) => add(geo, new THREE.Matrix4().compose(p, qOf(d), sc instanceof THREE.Vector3 ? sc : V(sc, sc, sc)), col, foliage);
@@ -81,9 +108,10 @@ function alienTree(g) {
 
   // --- Trunk plans ---
   const TRUNKS = {
-    column() { // one trunk, tapering through five pieces that wander a little (by the species' seed, so no random numbers are spent)
+    column() { // one trunk, a tube tapering through five points that wander a little (by the species' seed, so no random numbers are spent)
       const t = V(lean.x * H * .4, top, lean.z * H * .4), N = 5, w = (i, k) => (jitterOf(sp.seed % 977, i, k, 3) - .5) * tr * .9;
-      let prev = V(); for (let i = 1; i <= N; i++) { const f = i / N, p = t.clone().multiplyScalar(f).add(i < N ? V(w(i, 1), 0, w(i, 2)) : V()); limb(prev, p, tr * (1 - .5 * (i - 1) / N), tr * (1 - .5 * f)); prev = p; }
+      const pts = [V()]; for (let i = 1; i <= N; i++) pts.push(t.clone().multiplyScalar(i / N).add(i < N ? V(w(i, 1), 0, w(i, 2)) : V()));
+      tube(pts, tr, tr * .5, c.stem, 8);
       roots(4); return [{ p: t, d: UP, s: 1 }]; },
     bottle() {
       const prof = [1, 1.9, 2.5, 2.2, 1.3, .6], seg = top / (prof.length - 1);
@@ -98,32 +126,35 @@ function alienTree(g) {
       for (let i = 0; i < k; i++) { // each arm curves out and up, like a candelabrum's
         const a = i / k * 6.28 + r() * .6, reach = H * (.11 + .06 * S.spread), rise = H * (.3 + .2 * r()) * (.6 + .5 * S.lift);
         const pts = [0, .2, .4, .6, .8, 1].map((t) => base.clone().addScaledVector(out(a), reach * Math.sin(t * Math.PI / 2)).add(V(0, rise * (1 - Math.cos(t * Math.PI / 2)) + H * .02 * t, 0)));
-        for (let q = 0; q < pts.length - 1; q++) limb(pts[q], pts[q + 1], tr * (.7 - .07 * q), tr * (.7 - .07 * (q + 1)));
+        tube(pts, tr * .7, tr * .35, c.stem, 6, 2);
         const e = pts[pts.length - 1].clone().add(V(0, rise * .35, 0)); limb(pts[pts.length - 1], e, tr * .35, tr * .25); tips.push({ p: e, d: UP, s: .7 }); }
       limb(base, V(0, top, 0), tr * .8, tr * .45); tips.push({ p: V(0, top, 0), d: UP, s: .85 });
       return tips;
     },
     braided() {
       const strands = 3 + (S.count > 5 ? 1 : 0), steps = 7, turn = 1.6 + r();
-      for (let k = 0; k < strands; k++) { let prev = null; for (let i = 0; i <= steps; i++) { const t = i / steps, a = k / strands * 6.28 + t * turn * 6.28, rad = tr * (1.3 - .7 * t), p = V(Math.cos(a) * rad + lean.x * H * .4 * t, t * top, Math.sin(a) * rad); if (prev) limb(prev, p, tr * .5 * (1.1 - .5 * t), tr * .5 * (1 - .5 * t), c.stem, 5); prev = p; } }
+      for (let k = 0; k < strands; k++) { const pts = []; for (let i = 0; i <= steps; i++) { const t = i / steps, a = k / strands * 6.28 + t * turn * 6.28, rad = tr * (1.3 - .7 * t); pts.push(V(Math.cos(a) * rad + lean.x * H * .4 * t, t * top - (i ? 0 : sink), Math.sin(a) * rad)); } tube(pts, tr * .55, tr * .25, c.stem, 5, 2); }
       return [{ p: V(lean.x * H * .4, top, 0), d: UP, s: 1 }];
     },
     stilt() {
       const hub = V(0, Math.min(2.6, H * (.06 + .05 * S.lift)), 0), k = n(3);
-      for (let i = 0; i < k; i++) { const a = i / k * 6.28 + r() * .4, foot = out(a).multiplyScalar(tr * (1.8 + .9 * S.spread) + hub.y * .5), knee = foot.clone().multiplyScalar(.55).add(V(0, hub.y * .75, 0)); limb(foot.clone().add(V(0, -.25, 0)), knee, tr * .2, tr * .24, c.stem, 6); limb(knee, hub, tr * .24, tr * .32, c.stem, 6); }
+      for (let i = 0; i < k; i++) { const a = i / k * 6.28 + r() * .4, foot = out(a).multiplyScalar(tr * (1.8 + .9 * S.spread) + hub.y * .5), knee = foot.clone().multiplyScalar(.55).add(V(0, hub.y * .75, 0)); tube([foot.clone().add(V(0, -sink, 0)), knee, hub], tr * .2, tr * .32, c.stem, 5, 3); }
       const t = V(lean.x * H * .3, top, 0); limb(hub, t, tr * .8, tr * .5);
       return [{ p: t, d: UP, s: 1 }];
     },
     arch() {
       const side = r() < .5 ? -1 : 1, P = (t) => V(side * H * .38 * S.spread * t * t, top * (1.15 * t - .25 * t * t * t * t), 0);
-      let prev = V(); for (let i = 1; i <= 7; i++) { const p = P(i / 7); limb(prev, p, tr * (1 - .08 * (i - 1)), tr * (1 - .08 * i)); prev = p; }
+      const pts = []; for (let i = 0; i <= 7; i++) pts.push(P(i / 7));
+      tube(pts, tr, tr * .44, c.stem, 8, 2);
       roots(4);
       const end = P(1), d = end.clone().sub(P(.85)).normalize().lerp(V(0, -1, 0), .2 * S.droop);
       return [{ p: end, d: d.lerp(UP, .5).normalize(), s: 1 }];
     },
     segmented() {
       const k = 5 + Math.floor(S.lift * 4), seg = top / k;
-      for (let i = 0; i < k; i++) { const a = V(lean.x * H * .3 * i / k, i * seg, 0), b = V(lean.x * H * .3 * (i + 1) / k, (i + 1) * seg, 0); limb(a, b, tr * .85, tr * .75); limb(b.clone().add(V(0, -seg * .04, 0)), b.clone().add(V(0, seg * .04, 0)), tr * 1.05, tr * 1.05, deep(THREE, c.leaf2, .7, '#2a2a20', .3)); if (i % 2 && i < k - 1) for (let j = 0; j < 2; j++) put(bough(THREE, H * .1, H * .03, .5), b, out(j * 3.14 + i).add(V(0, .6, 0)), 1, fol(i), true); }
+      for (let i = 0; i < k; i++) { const b = V(lean.x * H * .3 * (i + 1) / k, (i + 1) * seg, 0); limb(b.clone().add(V(0, -seg * .04, 0)), b.clone().add(V(0, seg * .04, 0)), tr * 1.05, tr * 1.05, deep(THREE, c.leaf2, .7, '#2a2a20', .3)); if (i % 2 && i < k - 1) for (let j = 0; j < 2; j++) put(bough(THREE, H * .1, H * .03, .5), b, out(j * 3.14 + i).add(V(0, .6, 0)), 1, fol(i), true); }
+      tube([V(), V(lean.x * H * .3, top, 0)], tr * .88, tr * .68, c.stem, 8); // one cane, ringed at its joints
+      roots(3);
       return [{ p: V(lean.x * H * .3, top, 0), d: UP, s: .9 }];
     },
     forked() {
@@ -139,9 +170,11 @@ function alienTree(g) {
       return tips;
     },
     spiral() {
-      const steps = 10, turns = 1 + r() * .8, rad = tr * (2 + S.spread); let prev = V();
-      for (let i = 1; i <= steps; i++) { const t = i / steps, a = t * turns * 6.28, p = V(Math.cos(a) * rad * Math.sin(t * Math.PI) , t * top, Math.sin(a) * rad * Math.sin(t * Math.PI)); limb(prev, p, tr * (1 - .05 * (i - 1)), tr * (1 - .05 * i)); prev = p; }
-      return [{ p: prev, d: UP, s: 1 }];
+      // (A gentle corkscrew: the coil is at most the trunk's own width out from the axis, so it reads as a twisting trunk, not a zigzag.)
+      const steps = 10, turns = 1 + r() * .8, rad = tr * (1 + .5 * S.spread), pts = [V()];
+      for (let i = 1; i <= steps; i++) { const t = i / steps, a = t * turns * 6.28; pts.push(V(Math.cos(a) * rad * Math.sin(t * Math.PI), t * top, Math.sin(a) * rad * Math.sin(t * Math.PI))); }
+      tube(pts, tr, tr * .5, c.stem, 8, 2); roots(4);
+      return [{ p: pts[steps], d: UP, s: 1 }];
     },
   };
   // Roots flaring out into the ground from the foot of the trunk.
@@ -149,7 +182,8 @@ function alienTree(g) {
   // standing on it like a post; the roots are long enough to read from a few metres off.)
   function roots(k) {
     add(new THREE.CylinderGeometry(tr * 1.02, tr * 1.75, tr * 2.4, 8, 1).translate(0, tr * .9, 0), new THREE.Matrix4(), c.stem, false);
-    for (let i = 0; i < k; i++) { const a = i / k * 6.28 + r() * .6, len = tr * (3.2 + 1.6 * r()); add(new THREE.ConeGeometry(tr * .62, len, 5).translate(0, len / 2, 0), new THREE.Matrix4().makeTranslation(Math.cos(a) * tr * .6, tr * .75, Math.sin(a) * tr * .6).multiply(new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(-Math.sin(a), 0, Math.cos(a)), -1.82)), c.stem, false); }
+    add(new THREE.CylinderGeometry(tr * 1.75, tr * 1.75, sink, 8, 1).translate(0, -tr * .3 - sink / 2, 0), new THREE.Matrix4(), c.stem, false); // the foot carries on down into the ground
+    for (let i = 0; i < k; i++) { const a = i / k * 6.28 + r() * .6, len = tr * (2.3 + 1.1 * r()); add(new THREE.ConeGeometry(tr * .85, len, 5).translate(0, len / 2, 0), new THREE.Matrix4().makeTranslation(Math.cos(a) * tr * .6, tr * .75, Math.sin(a) * tr * .6).multiply(new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(-Math.sin(a), 0, Math.cos(a)), -1.82)), c.stem, false); }
   }
 
   // --- Crown plans: dress one tip (p, d, s) ---
@@ -170,16 +204,16 @@ function alienTree(g) {
       put(roughen(blob(R * .34, 1), S.lumpy * .6, i + 5), p.clone().addScaledVector(UP, R * .3), UP, V(1, .6, 1), fol(i + 1)); // the crown of the dome
       for (let j = 0; j < k; j++) { const a = j / k * 6.28 + r() * .5, q = p.clone().addScaledVector(out(a), R * (.45 + .2 * r())).add(V(0, R * (.02 + .06 * r()), 0)); put(roughen(blob(R * (.38 + .14 * r()), 1), S.lumpy * .7, j + i * 9), q.add(V(0, -R * .06, 0)), UP, V(1, .44 + .12 * r(), 1), fol(j + i)); }
       put(detail(roughen(blob(R * .8, 0), .12, i + 3)), p.clone().addScaledVector(UP, -R * .04), UP, V(1, .12, 1), under(i)); },
-    weeping({ p, d, s }, i) { const R = R0 * s; put(roughen(blob(R, 1), S.lumpy, i), p, d, V(1, .6, 1), fol(i)); const k = 16 + Math.floor(S.droop * 14);
-      for (let j = 0; j < k; j++) { const a = j / k * 6.28 + r() * .4, q = p.clone().addScaledVector(out(a), R * .85), len = R * (1.2 + 2 * S.droop) * (.7 + .5 * r()); add(new THREE.CylinderGeometry(R * .03, R * .008, len, 3, 1).translate(0, -len / 2, 0), new THREE.Matrix4().makeTranslation(q.x + (r() - .5) * R * .3, q.y, q.z + (r() - .5) * R * .3), j % 2 ? fol(j) : under(j), true); } },
+    weeping({ p, d, s }, i) { // a round crown with a skirt of drooping leafy clumps joined to its lower edge (long strands broke up into clumps hanging in the air)
+      const R = R0 * s; put(roughen(blob(R, 1), S.lumpy, i), p, d, V(1, .6, 1), fol(i)); const k = 16 + Math.floor(S.droop * 14);
+      for (let j = 0; j < k; j++) { const a = j / k * 6.28 + r() * .4, q = p.clone().addScaledVector(out(a), R * .78), len = R * (.3 + .45 * S.droop) * (.7 + .5 * r()); if (j % 2 === 0) put(roughen(blob(R * .3, 1), S.lumpy, j + 40), q.add(V(0, -len * .6, 0)), UP, V(.85, 1.3, .85), j % 4 ? fol(j) : under(j)); } },
     spiral({ p, d, s }, i) { const len = Math.min(R0 * s * 3.2, H * .55 * s), tipP = p.clone().addScaledVector(d, len); limb(p, tipP, tr * .3 * s, tr * .05, c.stem, 4); const k = Math.round((10 + S.layers * 2) * Math.min(1, s * 1.2));
       for (let j = 0; j < k; j++) { const f = j / k, q = p.clone().addScaledVector(d, len * f * .95); put(bough(THREE, R0 * s * (1.3 - f) * (.8 + .4 * r()), R0 * s * .35, .2 + S.droop * .6), q, out(j * 2.4).add(V(0, .25, 0)), 1, fol(j)); } },
     bottlebrush({ p, d, s }, i) { const len = Math.min(R0 * s * 3, H * .55 * s), tipP = p.clone().addScaledVector(d, len); limb(p, tipP, tr * .25 * s, tr * .05, c.stem, 4); const k = Math.round((26 + S.layers * 3) * Math.min(1, s * 1.2));
       for (let j = 0; j < k; j++) { const f = j / k, q = p.clone().addScaledVector(d, len * (.08 + .9 * f)), bl = R0 * s * (.55 + .5 * Math.sin(f * Math.PI)) * (.8 + .4 * r()); put(new THREE.ConeGeometry(bl * .1, bl, 3).translate(0, bl / 2, 0), q, out(j * 2.4 + r()).add(V(0, .15 - S.droop * .4, 0)), 1, fol(j)); } },
     fan({ p, d, s }, i) { const k = 7 + Math.floor(S.spread * 3); for (let j = 0; j < k; j++) { const a = j / k * 6.28 + r() * .3; put(bough(THREE, R0 * s * (1.8 + .6 * r()), R0 * s * .55, .05 + S.droop * .35), p, out(a).add(V(0, 1.2 - S.droop, 0)), 1, fol(j)); } put(blob(R0 * s * .25, 0), p, d, 1, fol(i)); },
-    // (The hanging pods are small, so they are twenty facets each, not eighty.)
-    lanterns({ p, d, s }, i) { const R = R0 * s; put(roughen(blob(R * .7, 1), S.lumpy, i), p, d, V(1.2, .55, 1.2), fol(i)); const k = 4 + Math.floor(S.droop * 5), pod = c.bloom || c.accent;
-      for (let j = 0; j < k; j++) { const a = j / k * 6.28 + r() * .5, q = p.clone().addScaledVector(out(a), R * (.5 + .4 * r())), len = R * (.4 + .9 * S.droop); add(new THREE.CylinderGeometry(R * .02, R * .02, len, 3, 1).translate(0, -len / 2, 0), new THREE.Matrix4().makeTranslation(q.x, q.y, q.z), under(j), true); put(roughen(blob(R * .2, 0), .1, j), q.clone().add(V(0, -len - R * .15, 0)), UP, V(1, 1.4, 1), pod); } },
+    lanterns({ p, d, s }, i) { const R = R0 * s; put(roughen(blob(R * .7, 1), S.lumpy, i), p, d, V(1.2, .55, 1.2), fol(i)); const k = 2 + Math.floor(S.droop * 3), pod = c.bloom || c.accent; // a few small smooth drops, close under the leaves
+      for (let j = 0; j < k; j++) { const a = j / k * 6.28 + r() * .5, q = p.clone().addScaledVector(out(a), R * (.5 + .4 * r())), len = R * (.25 + .4 * S.droop); add(new THREE.CylinderGeometry(R * .02, R * .02, len, 3, 1).translate(0, -len / 2, 0), new THREE.Matrix4().makeTranslation(q.x, q.y, q.z), under(j), true); put(blob(R * .1, 1), q.clone().add(V(0, -len - R * .1, 0)), UP, V(1, 1.5, 1), pod); } },
     invertedCone({ p, d, s }, i) { // a crown that widens upward (a vase of foliage), built of leafy clumps in rings, not a solid cone
       const R = R0 * s * .9, h = R * 1.7, rings = 3;
       for (let k = 0; k < rings; k++) { const f = (k + .5) / rings, rr = R * (.3 + .7 * f), n = 3 + k * 2, y = h * (f - .15);
@@ -198,7 +232,7 @@ function alienTree(g) {
   tips.forEach((t, i) => CROWNS[S.crown](t, i));
   // Extras: thorns up the trunk, and seed pods hanging near the tips.
   if (S.thorns) for (let k = 0; k < 10; k++) { const y = top * (.1 + .7 * r()), a = r() * 6.28; put(new THREE.ConeGeometry(tr * .12, tr * .9, 3).translate(0, tr * .45, 0), V(Math.cos(a) * tr * .7, y, Math.sin(a) * tr * .7), out(a).add(V(0, .3, 0)), 1, deep(THREE, c.stem, .6, '#000000', .2), false); }
-  if (S.pods && S.crown !== 'lanterns') for (const t of tips.slice(0, 4)) for (let k = 0; k < 2; k++) { const a = r() * 6.28; put(blob(R0 * t.s * .14, 0), t.p.clone().addScaledVector(out(a), R0 * t.s * .5).add(V(0, -R0 * t.s * .35, 0)), UP, V(1, 1.4, 1), c.bloom || c.accent); }
+  // (Seed pods used to hang near the tips as loose blobs; they read as stray lumps in the air and are gone. S.pods is still part of the species.)
 }
 
 // A fir: the dark heart of a conifer wood.

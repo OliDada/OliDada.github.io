@@ -41,7 +41,13 @@ export function leafTexture(THREE, sp, worldSeed = 0) {
   const count = needles ? 220 : kind === 'long' ? 90 : 130 + Math.floor(r() * 50);
   const len = (needles ? .11 : kind === 'long' ? .19 : kind === 'oval' ? .1 : .12) * LEAF_W * (.8 + .4 * (sp.leafSize || 1) * .5);
   const grey = (v) => `rgb(${v},${v},${v})`;
-  // Twigs first (darker), radiating from the middle, then leaves along and around them.
+  // A soft mass first, in mid grey: the cluster is a clump with leaves standing out on it
+  // and round its edge, not a spray of separate leaves with sky between them (which, on a
+  // whole crown, read as static). Its own random stream, so the leaves are where they were.
+  { const m = rng(worldSeed, 'leaf-mass', sp.id), k = needles ? .8 : 1;
+    for (let i = 0; i < 9; i++) { const a = i / 8 * 6.283 + m(), d = i ? R * (.34 + .16 * m()) * k : 0, rad = R * (i ? .25 + .1 * m() : .4) * k;
+      g.fillStyle = grey((needles ? 96 : 122) + (m() * 30 | 0)); g.beginPath(); g.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, rad, 0, 6.283); g.fill(); } }
+  // Twigs next (darker), radiating from the middle, then leaves along and around them.
   g.lineCap = 'round';
   const twigs = needles ? 7 : 5;
   for (let t = 0; t < twigs; t++) {
@@ -57,10 +63,10 @@ export function leafTexture(THREE, sp, worldSeed = 0) {
     const shade = 195 + (r() * 60 | 0);
     g.save(); g.translate(x, y); g.rotate(dir);
     if (kind === 'needle') {
-      g.strokeStyle = grey(shade); g.lineWidth = 2.2;
+      g.strokeStyle = grey(shade); g.lineWidth = 3.4;
       g.beginPath(); g.moveTo(-s * .5, 0); g.lineTo(s * .5, 0); g.stroke();
     } else {
-      const w = kind === 'long' ? s * .18 : kind === 'oval' ? s * .42 : kind === 'lobed' ? s * .5 : s * .55;
+      const w = kind === 'long' ? s * .3 : kind === 'oval' ? s * .42 : kind === 'lobed' ? s * .5 : s * .55;
       g.fillStyle = grey(shade);
       g.beginPath();
       if (kind === 'lobed') { for (let k = 0; k < 3; k++) { g.ellipse(s * (k - 1) * .22, (k - 1) * w * .15, s * .28, w * .45, 0, 0, Math.PI * 2); } }

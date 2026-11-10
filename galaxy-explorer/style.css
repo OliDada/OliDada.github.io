@@ -314,3 +314,20 @@ body.walking.swimming .touch-alt .fly-btn{display:block}
 
 /* ?hud=0 (quality.mjs): clean screenshots. The view, its vignette and the perf overlay stay. */
 body.nohud header,body.nohud #hud,body.nohud #devBtn{display:none!important}
+
+/* Title screen: the name, one line of facts about the system you start in, one button.
+   The header's wordmark and test label stay hidden until you start, so the name shows once. */
+#intro.overlay{background:linear-gradient(0deg,#050b13f0 0%,#050b13a0 32%,transparent 62%),linear-gradient(90deg,#050b1399,transparent 55%);align-items:flex-end;padding:0 7vw 12vh}
+body:not(.playing) header .wordmark,body:not(.playing) .prototype{opacity:0;pointer-events:none}
+header .wordmark,.prototype{transition:opacity .8s}
+#intro .intro-card{max-width:none;animation:introIn 1.4s cubic-bezier(.2,.7,.2,1) both}
+#intro .title{font-family:'Space Grotesk',sans-serif;font-weight:300;font-size:clamp(44px,8.5vw,128px);line-height:.9;letter-spacing:.16em;text-transform:uppercase;margin:0 0 0 -.06em;color:#eef6f2}
+#intro .intro-facts{margin:22px 0 0;padding-top:16px;border-top:1px solid #d6eee233;max-width:min(520px,80vw);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#9fb3ae;line-height:1.6}
+#intro .start{margin-top:34px;display:inline-flex;align-items:center;gap:18px;padding:14px 22px 14px 24px;background:transparent;backdrop-filter:none;border:1px solid #c9f4cc66;border-radius:2px;color:var(--mint);font-size:12px;font-weight:600;letter-spacing:.32em;text-transform:uppercase;transition:background .25s,color .25s,border-color .25s}
+#intro .start:hover,#intro .start:focus-visible{background:var(--mint);color:#0b1a14;border-color:var(--mint)}
+#intro .start kbd{margin:0;border-color:currentColor;opacity:.55;letter-spacing:.08em;text-transform:none;font-size:9px}
+#intro .coordinates{bottom:12vh;right:7vw;color:#8ea39e}
+@keyframes introIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@media(pointer:coarse){#intro .start kbd{display:none}}
+@media(max-width:700px){#intro.overlay{padding:0 26px 16vh}#intro .title{letter-spacing:.1em}#intro .intro-facts{font-size:9px;letter-spacing:.18em}#intro .coordinates{display:none}}
+@media(prefers-reduced-motion:reduce){#intro .intro-card{animation:none}}

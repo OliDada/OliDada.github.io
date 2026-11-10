@@ -19,17 +19,17 @@ const bell = (v, c, w) => Math.exp(-(((v - c) / w) ** 2));
 
 export const PLANS = {
   quadruped: { legs: 4, noun: 'grazer', fit: e => e.complex * (1 - e.lowG * .4) },
-  hexapod:   { legs: 6, noun: 'crawler', fit: e => .55 + e.dry * .3 },
+  hexapod:   { legs: 6, noun: 'crawler', fit: e => .38 + e.dry * .3 }, // (.55 before; with arachnids at .35, most land animals on simple worlds were small look-alike bugs)
   biped:     { legs: 2, noun: 'strider', fit: e => e.complex * (.35 + e.lowG * .8) },
-  serpent:   { legs: 0, noun: 'coil', fit: e => .3 + e.dry * .5 },
+  serpent:   { legs: 0, noun: 'coil', fit: e => .38 + e.dry * .5 },
   flyer:     { legs: 2, noun: 'glider', fit: e => e.complex * clamp(e.pressure / .6, 0, 1.5) * (.5 + e.lowG * .6) },
   floater:   { legs: 0, noun: 'drifter', fit: e => e.complex * (clamp((e.pressure - 1.5) / 3, 0, 1) + e.lowG * .6) },
-  arachnid:  { legs: 8, noun: 'skitter', fit: e => .35 + e.dry * .3 },
-  slug:      { legs: 0, noun: 'creeper', fit: e => .3 + e.wet * .45 },
+  arachnid:  { legs: 8, noun: 'skitter', fit: e => .2 + e.dry * .3 },
+  slug:      { legs: 0, noun: 'creeper', fit: e => .4 + e.wet * .45 },
   // Body plans with no Earth counterpart on land: radially symmetric walkers with
   // no front or back (and no head), and animals that roll instead of walking.
-  radial:    { legs: 5, noun: 'spoke', fit: e => e.complex * .55 },
-  roller:    { legs: 0, noun: 'roller', fit: e => e.complex * (.15 + e.dry * .45) * (e.gravity < 1.6 ? 1 : .4) },
+  radial:    { legs: 5, noun: 'spoke', fit: e => (.35 + .65 * e.complex) * .6 }, // (the alien plans turn up on simple worlds too: they need no backbone)
+  roller:    { legs: 0, noun: 'roller', fit: e => (.35 + .65 * e.complex) * (.2 + e.dry * .45) * (e.gravity < 1.6 ? 1 : .4) },
 };
 // Which body plans each chemistry favours. Cold methane and ammonia worlds are slow
 // and soupy (drifters, creepers, coils); hot silicon worlds favour armoured walkers
@@ -260,7 +260,7 @@ function rollLook(plan, form, t, e, r, camo, key) {
   if (!cc) for (const k of ['base', 'belly', 'accent', 'shimmer']) colors[k] = tame(colors[k], key, scheme === 'warning' ? .22 : 0);
   // New look (style.mjs): animals as restrained as the plants they live among, a little less
   // saturated (warning colours keep more of their bite).
-  if (PLANT_STYLE !== 'classic') for (const k of ['base', 'belly', 'accent', 'shimmer']) colors[k] = muted(colors[k], scheme === 'warning' && k === 'accent' ? .85 : k === 'accent' ? .75 : .64, .96);
+  if (PLANT_STYLE !== 'classic') for (const k of ['base', 'belly', 'accent', 'shimmer']) colors[k] = muted(colors[k], scheme === 'warning' && k === 'accent' ? .85 : k === 'accent' ? .64 : .46, .93); // (more muted than before, .75 and .64: bodies in pure pinks and teals read as plastic toys beside the worlds' restrained plants)
   const glow = e.chem === 'silicon' ? (r() < .6 ? r.range(.4, .9) : 0) : (e.dim > .35 || plan === 'floater') && r() < (plan === 'floater' ? .6 : .35) + e.dim * .3 ? r.range(.5, 1) : 0;
   const pattern = scheme === 'warning' ? r.pick(['bands', 'stripes', 'rings', 'spots']) : scheme === 'camouflage' ? r.pick(['mottled', 'spots', 'stripes', 'plain', 'dapple'])
     : r.pick(['plain', 'saddle', 'spots', 'stripes', 'gradient', 'rings']);

@@ -34,7 +34,7 @@ let THREE_CHUNKS = null; // three.js's shader chunks (set by buildFlora), for th
 // every 25-30 m², shoulder to shoulder; glades open where the stand thins.
 const WOODS = { darkwood: .97, forest: .7, wetland: .25, highland: .16, grassland: .07, dryland: .03, barren: 0 };
 // Treeless worlds: how thickly their biggest plants stand instead (same spots as trees).
-const BUSHES = { darkwood: 1, forest: .95, wetland: .6, highland: .45, grassland: .55, dryland: .25, barren: .02 };
+const BUSHES = { darkwood: 1, forest: .95, wetland: .42, highland: .24, grassland: .28, dryland: .13, barren: .02 }; // (open country is half as thickly grown as it was: the stands in forests read as forests, and the plant budget reaches twice as far)
 const TALL = 4; // metres: plants at least this tall take the tree spots (and get a distant model)
 const triCount = (g) => (g.index ? g.index.count : g.attributes.position.count) / 3;
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -58,7 +58,7 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
   // New plant style: beyond DISTANT, trees use a third, very light model (a few dozen
   // triangles), which is what lets a whole forest stand around you.
   const DISTANT = coarse ? 90 : 120, FAR_TREE = Q.nearTree; // forest trees switch to their lighter model sooner
-  const reach = coarse ? 220 : 320, cap = Math.round(budget * 2 * STRESS * Q.plants), triangles = (coarse ? 4.5e5 : NEW ? .75e6 : 1.1e6) * STRESS * Q.plants; // (Q: the quality tier's share, quality.mjs)
+  const reach = Q.plantReach, cap = Math.round(budget * 2 * STRESS * Q.plants), triangles = (coarse ? 4.5e5 : NEW ? .75e6 : 1.1e6) * STRESS * Q.plants; // (Q: the quality tier's share, quality.mjs)
   // New plant style: trees are filled and drawn much farther out (treeReach, their own grid
   // of cells, filled nearest first like the rest), thinning out towards the horizon, so the
   // country is wooded as far as you can see and from the air too.
@@ -286,7 +286,9 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
 
   // Draws the filled cells, nearest first, up to the cap; also lists every plant
   // (placed: what the scanner, sonar and grazing animals look at) and the obstacles.
-  let grid = obstacleGrid([]), budgetEdge = Infinity, gen = 0;
+  let grid = obstacleGrid([]), budgetEdge = Infinity, gen = 0, air = 0, treeThin = 0, thinAgain = false; // air: 0 on the ground, 1 well up in the air (update)
+  // A plant's own fixed number from 0 to 1 (from where it stands), for thinning with distance.
+  const thinOf = (it) => it.thin2 ?? (it.thin2 = (() => { const v = Math.sin(it.p[0] * 12.9898 + it.p[1] * 78.233 + it.p[2] * 37.719) * 43758.5453; return v - Math.floor(v); })());
   const FADE = .8, fades = []; // seconds to fade between models; the instances fading now
   function rebuild() {
     gen++; fades.length = 0;
@@ -302,9 +304,17 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
       // their distance, so the woods carry on to the horizon instead of ending.
       const spent = tris / triN; // (thrifty below, per plant, with some slack so plants at the line do not flip back and forth)
       // Far trees thin out towards the horizon (fewer and fewer of them drawn).
-      const keepShare = rec.d > reach ? 1 - .6 * smooth(reach, treeReach, rec.d) : 1;
+      // (Trees also thin with distance by as much as it takes for the budget to last to the
+      // edge of view, treeThin, found over a few redraws: where a world's trees are heavy or
+      // stand thick, the budget used to run out part of the way and the woods stopped in a ring.)
+      const keepShare = (rec.d > reach ? 1 - .6 * smooth(reach, treeReach, rec.d) : 1) * (tallList ? 1 - treeThin * smooth(40, treeReach * .5, rec.d) : 1);
       const far = rec.d > FAR, nearTree = rec.d <= FAR_TREE, distant = rec.d > DISTANT;
-      for (const it of rec.items) if (rec.d <= it.view && !(it.thin > keepShare)) {
+      // Small plants thin out with distance, so the budget reaches the edge of view as a
+      // thinning scatter. Drawn nearest first at full density, it ran out a little way off
+      // and the plants stopped in a ring round you, which showed most from the air: there
+      // they thin from close by, so the same number covers all you can see.
+      const smallKeep = tallList ? 1 : 1 - (.45 + .4 * air) * smooth(reach * (.25 - .19 * air), reach * (1 - .3 * air), rec.d);
+      for (const it of rec.items) if (rec.d <= it.view && !(it.thin > keepShare) && !(smallKeep < 1 && it.decor === undefined && thinOf(it) > smallKeep)) {
         if (it.decor !== undefined) { decorChosen.push(it); decorCount[it.decor]++; tris += decor[it.decor].tris; continue; }
         count++; it.d = rec.d;
         const k = kinds[it.s], v = it.variant, hasD = k.distantGeos.length > 0;
@@ -318,17 +328,21 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
           if (it.from === slotV && time.value - it.t0 < FADE) it.t0 = time.value - (FADE - (time.value - it.t0));
           else it.t0 = time.value;
           it.from = it.slot;
-        }
+        } else if (it.gen !== gen - 1) { it.t0 = time.value; it.from = -1; } // not drawn last time: it fades in from nothing (it used to just appear)
         it.slot = slotV; it.gen = gen;
         const fading = it.from !== undefined && it.from !== slotV && time.value - it.t0 < FADE;
         if (!fading) it.from = undefined;
         chosen.push([it, slotV, fading ? 1 : 0]); counts[it.s][slotV]++; tris += trisOf(k, slotV);
-        if (fading) { chosen.push([it, it.from, 2]); counts[it.s][it.from]++; } // (not counted against the budget: that made more plants switch, a loop)
+        if (fading && it.from >= 0) { chosen.push([it, it.from, 2]); counts[it.s][it.from]++; } // (not counted against the budget: that made more plants switch, a loop)
       }
     }
     // Where the budget ran out, plants fade out a little before it rather than stop dead.
     // (Small plants only, and the edge eased so it does not jitter as you move: on trees the
     // jitter made them blink in and out.)
+    if (tallList) {
+      if (Number.isFinite(edge) && treeThin < .94) { treeThin = Math.min(.94, treeThin + .14); thinAgain = true; }
+      else if (!Number.isFinite(edge) && tris < triN * .55 && treeThin > 0) { treeThin = Math.max(0, treeThin - .05); thinAgain = true; }
+    }
     if (!tallList) { budgetEdge = Number.isFinite(edge) ? (Number.isFinite(budgetEdge) ? budgetEdge * .7 + edge * .3 : edge) : Infinity;
       for (const k of kinds) if (!k.tall) k.fade.value.set(Math.min(k.view * .7, budgetEdge * .85), Math.min(k.view, budgetEdge)); }
     }
@@ -377,7 +391,9 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
   return {
     group, species, placed,
     // t: animation time; camera: camera position relative to the world's centre.
-    update(t, camera) {
+    // lead: an offset from the camera to the point to fill around (where you will be in a
+    // couple of seconds); the faster you go, the more is filled each frame.
+    update(t, camera, lead = null) {
       time.value = t;
       // Plants switching model: advance their fades; when all are done, drop the old models.
       if (fades.length) {
@@ -391,9 +407,12 @@ export function buildFlora(THREE, { body, terrain, radius, signalNormal, landing
       group.visible = altitude < treeReach;
       if (!group.visible) return;
       center.value.copy(camera);
-      if (altitude < reach && scatter.update(dir, coarse ? 2 : 4)) dirty = true;
-      if (treeScatter?.update(dir, coarse ? 2 : 3)) dirty = true;
-      if (dirty && (--wait <= 0 || !(scatter.busy || treeScatter?.busy))) { rebuild(); dirty = false; wait = 8; }
+      { const a = smooth(8, 40, altitude); if (Math.abs(a - air) > .08) { air = a; dirty = true; } }
+      const hurry = lead ? 1 + Math.min(1, lead.length() / 60) : 1;
+      if (lead && lead.lengthSq() > 1) dir.copy(camera).add(lead).normalize();
+      if (altitude < reach && scatter.update(dir, (coarse ? 2 : 4) * hurry)) dirty = true;
+      if (treeScatter?.update(dir, (coarse ? 2 : 3) * hurry)) dirty = true;
+      if (dirty && (--wait <= 0 || !(scatter.busy || treeScatter?.busy))) { rebuild(); dirty = thinAgain; thinAgain = false; wait = dirty ? 2 : 8; }
     },
     // Plants you can bump into near a point (grasses and mats are walked over).
     nearbyObstacles: (p, out) => grid.near(p, out),
@@ -492,11 +511,20 @@ float pNoise(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 *
         vec3 q = vPlantRest;
         #ifdef PLANT_BARK
           // Bark: furrows running up the stem, broken into plates, with fine grain.
+          // Old, weathered wood: the bark's own colour is muted and darkened first (a trunk in
+          // a pure, bright colour reads as plastic), then cut by deep dark furrows between
+          // paler ridges, darker and mossy towards the ground, lichen on what faces up.
           float furrow = pNoise(vec3(q.x * 9.0, q.y * 1.1, q.z * 9.0)) * 0.7 + pNoise(vec3(q.x * 22.0, q.y * 3.0, q.z * 22.0)) * 0.3;
           float grain = pNoise(q * 31.0);
-          diffuseColor.rgb *= 0.74 + 0.36 * furrow + 0.1 * (grain - 0.5);
-          // A little lichen on what faces up.
-          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.05, 1.18, 0.92), smoothstep(0.55, 0.9, vPlantRestN.y) * smoothstep(0.55, 0.75, pNoise(q * 4.0)) * 0.5);
+          float lines = pNoise(vec3(q.x * 5.0, q.y * 0.55, q.z * 5.0));
+          float groove = smoothstep(0.78, 0.97, 1.0 - abs(lines * 2.0 - 1.0)) * (0.55 + 0.45 * pNoise(vec3(q.x * 2.0, q.y * 2.4, q.z * 2.0)));
+          float barkL = dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15));
+          diffuseColor.rgb = mix(vec3(barkL) * vec3(1.04, 1.0, 0.93), diffuseColor.rgb, 0.5) + 0.03;
+          diffuseColor.rgb *= (0.78 + 0.5 * furrow + 0.12 * (grain - 0.5)) * (1.0 - 0.55 * groove);
+          float foot = 1.0 - smoothstep(0.0, 1.8, q.y);
+          diffuseColor.rgb *= 1.0 - 0.15 * foot;
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.13, 0.2, 0.08) * (0.7 + 0.6 * furrow), foot * smoothstep(0.35, 0.7, pNoise(q * 2.3 + 3.0)) * 0.7);
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.05, 1.22, 0.9), smoothstep(0.5, 0.9, vPlantRestN.y) * smoothstep(0.5, 0.72, pNoise(q * 4.0)) * 0.6);
         #else
           // Caps, bulbs, fleshy leaves: soft mottling, darker flecks, a paler bloom here and there.
           float mott = pNoise(q * 3.5) * 0.6 + pNoise(q * 9.0) * 0.4;
@@ -853,24 +881,24 @@ export function buildGeometry(THREE, sp, r, { bloom = false, far = false, distan
   const tip = (q, up) => { const a = r() * Math.PI * 2, el = up ? r() * 1.2 : -.3 - r() * 1.1, k = .92; return new THREE.Vector3(q.center.x + Math.cos(a) * Math.cos(el) * q.axes.x * k, q.center.y + Math.sin(el) * q.axes.y * k, q.center.z + Math.sin(a) * Math.cos(el) * q.axes.z * k); };
   // Weeping crowns: strands hanging from the rim of each crown.
   if (sp.weeping) for (const q of crowns.slice(0, 6)) for (let k = 0; k < 7; k++) {
-    const a = k / 7 * Math.PI * 2 + r() * .5, L0 = q.radius * (1.1 + r() * .9), x = q.center.x + Math.cos(a) * q.axes.x * .8, z = q.center.z + Math.sin(a) * q.axes.z * .8;
-    add(cyl(q.radius * .07, q.radius * .03, L0, 3).rotateX(Math.PI), M(x, q.center.y - q.axes.y * .2, z, 0, 0, 0), k % 2 ? c.leaf : c.leaf2, true);
+    const a = k / 7 * Math.PI * 2 + r() * .5, L0 = q.radius * (.45 + r() * .4), x = q.center.x + Math.cos(a) * q.axes.x * .8, z = q.center.z + Math.sin(a) * q.axes.z * .8;
+    add(cyl(q.radius * .12, q.radius * .05, L0, 3).rotateX(Math.PI), M(x, q.center.y - q.axes.y * .2, z, 0, 0, 0), k % 2 ? c.leaf : c.leaf2, true); // (short, thick tufts joined to the crown: long thin strands broke up into clumps hanging in the air)
   }
   // Trailing vines from the crowns and moss on the trunk.
   if (sp.vines) {
     for (const q of crowns.slice(0, 4)) for (let k = 0; k < 3; k++) {
       // An ivy-like strand: a chain of small overlapping leaf clumps, thinning toward its end.
-      const p0 = tip(q, false), n = 4 + Math.floor(r() * 4), st = H * .03;
+      const p0 = tip(q, false), n = 4 + Math.floor(r() * 4), st = H * .014; // (close-set, so a strand is one short trail and not separate clumps)
       for (let j = 0; j < n; j++) add(blob(H * .024 * (1 - j / n * .5), 0), M(p0.x + Math.sin(j * 1.7) * st * .3, p0.y - j * st, p0.z + Math.cos(j * 1.3) * st * .3, 0, r() * 6, 0, 1, 1.3, 1), j % 2 ? c.leaf : c.leaf2, true);
     }
     const tr = H * (sp.trunkRatio || .05) * (NEW ? .5 : 1); // (new trees have slimmer trunks)
-    for (let k = 0; k < 4; k++) { const a = r() * 6.28; add(blob(tr * (.5 + r() * .4), 0), M(Math.cos(a) * tr * .9, H * (.1 + r() * .35), Math.sin(a) * tr * .9, 0, 0, 0, 1, 1.6, 1), c.leaf2, false); }
+    for (let k = 0; k < 4; k++) { r(); r(); r(); } // (lumps of moss stood here, round the plant's axis: beside a bending or leaning trunk they hung in the air. The bark's own moss, in the shader, does this now; the numbers are still drawn so nothing after them changes.)
   }
   // In bloom: blossom, fruit, berries, a flower, or spores, in the species' bloom colour.
   if (bloom && crowns.length) {
     const col = c.bloom || c.accent;
     if (sp.bloom === 'blossom') for (const q of crowns.slice(0, 6)) for (let k = 0; k < 9; k++) { const p0 = tip(q, true); add(blob(Math.max(H * .02, q.radius * .09), 0), M(p0.x, p0.y, p0.z, 0, r() * 6, 0, 1, .6, 1), col, true); }
-    if (sp.bloom === 'fruit') for (const q of crowns.slice(0, 5)) for (let k = 0; k < 4; k++) { const p0 = tip(q, false), fr = Math.max(H * .03, q.radius * .12); add(cyl(fr * .08, fr * .08, fr * .9, 3).rotateX(Math.PI), M(p0.x, p0.y, p0.z), c.stem, true); add(blob(fr, 1), M(p0.x, p0.y - fr * 1.6, p0.z, 0, 0, 0, 1, 1.25, 1), col, true); }
+    if (sp.bloom === 'fruit') for (const q of crowns.slice(0, 5)) for (let k = 0; k < 4; k++) { const p0 = tip(q, false), fr = Math.max(H * .013, q.radius * .055); add(cyl(fr * .08, fr * .08, fr * .9, 3).rotateX(Math.PI), M(p0.x, p0.y, p0.z), c.stem, true); add(blob(fr, 1), M(p0.x, p0.y - fr * 1.6, p0.z, 0, 0, 0, 1, 1.25, 1), col, true); }
     if (sp.bloom === 'berries') for (const q of crowns.slice(0, 6)) for (let k = 0; k < 4; k++) { const p0 = tip(q, r() < .5), br = Math.max(H * .018, q.radius * .07); for (let j = 0; j < 3; j++) add(blob(br, 0), M(p0.x + (j - 1) * br * 1.4, p0.y - (j % 2) * br, p0.z), col, true); }
     if (sp.bloom === 'flower' || sp.bloom === 'spores') {
       const q = crowns.reduce((a, b) => (b.center.y + b.axes.y > a.center.y + a.axes.y ? b : a)), top = q.center.y + q.axes.y * .9, fr = Math.max(q.radius * 1.1, H * .08);

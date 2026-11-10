@@ -38,6 +38,7 @@ export const TIER_AUTO = !['low', 'medium', 'high'].includes(asked);
 //   lite        take the phone path wherever the code asks "coarse?" (shaders, reach, caps)
 //   plants      share of the small plants' triangle budget and count (flora-mesh.js)
 //   trees       share of the trees' triangle budget (flora-mesh.js)
+//   plantReach  metres out to which small plants are filled and drawn (thinning with distance)
 //   treeReach   metres out to which trees are filled and drawn
 //   nearTree    metres within which a tree uses its full model (and casts a shadow)
 //   leafEvery   the distant tree model keeps every n-th leaf card, grown to cover the gaps
@@ -48,9 +49,9 @@ export const TIER_AUTO = !['low', 'medium', 'high'].includes(asked);
 //   shadowHeight plants shorter than this many metres cast no shadow (flora-mesh.js)
 //   ratio       the most device pixels drawn per CSS pixel
 const TIERS = {
-  low: { lite: true, plants: 1, trees: 1, treeReach: 420, nearTree: 30, leafEvery: 3, cover: 1, coverReach: 32, shadowMap: 1024, shadowHalf: 42, shadowEvery: 2, shadowHeight: 1.2, ratio: 1.8 },
-  medium: { lite: false, plants: .65, trees: .6, treeReach: 720, nearTree: 38, leafEvery: 4, cover: .75, coverReach: 50, shadowMap: 2048, shadowHalf: 60, shadowEvery: 3, shadowHeight: 2.5, ratio: 1.8 },
-  high: { lite: false, plants: 1, trees: 1, treeReach: 720, nearTree: 45, leafEvery: 3, cover: 1, coverReach: 58, shadowMap: 2048, shadowHalf: 70, shadowEvery: 2, shadowHeight: 1.2, ratio: 1.8 },
+  low: { lite: true, plants: 1, trees: 1, plantReach: 220, treeReach: 420, nearTree: 30, leafEvery: 3, cover: 1, coverReach: 32, shadowMap: 1024, shadowHalf: 42, shadowEvery: 2, shadowHeight: 1.2, ratio: 1.8 },
+  medium: { lite: false, plants: .65, trees: .6, plantReach: 430, treeReach: 720, nearTree: 38, leafEvery: 4, cover: .75, coverReach: 50, shadowMap: 2048, shadowHalf: 60, shadowEvery: 3, shadowHeight: 2.5, ratio: 1.8 },
+  high: { lite: false, plants: 1, trees: 1, plantReach: 480, treeReach: 720, nearTree: 45, leafEvery: 3, cover: 1, coverReach: 58, shadowMap: 2048, shadowHalf: 70, shadowEvery: 2, shadowHeight: 1.2, ratio: 1.8 },
 };
 export const Q = TIERS[TIER];
 

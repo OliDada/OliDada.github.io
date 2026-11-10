@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- Review sheet: a grid of generated models drawn with the game's own builders and look,
+     so a whole generator can be judged at a glance, before and after a change.
+     review.html?kind=animals (default)   &n=40 how many   &skip=0 start further down the list
+     &cols=4 columns   &size=192 is fixed by thumbs.js. Animals come from the worlds nearest home. -->
+<meta charset="utf-8"><title>Elsewhere review sheet</title>
+<style>body{background:#1b2630;color:#dfe8ee;font:10px/1.25 ui-monospace,Menlo,monospace;margin:6px}
+.g{display:grid;gap:3px}figure{margin:0;background:linear-gradient(#3a4c5a,#26333d)}img{display:block;width:100%}
+figcaption{padding:2px 4px;height:25px;overflow:hidden;background:#141c23}</style>
+<div class="g" id="g"></div>
+<script type="module">
+import * as THREE from './vendor/three.module.js';
+import { applyLook } from './look.js';
+import { createThumbs } from './thumbs.js';
+import { buildCrew } from './fauna-mesh.js';
+import { generateSystem } from './system.mjs';
+import { homeStar, starsNear } from './galaxy.mjs';
+import { faunaFor } from './fauna.mjs';
+applyLook(THREE);
+const q = new URLSearchParams(location.search), n = +q.get('n') || 40, skip = +q.get('skip') || 0, cols = +q.get('cols') || 4;
+const grid = document.getElementById('g'); grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+const thumbs = createThumbs(THREE), list = [];
+for (const s of starsNear(homeStar(), 45).sort((a, b) => a.distance - b.distance)) {
+  for (const b of generateSystem(s.star.seed).bodies) { if (b.giant || !b.physics) continue; for (const sp of faunaFor(b).species) list.push({ sp, b }); }
+  if (list.length > (skip + n) * 3) break;
+}
+const pick = list.filter((_, i) => i % 3 === 0).slice(skip, skip + n);
+for (const { sp, b } of pick) {
+  const fig = document.createElement('figure'), img = new Image(), cap = document.createElement('figcaption');
+  cap.textContent = `${sp.name} · ${sp.plan ?? ''}/${sp.form ?? ''} · ${(sp.size ?? 0).toFixed(1)} m${sp.aquatic ? ' · sea' : ''} · ${b.biome}`;
+  fig.append(img, cap); grid.append(fig);
+  thumbs.get(`${b.seed}:${sp.id}`, ({ model }) => { const crew = buildCrew(THREE, sp, 1, 'thumb'); crew.set(0, new THREE.Matrix4(), .6, 0); crew.commit(); return model(crew.group); }).then((url) => { if (url) img.src = url; else cap.textContent += ' (failed)'; });
+}
+window.__reviewCount = pick.length;
+</script>

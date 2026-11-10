@@ -381,8 +381,9 @@ float rim=pow(1.0-abs(dot(normalize(n),normalize(v))),4.0);gl_FragColor=vec4(tin
         },
         // Call every frame with the camera position (relative to the world's centre):
         // plants and rocks are filled in around you, and animals follow you about.
-        update(camera, time) {
-            flora.update(time, camera);
+        // lead: where you are heading (an offset from the camera, game.js updateLead).
+        update(camera, time, lead = null) {
+            flora.update(time, camera, lead);
             if (updateRocks(camera) < 400) fauna.follow?.(camera); // not from orbit
         },
     };
