@@ -143,7 +143,13 @@ export function starById(id) {
 }
 
 let home = null;
+// Where a new game starts: Pecave, an airless-ish amethyst moon of the ringed gas giant
+// Belderri, with a second ringed giant (Thader) in the same sky. A quiet, striking first
+// stop with little to scan. Falls back to the star nearest HOME_POINT if it ever moves.
+export const START = { star: "-917_1261_0_0", world: "moon-1" };
 export function homeStar() {
+    if (home) return home;
+    home = starById(START.star);
     if (home) return home;
     for (let radius = 10; !home; radius *= 2)
         home = starsNear(HOME_POINT, radius)[0]?.star || null;

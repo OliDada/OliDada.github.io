@@ -10,6 +10,7 @@
 //
 // Everything is cheap: a handful of meshes, the mirror rings turn as whole groups, and
 // the traffic is one Points object. THREE is passed in.
+import { addHullFeel } from './hull-feel.js';
 import { SIZE } from './scale.mjs';
 import { civilizationsIn, colonistOf } from './civilizations.mjs';
 import { networkFor } from './settlements.mjs';
@@ -26,7 +27,7 @@ export function buildMegastructures(THREE, system, worlds, group, sun = null) {
   const parts = [], updates = [], disposables = [];
   const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
   const track = (o) => { o.traverse?.(c => { if (c.geometry) disposables.push(c.geometry); if (c.material) disposables.push(c.material); c.frustumCulled = false; }); return o; };
-  const lit = (opts = {}) => new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .5, metalness: .2, ...opts });
+  const lit = (opts = {}) => addHullFeel(THREE, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .5, metalness: .2, ...opts }), { plate: 40 });
   const glowing = () => new THREE.MeshBasicMaterial({ vertexColors: true });
   // Merges geometry pieces with a colour each into one geometry.
   const merged = () => {

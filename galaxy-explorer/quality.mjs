@@ -30,6 +30,12 @@ function setting(name, key, fallback) {
 const coarsePointer = !!globalThis.matchMedia?.('(pointer: coarse)').matches;
 const asked = setting('quality', 'elsewhere-quality', 'auto');
 // ?ground=0: no broad light and dark patches on the land (planet-lod.js); ?ground=1 brings them back.
+// What walls are made of, drawn in the building shader (wall-feel.js).
+export const WALLS = setting('walls', 'elsewhere-walls', '1') !== '0';
+// Plating, wear and lit windows on stations and arks (hull-feel.js).
+export const HULLS = setting('hulls', 'elsewhere-hulls', '1') !== '0';
+// Gas giants alive: drifting jets, limb haze, ring shadows, lightning, auroras, a high cloud deck (giant-mesh.js).
+export const GIANTS = setting('giants', 'elsewhere-giants', '1') !== '0';
 export const GROUND_PATCHES = setting('ground', 'elsewhere-ground', '1') !== '0';
 export const TIER = ['low', 'medium', 'high'].includes(asked) ? asked : coarsePointer ? 'low' : 'medium';
 export const TIER_AUTO = !['low', 'medium', 'high'].includes(asked);
@@ -62,3 +68,10 @@ export const TIME_OF_DAY = t === null || t === '' ? null : t in HOURS ? HOURS[t]
 export const HIDE_HUD = params.get('hud') === '0';
 const spot = params.get('spot');
 export const SPOT = spot === null ? null : Math.max(0, Math.min(400, Number(spot) || 0));
+// ?spot&at=town | port: stand at the edge of the capital or its spaceport instead; &back=40 sets how far back.
+export const SPOT_AT = params.get('at'), SPOT_BACK = Number(params.get('back')) || 0;
+// ?giant=1 (or a world's id): cruise straight to the system's gas giant when the page starts; &dive=1 lets the ship
+// go below its cloud tops without the Cloud diver (for this visit only, nothing is saved).
+export const GIANT_TEST = params.get('giant'), DIVE_TEST = params.get('dive') === '1';
+// ?eye=120: lift the walking view that many metres and look down, to survey a town's layout from the air.
+export const EYE_UP = Number(params.get('eye')) || 0;

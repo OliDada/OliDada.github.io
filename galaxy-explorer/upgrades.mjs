@@ -145,8 +145,8 @@ export const UPGRADES = {
     ],
   },
   cloudDiver: {
-    line: 'main', order: 14, chapter: 'albatross', gear: 'ship', name: 'Cloud diver', status: 'planned',
-    effect: 'Descend below 250 m into the clouds of gas and ice giants.',
+    line: 'main', order: 14, chapter: 'albatross', gear: 'ship', name: 'Cloud diver', status: 'live',
+    effect: 'Fly down through the cloud tops of gas and ice giants, into the winds and storms beneath, as far as 1500 m down. About one giant in three has life drifting there to scan.',
     needs: [
       { label: 'Visit 3 giants with different clouds', kind: 'world', world: { giant: true }, distinct: 'world.clouds', count: 3 },
       { label: 'Scan 2 drifters', ...DRIFTER, count: 2 },
@@ -275,6 +275,8 @@ export const hasFieldGlasses = (unlocked) => unlocked.has('fieldGlasses');
 // the start; methane and ammonia seas need Cryo seals; molten sulfur never.
 export const WADE_DEPTH = 1.1; // metres of water you can walk in
 export const diveDepth = (unlocked) => unlocked.has('pressureHull2') ? Infinity : unlocked.has('pressureHull1') ? 40 : 0;
+// Giants: without the Cloud diver the ship holds above the cloud tops; with it, it can go this many metres below them.
+export const cloudDepth = (unlocked) => unlocked.has('cloudDiver') ? 1500 : 0;
 export const swimDepth = (unlocked) => unlocked.has('diveSuit') ? 30 : 0;
 export const divesIn = (unlocked, solvent = 'water') => solvent === 'water' || ((solvent === 'methane' || solvent === 'ammonia') && unlocked.has('cryoSeals'));
 export const ZOOM_REACH = 4;

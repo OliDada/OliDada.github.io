@@ -47,6 +47,7 @@ const rockyReach = (physics) => Math.max(ROCKY_REACH, moonOrbit(worldRadius(phys
 // giants about 11 (more when puffed up by starlight). Always far bigger than any rocky world.
 export const giantRadius = (physics) => Math.round(EARTH * physics.radius);
 // Giants' moons orbit outside the rings (which reach 2.25 radii; giant-mesh.js).
+const HOT_CHANCE = .12, SHEPHERD_CHANCE = .7, MOON_RING_CHANCE = .07;
 const giantMoonStart = (radius) => Math.max(radius + GIANT_MOON_GAP, 2.25 * radius + 400 * SIZE);
 const reachOf = (physics) => physics.giant ? giantMoonStart(giantRadius(physics)) + (GIANT_MOONS - 1) * GIANT_MOON_STEP + 200 * SIZE : rockyReach(physics);
 
@@ -55,9 +56,10 @@ function buildBody(args) {
 }
 function buildGiant({ id, name, physics, star, seed, r, position, orbit, angle, ringed }) {
   const biome = physics.kind === 'ice' ? 'Ice giant' : 'Gas giant';
+  const hot = physics.hot ? (physics.kind === 'ice' ? 'Hot Neptune' : 'Hot Jupiter') : null;
   return {
-    id, name, biome, ...giantLook(physics, star, r), giant: true,
-    type: biome, description: describeGiant(physics), facts: giantFacts(physics),
+    id, name, biome, ...giantLook(physics, star, r), giant: true, hot: !!hot,
+    type: hot || biome, description: (hot ? `A ${hot.toLowerCase().replace('hot n', 'hot N').replace('hot j', 'hot J')}: a giant that drifted in close to its star. ` : '') + describeGiant(physics), facts: giantFacts(physics),
     note: '', title: '', message: '', starTemperature: star.temperature, starAge: star.age,
     seed, radius: giantRadius(physics), orbit, angle, position, ringed, parent: null,
     // Arrival point for cruise: on the day side, a little above the orbital
@@ -68,14 +70,40 @@ function buildGiant({ id, name, physics, star, seed, r, position, orbit, angle, 
     landmarkCount: 0, physics,
   };
 }
+// World variants: kinds of world within a biome, drawn from their own random stream (so every
+// other draw, and with it every species, place and record, stays as it was). The biome still
+// decides life and climate; the variant changes the look, the land and the description.
+//   super    a super-Earth: a big, heavy rocky world; strong gravity holds its land low and flat
+//   carbon   a carbon world: dark graphite plains, and diamond glittering in its rocks
+//   salt     a salt world: the dried-out bed of a vanished sea, white flats to the horizon
+//   wetland  a wetland world: land and water mixed into a maze of marsh, channels and pools
+const VARIANTS = {
+  super: { name: 'Super-Earth', text: 'A super-Earth: far bigger and heavier than most rocky worlds, its strong gravity holding the land low and flat.' },
+  carbon: { name: 'Carbon world', text: 'A carbon world, made more of carbon than of rock: dark graphite plains, and diamond glittering where the ground breaks.', palette: ['#1d1d22', '#2c2c33', '#45454f', '#6e6e7a'], rock: '#3a3a42', crystal: '#e8f4ff' },
+  salt: { name: 'Salt world', text: 'A salt world: the bed of a sea long since dried away, white salt flats running to the horizon between low, pale hills.', palette: ['#cdbfae', '#e0d4c4', '#efe6da', '#faf6ef'], rock: '#b8a894', crystal: '#ffd6e0' },
+  wetland: { name: 'Marsh world', text: 'A marsh world: land and water so mixed that neither wins, a maze of marsh, channels and still pools.', palette: ['#2f4a2a', '#3f5e33', '#5a7a44', '#8a9a6a'] },
+};
+function variantOf(biome, physics, parent, seed) {
+  const v = rng(seed, 'variant'), roll = v();
+  if (!parent && physics.mass > 3.1) return 'super';
+  if (['Barren', 'Desert', 'Volcanic'].includes(biome) && physics.waterState !== 'liquid' && roll < .1) return 'carbon';
+  if (biome === 'Desert' && physics.waterState !== 'liquid' && !physics.solvent && roll > .75) return 'salt';
+  if (biome === 'Verdant' && physics.waterState === 'liquid' && roll < .3) return 'wetland';
+  return null;
+}
 function buildWorld({ id, name, physics, star, seed, r, parent, position, orbit, angle, ringed }) {
   const biome = classify(physics);
   const look = worldLook(biome, physics, star, r);
   const b = BIOMES[biome];
+  const variant = variantOf(biome, physics, parent, seed), V = variant && VARIANTS[variant];
+  if (V?.palette) look.palette = V.palette;
+  if (V?.rock) look.rock = V.rock;
+  if (V?.crystal) look.crystal = V.crystal;
+  if (variant === 'super') look.relief = +(look.relief * .6).toFixed(3);
   return {
-    id, name, biome, ...look,
-    type: parent ? `${biome} moon` : biome,
-    description: describe(biome, { ...physics, isMoon: !!parent }),
+    id, name, biome, variant, ...look,
+    type: V ? (parent ? `${V.name} moon` : V.name) : parent ? `${biome} moon` : biome,
+    description: (V ? `${V.text} ` : '') + describe(biome, { ...physics, isMoon: !!parent }),
     facts: factLine(physics),
     note: b.note, title: b.title, message: b.message,
     starTemperature: star.temperature, starAge: star.age,
@@ -116,7 +144,14 @@ export function generateSystem(input = 1408) {
     // whether or not a giant takes its place; giants draw from their own key.
     const rocky = makeWorld(star, au, pr, null, { candidate: i === candidate });
     const gr = rng(seed, 'giant', i);
-    const physics = i !== candidate && gr() < giantChance(star, au) ? makeGiant(star, au, gr) : rocky;
+    let physics = i !== candidate && gr() < giantChance(star, au) ? makeGiant(star, au, gr) : rocky;
+    // Hot Jupiters: now and then a giant that migrated inward sits on the innermost orbit,
+    // so close that its clouds are dark and scorching or glow with molten rock. Own stream.
+    const hr = rng(seed, 'hot', i);
+    if (i === 0 && i !== candidate && !physics.giant && hr() < HOT_CHANCE) {
+      const g = makeGiant(star, Math.min(au, .08 * Math.sqrt(star.luminosity)) * hr.range(.5, 1.2), hr); // migrated in close
+      if (g.temperature > 800) { physics = g; physics.hot = true; } // only where it is truly scorching
+    }
     const reach = reachOf(physics);
     // The first orbit sits about three star radii out (heat rises close in, game.js).
     base = i === 0 ? starRadius * 3 + reach : base + Math.max(ORBIT_STEP, previousReach + reach + ORBIT_GAP);
@@ -125,7 +160,7 @@ export function generateSystem(input = 1408) {
     const orbit = base + pr() * ORBIT_JITTER;
     const position = [Math.cos(angle) * orbit, (pr() - .5) * 140 * SIZE, Math.sin(angle) * orbit];
     let ringed = physics.icy ? pr.chance(physics.mass > 1 ? .55 : .15) : pr.chance(.05);
-    if (physics.giant) ringed = gr.chance(physics.kind === 'gas' ? .6 : .45);
+    if (physics.giant) ringed = physics.hot ? false : gr.chance(physics.kind === 'gas' ? .6 : .45);
     bodies.push(buildBody({ id: `planet-${i}`, name: makeName(r, used), physics, star, seed: hash(seed, 'surface', i), r: pr, parent: null, position, orbit, angle, ringed }));
     au *= ratio * pr.range(.9, 1.1);
   }
@@ -145,9 +180,29 @@ export function generateSystem(input = 1408) {
       const orbit = planet.giant ? giantMoonStart(planet.radius) + k * GIANT_MOON_STEP : moonOrbit(planet.radius, k);
       const angle = baseAngle + k * (Math.PI + mr.range(-.6, .6));
       const position = [planet.position[0] + Math.cos(angle) * orbit, planet.position[1] + 110 * SIZE, planet.position[2] + Math.sin(angle) * orbit];
-      bodies.push(buildBody({ id: `moon-${moonIndex}`, name: makeName(r, used), physics, star, seed: hash(seed, 'surface', 'moon', moonIndex), r: mr, parent: planet, position, orbit, angle, ringed: false }));
+      // Now and then a moon has rings of its own (own stream, so nothing else moves).
+      const ringedMoon = !planet.giant ? false : rng(seed, 'moon-ring', moonIndex)() < MOON_RING_CHANCE;
+      bodies.push(buildBody({ id: `moon-${moonIndex}`, name: makeName(r, used), physics, star, seed: hash(seed, 'surface', 'moon', moonIndex), r: mr, parent: planet, position, orbit, angle, ringed: ringedMoon }));
       moonIndex++;
     }
+  }
+
+  // Shepherd moons: a tiny moon riding just outside a ringed giant's rings, in the ring plane,
+  // keeping their edge sharp. Added after every other moon so no other id changes.
+  for (const planet of bodies.filter(b => b.giant && b.ringed)) {
+    const sr = rng(seed, 'shepherd', planet.id);
+    if (sr() >= SHEPHERD_CHANCE) continue;
+    const physics = makeWorld(star, planet.physics.au, sr, planet.physics);
+    physics.isMoon = true;
+    const body = buildBody({ id: `moon-${moonIndex}`, name: makeName(r, used), physics, star, seed: hash(seed, 'surface', 'moon', moonIndex), r: sr, parent: planet, position: [0, 0, 0], orbit: 0, angle: 0, ringed: false });
+    body.radius = Math.round(SIZE * sr.range(110, 200));
+    const edge = planet.radius * (planet.physics.kind === 'ice' ? 1.95 : 2.25);
+    const orbit = edge + body.radius * 1.6 + 60 * SIZE, angle = sr() * Math.PI * 2, t = planet.tilt || 0;
+    const x = Math.cos(angle) * orbit, z = Math.sin(angle) * orbit;
+    Object.assign(body, { orbit, angle, shepherd: true, position: [planet.position[0] + x * Math.cos(t), planet.position[1] + x * Math.sin(t), planet.position[2] + z],
+      type: 'Shepherd moon', description: `A shepherd moon: a small moon riding the edge of ${planet.name}'s rings, its pull keeping their rim sharp. ${body.description}` });
+    bodies.push(body);
+    moonIndex++;
   }
 
   // Start above the most habitable world; otherwise the one nearest the habitable zone.

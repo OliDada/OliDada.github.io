@@ -28,7 +28,7 @@ export function angularSpeed(system, body) {
     if (!body.parent) return (2 * Math.PI) / (PLANET_PERIOD * (body.orbit / INNER_ORBIT) ** 1.5);
     const parent = system.bodies.find((b) => b.id === body.parent);
     if (!parent.giant) return (2 * Math.PI) / MOON_PERIOD;
-    const innermost = Math.min(...system.bodies.filter((b) => b.parent === parent.id).map((b) => b.orbit));
+    const innermost = Math.min(...system.bodies.filter((b) => b.parent === parent.id && !b.shepherd).map((b) => b.orbit)); // (shepherd moons ride faster, inside)
     return (2 * Math.PI) / ((2 * Math.PI * innermost / GIANT_MOON_SPEED) * (body.orbit / innermost) ** 1.5);
 }
 
@@ -38,6 +38,9 @@ export function bodyPosition(system, body, t) {
     if (!body.parent) return [Math.cos(a) * body.orbit, body.position[1], Math.sin(a) * body.orbit];
     const parent = system.bodies.find((b) => b.id === body.parent);
     const p = bodyPosition(system, parent, t);
+    // A shepherd moon circles in its giant's tilted ring plane (system.mjs).
+    if (body.shepherd) { const x = Math.cos(a) * body.orbit, tilt = parent.tilt || 0;
+        return [p[0] + x * Math.cos(tilt), p[1] + x * Math.sin(tilt), p[2] + Math.sin(a) * body.orbit]; }
     // The snapshot keeps each moon a fixed height above its planet's orbital plane.
     const lift = body.position[1] - parent.position[1];
     return [p[0] + Math.cos(a) * body.orbit, p[1] + lift, p[2] + Math.sin(a) * body.orbit];

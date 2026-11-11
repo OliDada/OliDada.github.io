@@ -126,7 +126,7 @@ function updateMainHUD(g) {
         : mode === "landed"
           ? "↑ Take off [L]"
           : autoApproach
-            ? "× Cancel approach"
+            ? "◎ Next place"
             : "◎ Find landing site";
     $("approachBtn").onclick = inSpace
         ? openMap

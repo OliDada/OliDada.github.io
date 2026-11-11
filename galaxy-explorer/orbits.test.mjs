@@ -17,7 +17,7 @@ test('time zero is the generated snapshot', () => {
 test('orbits keep their radius and height, and outer planets are slower', () => {
   for (const seed of SEEDS.slice(0, 40)) {
     const s = generateSystem(seed), planets = s.bodies.filter(b => !b.parent);
-    for (const t of TIMES) for (const b of s.bodies) {
+    for (const t of TIMES) for (const b of s.bodies.filter(b => !b.shepherd)) { // shepherds ride the tilted ring plane
       const p = bodyPosition(s, b, t);
       const centre = b.parent ? bodyPosition(s, s.bodies.find(x => x.id === b.parent), t) : [0, p[1], 0];
       assert.ok(Math.abs(Math.hypot(p[0] - centre[0], p[2] - centre[2]) - b.orbit) < 1e-6);

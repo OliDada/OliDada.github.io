@@ -115,6 +115,24 @@ export function setupDev({ codex, system, star, body, onChange, toast }) {
         location.reload();
       } catch {}
     });
+    // Ships: each is a main-line upgrade (Petrel, Albatross). Flying one installs it and the
+    // ships before it, and removes the later ones, so its handling and abilities come with it.
+    h('h3', 'SHIP');
+    const ships = MAIN.filter((u) => u.ship).sort((a, b) => a.order - b.order);
+    const flying = ships.filter((u) => codex.unlocked.has(u.id)).at(-1)?.id ?? 'kestrel';
+    const shipRow = h('div', null, 'row');
+    for (const [id, name, planned] of [['kestrel', 'Kestrel', false], ...ships.map((u) => [u.id, u.name, u.status === 'planned'])]) {
+      const b = document.createElement('button');
+      b.textContent = (id === flying ? '● ' : '') + name + (planned ? ' (no model yet)' : '');
+      b.disabled = id === flying;
+      b.onclick = () => {
+        backup();
+        const upTo = ships.findIndex((u) => u.id === id);
+        for (const [i, u] of ships.entries()) { if (i <= upTo) codex.unlock(u.id); else codex.lock(u.id); }
+        changed(`Now flying the ${name}.`);
+      };
+      shipRow.append(b);
+    }
     const group = (title, list) => {
       h('h3', title);
       for (const u of list) {

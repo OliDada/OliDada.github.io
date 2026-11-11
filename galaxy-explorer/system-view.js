@@ -24,7 +24,7 @@ function buildWorld(system, body, streamer, coarse, gradual, sun) {
     // shadows cast on the ground. Sunlit in the star's colour, like the ground.
     const clouds = body.giant ? null : createCloudLayer(THREE, body, sun, { lite: coarse, light: sunlight(system), maxH: terrainFor(body).maxH });
     const planet = body.giant
-        ? createGiant(THREE, body, { coarse, gradual })
+        ? createGiant(THREE, body, { coarse, gradual, sun })
         // Grid points per terrain tile: finer on laptops; phones get a lighter grid.
         : createPlanet(THREE, streamer, body, { segments: coarse ? 24 : 32, lite: coarse, clouds });
     if (clouds) {
@@ -41,7 +41,7 @@ function buildWorld(system, body, streamer, coarse, gradual, sun) {
             inner = R * 1.2,
             outer = Math.min(R * 1.95, R + 210 * SIZE);
         if (outer > inner + 25 * SIZE) {
-            const ring = createRing(THREE, body, inner, outer, { segments: 160, opacity: 0.8 });
+            const ring = createRing(THREE, body, inner, outer, { segments: 160, opacity: 0.8, sun, planetR: R });
             const tilt = new THREE.Group();
             tilt.rotation.z = (((body.seed % 1000) / 1000) - 0.5) * 0.5;
             tilt.add(ring.mesh);

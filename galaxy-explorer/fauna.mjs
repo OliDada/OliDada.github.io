@@ -135,15 +135,18 @@ function rollTraits(plan, e, r, star, big, forceDiet = null) {
   return { diet, intelligence, sociality, aggression, caution, metabolism, perception };
 }
 
-export function faunaFor(body) {
+// opts.plans: only these body plans (each given at least a fair chance); opts.sea: false
+// leaves out sea life. cloudFaunaFor uses both.
+export function faunaFor(body, opts = {}) {
   const p = body.physics;
   if (!p || (p.life !== 'simple' && p.life !== 'complex')) return { species: [], environment: null };
   const e = environment(body), r = rng(body.seed, 'fauna'), star = { age: body.starAge ?? 4 };
   const chemFit = CHEM_FIT[e.chem] || {};
-  const fits = Object.entries(PLANS).map(([plan, d]) => ({ plan, w: d.fit(e) * (chemFit[plan] ?? 1) * (plan === 'flyer' && e.pressure < .15 ? 0 : 1) })).filter(c => c.w > .05);
+  const only = opts.plans;
+  const fits = Object.entries(PLANS).filter(([plan]) => !only || only.includes(plan)).map(([plan, d]) => ({ plan, w: Math.max(only ? .4 : 0, d.fit(e) * (chemFit[plan] ?? 1) * (plan === 'flyer' && e.pressure < .15 ? 0 : 1)) })).filter(c => c.w > .05);
   const allowed = p.life === 'complex' ? fits : fits.filter(f => ['hexapod', 'serpent', 'arachnid', 'slug'].includes(f.plan));
   if (!allowed.length) return { species: [], environment: e };
-  const count = p.life === 'complex' ? r.int(4, 8) : r.int(1, 3);
+  const count = opts.count ?? (p.life === 'complex' ? r.int(4, 8) : r.int(1, 3));
   const gScale = clamp(1 / Math.sqrt(Math.max(e.gravity, .1)), .7, 1.7);
   const camo = [body.palette[1], body.palette[2], body.rock].map(hueOf);
   const used = new Set(), species = [];
@@ -161,7 +164,7 @@ export function faunaFor(body) {
     const bulk = t.diet === 'herbivore' ? 1.15 : t.diet === 'carnivore' ? .85 : 1;
     const arms = plan === 'biped' && t.intelligence > .42;
     const form0 = r.pick(FORMS[plan]);
-    const civilization = civilizationLevel(t, manipulatorsOf(plan, form0, arms).score, star);
+    const civilization = opts.cloud ? 0 : civilizationLevel(t, manipulatorsOf(plan, form0, arms).score, star); // nothing builds in a giant's air
     const form = form0;
     const look = rollLook(plan, form, t, e, r, camo, worldKey(body));
     const chemSpeed = CHEM_SPEED[e.chem] ?? 1;
@@ -194,10 +197,11 @@ export function faunaFor(body) {
     s.diet = t.diet; // kept for older callers
     species.push(s);
   }
-  const sea = aquaticFor(body, e, star, camo);
+  const sea = opts.sea === false ? [] : aquaticFor(body, e, star, camo);
   species.push(...sea);
   // Where each species can go: land, water, air, or more than one (own stream).
   for (const s of species) habitatsFor(s, seasOf(p), rng(body.seed, 'fauna-habitat', s.id));
+  if (opts.cloud) for (const s of species) { s.habitats = { land: false, water: false, air: true }; s.perches = s.dives = false; } // no ground to land on
   // Ecology (activity cycle, food web, hunger) reads the finished species list. Hunters
   // only take prey that shares a place with them: fish catch fish, an amphibious hunter
   // takes prey on the shore or in the shallows, a diving flier plucks fish from the sea.
@@ -216,6 +220,30 @@ export function faunaFor(body) {
     s.description = describeAnimal(s, e) + (life ? ` ${life}` : '');
   }
   return { species, environment: e };
+}
+
+// Life in a giant's clouds: about one giant in three carries a drifting ecosystem below
+// its cloud tops (found with the Cloud diver). Gas-bag grazers, sky whales and chains of
+// bells, and on some the fliers that hunt them. They are made exactly as a world's
+// fliers and drifters are, as if for a world of thick, buoyant air in the giant's own
+// colours, so they look, behave and are described like the rest of the galaxy's animals.
+export function cloudFaunaFor(body) {
+  const p = body.physics;
+  if (!body.giant || !p) return { species: [], environment: null };
+  const r = rng(body.seed, 'cloud-life');
+  if (r() > .36) return { species: [], environment: null };
+  const gas = p.kind === 'gas';
+  const air = {
+    ...body,
+    physics: {
+      ...p, life: 'complex', pressure: 8, gravity: .55, waterCoverage: 0, waterState: 'none', solvent: null, solventCoverage: 0,
+      temperature: clamp(p.temperature + 120, 160, 320), biochemistry: gas ? 'ammonia' : 'methane', tidallyLocked: false,
+    },
+  };
+  const hunters = r() < .55;
+  const out = faunaFor(air, { plans: hunters ? ['floater', 'flyer'] : ['floater'], sea: false, count: r.int(2, hunters ? 4 : 3), cloud: true });
+  for (const s of out.species) { s.id = `cl-${s.id}`; s.cloud = true; }
+  return out;
 }
 
 // --- Looks ---

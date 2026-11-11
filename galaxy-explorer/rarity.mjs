@@ -27,7 +27,8 @@ export function rarityScore(e) {
     case 'formation': return t.rare ? 4.5 : (t.type === 'rock' ? .2 : 1.3) + (w.volcanism > .6 ? .3 : 0);
     case 'core': return t.rare ? 4.5 : 1.2;
     case 'behaviour': return ({ kill: 3.2, defend: 3.4, hunt: 2.1, sleep: .4, drink: .9, graze: 0 })[t.behaviour] ?? .5;
-    case 'phenomenon': return t.type === 'eclipse' ? (t.total ? 4.4 : 2.3) : t.type === 'aurora' ? 1.6 : 1.3;
+    case 'phenomenon': if (t.deep) return { nebula: 2.2, rogue: t.life ? 5 : 3.4, dwarf: 3, hole: 4.6, belt: 1.4, trojans: 2.3, comet: 2.6 }[t.type] ?? 2;
+      return t.type === 'eclipse' ? (t.total ? 4.4 : 2.3) : t.type === 'aurora' ? 1.6 : 1.3;
     case 'settlement': return TIER_SCORE[t.tier] ?? 0;
     case 'station': return 3.2 + (t.tier === 'system-shapers' ? 1 : 0);
     case 'signal': return t.tier === 'system-shapers' ? 3.6 : t.tier === 'spacefarers' ? 2.6 : 1.6;

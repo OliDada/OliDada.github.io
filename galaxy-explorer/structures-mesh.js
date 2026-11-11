@@ -10,6 +10,8 @@
 //                   system by megastructures.js)
 // Everything is merged into a few meshes (lit, glowing, blinking beacons, the pools of
 // lamplight on the ground): a handful of draw calls however big the city. Footings reach into the ground so nothing floats on a slope. THREE is passed in.
+import { padPieces } from './landing-pad.js';
+import { addWallFeel } from './wall-feel.js';
 import { rng } from './rng.mjs';
 import { softenNormals } from './soften.js';
 import { hullDetail } from './kestrel.js';
@@ -77,6 +79,7 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   const weatherCfg = { snow: clime.cold, bleach: clime.hot * (clime.dry ? 1 : .6), damp: ruins ? 1 : clime.damp };
   // Materials shared by everything built here (and by the town units built later, near or far).
   const litMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .9 }), glowMat = new THREE.MeshBasicMaterial({ vertexColors: true });
+  addWallFeel(THREE, litMat, civ.material, { radius });
   const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }), blinkMat = new THREE.MeshBasicMaterial({ vertexColors: true });
   const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
   const q = new THREE.Quaternion(), e = new THREE.Euler(), world = new THREE.Matrix4();
@@ -1394,16 +1397,24 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
   const spaceport = (rawAdd) => {
     const k = portK, S = new THREE.Matrix4().makeScale(k, k, k);
     const add = (g, m, ...rest) => rawAdd(g, S.clone().multiply(m), ...rest);
+    const padMark = '#' + new THREE.Color(C.accent).lerp(new THREE.Color('#e6d9b8'), .55).getHexString();
+    const padField = '#' + new THREE.Color(C.pad).lerp(new THREE.Color('#aab0b4'), .25).getHexString();
     const sz = shipSize(ship), R0 = portR0, drop = (R0 * k) ** 2 / (2 * radius);
     rawAdd(sunk(cyl(R0 * k, R0 * k * 1.02, .3 * k + SINK + relief + drop, 28)).translate(0, -relief - drop, 0), L(), C.concrete);
     PADS.forEach(([x, z, k], i) => {
       const pr = Math.max(3.2 * u, sz.radius * shipScale * k * 1.6);
-      add(cyl(pr, pr, .32, 20), L(x, 0, z), C.pad);
-      add(new THREE.TorusGeometry(pr * .82, .08 * u, 3, 24).rotateX(Math.PI / 2), L(x, .36, z), C.window, true);
-      if (k < 1 && !FLYING_PADS.includes(i)) buildShip(THREE, ship, add, L(x, .32, z, 0, (x + z) % 6, 0), shipScale * k); // the others are out flying (see flights)
+      add(cyl(pr, pr * 1.06, .32, 24), L(x, 0, z), C.pad);
+      for (const pc of padPieces(THREE, pr, { raised: true })) add(pc.geo, L(x, .32, z), { field: padField, mark: padMark, dark: C.scorch, metal: C.metal, light: C.window }[pc.colour], pc.glow);
+      // A painted way from each shuttle pad to the main one, and cargo waiting beside it.
+      if (i) {
+        const d = Math.hypot(x, z), a = Math.atan2(z, x), r0 = Math.max(3.2 * u, sz.radius * shipScale * 1.6) * 1.25;
+        add(box(d - r0 - pr * 1.25, .04, .5 * u), L((x / d) * (r0 + (d - r0 - pr * 1.25) / 2), .3, (z / d) * (r0 + (d - r0 - pr * 1.25) / 2), 0, -a), C.accent2);
+        for (let c = 0; c < 4; c++) add(box(1.1 * u, (.8 + (c % 2) * .5) * u, 1.1 * u), L(x + Math.cos(a + 1.9) * (pr * 1.35 + (c % 2) * 1.3 * u), .3, z + Math.sin(a + 1.9) * (pr * 1.35 + Math.floor(c / 2) * 1.3 * u), 0, c * .3), c % 2 ? C.wall2 : C.accent);
+      }
+      if (k < 1 && !FLYING_PADS.includes(i)) { lit.plain = 1; buildShip(THREE, ship, add, L(x, .32, z, 0, (x + z) % 6, 0), shipScale * k); lit.plain = 0; } // the others are out flying (see flights)
     });
     // The main ship and what holds it.
-    buildShip(THREE, ship, add, L(0, .32, 0, 0, .4, 0), shipScale);
+    lit.plain = 1; buildShip(THREE, ship, add, L(0, .32, 0, 0, .4, 0), shipScale); lit.plain = 0;
     const H = sz.height * shipScale;
     if (ship.stands) { // a lattice launch tower with access arms
       const tx = sz.radius * shipScale * 1.4 + 1.2 * u;
@@ -1419,6 +1430,17 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       for (let i = 0; i < 5; i++) add(new THREE.TorusGeometry(hw * 1.01, .12 * u, 4, 16, Math.PI).rotateY(Math.PI / 2), L(hx, 0, hz, 0, .5, 0).multiply(L((i / 4 - .5) * hl, 0, 0)), C.metal);
       add(new THREE.CircleGeometry(hw * .9, 16, 0, Math.PI).rotateY(-Math.PI / 2), L(hx, 0, hz, 0, .5, 0).multiply(L(-hl / 2 + .3 * u, 0, 0)), C.window, true);
     }
+    // The apron's edge: a painted band, and floodlight masts round it.
+    add(new THREE.RingGeometry(R0 * .93, R0 * .96, 48).rotateX(-Math.PI / 2), L(0, .31, 0), C.accent2);
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * Math.PI * 2 + .2, x = Math.cos(a) * R0 * .97, z = Math.sin(a) * R0 * .97;
+      add(sunk(cyl(.12 * u, .2 * u, 7 * u + SINK, 5)), L(x, 0, z), C.metal);
+      add(box(1.2 * u, .25 * u, .5 * u), L(x * .985, 7 * u, z * .985, 0, -a + Math.PI / 2), C.window, true);
+    }
+    // A low terminal by the control tower, its long window lit.
+    add(box(7 * u, 2.6 * u, 3.4 * u), L(R0 * .6, .3, -R0 * .68, 0, -.6), C.wall);
+    add(box(7.3 * u, .3 * u, 3.7 * u), L(R0 * .6, 2.9 * u, -R0 * .68, 0, -.6), C.roof2);
+    add(box(6 * u, .7 * u, 3.5 * u), L(R0 * .6, 1.4 * u, -R0 * .68, 0, -.6), C.window, true);
     // Control tower: a stalk with a lit, glazed cab.
     const ct = [R0 * .75, 0, -R0 * .55], th = 11 * u * tall;
     add(sunk(cyl(.6 * u, .9 * u, th + SINK, 8)), L(ct[0], 0, ct[2]), C.wall2);
@@ -1991,6 +2013,7 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
     // Their own architecture (alien-arch.mjs): read from their bodies, their ways and their world.
     const arch = architectureOf(civ, body), archCtx = { THREE, C, U: Math.max(.75, u), fh: floorH(u), lights };
     let protos = null, farMat = null; // far prototypes and their material, made when first needed
+    const LOT_TINTS = [null, [C.accent, .22], ['#000000', .14], [C.accent2, .2], null, ['#ffffff', .1], [C.roof, .24]];
     const alienLot = (l, add) => buildAlien({ ...archCtx, fill: fillOf(l) }, arch, { ...l, kind: l.kind === 'house' || l.kind === 'row' ? 'home' : l.kind }, add);
     // gy(x, z) on a lot's own ground: the height there above the lot's base (null over water).
     const groundOf = (b) => (x, z) => { const m = b.n.clone().addScaledVector(b.right, x / radius).addScaledVector(b.fwd, z / radius).normalize(); return terrain.isLiquid(m) ? null : radius + terrain.surface(m) - b.groundR; };
@@ -2125,13 +2148,67 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
       let n = 0;
       for (const l of plan.lots) {
         const b = lotBase(unit, l);
-        const addL = (g, m, colour, bright = false) => { if (!g || bright === 'halo' || bright === 'light' || bright === 'pool') return; const mm = new THREE.Matrix4().multiplyMatrices(b.base, m); if (bright === 'blink') B1.add(g, mm, colour); else if (bright) G1.add(g, mm, colour); else L1.add(g, mm, colour, b.groundR, 1.4 * u); };
+        const tint = LOT_TINTS[l.seed % LOT_TINTS.length]; // neighbours differ a little in colour, as real streets do
+        const addL = (g, m, colour, bright = false) => { if (!g || bright === 'halo' || bright === 'light' || bright === 'pool') return; const mm = new THREE.Matrix4().multiplyMatrices(b.base, m); if (bright === 'blink') B1.add(g, mm, colour); else if (bright) G1.add(g, mm, colour); else L1.add(g, mm, tint && typeof colour === 'string' ? mixC(colour, tint[0], tint[1]) : colour, b.groundR, 1.4 * u); };
         if (blocks) buildLot(kit, l, 'near', addL);
         else alienLot(l, addL);
         if (++n % 6 === 0) yield;
       }
-      for (const st of plan.streets) { strip(st.pts.map(([x, z]) => unit.fr.at(x, z)), st.w, streetColour, .2, Gd); yield; }
-      for (const sq of plan.squares) disc(unit.fr.at(sq.x, sq.z), sq.r, sq.kind === 'park' || sq.kind === 'court' ? C.turf : paved ? C.plaza : C.path, .26, Gd);
+      // Town ground. A pavement runs under every street and a forecourt lies under every
+      // building, with a way from its door to the street, so the place stands on ground its
+      // people have laid and worn rather than on a lawn.
+      const UU = plan.U || Math.max(.75, u), paveC = paved ? mixC(C.plaza, C.road, .35) : mixC(C.path, C.soil, .3), grid = plan.squares.some((q) => q.block);
+      for (const l of plan.lots) {
+        const fx = Math.cos(l.ang), fz = Math.sin(l.ang), reach = l.d / 2 + 1.6 * UU;
+        disc(unit.fr.at(l.x, l.z), Math.max(l.w, l.d) * .56, paveC, .07, Gd);
+        if (!l.inner) strip([unit.fr.at(l.x, l.z), unit.fr.at(l.x + fx * reach, l.z + fz * reach)], Math.min(l.w * .4, 2.2 * UU), streetColour, .16, Gd);
+        if (++n % 12 === 0) yield;
+      }
+      for (const st of plan.streets) { const pts = st.pts.map(([x, z]) => unit.fr.at(x, z)); strip(pts, st.w + (st.main ? 3.4 : 2.2) * UU, paveC, .12, Gd); strip(pts, st.w, streetColour, .2, Gd); yield; }
+      for (const sq of plan.squares) {
+        const green = sq.kind === 'park' || sq.kind === 'court', c = unit.fr.at(sq.x, sq.z), base = paved ? C.plaza : C.path;
+        disc(c, sq.r, green ? C.turf : base, .26, Gd);
+        // The square's own paving: rings in the builders' colours round its middle.
+        if (!green) { disc(c, sq.r * .7, mixC(base, C.accent, .2), .3, Gd); disc(c, sq.r * .62, base, .33, Gd); disc(c, sq.r * .3, mixC(base, C.accent2, .28), .36, Gd); }
+      }
+      // The main streets are dressed: lines of pennants (lanterns in cities) strung across
+      // them between poles, and a gate of two pylons where each one enters the place.
+      for (const st of plan.streets) {
+        if (!st.main || st.pts.length < 4) continue;
+        const span = st.w + 1.2 * UU, h = 4.4 * UU;
+        const frameAt = (k) => {
+          const [x, z] = st.pts[k], [x2, z2] = st.pts[Math.min(st.pts.length - 1, k + 1)], [x1, z1] = st.pts[Math.max(0, k - 1)];
+          const f = lotFrame(unit.fr, x, z, Math.atan2(z2 - z1, x2 - x1));
+          if (terrain.isLiquid(f.n)) return null;
+          const gr = radius + terrain.surface(f.n), base = new THREE.Matrix4().makeBasis(f.right, f.n, f.fwd).setPosition(f.n.clone().multiplyScalar(gr));
+          return { lit: (g, m, c) => L1.add(g, new THREE.Matrix4().multiplyMatrices(base, m), c, gr, 1.4 * u), glow: (g, m, c) => G1.add(g, new THREE.Matrix4().multiplyMatrices(base, m), c) };
+        };
+        const every = Math.max(3, Math.round(15 * UU / (grid ? 4 * UU : 3 * UU)));
+        for (let k = 2; k < st.pts.length - 2; k += every) {
+          const f = frameAt(k); if (!f) continue;
+          for (const sx of [-1, 1]) f.lit(sunk(cyl(.05 * UU, .09 * UU, h + SINK, 5)), L(sx * span / 2, 0, 0), C.wood);
+          f.lit(box(span, .035 * UU, .035 * UU), L(0, h - .15 * UU, 0), C.line);
+          const nP = Math.max(4, Math.round(span / (.7 * UU)));
+          for (let i = 0; i < nP; i++) {
+            const x = (i + .5) / nP * span - span / 2, sag = (1 - (2 * x / span) ** 2) * .25 * UU;
+            if (lights && level >= 4) f.glow(ball(.12 * UU, 0), L(x, h - .32 * UU - sag, 0), i % 2 ? C.window : C.accent2);
+            else f.lit(new THREE.ConeGeometry(.2 * UU, .5 * UU, 3).rotateX(Math.PI), L(x, h - .42 * UU - sag, 0, 0, 0, 0, 1, 1, .2), [C.accent, C.accent2, C.trim][i % 3]);
+          }
+        }
+        for (const k of grid ? [1, st.pts.length - 2] : [st.pts.length - 2]) {
+          const f = frameAt(k); if (!f) continue;
+          const gw = st.w / 2 + 1.1 * UU, gh = 6.2 * UU;
+          for (const sx of [-1, 1]) {
+            f.lit(sunk(cyl(.42 * UU, .62 * UU, gh + SINK, 6)), L(sx * gw, 0, 0), C.plinth);
+            f.lit(cyl(.52 * UU, .52 * UU, .3 * UU, 6), L(sx * gw, gh * .72, 0), C.accent);
+            f.lit(cyl(.1 * UU, .46 * UU, .7 * UU, 6), L(sx * gw, gh, 0), C.roof2);
+            (lights ? f.glow : f.lit)(ball(.26 * UU, 0), L(sx * gw, gh + .85 * UU, 0), lights ? C.window : C.accent2);
+          }
+          f.lit(box(gw * 2 + .5 * UU, .32 * UU, .5 * UU), L(0, gh * .84, 0), C.wall2);
+          for (let i = 0; i < 5; i++) f.lit(box(.5 * UU, 1.1 * UU, .06 * UU), L((i - 2) * gw * .36, gh * .84 - 1.1 * UU, 0), i % 2 ? C.accent2 : C.accent);
+        }
+        yield;
+      }
       for (const pr of plan.props) {
         const b = lotFrame(unit.fr, pr.x, pr.z, pr.ang), gr = radius + terrain.surface(b.n);
         if (terrain.isLiquid(b.n)) continue;
@@ -2578,7 +2655,7 @@ function colours(THREE, body, civ) {
   const rock = body.rock, sp = civ.species.colors || {}, prim = sp.accent || sp.base || '#c0503a', sec = sp.shimmer || sp.belly || '#d8c07a';
   const wall = {
     wood: mix('#7b5a3c', rock, .25), ice: mix('#cfe6f2', body.atmosphere, .15), adobe: mix('#c99a6b', body.palette[3], .3), glass: mix('#9fe3e6', prim, .3), stone: mix(rock, '#b9b2a6', .35),
-    grown: mix(prim, '#f0b8a0', .35), shell: mix('#efe3d0', prim, .2), silk: mix('#f2f0ea', body.atmosphere, .1), wax: mix('#d9a441', prim, .2), living: mix('#6b4a2f', rock, .2), membrane: mix(prim, '#ffffff', .45),
+    grown: mix(prim, '#b98a70', .35), shell: mix('#c9b392', prim, .38), silk: mix(mix('#d6cfbd', body.atmosphere, .1), prim, .22), wax: mix('#b98a3a', prim, .3), living: mix('#6b4a2f', rock, .2), membrane: mix(prim, '#e8dcc8', .3),
   }[civ.material];
   const leaf = mix(body.palette[1] || '#4f7a3a', '#4fa83a', .4);
   return {
@@ -2645,8 +2722,10 @@ let THREE_REF = null;
 // looks up, a hot sun bleaches every colour, and damp darkens the foot of every wall toward
 // moss, so the same buildings read differently on a frozen, a baking or a dripping world.
 function merger(THREE, weather = null) {
-  const pos = [], nor = [], col = [], win = [], tmp = new THREE.Color(), snowC = new THREE.Color('#eef3f7'), mossC = new THREE.Color('#3d4a2c'), sunC = new THREE.Color('#f3ead8');
+  const pos = [], nor = [], col = [], win = [], plain = [], tmp = new THREE.Color(), snowC = new THREE.Color('#eef3f7'), mossC = new THREE.Color('#3d4a2c'), sunC = new THREE.Color('#f3ead8');
+  let plainNow = 0;
   return {
+    set plain(v) { plainNow = v; },
     // ground: distance from the planet's centre to the ground this piece stands on, and
     // shade: the height over which it darkens toward the ground (ambient shadow). Glowing
     // pieces pass no ground and stay flat. Each face also varies a little in tone, so
@@ -2676,6 +2755,7 @@ function merger(THREE, weather = null) {
         }
         pos.push(x, y, z); nor.push(N.getX(i), N.getY(i), N.getZ(i)); col.push(cr * k, cg * k, cb * k);
         if (W) win.push(W.getX(i), W.getY(i), W.getZ(i), W.getW(i)); else win.push(0, 0, 0, 0);
+        plain.push(plainNow);
       }
       geo.dispose(); if (g !== geo) g.dispose();
     },
@@ -2686,7 +2766,9 @@ function merger(THREE, weather = null) {
       geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
       geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
       geo.setAttribute('aWin', new THREE.Float32BufferAttribute(win, 4));
+      geo.setAttribute('aPlain', new THREE.Float32BufferAttribute(plain, 1)); // 1: not a wall (a ship's hull): wall-feel.js leaves it alone
       return geo;
     },
   };
 }
+export { colours as buildingColours }; // (review.html: the palette a civilization builds in)

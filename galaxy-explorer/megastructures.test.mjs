@@ -18,7 +18,7 @@ test('system-shapers settle every rocky world and build a ring, elevators, habit
   assert.ok(home.children.length >= 3, 'no ring or elevators on the home world');
   // The ring stays clear of the ground and below the moons.
   const ring = home.children[0]; ring.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(ring, true), size = box.getSize(new THREE.Vector3());
+  const box = new THREE.Box3().setFromBufferAttribute(ring.children[0].geometry.attributes.position), size = box.getSize(new THREE.Vector3()); // (in the ring's own frame: it is tilted to pass over the capital)
   const R = sys.bodies.find(b => b.id === c.home).radius;
   assert.ok(Math.max(size.x, size.y, size.z) > 2.4 * R && Math.max(size.x, size.y, size.z) < 2.8 * R, 'ring the wrong size');
   for (const t of [0, 50, 500]) mega.update(t, new THREE.Vector3());
@@ -42,7 +42,7 @@ test('colonists on a lifeless world can be found and scanned, and the codex mark
   const { findScanTarget } = await import('./scanning.js');
   const { worldTraits } = await import('./codex.mjs');
   const { terrainFor } = await import('./terrain.mjs');
-  const sys = generateSystem(38), body = sys.bodies.find(b => colonistOf(sys, b) && b.physics.life === 'none');
+  const sys = generateSystem(1041), body = sys.bodies.find(b => colonistOf(sys, b) && b.physics.life === 'none'); // (system 38 lost its colony when body plans were rebalanced)
   const t = terrainFor(body), R = body.radius;
   const site = buildSurface({ body, radius: R, signalNormal: new THREE.Vector3(...t.site), landingNormal: new THREE.Vector3(...t.landing), surfacePoint: (n, o = 0) => n.clone().multiplyScalar(R + t.surface(n) + o), coarse: false, colonist: colonistOf(sys, body) });
   const colonist = site.fauna.species.find(s => s.id.endsWith('-colonist'));

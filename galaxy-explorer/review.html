@@ -16,6 +16,12 @@ import { buildCrew } from './fauna-mesh.js';
 import { generateSystem } from './system.mjs';
 import { homeStar, starsNear } from './galaxy.mjs';
 import { faunaFor } from './fauna.mjs';
+import { civilizationOf } from './civilizations.mjs';
+import { architectureOf } from './alien-arch.mjs';
+import { buildAlien } from './alien-build.js';
+import { addWallFeel } from './wall-feel.js';
+import { buildingColours } from './structures-mesh.js';
+import { floorH } from './town-plan.mjs';
 applyLook(THREE);
 const q = new URLSearchParams(location.search), n = +q.get('n') || 40, skip = +q.get('skip') || 0, cols = +q.get('cols') || 4;
 const grid = document.getElementById('g'); grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
@@ -24,7 +30,88 @@ for (const s of starsNear(homeStar(), 45).sort((a, b) => a.distance - b.distance
   for (const b of generateSystem(s.star.seed).bodies) { if (b.giant || !b.physics) continue; for (const sp of faunaFor(b).species) list.push({ sp, b }); }
   if (list.length > (skip + n) * 3) break;
 }
-const pick = list.filter((_, i) => i % 3 === 0).slice(skip, skip + n);
+// ?kind=buildings: each civilization's home, hall and tower, in its own architecture and colours.
+// &frame=planet draws them 6 km from the origin, as on a world, to check the wall shader there.
+const far = q.get('frame') === 'planet';
+if (q.get('kind') === 'buildings') {
+  let shown = 0;
+  for (const s of starsNear(homeStar(), 60).sort((a, b) => a.distance - b.distance)) {
+    if (shown >= n + skip) break;
+    for (const b of generateSystem(s.star.seed).bodies) {
+      const civ = !b.giant && b.physics ? civilizationOf(b) : null;
+      if (!civ || !civ.species) continue;
+      if (shown++ < skip) continue;
+      const A = architectureOf(civ, b), C = buildingColours(THREE, b, civ), u = civ.unit || 1, U = Math.max(.75, u);
+      for (const [kind, floors] of [['home', 1], ['hall', 2], ['tower', 5]]) {
+        const fig = document.createElement('figure'), img = new Image(), cap = document.createElement('figcaption');
+        cap.textContent = `${civ.species.name} · ${kind} · ${civ.tier ?? ''} · ${A.mass ?? ''} · ${b.biome}`;
+        fig.append(img, cap); grid.append(fig);
+        thumbs.get(`${b.seed}:${kind}`, ({ model }) => {
+          const g = new THREE.Group();
+          buildAlien({ THREE, C, U, fh: floorH(u), lights: (civ.level ?? 0) >= 3, fill: .7 }, A, { w: 9 * U, d: 9 * U, floors, seed: 7 + floors, kind }, (geo, m, colour, bright) => {
+            const mesh = new THREE.Mesh(geo, bright ? new THREE.MeshBasicMaterial({ color: colour }) : addWallFeel(THREE, new THREE.MeshStandardMaterial({ color: colour, roughness: .9, flatShading: true }), civ.material, far ? { radius: 6000 } : { local: true }));
+            if (far) { mesh.geometry = geo.clone().applyMatrix4(m).translate(0, 6000, 0); mesh.position.y = -6000; } else mesh.applyMatrix4(m);
+            g.add(mesh);
+          });
+          return model(g);
+        }).then((url) => { if (url) img.src = url; else cap.textContent += ' (failed)'; });
+      }
+    }
+  }
+}
+// ?kind=stations: nearby builders' arks (megastation.js) and station decks (station-deck.js), in their colours.
+if (q.get('kind') === 'stations') {
+  const { buildMegastation } = await import('./megastation.js'), { buildStationDeck } = await import('./station-deck.js'), { shipDesign } = await import('./ships.js');
+  let shown = 0;
+  for (const s of starsNear(homeStar(), 70).sort((a, b) => a.distance - b.distance)) {
+    if (shown >= n) break;
+    for (const b of generateSystem(s.star.seed).bodies) {
+      const civ = !b.giant && b.physics ? civilizationOf(b) : null;
+      if (!civ || !civ.species || (civ.level ?? 0) < 3 || shown >= n) continue;
+      shown++;
+      for (const what of ['ark', 'deck']) {
+        const fig = document.createElement('figure'), img = new Image(), cap = document.createElement('figcaption');
+        cap.textContent = `${civ.species.name} · ${what} · ${civ.family}`; fig.append(img, cap); grid.append(fig);
+        thumbs.get(`st:${what}:${b.seed}`, ({ model }) => {
+          if (what === 'ark') { const a = buildMegastation(THREE, civ); cap.textContent += ' · ' + a.form; return model(a.group); }
+          const d = shipDesign(civ);
+          return model(buildStationDeck(THREE, { seed: `${b.seed}:${civ.id}`, tier: 'orbital', level: 5, civ, lift: 9, colours: { hull: d.hullColour, trim: d.trim, glow: d.glow, panel: '#1b2a52', window: '#ffd98a' } }).group);
+        }).then((url) => { if (url) img.src = url; else cap.textContent += ' (failed)'; });
+      }
+    }
+  }
+}
+// ?kind=giants: the nearest gas and ice giants, lit from one side (ringed ones first).
+if (q.get('kind') === 'giants') {
+  const { createGiant } = await import('./giant-mesh.js');
+  const found = [];
+  for (const s of starsNear(homeStar(), 50).sort((a, b) => a.distance - b.distance)) for (const b of generateSystem(s.star.seed).bodies) if (b.giant) found.push(b);
+  found.sort((a, b) => (b.ringed ? 1 : 0) - (a.ringed ? 1 : 0));
+  for (const b of found.slice(skip, skip + n)) {
+    const fig = document.createElement('figure'), img = new Image(), cap = document.createElement('figcaption');
+    cap.textContent = `${b.name} · ${b.physics.kind} giant${b.ringed ? ' · ringed' : ''}${b.storm ? ' · storm' : ''}`; fig.append(img, cap); grid.append(fig);
+    thumbs.get('giant:' + b.seed, ({ model }) => { const g = createGiant(THREE, b, { sun: { value: new THREE.Vector3(2e7, 1.2e7, 3e7) } }); g.update(); return model(g.group); }).then((url) => { if (url) img.src = url; else cap.textContent += ' (failed)'; });
+  }
+}
+// ?kind=ships: the player's two ships, then every hull the spacefarers build, in two sample liveries.
+if (q.get('kind') === 'ships') {
+  const { createKestrel } = await import('./kestrel.js'), { buildShip, HULL_WORDS } = await import('./ships.js');
+  const show = (label, make) => {
+    const fig = document.createElement('figure'), img = new Image(), cap = document.createElement('figcaption');
+    cap.textContent = label; fig.append(img, cap); grid.append(fig);
+    thumbs.get('ship:' + label, ({ model }) => model(make())).then((url) => { if (url) img.src = url; else cap.textContent += ' (failed)'; });
+  };
+  const k = createKestrel();
+  for (const name of ['kestrel', 'petrel']) show(name, () => { const m = k.models[name]; m.visible = true; for (const key of ['engines', 'liftJets']) for (const o of m.userData[key] || []) o.visible = false; return m; });
+  const liveries = [{ hullColour: '#d9dcd6', trim: '#b5523a', second: '#4c5a66', glow: '#7fd4ff' }, { hullColour: '#8a6a4e', trim: '#d8b04a', second: '#3d4a3a', glow: '#ffb35c' }];
+  const only = q.get('only')?.split(',');
+  for (const hull of Object.keys(HULL_WORDS).filter((h) => !only || only.includes(h))) liveries.forEach((lv, i) => show(`${hull} ${i + 1}`, () => {
+    const g = new THREE.Group(), d = { hull, length: 12, girth: i ? .22 : .16, segments: 2 + i, fins: i ? 4 : 3, engines: 2 + i, stripes: !i, windows: true, ...lv };
+    buildShip(THREE, d, (geo, m, colour, bright) => { const mesh = new THREE.Mesh(geo, bright ? new THREE.MeshBasicMaterial({ color: colour }) : new THREE.MeshStandardMaterial({ color: colour, roughness: .55, metalness: .12, flatShading: true })); mesh.applyMatrix4(m); g.add(mesh); });
+    return g;
+  }));
+}
+const pick = q.get('kind') ? [] : list.filter((_, i) => i % 3 === 0).slice(skip, skip + n);
 for (const { sp, b } of pick) {
   const fig = document.createElement('figure'), img = new Image(), cap = document.createElement('figcaption');
   cap.textContent = `${sp.name} · ${sp.plan ?? ''}/${sp.form ?? ''} · ${(sp.size ?? 0).toFixed(1)} m${sp.aquatic ? ' · sea' : ''} · ${b.biome}`;

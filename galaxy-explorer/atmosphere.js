@@ -34,12 +34,15 @@ export function createSkyDome(THREE) {
     uSpace: { value: new THREE.Color() }, uSunColor: { value: new THREE.Color() }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
     uUp: { value: new THREE.Vector3(0, 1, 0) }, uAir: { value: 0 }, uGlow: { value: 0 },
     uBack: { value: new THREE.Color() }, uOver: { value: 0 },
+    // Inside a giant's clouds (game.js finishSky): a lit ceiling above, the dark depths below.
+    uDive: { value: 0 }, uDiveTop: { value: new THREE.Color() }, uDiveLow: { value: new THREE.Color() }, uDiveUp: { value: new THREE.Vector3(0, 1, 0) },
   };
   const material = new THREE.ShaderMaterial({
     uniforms,
     vertexShader: `varying vec3 vDir;
 void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: `uniform vec3 uZenith, uHorizon, uGround, uSpace, uSunColor, uSunDir, uUp, uBack; uniform float uAir, uGlow, uOver;
+uniform float uDive; uniform vec3 uDiveTop, uDiveLow, uDiveUp;
 varying vec3 vDir;
 void main() {
   vec3 d = normalize(vDir);
@@ -52,6 +55,12 @@ void main() {
   col += uSunColor * uGlow * (0.22 * pow(s, 6.0) + 0.45 * pow(s, 48.0) + 0.18 * pow(s, 2.0) * (1.0 - smoothstep(0.0, 0.5, abs(h))));
   col = mix(uSpace, col, uAir);
   col = mix(col, uBack, uOver); // clouds, storms and the local haze take the sky over
+  if (uDive > 0.0) {
+    float v = dot(d, uDiveUp);
+    vec3 g = v > 0.0 ? mix(uBack, uDiveTop, pow(smoothstep(0.0, 0.95, v), 0.8)) : mix(uBack, uDiveLow, pow(smoothstep(0.0, -0.9, v), 0.7));
+    g += uSunColor * (0.12 * pow(s, 3.0) + 0.18 * pow(s, 14.0)) * smoothstep(-0.3, 0.4, v) * dot(uDiveTop, vec3(0.33)); // the star, a diffuse brightness through the cloud
+    col = mix(col, g, uDive);
+  }
   gl_FragColor = vec4(col, 1.0);
   #include <colorspace_fragment>
 }`,

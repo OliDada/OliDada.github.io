@@ -31,9 +31,9 @@ import { setupInput } from "./input.js";
 import { updateHUD, updateWaypoint } from "./hud.js";
 import { createEngineSound } from "./audio.js";
 import { orbitClock, systemPositions, bodyPosition, angularSpeed, setClockShift } from "./orbits.mjs";
-import { TIER, TIER_AUTO, Q, TIME_OF_DAY, HIDE_HUD, SPOT } from "./quality.mjs";
+import { TIER, TIER_AUTO, Q, TIME_OF_DAY, HIDE_HUD, SPOT, SPOT_AT, SPOT_BACK, EYE_UP, GIANT_TEST, DIVE_TEST } from "./quality.mjs";
 import { VIEW_RANGE } from "./scale.mjs";
-import { starById, homeStar, starsNear } from "./galaxy.mjs";
+import { starById, homeStar, starsNear, START } from "./galaxy.mjs";
 import { createRelations, canTalk, askOf, valueOf, tradeable, giftsOf, giftWords, keepsakeOf, stepAtLeast, STEPS } from "./contact.mjs";
 import { createContactUI } from "./contact-ui.js";
 import { createVoices } from "./voices.js";
@@ -43,6 +43,7 @@ import { rarityOf, rarityAtLeast } from "./rarity.mjs";
 import { createCodexUI } from "./codex-ui.js";
 import { stanceOf } from "./station-deck.js";
 import { plural } from "./structures.mjs";
+import { networkFor } from "./settlements.mjs";
 import {
     loadGalaxyState,
     saveGalaxyState,
@@ -53,7 +54,13 @@ import { createStarMap } from "./starmap.js";
 import { seaOnly } from "./codex.mjs";
 import { createCodex, backfill, stationEntry, contactEntry, coreEntry, floraEntry, faunaEntry, formationEntry, settlementEntry, fieldNoteEntry, worldEntry, signalEntry, behaviourEntry, phenomenonEntry } from "./codex.mjs";
 import { coreSample } from "./geology.mjs";
-import { WADE_DEPTH, diveDepth, swimDepth, divesIn } from "./upgrades.mjs";
+import { WADE_DEPTH, diveDepth, swimDepth, divesIn, cloudDepth } from "./upgrades.mjs";
+import { cloudFaunaFor } from "./fauna.mjs";
+import { findsNear, findInCell, DETECT_LY, REVEAL_LY, FIND_KINDS } from "./deep-finds.mjs";
+import { createFindViews } from "./deep-finds-view.js";
+import { rockClearance, rockDensity } from "./space-objects.mjs";
+import { createSpaceObjectsView } from "./space-objects-view.js";
+import { buildCrew } from "./fauna-mesh.js";
 import { UPGRADES, completedWorlds, progress, advanced, recordedOn, jumpRange as rangeFor, suitDamageScale, suitRecoveryScale, heatScale, observeTime, behaviourAlerts, hasFieldGlasses, ZOOM_REACH, radioHearing, decodesSignals, landsBesideLava, exposureScale, exposureOf } from "./upgrades.mjs";
 import { BEHAVIOURS, behavioursOf, behaviourNow } from "./ecology.mjs";
 import { forecast, eclipseAt } from "./phenomena.mjs";
@@ -98,6 +105,7 @@ let loadedId = offChart ? null : currentStar.id;
 // Giants have no surface, so they are never the world you are at.
 let activeBody =
     system.bodies.find((b) => b.id === params.get("world") && !b.giant) ||
+    (loadedId === START.star && system.bodies.find((b) => b.id === START.world)) ||
     system.bodies.find((b) => b.id === system.startId);
 let RADIUS = activeBody.radius;
 // The codex: everything documented in every system, and the upgrades it unlocks
@@ -173,6 +181,19 @@ if (HIDE_HUD) document.body.classList.add("nohud");
 let orbitTime = orbitClock(),
     positions = systemPositions(system, orbitTime);
 // Worlds, and arks (chosen on the map: { ark: true, civ }), sixty degrees ahead of their builders' worlds.
+// One destination per ark, the same object the map uses ids for (starmap.js arkBodyOf);
+// radius: the sphere its hull fits in, so distances read to the hull as they do for worlds.
+const arkBodyCache = new Map();
+function arkBody(a) {
+    const id = `ark:${a.civ.id}`;
+    if (!arkBodyCache.has(id)) arkBodyCache.set(id, { id, ark: true, civ: a.civ, name: a.civ.arkName.replace(/^the /, "").replace(/^./, (c) => c.toUpperCase()), type: "Ark", radius: 0 });
+    const b = arkBodyCache.get(id);
+    b.radius = a.size * 0.5;
+    return b;
+}
+const arkBodies = () => (systemView?.arks?.() ?? []).map(arkBody);
+// The map hands over its own ark objects: use ours.
+const ownBody = (body) => (body?.ark ? arkBodies().find((b) => b.id === body.id) ?? body : body);
 const positionOf = (body) => (body.ark ? vec(...arkPosition(system, body.civ, positions)) : vec(...positions.get(body.id)));
 let worldOrigin = positionOf(activeBody);
 let signalNormal = vec(...terrainFor(activeBody).site); // dry, level ground near the signal
@@ -334,6 +355,8 @@ function buildSite() {
 // tiles for every system are built by one shared pool of background threads.
 const streamer = createTerrainStreamer();
 let systemView = createSystemView(scene, system, streamer, { coarse: lite });
+// Asteroid belts, Trojan swarms and comets of this system (space-objects.mjs).
+let spaceView = createSpaceObjectsView(scene, system);
 // Sites built before the view existed: light them from space where their lights really are.
 for (const [id, built] of siteCache) { const b = system.bodies.find((x) => x.id === id); if (b && built.structures?.nightLights) systemView.useSiteLights(b, built.structures.nightLights); }
 let edge = systemEdge(system); // beyond this (metres from the star) is interstellar space
@@ -341,6 +364,9 @@ let edge = systemEdge(system); // beyond this (metres from the star) is interste
 const sky = createSky(scene, renderer);
 const nearStar = createNearStar(scene);
 const streaks = createDriveStreaks(scene, 340);
+// The star drive's streaks fade in as it engages and out as it lets go (0..1), rather than switching.
+let driveFade = 0,
+    drivePower = 0;
 // Dust and ice motes rushing past near worlds: they move at your real speed, so
 // going faster is something you see, not just a number.
 const spaceDust = createDriveStreaks(scene, 80, { R: 80, L: 300, min: 10, color: 0xe4f2ec });
@@ -575,9 +601,29 @@ function setStage(next) {
 function modalOpen() {
     return $("help").open || $("discovery").open || $("starMap").open || upgradeScreen.isOpen || contactUI.isOpen || codexUI.isOpen;
 }
+// Dev: ?find=hole (or nebula, rogue, dwarf) starts in deep space beside the nearest find of that kind.
+function startAtFind(kind) {
+    const c = starPoint(currentStar).map(Math.floor);
+    let f = null;
+    for (let r = 1; !f && r < 40; r++) for (let x = -r; x <= r && !f; x++) for (let y = -r; y <= r && !f; y++) for (let z = -r; z <= r && !f; z++) {
+        if (Math.max(Math.abs(x), Math.abs(y), Math.abs(z)) !== r) continue;
+        const g = findInCell(c[0] + x, c[1] + y, c[2] + z);
+        if (g && g.kind === kind) f = g;
+    }
+    if (!f) return void toast(`No ${kind} found nearby.`);
+    enterDeep(new THREE.Vector3(1, 0, 0));
+    course = null; autopilot = false; throttle = 0;
+    const away = f.kind === "nebula" ? f.size * 1.6 : f.size + f.stop * 3;
+    galactic = [f.x + away * 0.8, f.y + away * 0.36, f.z + away * 0.48];
+    shipForward.copy(toScene(findOffset(f)).normalize());
+    deepTarget = f; deepDetour = false;
+    deepNear = findsNear(galactic, DETECT_LY + 0.25);
+    sky.update(galactic, camera);
+}
 function start() {
     if (started) return;
     started = true;
+    if (params.get("find")) setTimeout(() => startAtFind(params.get("find")), 50);
     $("hud").inert = false;
     $("intro").inert = true;
     $("intro").classList.add("hidden");
@@ -591,6 +637,10 @@ function start() {
     );
     // ?spot (quality.mjs): skip the descent. The ship stands on the landing pad and you
     // are on foot beside it, facing the signal, some metres on toward it if asked.
+    if (GIANT_TEST && mode === "flight") { // ?giant (quality.mjs): straight to the giant
+        const g = system.bodies.find((b) => b.giant && (GIANT_TEST === "1" || b.id === GIANT_TEST));
+        if (g) { selectedBody = g; beginCruise(); }
+    }
     if (SPOT !== null && mode === "flight" && !activeBody.giant) {
         shipPosition.copy(landingNormal).multiplyScalar(surfaceRadius(landingNormal) + 1.7);
         speed = 0; verticalSpeed = 0; autoApproach = false;
@@ -601,21 +651,76 @@ function start() {
             const ahead = tangent(signalNormal.clone().sub(playerNormal), playerNormal);
             if (ahead.lengthSq() > 0.1) playerForward = ahead;
         }
+        // ?at=town | port: stand looking at the capital's centre or its spaceport.
+        const goal = SPOT_AT === "port" ? site?.structures?.spaceportAt : SPOT_AT === "town" ? site?.structures?.sites?.[0] : null;
+        if (mode === "walk" && goal) {
+            const from = tangent(playerNormal.clone().sub(goal), goal).normalize();
+            playerNormal = goal.clone().multiplyScalar(RADIUS).addScaledVector(from, SPOT_BACK).normalize();
+            playerForward = tangent(goal.clone().sub(playerNormal), playerNormal);
+            if (playerForward.lengthSq() < 1e-9) playerForward = from.negate();
+        }
     }
+}
+// "Find landing site": the approach assist flies to a place worth landing at and stops just
+// above it. Each press picks the next place, nearest first: the signal site, and every town,
+// city and village of the world's builders (towns are built in detail wherever you go).
+// Manual controls cancel it.
+let approachSpeed = 0, // the assist's ground speed (m/s)
+    approachTo = null, // { n, name, note } where the assist is flying
+    poiCache = { id: null, list: [] },
+    poiIndex = -1,
+    poiAt = 0;
+const PLACE_WORDS = { camp: "Camp", village: "Village", town: "Town", city: "City", metropolis: "Metropolis", capital: "Capital", megacity: "Megacity", colony: "Colony" };
+function placesOfInterest() {
+    if (poiCache.id === activeBody.id) return poiCache.list;
+    const list = [{ n: landingNormal.clone(), name: "the signal site", note: "" }];
+    try {
+        const t = terrainFor(activeBody), civ = site?.structures?.civ || civilizationOf(activeBody);
+        if (civ) {
+            const net = networkFor(activeBody, civ, t, { colony: !!civ.colony }), sea = civ.underwater || civ.species?.aquatic;
+            const P = (v) => ({ x: v.x, y: v.y, z: v.z });
+            const level = (v) => { if (t.isLiquid(P(v))) return false; const h = t.surface(P(v)); for (let j = 0; j < 6; j++) { const q = v.clone().add(tangent(vec(Math.cos(j), 0.3, Math.sin(j)), v).multiplyScalar(8 / RADIUS)).normalize(); if (t.isLiquid(P(q)) || Math.abs(t.surface(P(q)) - h) > 3.5) return false; } return true; };
+            const who = civ.species?.name ? plural(civ.species.name) : "builders";
+            for (const st of net.settlements) {
+                const c = vec(...st.n).normalize();
+                // Set down just outside it (sea builders: on the nearest shore), on open level ground.
+                let spot = null;
+                for (let d = st.radius + 18; !spot && d < st.radius + (sea ? 420 : 140); d += 12)
+                    for (let j = 0; j < 12 && !spot; j++) { const q = c.clone().add(tangent(vec(Math.cos(j * 0.52 + d), 0.2, Math.sin(j * 0.52 + d)), c).multiplyScalar(d / RADIUS)).normalize(); if (level(q)) spot = q; }
+                list.push({
+                    n: spot || c, name: `${civ.spaceborne ? "the empty " : "a "}${(PLACE_WORDS[st.kind] || "Town").toLowerCase()} of the ${who}`.replace("a capital", "the capital"),
+                    note: sea ? " It stands on the sea floor offshore." : civ.spaceborne ? " Its builders left long ago." : "",
+                });
+            }
+        }
+    } catch (e) { console.warn("places", e); }
+    poiCache = { id: activeBody.id, list };
+    return list;
 }
 function approach() {
     if (mode !== "flight") return;
-    autoApproach = !autoApproach;
-    toast(
-        autoApproach
-            ? "Approach assist engaged. Manual controls cancel it."
-            : "Approach assist disengaged.",
-    );
+    const up = shipPosition.clone().normalize(), now = performance.now();
+    const far = (p) => p.n.angleTo(up) * RADIUS;
+    // Pressing again while it flies (or soon after) moves on to the next place; otherwise start from the nearest.
+    const list = placesOfInterest().slice().sort((a, b) => far(a) - far(b)).filter((p, i) => i < 10);
+    const fresh = !autoApproach && now - poiAt > 8000;
+    let pick = null;
+    for (let k = 0; k < list.length && !pick; k++) {
+        poiIndex = fresh && k === 0 ? 0 : (poiIndex + 1) % list.length;
+        if (far(list[poiIndex]) > 60 || list.length === 1) pick = list[poiIndex];
+    }
+    if (!pick) return;
+    poiAt = now;
+    approachTo = pick;
+    if (!autoApproach) approachSpeed = Math.max(20, Math.abs(speed));
+    autoApproach = true;
+    const d = far(pick);
+    toast(`Approach assist: ${pick.name}, ${d >= 1000 ? `${(d / 1000).toFixed(1)} km` : `${Math.round(d)} m`} away.${list.length > 1 ? " Press again for the next place." : ""} Manual controls cancel it.`, 5);
 }
 function act() {
     if (!started || modalOpen()) return;
     if (mode === "deep") {
-        if (course) toggleAutopilot();
+        if (course || deepTarget) toggleAutopilot();
         else openGalaxy();
         return;
     }
@@ -751,6 +856,7 @@ function nearLava(n) {
 function interact() {
     if (!started || modalOpen()) return;
     if (mode === "dive") return diveAct();
+    if (mode === "space" && scanTarget?.cloud) { if (scanTarget.known) showScanCard(scanTarget, null); return; }
     if (mode === "docked") return leaveShipOnDeck();
     if (mode === "deck") {
         const crew = crewInReach();
@@ -977,19 +1083,260 @@ function orientSpace(dt) {
 }
 // Closest approach to a giant's cloud tops: 250 m, more on the biggest giants.
 const giantClearance = (body) => Math.max(250, body.radius * 0.02);
+// Cloud diving (the Cloud diver, upgrades.mjs). With it the ship may go below a giant's
+// cloud tops, as far as its crush depth. Coming down you pass through the cloud deck (thick
+// cloud for a few tens of metres), then fly in murky air in the giant's own colours that
+// darkens and thickens with depth. The wind there blows along the giant's bands, one way in
+// one band and the other way in the next, harder the deeper you go, and carries the ship
+// and the loose cloud around it. Lightning lights the murk on stormy giants.
+const crushDepth = (body) => { const d = cloudDepth(codex.unlocked) || (DIVE_TEST ? 1500 : 0); return d ? Math.min(d, body.radius * 0.06) : 0; };
+const dive = { body: null, k: 0, depth: 0, flash: 0, told: 0, wind: 0, puffs: null, off: [], last: null };
+const DIVE_AIR = new THREE.Color(), DIVE_DEEP = new THREE.Color(), DIVE_FLASH = new THREE.Color(0xdfe8ff), DIVE_TINT = new THREE.Color(), DIVE_TOP = new THREE.Color(), DIVE_LOW = new THREE.Color();
+// Soft cloud: camera-facing lumps with ragged edges, lit from the sun's side and from above,
+// fading into the murk with distance (their own fog, so they match the dome) and out as the
+// ship passes through them (no hard edge across the view).
+function cloudPuffMaterial() {
+    return new THREE.ShaderMaterial({
+        uniforms: { uMurk: { value: new THREE.Color() }, uDensity: { value: 0.01 }, uSun: { value: new THREE.Vector3(0, 1, 0) }, uUp: { value: new THREE.Vector3(0, 1, 0) }, uLight: { value: 1 }, uFlash: { value: 0 } },
+        vertexShader: `varying vec2 vUv; varying vec3 vCol; varying float vDist, vSize, vSeed; varying vec3 vRight, vUpV;
+void main() {
+  vec3 c = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+  float s = length(instanceMatrix[0].xyz);
+  vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]), up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+  vec3 p = c + (right * position.x + up * position.y) * s;
+  vUv = uv; vSize = s; vDist = distance(cameraPosition, c); vRight = right; vUpV = up;
+  vSeed = fract(sin(dot(c.xz, vec2(12.9898, 78.233))) * 43758.5453);
+  vCol = instanceColor;
+  gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+}`,
+        fragmentShader: `uniform vec3 uMurk, uSun, uUp; uniform float uDensity, uLight, uFlash;
+varying vec2 vUv; varying vec3 vCol; varying float vDist, vSize, vSeed; varying vec3 vRight, vUpV;
+float h2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float n2(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h2(i), h2(i + vec2(1, 0)), f.x), mix(h2(i + vec2(0, 1)), h2(i + vec2(1, 1)), f.x), f.y); }
+void main() {
+  vec2 q = vUv - 0.5;
+  float n = n2(q * 3.2 + vSeed * 17.0) * 0.6 + n2(q * 7.5 + vSeed * 5.0) * 0.4;
+  float r = length(q) * 2.0 + (n - 0.5) * 0.75;
+  float a = smoothstep(1.0, 0.15, r);
+  if (a < 0.01) discard;
+  // Lit on the side toward the sun and from above, shadowed beneath and inside.
+  vec3 sideDir = normalize(vRight * q.x + vUpV * q.y + 1e-4);
+  float lit = 0.55 + 0.35 * max(dot(sideDir, uSun), 0.0) + 0.25 * max(dot(sideDir, uUp), 0.0) - 0.25 * (1.0 - r) * n;
+  vec3 col = vCol * lit * uLight + vec3(0.85, 0.9, 1.0) * uFlash * 0.6;
+  float f = 1.0 - exp(-uDensity * uDensity * vDist * vDist);
+  col = mix(col, uMurk, f);
+  a *= 0.62 * smoothstep(vSize * 0.15, vSize * 0.55 + 6.0, vDist) * (1.0 - 0.85 * f);
+  gl_FragColor = vec4(col, a);
+  #include <colorspace_fragment>
+}`,
+        transparent: true, depthWrite: false, fog: false,
+    });
+}
+function updateCloudDive(dt, global) {
+    let body = null, h = Infinity;
+    for (const b of system.bodies) if (b.giant) { const hb = global.distanceTo(positionOf(b)) - b.radius; if (hb < h) { h = hb; body = b; } }
+    const limit = body ? crushDepth(body) : 0;
+    dive.k = limit ? clamp(1 - (h + 20) / 260, 0, 1) : 0; // 0 from 240 m above the tops, 1 just under them
+    dive.flash = Math.max(0, dive.flash - dt * 6);
+    if (!dive.k) { dive.body = null; dive.told = 0; dive.last = null; if (dive.puffs) dive.puffs.visible = false; hideCloudLife(); return; }
+    dive.body = body; dive.depth = -h;
+    const centre = positionOf(body), out = global.clone().sub(centre).normalize(), deep = clamp(-h / limit, 0, 1), gas = body.physics.kind === "gas";
+    // The wind: along the bands (round the giant's axis), by the band you are in.
+    const axis = vec(-Math.sin(body.tilt || 0), Math.cos(body.tilt || 0), 0), lat = Math.asin(clamp(out.dot(axis), -1, 1));
+    const east = axis.clone().cross(out); if (east.lengthSq() > 1e-6) east.normalize();
+    dive.wind = clamp(Math.sin(lat * body.bands * 2 + (body.seed % 1000) / 159) * 2.5, -1, 1) * (8 + 26 * deep) * dive.k * (gas ? 1 : 0.5);
+    shipPosition.addScaledVector(east, dive.wind * dt);
+    // Buffeting, and the horizon steadies to the giant's own up and down.
+    const rough = (0.3 + deep) * dive.k * Math.min(1.5, body.turbulence ?? 1);
+    verticalSpeed += (Math.random() - 0.5) * rough * 30 * dt; strafeSpeed += (Math.random() - 0.5) * rough * 30 * dt;
+    const level = out.clone().addScaledVector(shipForward, -out.dot(shipForward));
+    if (level.lengthSq() > 0.04) spaceUp.lerp(level.normalize(), dt * 0.8 * dive.k).normalize();
+    // Lightning, on the stormier giants and more of it deeper down.
+    if (Math.random() < dt * (0.03 + 0.2 * deep) * (body.turbulence ?? 1) * (gas ? 1 : 0.3) * (h < 40 ? 1 : 0)) dive.flash = 1;
+    // What the pilot is told: on going in, and near the limit.
+    if (h < 0 && dive.told < 1) { dive.told = 1; toast(`Below ${body.name}'s cloud tops. Wind ${Math.round(Math.abs(dive.wind))} m/s along the bands. The hull holds to ${Math.round(limit)} m down.`, 6); }
+    if (deep > 0.8 && dive.told < 2) { dive.told = 2; toast(`Hull pressure rising: crush depth in ${Math.round(limit + h)} m.`, 4); }
+    if (deep < 0.6 && dive.told === 2) dive.told = 1;
+    if (h > 120) dive.told = 0;
+    // Loose cloud round the ship: lumps that stay where they are in the air as you fly
+    // through them, carried along by the wind, and come round again ahead when left behind.
+    const N = lite ? 48 : 110;
+    if (!dive.puffs) {
+        dive.puffs = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), cloudPuffMaterial(), N);
+        dive.puffs.frustumCulled = false; dive.puffs.renderOrder = 3; dive.puffs.userData.perf = "clouds";
+        dive.puffs.setColorAt(0, new THREE.Color());
+        scene.add(dive.puffs);
+        for (let i = 0; i < N; i++) dive.off.push({ p: vec(), s: 0, a: 0, c: 0 });
+    }
+    // The giant moves along its orbit: in its air, the ship is carried with it.
+    if (!holding && dive.last && dive.last.body === body) shipPosition.add(centre.clone().sub(dive.last.centre));
+    const rel = global.clone().sub(centre), moved = dive.last && dive.last.body === body ? rel.clone().sub(dive.last.rel) : vec();
+    const fresh = !dive.last || dive.last.body !== body;
+    dive.last = { body, rel, centre };
+    const show = clamp((80 - h) / 80, 0, 1), m4 = new THREE.Matrix4(), qd = new THREE.Quaternion(), sc = vec(), tint = new THREE.Color();
+    dive.puffs.visible = show > 0.01;
+    dive.puffs.position.copy(shipPosition);
+    // Each lump in one of the giant's own cloud colours, darker the deeper it hangs.
+    const pal = body.palette || [body.atmosphere, body.atmosphere, body.atmosphere, body.atmosphere], dark = 1 - 0.65 * deep;
+    for (let i = 0; i < N; i++) {
+        const o = dive.off[i];
+        o.p.sub(moved).addScaledVector(east, dive.wind * 0.5 * dt);
+        if (fresh || o.p.lengthSq() > 300 * 300 || !o.s) {
+            const dir = vec(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+            if (!fresh && dir.dot(shipForward) < 0 && Math.abs(speed) > 4) dir.negate().multiplyScalar(Math.sign(speed));
+            o.p.copy(dir).multiplyScalar(fresh ? 60 + Math.random() * 230 : 250 + Math.random() * 45);
+            o.s = 30 + Math.random() ** 1.6 * 110; o.a = Math.random() * 6.28; o.c = Math.random();
+        }
+        sc.setScalar(i / N < show ? o.s : 0.0001);
+        dive.puffs.setMatrixAt(i, m4.compose(o.p, qd, sc));
+        tint.set(pal[1 + Math.floor(o.c * 3) % 3] || body.atmosphere).lerp(DIVE_TINT.set(body.atmosphere), 0.35).multiplyScalar(dark * (0.85 + 0.3 * o.c));
+        dive.puffs.setColorAt(i, tint);
+    }
+    dive.puffs.instanceMatrix.needsUpdate = true;
+    dive.puffs.instanceColor.needsUpdate = true;
+    updateCloudLife(dt, body, centre, out, east, h, limit);
+}
+// --- Life in the clouds -------------------------------------------------------
+// About one giant in three (fauna.mjs cloudFaunaFor): flocks of drifters, and on some the
+// fliers that hunt them, live below the cloud tops. Each flock keeps its place in the air
+// (relative to the giant), rides the band's wind, and swims slowly on its own heading; when
+// it falls far behind it comes round again out of the murk ahead, past where the cloud hides
+// it, so nothing appears in plain view. Point the nose at one and hold E to scan it.
+const cloudLife = new Map(); // body id -> { species, crews: [{ sp, crew, flocks: [{ rel, heading, members }] }] } (built on first dive)
+const CL_M = new THREE.Matrix4(), CL_Q = new THREE.Quaternion(), CL_S = new THREE.Vector3(), CL_X = new THREE.Vector3(), CL_Y = new THREE.Vector3(), CL_Z = new THREE.Vector3();
+function cloudLifeOf(body) {
+    let life = cloudLife.get(body.id);
+    if (life) return life;
+    const species = cloudFaunaFor(body).species;
+    life = { body, species, crews: [], site: { fauna: { species } } };
+    for (const sp of species) {
+        const herds = Math.min(sp.herds, lite ? 2 : 3), group = Math.min(sp.group, 5), crew = buildCrew(THREE, sp, herds * group, `cloud:${body.id}`);
+        crew.group.visible = false;
+        scene.add(crew.group);
+        const flocks = [];
+        for (let f = 0; f < herds; f++) flocks.push({ rel: null, heading: vec(), turn: 0, members: Array.from({ length: group }, () => ({ off: vec(), phase: Math.random() * 6.28 })) });
+        life.crews.push({ sp, crew, flocks });
+    }
+    cloudLife.set(body.id, life);
+    return life;
+}
+function hideCloudLife() {
+    for (const life of cloudLife.values()) for (const c of life.crews) c.crew.group.visible = false;
+    if (scanTarget?.cloud) { scanTarget = null; scanProgress = 0; }
+}
+// Places a flock somewhere in the giant's air near the ship (rel: from the giant's centre).
+function placeFlock(f, sp, body, centre, global, out, limit, ahead) {
+    let dir = vec(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5);
+    dir.addScaledVector(out, -dir.dot(out));
+    if (ahead && Math.abs(speed) > 3) dir.add(shipForward.clone().addScaledVector(out, -shipForward.dot(out)).multiplyScalar(1.5 * Math.sign(speed)));
+    dir.normalize();
+    const reach = ahead ? 650 + Math.random() * 350 : 120 + Math.random() * 700;
+    const depth = 60 + Math.random() * Math.max(80, limit * 0.8 - 60); // below the cloud deck, above crush depth
+    const p = global.clone().addScaledVector(dir, reach).sub(centre).setLength(body.radius - depth);
+    f.rel = p;
+    f.heading.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+    f.turn = (Math.random() - 0.5) * (sp.plan === "flyer" ? 0.5 : 0.08);
+    const spread = sp.size * (sp.plan === "flyer" ? 4 : 2.5) + 6;
+    for (const m of f.members) m.off.set((Math.random() - 0.5) * spread, (Math.random() - 0.5) * spread * 0.4, (Math.random() - 0.5) * spread);
+}
+function updateCloudLife(dt, body, centre, out, east, h, limit) {
+    const life = cloudLifeOf(body);
+    if (!life.crews.length || h > 40) return hideCloudLife(); // only below the deck
+    const global = shipPosition.clone().add(worldOrigin), eye = camera.position, look = camera.getWorldDirection(vec());
+    let best = null;
+    for (const { sp, crew, flocks } of life.crews) {
+        crew.group.visible = true;
+        let i = 0;
+        for (const f of flocks) {
+            if (!f.rel) placeFlock(f, sp, body, centre, global, out, limit, false);
+            const at = centre.clone().add(f.rel);
+            if (at.distanceTo(global) > 1100) { placeFlock(f, sp, body, centre, global, out, limit, true); at.copy(centre).add(f.rel); }
+            const up = f.rel.clone().normalize();
+            // Its own way through the air (kept level), plus the band's wind where it is.
+            f.heading.addScaledVector(up, -f.heading.dot(up)).applyAxisAngle(up, f.turn * dt);
+            if (f.heading.lengthSq() < 1e-6) f.heading.copy(east);
+            f.heading.normalize();
+            const swim = sp.plan === "flyer" ? clamp(sp.speed?.run ?? 8, 6, 18) : clamp(sp.speed?.walk ?? 2, 1.5, 5);
+            const lat = Math.asin(clamp(up.dot(vec(-Math.sin(body.tilt || 0), Math.cos(body.tilt || 0), 0)), -1, 1));
+            const wind = clamp(Math.sin(lat * body.bands * 2 + (body.seed % 1000) / 159) * 2.5, -1, 1) * 14 * (body.physics.kind === "gas" ? 1 : 0.5);
+            f.rel.addScaledVector(f.heading, swim * dt).addScaledVector(east, wind * 0.8 * dt);
+            const fwd = f.heading;
+            CL_X.crossVectors(up, fwd).normalize();
+            CL_Q.setFromRotationMatrix(CL_M.makeBasis(CL_X, up, fwd));
+            for (const m of f.members) {
+                m.phase += dt * (sp.plan === "flyer" ? 5 : 1.2);
+                const p = at.clone().add(CL_Y.copy(m.off).applyQuaternion(CL_Q)).addScaledVector(up, Math.sin(m.phase * 0.4) * sp.size * 0.15).sub(worldOrigin);
+                crew.set(i++, CL_M.compose(p, CL_Q, CL_S.set(1, 1, 1)), m.phase, 1);
+                // The one nearest your aim, within the scanner's reach, is what E scans.
+                const to = p.clone().sub(eye), d = to.length(), reach = 160 + sp.size * 14;
+                if (d > reach) continue;
+                const off = to.normalize().angleTo(look) - Math.atan((sp.size * 0.8) / Math.max(d, 1));
+                if (off < 0.12 && (!best || off < best.off)) best = { off, sp, point: p };
+            }
+        }
+        crew.commit();
+    }
+    // Scanning from the cockpit (the same ring, hold time and card as on foot).
+    const keep = scanTarget?.cloud && scanProgress > 0 && life.species.includes(scanTarget.ref) ? scanTarget : null;
+    if (best && (!keep || keep.ref === best.sp)) {
+        const known = (bestiary[body.id] ||= []).includes(best.sp.id);
+        if (scanTarget?.cloud && scanTarget.ref === best.sp) Object.assign(scanTarget, { point: best.point, known });
+        else { scanTarget = { kind: "fauna", id: best.sp.id, ref: best.sp, point: best.point, known, cloud: true, body, site: life.site }; scanProgress = 0; }
+    } else if (!keep && scanTarget?.cloud) { scanTarget = null; scanProgress = 0; }
+    const held = scanHeld();
+    if (!held) scanNeedsRelease = false;
+    if (scanTarget?.cloud && !scanTarget.known && held && !scanNeedsRelease) {
+        scanProgress += dt / SCAN_TIME;
+        if (scanProgress >= 1) {
+            const t = scanTarget;
+            scanProgress = 0; scanNeedsRelease = true; t.known = true;
+            bestiary[body.id].push(t.id);
+            saveSurvey();
+            scanUI.flash();
+            showScanCard(t, recordInfo(faunaEntry(system, body, t.ref)));
+        }
+    } else scanProgress = Math.max(0, scanProgress - dt * 2.5);
+    if (dive.told === 1 && !life.told) { life.told = true; toast(`Something is alive down here. Point the nose at it and hold E to scan.`, 5); }
+}
 // Space is big and worlds are far apart, so out in the open the engines scale up
 // with the distance to the nearest surface (the star's, a giant's cloud tops or a
 // world's ground): 1x within 900 m, so arrival speeds are unchanged.
 function spaceReach(global) {
     let clearance = global.length() - system.star.radius;
     for (const body of system.bodies) clearance = Math.min(clearance, global.distanceTo(positionOf(body)) - body.radius);
+    for (const a of systemView.arks?.() ?? []) clearance = Math.min(clearance, global.distanceTo(positionOf(arkBody(a))) - a.size);
+    clearance = Math.min(clearance, rockClearance(system, spaceView.objs, global.toArray(), orbitClock()) + 300); // among the rocks of a belt or swarm, slow
     return clamp(clearance / 900, 1, 150);
 }
+// A jump chosen on the map: the ship turns to the star, runs up and is gone (then the page
+// reloads into that system, see starMap onJump).
+let jumpAnim = null; // { t, duration, aim }
+function updateJump(dt) {
+    const j = jumpAnim, k = clamp((j.t += dt) / j.duration, 0, 1);
+    shipForward.lerp(j.aim, 1 - Math.exp(-dt * 3.5)).normalize();
+    spaceUp.addScaledVector(shipForward, -spaceUp.dot(shipForward)).normalize();
+    // Turn first, then the surge.
+    const surge = smoothstep((k - 0.3) / 0.7);
+    speed = damp(speed, 250 + 90000 * surge * surge, 2 + 4 * surge, dt);
+    verticalSpeed = damp(verticalSpeed, 0, 4, dt);
+    strafeSpeed = damp(strafeSpeed, 0, 4, dt);
+    bankAngle = damp(bankAngle, 0, 3, dt);
+    heat = 0;
+    shipPosition.addScaledVector(shipForward, speed * dt).addScaledVector(spaceUp, verticalSpeed * dt);
+    driveFade = 1;
+    drivePower = smoothstep(k * 1.4);
+    streaks.update(camera, shipForward, drivePower, dt);
+    orientSpace(dt);
+}
 function updateSpace(dt) {
+    if (driveFade > 0) {
+        driveFade = driveFade < 0.03 ? 0 : damp(driveFade, 0, 1.6, dt);
+        streaks.update(camera, shipForward, drivePower * driveFade, dt);
+    }
     // A selected world, or else your course star: hold the nose on it whenever
     // you are not steering.
     const aim = target ? positionOf(target).sub(worldOrigin).sub(shipPosition).normalize() : course ? towardStar(course) : null;
-    if (aim && !steering()) turnToward(aim, dt);
+    if (aim && !steering() && !(dive.k > 0.3 && target === dive.body)) turnToward(aim, dt); // (in a giant's clouds the nose is yours)
     const autoThrust = autopilot && course && !target && !keys.has("KeyW") && !keys.has("KeyS") && !keys.has("KeyX");
     if (holding && ["KeyW", "KeyS", "KeyR", "KeyF", "KeyX"].some((k) => keys.has(k))) holding = null; // flying off
     // Near worlds A/D slide the ship sideways (handy for lining up a scan or an
@@ -1052,18 +1399,24 @@ function updateSpace(dt) {
     holdOff(vec(), system.star.radius + 140, `Stellar exclusion zone. Turn away from ${system.star.name}.`);
     // Close to a star the hull heats up: the view glows and warnings start well
     // before the hard limit above.
-    heat = clamp(1 - (global.length() - system.star.radius - 140) / (system.star.radius * 4), 0, 1) * heatScale(codex.unlocked);
+    heat = clamp(1 - (global.length() - system.star.radius - 140) / (system.star.radius * 0.5), 0, 1) * heatScale(codex.unlocked);
     if (heat > 0.35 && toastTime <= 0)
         toast(heat > 0.75 ? `Hull temperature critical. Turn away from ${system.star.name}!` : `Hull temperature rising near ${system.star.name}.`, 2);
     for (const body of system.bodies)
-        if (body.giant)
+        if (body.giant) {
+            const crush = crushDepth(body);
             holdOff(
                 positionOf(body),
-                body.radius + giantClearance(body),
-                `${body.name} has no surface: the clouds only thicken into crushing pressure. Its moons are safe to land on.`,
+                crush ? body.radius - crush : body.radius + giantClearance(body),
+                crush ? `Crush depth. The hull will not go deeper into ${body.name}.` : `${body.name} has no surface: the clouds only thicken into crushing pressure. Its moons are safe to land on.`,
             );
+        }
+    updateCloudDive(dt, shipPosition.clone().add(worldOrigin));
+    // Rocks are solid: the ship glances off them.
+    if (spaceView.collide(shipPosition, SHIP_RADIUS + 1.5, worldOrigin)) { speed *= 0.9; if (toastTime <= 0) toast("Rock alongside. Ease off the throttle among the rocks.", 2); }
+    updateSpaceRecord(dt, shipPosition.clone().add(worldOrigin));
     // Past the outermost orbits lies interstellar space.
-    if (global.length() > edge * 0.85 && global.length() < edge && toastTime <= 0)
+    if (global.length() > edge * 0.85 && global.length() < edge && toastTime <= 0 && spaceReach(global) > 20) // (not beside an outer giant)
         toast(`Leaving the ${system.name} system. The star drive engages beyond the outer orbits.`);
     if (global.length() > edge) {
         enterDeep(global);
@@ -1084,6 +1437,13 @@ function updateSpace(dt) {
             const cap = 220 + 680 * smoothstep((nearby[0].clearance - 520) / 1600);
             if (Math.abs(speed) > cap) speed = damp(speed, Math.sign(speed) * cap, 3, dt);
         }
+    }
+    // The same on the way in to an ark: down to docking speed by the time its hull is alongside.
+    for (const a of systemView.arks?.() ?? []) {
+        const centre = positionOf(arkBody(a)), clearance = global.distanceTo(centre) - a.size;
+        if (clearance > 2600 || shipForward.dot(centre.sub(global).normalize()) * speed <= 0) continue;
+        const cap = 75 + 825 * smoothstep(clearance / 2600);
+        if (Math.abs(speed) > cap) speed = damp(speed, Math.sign(speed) * cap, 3, dt);
     }
     // Orbit begins at 520 m (it ends again above 600 m), high enough for the
     // change of view to happen gradually.
@@ -1220,7 +1580,8 @@ function enterDeep(global) {
     shipPosition.set(0, 0, 0);
     camera.position.sub(shift);
     mode = "deep";
-    throttle = autopilot && course ? 1 : 0.35;
+    // The drive picks up at the speed the ship already had (it used to leap to a third throttle).
+    throttle = clamp(Math.abs(speed) / (edge / DRIVE_TIME), 0.06, 1);
     autopilot = autopilot && !!course;
     systemView.visible = false;
     if (site) site.group.visible = false;
@@ -1243,6 +1604,7 @@ function nameCache(star) {
 function setCourse(star) {
     if (!star) return clearTarget();
     course = star;
+    deepTarget = null;
     target = pendingBody = selectedBody = null;
     starMap.close();
     if (mode === "deep") {
@@ -1257,9 +1619,9 @@ function setCourse(star) {
         );
 }
 function toggleAutopilot() {
-    if (!course) return void toast("Set a course on the galaxy map (G) first.");
+    if (!course && !deepTarget) return void toast("Set a course on the galaxy map (G) first.");
     autopilot = !autopilot;
-    toast(autopilot ? `Autopilot to ${starName(course)}.` : "Autopilot off. Manual flight.");
+    toast(autopilot ? `Autopilot to ${deepTarget ? findLabel(deepTarget) : starName(course)}.` : "Autopilot off. Manual flight.");
 }
 // T and the main button: with a star as your course (and no world in focus),
 // they work the autopilot; otherwise they cruise to the selected world.
@@ -1372,6 +1734,104 @@ function showSystemAhead(entry, offset, d) {
             .map((e) => ({ dir: e.at.normalize(), color: e.b.palette[2] })),
     );
 }
+// --- Finds between the stars (deep-finds.mjs, deep-finds-view.js) --------------------
+// The drive's sensors pick up anything within DETECT_LY: an unknown contact at first, named
+// once you are close. Tap it (or Tab) to set course; the drive eases you in and holds you
+// beside a world, dwarf or black hole; a nebula you fly into. Hold E to record it (codex).
+// Found ones are remembered (and drawn on the galaxy map).
+const FINDS_KEY = "elsewhere-finds";
+const knownFinds = (() => { try { return JSON.parse(localStorage.getItem(FINDS_KEY) || "{}"); } catch { return {}; } })();
+const saveFinds = () => { try { localStorage.setItem(FINDS_KEY, JSON.stringify(knownFinds)); } catch {} };
+let deepTarget = null, // a find you set course for
+    deepNear = [],
+    deepScanAt = 0,
+    nebulaIn = 0, // 0..1, eases in and out
+    nebulaFind = null,
+    heldBeside = null,
+    deepDetour = false, // deepTarget was set by the sensors, not by you: C or recording it resumes your course
+    deepSpeed = 0; // light years per second, last frame (the sensors look further ahead the faster you go)
+const findViews = createFindViews(scene, { puffMaterial: cloudPuffMaterial });
+const findOffset = (f) => [f.x - galactic[0], f.y - galactic[1], f.z - galactic[2]];
+const findLabel = (f) => (knownFinds[f.id]?.revealed ? f.title : "Unknown contact");
+const findEntry = (f) => ({ kind: "phenomenon", seed: String(f.seed), bodyId: "deep", id: f.kind, traits: { type: f.kind, name: f.title, deep: true, life: !!f.life }, world: { name: f.title, giant: false, moon: false, life: f.life ? "microbial" : "none" } });
+function updateFinds(dt, inNebula) {
+    for (const n of deepNear) {
+        const f = n.f, k = knownFinds[f.id];
+        // Picked up by the sensors, then identified as you close in.
+        if (n.edge < DETECT_LY && !k) {
+            knownFinds[f.id] = { id: f.id, kind: f.kind, x: f.x, y: f.y, z: f.z, title: f.title, revealed: false, recorded: false };
+            saveFinds();
+            // The drive drops to approach speed and turns toward it, so a contact can't be missed.
+            // Steer away to ignore it; C clears the detour and goes back to your course.
+            if (!deepTarget && !inNebula) {
+                deepTarget = f; deepDetour = true; autopilot = true; throttle = Math.min(throttle, 0.4);
+                starMap.refresh();
+                toast(`Sensor contact, ${fmtLightYears(Math.max(0, n.edge))} away. Dropping out of full drive and turning toward it. C to ignore.`, 7);
+            } else toast(`Sensor contact: something ${fmtLightYears(Math.max(0, n.edge))} away. Tab or tap it to set course.`, 6);
+        } else if (k && !k.revealed && n.edge < REVEAL_LY) {
+            k.revealed = true; saveFinds();
+            toast(`Contact identified: ${f.name}, ${FIND_KINDS[f.kind].word}.${f.kind === "nebula" ? " Fly into it." : " The drive will bring you alongside."}`, 7);
+        }
+        // Held beside a solid find: the drive will not take you into it.
+        if (f.kind !== "nebula" && n.d < f.size + f.stop) {
+            const off = findOffset(f), out = off.map((v) => -v / n.d);
+            galactic = [f.x + out[0] * (f.size + f.stop), f.y + out[1] * (f.size + f.stop), f.z + out[2] * (f.size + f.stop)];
+            if (shipForward.dot(toScene(off).normalize()) > 0) throttle = damp(throttle, 0, 6, dt);
+            if (heldBeside !== f.id) { heldBeside = f.id; autopilot = false; toast(`${f.title} fills the view.${knownFinds[f.id]?.recorded ? "" : " Hold E to record it."}`, 6); }
+        } else if (heldBeside === f.id && n.d > f.size + f.stop * 3) heldBeside = null;
+    }
+    // In a nebula: its gas round you and the sky its colour.
+    if (inNebula && nebulaFind !== inNebula) { nebulaFind = inNebula; toast(`Inside ${inNebula.name}. ${knownFinds[inNebula.id]?.recorded ? "" : "Hold E to record it. "}The drive slows in the gas.`, 6); }
+    nebulaIn = damp(nebulaIn, inNebula ? 1 : 0, 1.5, dt);
+    if (!inNebula && nebulaIn < 0.02) nebulaFind = null;
+    findViews.update(camera, galactic, deepNear, dt);
+    findViews.inside(camera, nebulaIn > 0.02 ? nebulaFind : null, shipForward, 150 + throttle * 2600, dt, 1);
+    // What E records: the nebula you are in, or the find you are beside.
+    const here = inNebula || deepNear.find((n) => n.f.kind !== "nebula" && n.edge < n.f.stop * 4)?.f || null;
+    if (here) {
+        const known = codex.has(findEntry(here));
+        if (scanTarget?.deepFind !== here) { scanTarget = { kind: "phenomenon", id: here.kind, deepFind: here, ref: { name: here.title }, known }; scanProgress = 0; }
+        scanTarget.known = known;
+        const held = scanHeld();
+        if (!held) scanNeedsRelease = false;
+        if (!known && held && !scanNeedsRelease) {
+            scanProgress += dt / RECORD_TIME;
+            if (scanProgress >= 1) {
+                scanProgress = 0; scanNeedsRelease = true;
+                const info = recordInfo(findEntry(here));
+                knownFinds[here.id] = { ...(knownFinds[here.id] || {}), revealed: true, recorded: true }; saveFinds();
+                scanUI.flash();
+                toast(`${here.title} recorded in your codex.${info.text || ""}${deepDetour && deepTarget === here && course ? ` Back on course to ${starName(course)}.` : ""}`, 7);
+                if (deepDetour && deepTarget === here) { deepTarget = null; deepDetour = false; autopilot = !!course; starMap.refresh(); }
+            }
+        } else scanProgress = Math.max(0, scanProgress - dt * 2.5);
+    } else if (scanTarget?.deepFind) { scanTarget = null; scanProgress = 0; }
+}
+// In a belt or swarm, or close to a comet: hold E to record it (codex, as a sky event).
+const spaceEntry = (o) => ({ kind: "phenomenon", seed: String(system.seed), bodyId: "space", id: o.id, traits: { type: o.kind, name: o.name.replace(/^the /, "").replace(/^./, (c) => c.toUpperCase()), deep: true }, world: { name: system.name, giant: false, moon: false, life: "none" } });
+let spaceHere = null;
+function updateSpaceRecord(dt, global) {
+    const t = orbitClock(), objs = spaceView.objs, p = global.toArray();
+    let here = null;
+    if (rockDensity(system, objs, p, t) > 0.15) {
+        const rho = Math.hypot(p[0], p[2]);
+        here = objs.belts.find((b) => Math.abs(rho - b.R) < b.width * .6) || objs.trojans.find((tr) => rockDensity(system, { belts: [], trojans: [tr] }, p, t) > 0.1) || null;
+    }
+    const c = spaceView.nearestComet(p, t);
+    if (!here && c && c.d < 4000) here = c.c;
+    if (here !== spaceHere) { spaceHere = here; if (here && !codex.has(spaceEntry(here))) toast(`${here.name.replace(/^the /, "").replace(/^./, (x) => x.toUpperCase())}. Hold E to record it.`, 5); }
+    if (here) {
+        const known = codex.has(spaceEntry(here));
+        if (scanTarget?.spaceObj !== here) { scanTarget = { kind: "phenomenon", id: here.kind, spaceObj: here, deepFind: here, ref: { name: here.name.replace(/^the /, "") }, known }; scanProgress = 0; }
+        scanTarget.known = known;
+        const held = scanHeld();
+        if (!held) scanNeedsRelease = false;
+        if (!known && held && !scanNeedsRelease) {
+            scanProgress += dt / RECORD_TIME;
+            if (scanProgress >= 1) { scanProgress = 0; scanNeedsRelease = true; const info = recordInfo(spaceEntry(here)); scanUI.flash(); toast(`${scanTarget.ref.name} recorded in your codex.${info.text || ""}`, 7); }
+        } else scanProgress = Math.max(0, scanProgress - dt * 2.5);
+    } else if (scanTarget?.spaceObj) { scanTarget = null; scanProgress = 0; }
+}
 function updateDeep(dt) {
     const steer = steering();
     // Between stars there is nothing to slide past, so A/D turn here.
@@ -1387,8 +1847,8 @@ function updateDeep(dt) {
     // With a course set, the ship holds its heading toward it whenever you are
     // not steering; steering takes over until you let go.
     let want = null;
-    if (course && !steer) {
-        want = courseAim();
+    if ((course || deepTarget) && !steer) {
+        want = deepTarget ? toScene(findOffset(deepTarget)).normalize() : courseAim();
         turnToward(want, dt);
     }
     const manualThrottle = keys.has("KeyW") || keys.has("KeyS") || keys.has("KeyX");
@@ -1398,14 +1858,35 @@ function updateDeep(dt) {
     const boost = keys.has("ShiftLeft") || keys.has("ShiftRight");
     const nearest = sky.stars[0];
     const d = nearest ? nearest.distance : 1;
-    const lyPerSecond = (throttle * Math.max(d, 0.0008)) / (boost ? DRIVE_TIME / 2.5 : DRIVE_TIME);
+    // Finds between the stars (deep-finds.mjs) slow the drive as you near them, as stars do,
+    // and a nebula's gas holds it back while you are inside.
+    // The sensors look about a second of flight ahead, so even at full drive nothing is skipped
+    // between two scans. Finds already recorded don't slow you, unless you are heading for one.
+    if ((deepScanAt -= dt) <= 0) { deepScanAt = 0.25; deepNear = findsNear(galactic, Math.min(4, DETECT_LY + 0.25 + deepSpeed * 1.2)); }
+    let dFind = Infinity, inNebula = null;
+    for (const n of deepNear) {
+        const off = findOffset(n.f), dd = Math.hypot(...off);
+        n.d = dd; n.edge = dd - n.f.size;
+        if (n.f.kind === "nebula") { if (n.edge < 0) inNebula = n.f; continue; }
+        if (knownFinds[n.f.id]?.recorded && n.f !== deepTarget) continue;
+        // Approaching your target, the drive eases in hard so you come to rest beside it.
+        const left = Math.max(0, n.edge - n.f.stop * 0.6);
+        dFind = Math.min(dFind, n.f === deepTarget ? left * 0.5 : left);
+    }
+    const lyPerSecond = (throttle * Math.max(Math.min(d, dFind + 0.0004), 0.0008)) / (boost ? DRIVE_TIME / 2.5 : DRIVE_TIME) * (inNebula ? 0.45 : 1);
+    deepSpeed = lyPerSecond;
     const step = toGalaxy(shipForward);
-    for (let i = 0; i < 3; i++) galactic[i] += step[i] * lyPerSecond * dt;
+    // Never more than half the way to a find in one frame (a slow frame can't jump past it).
+    const move = Math.min(lyPerSecond * dt, dFind * 0.5 + 0.0002);
+    for (let i = 0; i < 3; i++) galactic[i] += step[i] * move;
+    updateFinds(dt, inNebula);
     speed = 120 + throttle * 600; // for engine glow
     verticalSpeed = 0;
     sky.update(galactic, camera);
     orientSpace(dt);
-    streaks.update(camera, shipForward, throttle * (boost ? 1 : 0.7), dt);
+    driveFade = damp(driveFade, 1, 1.2, dt);
+    drivePower = throttle * (boost ? 1 : 0.7);
+    streaks.update(camera, shipForward, drivePower * driveFade, dt);
     if (!nearest) return;
     // Light comes from the nearest star.
     const toStar = toScene(starPoint(nearest.star).map((v, i) => v - galactic[i])).normalize();
@@ -1443,6 +1924,7 @@ function arriveInSystem(star, offset) {
         systemView.dispose();
         systemView = incoming.view;
         system = incoming.system;
+        spaceView.dispose(); spaceView = createSpaceObjectsView(scene, system);
         incoming = null;
         currentStar = star;
         loadedId = star.id;
@@ -1460,8 +1942,9 @@ function arriveInSystem(star, offset) {
         if (course?.id === star.id) course = null;
     }
     nearStar.hide();
-    streaks.hide();
     worldDots.hide();
+    findViews.hide(); nebulaIn = 0; nebulaFind = null; deepNear = [];
+    if (scanTarget?.deepFind) scanTarget = null;
     if (shownView && shownView !== incoming?.view) shownView.visible = false;
     shownView = ahead = null;
     autopilot = false;
@@ -1482,7 +1965,8 @@ function arriveInSystem(star, offset) {
     shipPosition.copy(entry).sub(worldOrigin);
     camera.position.add(shipPosition);
     mode = "space";
-    speed = 150;
+    // Come in at the speed the drive had and ease down from there (it used to stop dead).
+    speed = Math.max(150, throttle * (edge / DRIVE_TIME));
     systemView.visible = true;
     if (site) site.group.visible = true;
     sun.intensity = 3.1;
@@ -1512,6 +1996,11 @@ function deepInfo() {
         return { name: starName(course), isCourse: true, autopilot, distance: d, point: towardStar(course).multiplyScalar(5000).add(camera.position) };
     }
     const nearest = sky.stars[0];
+    if (deepTarget) {
+        const off = findOffset(deepTarget), nd = nearest ? nearest.distance : 1;
+        return { name: findLabel(deepTarget), isCourse: true, autopilot, distance: Math.max(0, Math.hypot(...off) - deepTarget.size), nearestName: nearest ? starName(nearest.star) : "", nearestDistance: nd,
+            lightSpeeds: ((throttle * Math.max(nd, 0.0008)) / DRIVE_TIME) * 31557600, point: toScene(off).normalize().multiplyScalar(5000).add(camera.position) };
+    }
     const aimed = course || nearest?.star;
     if (!aimed) return null;
     const offset = starPoint(aimed).map((v, i) => v - galactic[i]);
@@ -1580,7 +2069,10 @@ $("randomSystem").onclick = () => {
 function openMap() {
     if ($("help").open || $("discovery").open) return;
     keys.clear();
-    starMap.open("system");
+    // At a world (in its orbit, flying low, landed or on foot): the map opens on that world;
+    // zooming out goes on to the system, the neighbourhood and the galaxy.
+    // In deep space it opens on the ship, between the stars.
+    starMap.open(mode === "deep" ? "local" : ["space", "transit"].includes(mode) ? "system" : "world");
 }
 $("mapBtn").onclick = openMap;
 
@@ -1588,20 +2080,25 @@ function updateFlight(dt) {
     orbitEntry = Math.max(0, orbitEntry - dt / 3);
     const up = shipPosition.clone().normalize();
     if (autoApproach) {
-        const angle = up.angleTo(landingNormal),
+        const goal = approachTo?.n || landingNormal,
+            angle = up.angleTo(goal),
             currentRadius = shipPosition.length();
         const nextUp = up.clone();
-        const turnStep = Math.min(angle, dt * Math.min(0.14, angle * 0.75));
+        // Fast over open ground (up to ~300 m/s at height when the place is far), easing in as it nears.
+        const dist = angle * currentRadius, cruiseSpeed = clamp(dist * 0.9, 12, 320);
+        approachSpeed = damp(approachSpeed || speed || 20, cruiseSpeed, 1.2, dt);
+        const turnStep = Math.min(angle, (approachSpeed / currentRadius) * dt);
         if (angle > 0.001) {
-            const axis = up.clone().cross(landingNormal).normalize();
+            const axis = up.clone().cross(goal).normalize();
             nextUp.applyAxisAngle(axis, turnStep);
-            shipForward = tangent(landingNormal.clone().sub(up), nextUp);
+            shipForward = tangent(goal.clone().sub(up), nextUp);
         }
-        const targetRadius = surfaceRadius(nextUp) + (angle > 0.16 ? 65 : 14);
+        // High while far (clear of hills and towers at speed), down to 14 m on arrival.
+        const targetRadius = surfaceRadius(nextUp) + 14 + clamp((dist - 60) * 0.18, 0, 160);
         const targetVertical = clamp(
             (targetRadius - currentRadius) * 0.8,
-            -18,
-            18,
+            -45,
+            60,
         );
         verticalSpeed = damp(verticalSpeed, targetVertical, 2.2, dt);
         const radius = currentRadius + verticalSpeed * dt;
@@ -1611,8 +2108,9 @@ function updateFlight(dt) {
         bankAngle = damp(bankAngle, 0, 3, dt);
         if (angle < 0.012 && altitude() < 18) {
             autoApproach = false;
+            approachSpeed = 0;
             speed = 0;
-            toast("Approach complete. Press L to land.");
+            toast(`Approach complete${approachTo ? `: ${approachTo.name}.${approachTo.note}` : "."} Press L to land.`, 5);
         }
     } else {
         strafeSpeed = 0;
@@ -2345,7 +2843,7 @@ function crewInReach() {
 const KIND_WORDS = { fauna: "Animal", flora: "Plant", formation: "Rock", core: "Core sample", behaviour: "Behaviour", phenomenon: "Sky event", settlement: "Settlement", station: "Station", "field-note": "Signal", world: "World", signal: "Radio source" };
 function entryName(e) {
     if (e.kind === "behaviour") return `${e.traits?.name ?? "An animal"}: ${e.traits?.behaviour ?? "behaviour"}`;
-    if (e.kind === "phenomenon") return ({ eclipse: "An eclipse", aurora: "An aurora", meteors: "A meteor shower" })[e.traits?.type] || "A sky event";
+    if (e.kind === "phenomenon") return e.traits?.deep ? e.traits.name : ({ eclipse: "An eclipse", aurora: "An aurora", meteors: "A meteor shower" })[e.traits?.type] || "A sky event";
     if (e.kind === "settlement") return `${e.traits?.name ?? "A people"} (${e.traits?.tier ?? "builders"})`;
     if (e.kind === "station") return `${e.traits?.name ?? "A"} station`;
     if (e.kind === "signal") return `A radio voice (${e.traits?.tier ?? "unknown"})`;
@@ -2600,7 +3098,7 @@ let scanTarget = null, // { kind, id, ref, point, reach, known }
     touchScanHeld = false;
 const scanHeld = () => keys.has("KeyE") || touchScanHeld;
 $("actionBtn").addEventListener("pointerdown", () => {
-    if (mode === "walk" && scanTarget && !scanTarget.known) touchScanHeld = true;
+    if ((mode === "walk" || (mode === "space" && scanTarget?.cloud)) && scanTarget && !scanTarget.known) touchScanHeld = true;
 });
 for (const ev of ["pointerup", "pointercancel", "pointerleave"]) $("actionBtn").addEventListener(ev, () => (touchScanHeld = false));
 // Behaviours and sky events live only in the codex: ask it.
@@ -2671,7 +3169,7 @@ function completeScan() {
 // The codex entry a scan target makes (for its rarity), or null.
 function entryOfTarget(t) {
     try {
-        if (t.kind === "fauna") return faunaEntry(system, activeBody, t.ref);
+        if (t.kind === "fauna") return faunaEntry(system, t.body || activeBody, t.ref);
         if (t.kind === "flora") return floraEntry(system, activeBody, t.ref);
         if (t.kind === "formation") return formationEntry(system, activeBody, t.ref);
         if (t.kind === "behaviour") return behaviourEntry(system, activeBody, t.ref, t.behaviour);
@@ -2682,8 +3180,8 @@ function entryOfTarget(t) {
     return null;
 }
 function showScanCard(t, info) {
-    const where = `${wordFor(t).toUpperCase()} · ${activeBody.name.toUpperCase()}`;
-    const card = cardFor(t, site, activeBody, t.kind === "fauna" || t.kind === "behaviour" ? seenOf(t.ref) : []);
+    const body = t.body || activeBody, where = `${wordFor(t).toUpperCase()} · ${body.name.toUpperCase()}`;
+    const card = cardFor(t, t.site || site, body, (t.kind === "fauna" || t.kind === "behaviour") && !t.cloud ? seenOf(t.ref) : []);
     // Rarity (rarity.mjs): a tag on the card, and a word when you find something rare.
     const e = entryOfTarget(t), grade = e ? rarityOf(e) : "common";
     if (grade !== "common") card.tags = [{ text: grade[0].toUpperCase() + grade.slice(1), tone: grade }, ...(card.tags || [])];
@@ -2702,7 +3200,7 @@ function showScanCard(t, info) {
 }
 // The prompt at the crosshair, every frame.
 function drawScanMarker() {
-    if (mode !== "walk" || indoor || !scanTarget || modalOpen()) return scanUI.prompt(null);
+    if ((mode !== "walk" && !(mode === "space" && scanTarget?.cloud) && !((mode === "deep" || mode === "space") && scanTarget?.deepFind)) || indoor || !scanTarget || modalOpen()) return scanUI.prompt(null);
     scanUI.prompt({ title: titleFor(scanTarget), known: scanTarget.known, verb: verbFor(scanTarget) }, scanProgress);
 }
 function updateCamera(dt) {
@@ -2747,6 +3245,7 @@ function updateCamera(dt) {
             .multiplyScalar(Math.cos(lookPitch))
             .addScaledVector(playerNormal, Math.sin(lookPitch));
         camera.lookAt(eye.clone().add(look));
+        if (EYE_UP) { camera.position.addScaledVector(playerNormal, EYE_UP); camera.lookAt(eye.clone().addScaledVector(playerForward, EYE_UP * 0.9)); }
         // Field glasses: hold Z (or the touch button) to zoom in.
         const zooming = hasFieldGlasses(codex.unlocked) && keys.has("KeyZ") && !modalOpen();
         zoom = damp(zoom, zooming ? 1 : 0, 7, dt);
@@ -2818,7 +3317,9 @@ function updateCamera(dt) {
         if (mode !== "deep") camera.position.addScaledVector(shipVel, dt);
         camera.position.lerp(desired, 1 - Math.exp(-dt * (4 - 2.6 * ease)));
         // The camera trails at most a few metres behind its place (a little lag reads as speed).
-        const along = shipVel.lengthSq() > 1 ? shipVel.clone().normalize() : null;
+        // (In deep space the ship stays put and the stars move, so its heading stands in: without
+        // it the last stretch flown before the drive engaged left the camera far behind for a moment.)
+        const along = mode === "deep" ? shipForward.clone() : shipVel.lengthSq() > 1 ? shipVel.clone().normalize() : null;
         if (along) {
             const behind = -camera.position.clone().sub(desired).dot(along), most = (3 + 5 * rushLevel) * framing;
             if (behind > most) camera.position.addScaledVector(along, behind - most);
@@ -2860,6 +3361,8 @@ function targetCandidates() {
     if (mode === "deep") {
         for (const e of sky.stars.slice(0, 400))
             out.push({ kind: "star", star: e.star, point: toScene(starPoint(e.star).map((v, i) => v - galactic[i])).normalize().multiplyScalar(5000).add(camera.position) });
+        for (const n of deepNear)
+            if (knownFinds[n.f.id]) out.push({ kind: "find", find: n.f, point: toScene(findOffset(n.f)).normalize().multiplyScalar(5000).add(camera.position) });
         if (ahead)
             for (const b of ahead.system.bodies) {
                 const p = ahead.starScene.clone().add(vec(...ahead.positions.get(b.id)));
@@ -2869,6 +3372,8 @@ function targetCandidates() {
         for (const b of system.bodies)
             if (b.id !== activeBody.id || mode === "space" || mode === "transit")
                 out.push({ kind: "body", body: b, point: positionOf(b).sub(worldOrigin) });
+        // Arks are destinations like worlds: tap them, Tab to them, cruise to them.
+        for (const b of arkBodies()) out.push({ kind: "body", body: b, point: positionOf(b).sub(worldOrigin) });
         // Other stars, so you can find the way to another system.
         for (const e of sky.stars.slice(0, 300))
             if (e.star.id !== currentStar.id)
@@ -2913,7 +3418,7 @@ function cycleTarget() {
     }
     // Only what is on screen: nearest worlds first, then the nearest stars.
     const reach = (c) =>
-        c.kind === "star"
+        c.kind === "find" ? 1e5 + Math.hypot(...findOffset(c.find)) * 1e5 : c.kind === "star"
             ? 1e12 + Math.hypot(...starPoint(c.star).map((v, i) => v - viewer()[i]))
             : mode === "deep"
               ? 1e6 + ahead.starScene.clone().add(vec(...ahead.positions.get(c.body.id))).length()
@@ -2930,6 +3435,14 @@ function cycleTarget() {
 const fmtDistance = (m) => (m >= 10000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
 const fmtLightYears = (ly) => (ly < 0.05 ? `${Math.max(1, Math.round(ly * 63241))} AU` : `${ly.toFixed(2)} ly`);
 function chooseTarget(c) {
+    if (c.kind === "find") {
+        deepTarget = c.find; deepDetour = false;
+        autopilot = true;
+        toast(`Course: ${findLabel(c.find)}, ${fmtLightYears(Math.max(0, Math.hypot(...findOffset(c.find)) - c.find.size))}. Autopilot engaged; steer to take over, C to clear.`, 5);
+        starMap.refresh();
+        return;
+    }
+    if (c.kind === "star") deepTarget = null;
     if (c.kind === "star") {
         course = c.star;
         target = pendingBody = selectedBody = null;
@@ -2951,8 +3464,14 @@ function chooseTarget(c) {
 }
 // C, the Clear button, tapping empty space, or Clear course on the map.
 function clearTarget() {
-    if (!target && !course && !selectedBody) return;
-    target = course = pendingBody = selectedBody = null;
+    if (!target && !course && !selectedBody && !deepTarget) return;
+    if (deepDetour && deepTarget) { // ignore the sensor contact, back to your course
+        deepTarget = null; deepDetour = false; autopilot = !!course;
+        toast(course ? `Contact ignored. Back on course to ${starName(course)}.` : "Contact ignored.", 4);
+        starMap.refresh(); return;
+    }
+    deepDetour = false;
+    target = course = pendingBody = selectedBody = deepTarget = null;
     autopilot = false;
     starMap.refresh();
     toast("Target cleared. Free flight.");
@@ -2979,6 +3498,8 @@ function airOf(body) {
     return clamp((Math.log10(Math.max(p, 1e-4)) + 1.5) / 2.5, 0, 1);
 }
 const cloudFog = new THREE.Color();
+const NEBULA_SKY = new THREE.Color();
+let diveBuried = false; // the system outside hidden while deep in a giant (finishSky)
 let dayNow = 1; // daylight where the camera is, 0..1 (updateAtmosphere)
 let inCloud = 0, // 0..1: how deep in cloud the camera is
     hiddenLayer = null; // the cloud layer faded out while you are inside it
@@ -2987,7 +3508,40 @@ let inCloud = 0, // 0..1: how deep in cloud the camera is
 // follow it, and the shadows are centred on where you are.
 function finishSky() {
     const du = skyDome.uniforms;
-    const over = Math.min(1, Math.max(inCloud * 0.95, gloomNow * 0.8, localAir.mix * 0.6, cameraDepth > 0 ? 1 : 0));
+    // In a giant's clouds (updateCloudDive): thick cloud at the deck itself, murk below it
+    // that darkens and thickens with depth, lit up for a moment by lightning.
+    let diveIn = 0;
+    if (dive.k > 0 && dive.body && mode === "space") {
+        const b = dive.body, deep = clamp(dive.depth / Math.max(1, crushDepth(b)), 0, 1), deck = Math.exp(-((dive.depth / 45) ** 2));
+        diveIn = clamp((dive.depth + 130) / 150, 0, 1);
+        const light = (0.12 + 0.88 * dayNow), flash = 0.55 * dive.flash * dive.flash;
+        // The air between the cloud layers: the giant's mid colour; the cloud ceiling above is
+        // its palest band warmed by the star, the depths below its darkest, fading to near black.
+        DIVE_AIR.set(b.palette?.[2] ?? b.atmosphere).lerp(DIVE_DEEP.set(b.atmosphere), 0.3);
+        DIVE_DEEP.set(b.palette?.[0] ?? b.atmosphere).multiplyScalar(0.35);
+        DIVE_AIR.lerp(DIVE_DEEP, deep * 0.85).multiplyScalar(light).lerp(DIVE_FLASH, flash);
+        DIVE_TOP.set(b.palette?.[3] ?? b.atmosphere).lerp(sun.color, 0.15).multiplyScalar((1.25 - 0.75 * deep) * light).lerp(DIVE_FLASH, flash);
+        DIVE_LOW.set(b.palette?.[0] ?? b.atmosphere).multiplyScalar(0.28 * (1 - 0.7 * deep) * light).lerp(DIVE_FLASH, flash * 0.5);
+        scene.background.lerp(DIVE_AIR, diveIn);
+        scene.fog.density = Math.max(scene.fog.density, diveIn * (0.003 + 0.022 * deep) + 0.05 * deck * diveIn);
+        if (dive.flash > 0.01) hemi.intensity *= 1 + 2 * dive.flash * dive.flash;
+        du.uDive.value = diveIn; du.uDiveTop.value.copy(DIVE_TOP); du.uDiveLow.value.copy(DIVE_LOW);
+        du.uDiveUp.value.copy(camera.position).add(worldOrigin).sub(positionOf(b)).normalize();
+        skyDome.mesh.visible = true;
+        if (dive.puffs) {
+            const pu = dive.puffs.material.uniforms;
+            pu.uMurk.value.copy(scene.background); pu.uDensity.value = scene.fog.density; pu.uLight.value = light;
+            pu.uFlash.value = dive.flash * dive.flash; pu.uUp.value.copy(du.uDiveUp.value);
+            pu.uSun.value.copy(sun.position).sub(camera.position).normalize();
+        }
+    } else du.uDive.value = 0;
+    // Inside a nebula (deep space): the sky takes its colour.
+    if (mode === "deep" && nebulaIn > 0.01 && nebulaFind) scene.background.lerp(NEBULA_SKY.set(nebulaFind.hue[1]).multiplyScalar(0.35), 0.85 * nebulaIn);
+    // Below the cloud deck nothing outside the giant shows: its moons, rings and the star are
+    // hidden (the thick deck covers the moment they go), and the dome's glow stands in for the sun.
+    const buried = diveIn > 0 && dive.depth > 35;
+    if (buried !== diveBuried) { diveBuried = buried; systemView.visible = !buried; }
+    const over = Math.min(1, Math.max(inCloud * 0.95, gloomNow * 0.8, localAir.mix * 0.6, cameraDepth > 0 ? 1 : 0, diveIn));
     du.uBack.value.copy(scene.background); du.uOver.value = over;
     scene.fog.color.copy(fogHorizon).lerp(scene.background, over);
     if (cameraDepth > 0) skyDome.mesh.visible = false;
@@ -2997,7 +3551,7 @@ function finishSky() {
     shadows.update(focus, near && dayNow > 0.02);
     // Valley mist and the water's reflection of the sky follow the fog's final colour.
     scene.fog.mist = !MIST || indoor || cameraDepth > 0 ? 0 : mistWant * (1 - inCloud) * (1 - over * 0.5);
-    WATER.sky.value.copy(scene.fog.color);
+    WATER.sky.value?.copy(scene.fog.color); // (no water anywhere in the system: not set yet)
     const t = performance.now() / 1000;
     WATER.time.value = t;
     // Sunbeams: in woods, by day, under a sky that is not overcast, on foot or low down.
@@ -3434,6 +3988,7 @@ heatGlow.style.cssText =
 document.body.append(heatGlow);
 function updateHeat(dt) {
     if (mode !== "space") heat = 0;
+    if (mode !== "space" && mode !== "deep" && driveFade) { driveFade = 0; streaks.hide(); } // (into orbit or a cruise mid-fade)
     shownHeat = damp(shownHeat, heat, 4, dt);
     heatGlow.style.opacity = shownHeat < 0.01 ? "0" : shownHeat.toFixed(3);
 }
@@ -3673,7 +4228,7 @@ function frame(now) {
         animationTime += dt;
         if (started) {
             if (mode === "deep") updateDeep(dt);
-            else if (mode === "space") updateSpace(dt);
+            else if (mode === "space") jumpAnim ? updateJump(dt) : updateSpace(dt);
             else if (mode === "transit") updateCruise(dt);
             else if (mode === "flight") updateFlight(dt);
             else if (mode === "dive") updateDive(dt);
@@ -3755,8 +4310,10 @@ function frame(now) {
     if (!starMap.isOpen) {
         if (mode !== "deep") {
             systemView.update(camera.position, streamer);
+            spaceView.visible = mode === "space" || mode === "transit" || (mode === "flight" && altitude() > 400);
+            if (mode === "space" || mode === "transit" || mode === "flight") spaceView.update(camera.position, worldOrigin, orbitClock(), systemView.starMesh.position, dt);
             sky.follow(camera);
-        } else streamer.pump(4);
+        } else { streamer.pump(4); spaceView.visible = false; }
         perf.beforeRender(); // a resolution change wipes the canvas, so it happens just before drawing
         finishSky();
         // Indoors, the daylight comes in only by the door and windows: the room is lit by its own lamp.
@@ -3879,6 +4436,7 @@ const starMap = createStarMap({
     here: currentStar,
     system,
     deep: () => (mode === "deep" ? { position: galactic, course } : null),
+    finds: () => Object.values(knownFinds),
     onCourse: (star) => setCourse(star),
     clearCourse: () => clearTarget(),
     course: () => course,
@@ -3902,6 +4460,8 @@ const starMap = createStarMap({
         try {
             sessionStorage.setItem("elsewhere-arrival", star.id);
         } catch {}
+        jumpAnim = { t: 0, duration: 2.6, aim: towardStar(star) };
+        target = selectedBody = null;
         playJump(name, () => {
             // The destination is already saved, so a plain reload lands there even
             // where query strings are unavailable; the URL is updated where it can be.
@@ -3922,8 +4482,13 @@ const starMap = createStarMap({
         geology: strata,
     }),
     selectedBody: () => selectedBody,
+    // The world view (starmap.js): the world you are at, and where on it you are.
+    currentBody: () => activeBody,
+    // Where the ship is in this system (system coordinates, metres), for the map's marker.
+    shipInSystem: () => (mode === "deep" ? null : shipPosition.clone().add(worldOrigin).toArray()),
+    shipNormal: (body) => body?.id === activeBody.id && !["space", "transit", "deep"].includes(mode) ? (mode === "walk" ? playerPos() : shipPosition).clone().normalize().toArray() : null,
     onSelectBody: (body) => {
-        selectedBody = body;
+        selectedBody = body = ownBody(body);
         if (body.id !== activeBody.id) target = body;
     },
     cruise: (body) => {
@@ -3946,7 +4511,7 @@ const starMap = createStarMap({
         return { enabled: true, label: `Cruise to ${body.name} ↗` };
     },
     onCruise: (body) => {
-        selectedBody = body;
+        selectedBody = ownBody(body);
         beginCruise();
     },
 });
@@ -3964,6 +4529,13 @@ try {
         sessionStorage.removeItem("elsewhere-arrival");
         start();
         arriveNear(activeBody);
+        // Out of the jump still moving: the ship glides in and settles where it used to appear.
+        const glide = 30000, back = glide / 2.6;
+        shipPosition.addScaledVector(shipForward, -back);
+        camera.position.addScaledVector(shipForward, -back);
+        speed = glide;
+        driveFade = 1;
+        drivePower = 0.8;
         playArrival();
         toast(
             `Jump complete: ${system.name}, a ${system.star.physics.spectralClass} star with ${system.bodies.length} worlds. ${activeBody.name} is ahead.`,
@@ -3980,6 +4552,7 @@ setupDev({
     star: currentStar,
     body: () => activeBody,
     onChange: () => {
+        setShipDesign(kestrel, codex.unlocked.has("petrel") ? "petrel" : "kestrel"); // (the ship switch, or the Petrel ticked or unticked)
         starMap.setRange(jumpRangeNow());
         upgradeScreen.refresh();
         updateTally(true);

@@ -21,6 +21,8 @@
 //   wary      cautious (devotional): they keep their distance and watch you
 //   guarded   aggressive (martial): two wardens follow you wherever you walk
 // THREE is passed in. Geometry and motion only; game.js does the walking and docking.
+import { padPieces } from './landing-pad.js';
+import { addHullFeel } from './hull-feel.js';
 import { rng } from './rng.mjs';
 import { buildCrew, suitUp } from './fauna-mesh.js';
 import { createExpression, express, lookAngles, startGesture, gestureOf, moodOf } from './express.mjs';
@@ -151,9 +153,7 @@ export function buildStationDeck(THREE, { seed, tier, level, civ, colours, organ
   // Pads, with the crew's service places round each.
   for (const p of pads) {
     floor.add(flat(new THREE.CircleGeometry(p.r, 40)), L(p.x, .04, p.z), C.pad);
-    lit.add(flat(new THREE.RingGeometry(p.r * .78, p.r * .86, 40)), L(p.x, .06, p.z), p.guest ? C.guest : C.trim);
-    for (let i = 0; i < 4; i++) lit.add(box(p.r * .55, .02, .22), L(p.x, .06, p.z, 0, i * Math.PI / 2 + Math.PI / 4).multiply(L(0, 0, -p.r * .32)), p.guest ? C.guest : C.trim);
-    for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; glow.add(box(.22, .1, .22), L(p.x + Math.cos(a) * (p.r + .1), .04, p.z + Math.sin(a) * (p.r + .1)), p.guest ? C.guest : C.glow); }
+    for (const pc of padPieces(THREE, p.r)) (pc.glow ? glow : lit).add(pc.geo, L(p.x, .05, p.z), { field: mix(C.pad, '#aab0b4', .22), mark: p.guest ? C.guest : C.trim, dark: C.dark, metal: C.metal, light: p.guest ? C.guest : C.glow }[pc.colour]);
     if (!p.guest) around(p.x, p.z, p.r + 1.1, 'service', 3, towardHub(p.x, p.z) + Math.PI, 1.6);
   }
   // The spire, in their style, with doors and a post at each.
@@ -306,7 +306,7 @@ export function buildStationDeck(THREE, { seed, tier, level, civ, colours, organ
   const mat = (opts) => new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .6, metalness: .18, ...opts });
   const meshes = [
     new THREE.Mesh(floor.geometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .75, metalness: .1, side: THREE.DoubleSide })),
-    new THREE.Mesh(lit.geometry(), mat({ side: THREE.DoubleSide })),
+    new THREE.Mesh(lit.geometry(), addHullFeel(THREE, mat({ side: THREE.DoubleSide }), { plate: 2.4 })),
     new THREE.Mesh(glow.geometry(), new THREE.MeshBasicMaterial({ vertexColors: true })),
   ];
   if (glass.count()) meshes.push(new THREE.Mesh(glass.geometry(), new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: .28, roughness: .05, metalness: .3, depthWrite: false, side: THREE.DoubleSide })));

@@ -50,7 +50,7 @@ function streaks(count) {
 export function playJump(destinationName, done) {
     const { c, g } = overlay(),
         parts = streaks(260),
-        duration = reducedMotion() ? 500 : 2300,
+        duration = reducedMotion() ? 500 : 2600,
         t0 = performance.now();
     const label = document.createElement("div");
     label.className = "jump-label";
@@ -60,15 +60,16 @@ export function playJump(destinationName, done) {
         const t = Math.min(1, (now - t0) / duration),
             cx = innerWidth / 2,
             cy = innerHeight / 2;
-        g.fillStyle = `rgba(4,10,18,${0.25 + t * 0.5})`;
-        g.fillRect(0, 0, innerWidth, innerHeight);
+        // The game shows the ship running up to the jump behind this: streaks gather over it
+        // late, and the flash covers the reload.
+        g.clearRect(0, 0, innerWidth, innerHeight);
         const speed = 2 + t ** 3 * 90;
         g.lineCap = "round";
         for (const p of parts) {
             p.d += speed * p.s;
             if (p.d > Math.hypot(cx, cy)) p.d = 10 + Math.random() * 60;
             const len = 2 + t ** 2 * 160 * p.s;
-            g.strokeStyle = `rgba(${200 + 55 * t},${225 + 30 * t},255,${0.35 + 0.6 * t})`;
+            g.strokeStyle = `rgba(${200 + 55 * t},${225 + 30 * t},255,${0.75 * Math.max(0, (t - 0.45) / 0.55) ** 2})`;
             g.lineWidth = 0.6 + t * 1.6;
             g.beginPath();
             g.moveTo(cx + Math.cos(p.a) * p.d, cy + Math.sin(p.a) * p.d);

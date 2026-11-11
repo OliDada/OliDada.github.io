@@ -12,6 +12,7 @@
 // On top of its hub, the part that does not turn, is a landing deck far larger than any
 // station's (station-deck.js, mega): many pads, several landmarks, hangars and a big crew.
 // collide(p, rad) keeps a ship out of the hull. THREE is passed in.
+import { addHullFeel } from './hull-feel.js';
 import { rng } from './rng.mjs';
 import { buildStationDeck } from './station-deck.js';
 import { shipDesign } from './ships.js';
@@ -27,7 +28,7 @@ export function buildMegastation(THREE, civ, { coarse = false } = {}) {
   const q = new THREE.Quaternion(), e = new THREE.Euler();
   const L = (x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => new THREE.Matrix4().compose(V(x, y, z), q.setFromEuler(e.set(rx, ry, rz)).clone(), V(sx, sy, sz));
   const sp = civ.species.colors || {}, design = shipDesign(civ);
-  const hull = design.hullColour || '#e8ecef', trim = design.trim || sp.accent || '#c0503a', glowC = design.glow || '#7fd4ff';
+  const hull = design.hullColour || '#e8ecef', trim = '#' + new THREE.Color(design.trim || sp.accent || '#c0503a').lerp(new THREE.Color(design.hullColour || '#e8ecef'), .45).getHexString(), glowC = design.glow || '#7fd4ff';
   const mix = (a, b, t) => '#' + new THREE.Color(a).lerp(new THREE.Color(b), t).getHexString();
   const windowC = mix('#ffd98a', sp.glow || trim, .3), dark = mix(hull, '#20262c', .55);
   const lit = merged(THREE), glow = merged(THREE);
@@ -120,7 +121,7 @@ export function buildMegastation(THREE, civ, { coarse = false } = {}) {
   const box = new THREE.Box3();
   const meshes = [];
   // No fog: an ark hangs in the sky of a world with air like a moon, rather than fading into its haze.
-  const mat = () => new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .55, metalness: .25, fog: false });
+  const mat = () => addHullFeel(THREE, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .55, metalness: .25, fog: false }), { plate: 28, windows: 1, window: 7, colour: windowC });
   const parts = [[lit, group, false], [glow, group, true]];
   for (const w of spinners) { group.add(w.group); parts.push([w.lit, w.group, false], [w.glow, w.group, true]); }
   for (const [m, parent, glowing] of parts) {

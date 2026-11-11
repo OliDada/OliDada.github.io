@@ -55,7 +55,7 @@ test('giants form mostly beyond the frost line, have no surface, and keep their 
     const { bodies, star } = generateSystem(seed);
     for (const g of bodies.filter(b => b.giant)) {
       giants++;
-      if (g.physics.au >= star.physics.frostLine * .6) outer++;
+      if (g.hot || g.physics.au >= star.physics.frostLine * .6) outer++; // hot Jupiters migrated in on purpose
       assert.equal(g.parent, null);
       assert.equal(g.physics.life, 'none');
       assert.ok(g.radius > Math.max(...bodies.filter(b => !b.giant).map(b => b.radius)), `seed ${seed}: giant smaller than a rocky world`);

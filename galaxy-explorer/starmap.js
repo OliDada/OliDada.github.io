@@ -14,6 +14,8 @@ import { civilizationOf, tierAtLeast, colonistOf, arksIn } from './civilizations
 import { networkFor, describeNetwork } from './settlements.mjs';
 import { plural } from './structures.mjs';
 import { terrainFor } from './terrain.mjs';
+import { paintBand } from './world-paint.mjs';
+import { spaceObjectsOf, cometPosition, trojanCentre } from './space-objects.mjs';
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -168,7 +170,7 @@ export function createStarMap(o) {
   }
   const heardFrom = (star) => radio.find(e => e.star.id === star.id);
   const view = { x: here.x, y: here.y, scale: LOCAL_SCALE };
-  let w = 0, h = 0, dpr = 1, pending = false, drawn = [], haze = null, anim = null;
+  let w = 0, h = 0, dpr = 1, pending = false, drawn = [], haze = null, anim = null, live = 0;
   let selected = { star: targets[0]?.star || here, body: null };
   const isVisited = (star) => star.id === here.id || state.visited.has(star.id);
   // Orbital survey: every system within jump range shows its worlds (biome, chemistry, life) as if visited.
@@ -206,7 +208,175 @@ export function createStarMap(o) {
     g.putImageData(img, 0, 0); return c;
   }
 
+  // --- The world view: one world up close ---------------------------------------
+  // Below the system level: the chosen world as a globe you turn by dragging, painted from
+  // its real terrain (the same colours, seas and relief you fly over) or, for a giant, its
+  // bands. Marked on it: the signal, where you are, and the towns of its builders once you
+  // have seen them. The side panel shows the world's facts and what you have recorded there.
+  // The globe is painted once into a small map (a few rows a frame, so the map stays
+  // responsive), and drawn from that each time it turns.
+  // Two maps per world: a coarse one painted here in a moment, then a sharp one painted by
+  // background threads (world-bake-worker.js) a band at a time; the globe draws from the
+  // sharp map wherever it is ready. Both are kept for the last few worlds you looked at.
+  const LO = [256, 128], HI = [1536, 768];
+  const bakes = new Map(); // body key -> { lo, hi } where each is { W, H, tex, hgt, rows (done) }
+  let world = null, bakers = null, bakeId = 0;
+  const unit3 = (v) => { const l = Math.hypot(...v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+  const hexRgb = (hx) => [1, 3, 5].map((i) => parseInt(String(hx || '#888888').slice(i, i + 2), 16) / 255);
+  const level = ([W, H]) => ({ W, H, tex: new Float32Array(W * H * 3), rows: 0, ready: new Uint8Array(H) });
+  function openWorld(star, body) {
+    if (!body || body.ark || !isSurveyed(star)) return false;
+    let terrain = null;
+    try { terrain = body.giant ? null : terrainFor(body); } catch { /* painted as bands */ }
+    const focus = o.shipNormal?.(body) || terrain?.landing || body.signal || [0, 0, 1];
+    const key = `${star.id}:${body.id}`;
+    let maps = bakes.get(key);
+    if (!maps) {
+      if (bakes.size >= 4) bakes.delete(bakes.keys().next().value);
+      bakes.set(key, (maps = { lo: level(LO), hi: body.giant ? null : level(HI), sent: false }));
+    }
+    world = { star, body, terrain, maps, zoom: 1, yaw: Math.atan2(focus[0], focus[2]), pitch: Math.asin(clamp(focus[1], -1, 1)), img: null };
+    world.marks = worldMarks(star, body, terrain);
+    selected = { star, body };
+    if (star.id === here.id) o.onSelectBody?.(body);
+    updatePanel(); document.body.classList.remove('map-panel-collapsed');
+    bakeWorld();
+    return true;
+  }
+  const exitWorld = () => { world = null; };
+  function worldMarks(star, body, terrain) {
+    const marks = [];
+    if (terrain?.site) marks.push({ n: unit3(terrain.site), label: 'SIGNAL', kind: 'signal' });
+    // Towns, once their builders have been seen (the survey's traces).
+    try {
+      const survey = star.id === here.id ? o.survey() : readSurvey(systemOf(star).seed), civ = civOf(body);
+      if (civ && terrain && survey.traces?.[body.id]) {
+        const net = networkFor(body, civ, terrain);
+        for (const st of net.settlements) marks.push({ n: unit3(st.n), kind: st.id === 's0' ? 'capital' : 'town' });
+      }
+    } catch { /* no towns to mark */ }
+    return marks;
+  }
+  function bakeWorld() {
+    const Wd = world;
+    if (!Wd) return;
+    const b = Wd.body, t = Wd.terrain, lo = Wd.maps.lo, t0 = performance.now();
+    // The coarse map, here, a few rows a frame.
+    while (lo.rows < lo.H && performance.now() - t0 < 10) {
+      const y1 = Math.min(lo.H, lo.rows + 4);
+      lo.tex.set(paintBand(t, b, lo.W, lo.H, lo.rows, y1), lo.rows * lo.W * 3);
+      lo.rows = y1;
+    }
+    requestDraw();
+    if (lo.rows < lo.H) return void requestAnimationFrame(() => world === Wd && bakeWorld());
+    // Then the sharp map, in bands, on background threads.
+    const hi = Wd.maps.hi;
+    if (!hi || Wd.maps.sent) return;
+    Wd.maps.sent = true;
+    try {
+      bakers ||= Array.from({ length: Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1)) }, () => new Worker(new URL(`./world-bake-worker.js?size=${SIZE}`, import.meta.url), { type: 'module' }));
+    } catch { bakers = []; }
+    if (!bakers.length) return;
+    const id = ++bakeId, bands = [];
+    for (let y = 0; y < hi.H; y += 32) bands.push([y, Math.min(hi.H, y + 32)]);
+    // Rows nearest the part of the world facing you first.
+    const facing = clamp(Math.round((.5 - Wd.pitch / Math.PI) * hi.H), 0, hi.H - 1);
+    bands.sort((a, c) => Math.abs((a[0] + a[1]) / 2 - facing) - Math.abs((c[0] + c[1]) / 2 - facing));
+    const maps = Wd.maps, plain = JSON.parse(JSON.stringify(b));
+    const next = (wk) => {
+      const band = bands.shift();
+      if (!band) return;
+      wk.onmessage = (e) => {
+        if (e.data.id !== id) return;
+        const { y0, y1, col } = e.data;
+        hi.tex.set(col, y0 * hi.W * 3);
+        for (let y = y0; y < y1; y++) hi.ready[y] = 1;
+        hi.rows += y1 - y0;
+        if (world?.maps === maps) requestDraw();
+        next(wk);
+      };
+      wk.postMessage({ id, body: plain, W: hi.W, H: hi.H, y0: band[0], y1: band[1] });
+    };
+    bakers.forEach(next);
+  }
+  // A texel's colour and height from a map, with bilinear filtering (fx, fy in texels).
+  const SAMPLE = [0, 0, 0, 0];
+  function sampleMap(m, fx, fy) {
+    const W = m.W, H = m.H, x0 = Math.floor(fx), y0 = clamp(Math.floor(fy), 0, H - 1), tx = fx - x0, ty = fy - Math.floor(fy);
+    const xa = ((x0 % W) + W) % W, xb = (xa + 1) % W, yb = Math.min(H - 1, y0 + 1);
+    const a = y0 * W + xa, bI = y0 * W + xb, c = yb * W + xa, d = yb * W + xb;
+    for (let k = 0; k < 3; k++) SAMPLE[k] = (m.tex[a * 3 + k] * (1 - tx) + m.tex[bI * 3 + k] * tx) * (1 - ty) + (m.tex[c * 3 + k] * (1 - tx) + m.tex[d * 3 + k] * tx) * ty;
+    return SAMPLE;
+  }
+  function drawWorld() {
+    const Wd = world, b = Wd.body, lo = Wd.maps.lo, hi = Wd.maps.hi;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalAlpha = 1;
+    ctx.fillStyle = '#040911'; ctx.fillRect(0, 0, w, h);
+    drawn.length = 0;
+    const [ox, oy] = focusOffset(), cx = w / 2 - ox, cy = h / 2 - oy;
+    const avail = Math.min(w - (w > 760 && panelOpen() ? 360 : 0), h - (w <= 760 && panelOpen() ? Math.min(h * .46, 420) : 0));
+    const R = avail * .4 * Wd.zoom;
+    // Rendered at up to the screen's own resolution (capped, for speed) and scaled up smoothly.
+    const G = Math.max(64, Math.min(800, Math.round(R * 2 * Math.min(dpr, 2))));
+    if (!Wd.img || Wd.img.width !== G) Wd.img = new ImageData(G, G);
+    const px = Wd.img.data, cyaw = Math.cos(Wd.yaw), syaw = Math.sin(Wd.yaw), cp = Math.cos(Wd.pitch), sp = Math.sin(Wd.pitch);
+    const f = [syaw * cp, sp, cyaw * cp], e = [cyaw, 0, -syaw], n = [f[1] * e[2] - f[2] * e[1], f[2] * e[0] - f[0] * e[2], f[0] * e[1] - f[1] * e[0]];
+    const L = unit3([-.55, .5, .67]), hc = Wd.haze || (Wd.haze = hexRgb(b.atmosphere)), airy = b.physics?.pressure > .05 || b.giant ? .35 : .1;
+    const TAU = Math.PI * 2;
+    for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) {
+      const u = (x + .5) / G * 2 - 1, v = 1 - (y + .5) / G * 2, rr = u * u + v * v, o4 = (y * G + x) * 4;
+      if (rr > 1) { px[o4 + 3] = 0; continue; }
+      const z = Math.sqrt(1 - rr);
+      const wx = e[0] * u + n[0] * v + f[0] * z, wy = e[1] * u + n[1] * v + f[1] * z, wz = e[2] * u + n[2] * v + f[2] * z;
+      const lat = Math.asin(clamp(wy, -1, 1)), lon = Math.atan2(wx, wz), gx = lon / TAU + .5, gy = .5 - lat / Math.PI;
+      // The sharp map where its rows are in, else the coarse one.
+      let m = hi && hi.ready[Math.min(hi.H - 1, Math.floor(gy * hi.H))] && hi.ready[Math.min(hi.H - 1, Math.floor(gy * hi.H) + 1)] ? hi : lo;
+      if (m === lo && Math.floor(gy * lo.H) >= lo.rows) { px[o4] = 30; px[o4 + 1] = 42; px[o4 + 2] = 52; px[o4 + 3] = 255; continue; } // still being painted
+      const s = sampleMap(m, gx * m.W - .5, gy * m.H - .5), r0 = s[0], g0 = s[1], b0 = s[2];
+      const shade = .3 + .8 * Math.max(0, u * L[0] + v * L[1] + z * L[2]); // (relief is in the map)
+      const hz = airy * Math.pow(1 - z, 2.2);
+      px[o4] = Math.min(255, 255 * (r0 * shade * (1 - hz) + hc[0] * hz * .9));
+      px[o4 + 1] = Math.min(255, 255 * (g0 * shade * (1 - hz) + hc[1] * hz * .9));
+      px[o4 + 2] = Math.min(255, 255 * (b0 * shade * (1 - hz) + hc[2] * hz * .9));
+      px[o4 + 3] = 255;
+    }
+    const tmp = Wd.canvas || (Wd.canvas = document.createElement('canvas'));
+    if (tmp.width !== G) { tmp.width = G; tmp.height = G; }
+    tmp.getContext('2d').putImageData(Wd.img, 0, 0);
+    if (b.physics?.pressure > .05 || b.giant) { // the glow of its air around the edge
+      const g = ctx.createRadialGradient(cx, cy, R * .96, cx, cy, R * 1.12);
+      g.addColorStop(0, `rgba(${hc.map((v) => Math.round(v * 255)).join(',')},.45)`); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R * 1.12, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(tmp, cx - R, cy - R, R * 2, R * 2);
+    // Rings of a ringed giant: a flat ellipse in front of and behind it (simple).
+    // Marks on the near side.
+    const proj = (m) => { const d = m[0] * f[0] + m[1] * f[1] + m[2] * f[2]; return d > .05 ? [cx + R * (m[0] * e[0] + m[1] * e[1] + m[2] * e[2]), cy - R * (m[0] * n[0] + m[1] * n[1] + m[2] * n[2]), d] : null; };
+    ctx.font = '600 10px system-ui, sans-serif'; ctx.textBaseline = 'middle';
+    const you = o.shipNormal?.(b);
+    for (const m of [...Wd.marks, ...(you ? [{ n: unit3(you), label: 'YOU', kind: 'you' }] : [])]) {
+      const q = proj(m.n); if (!q) continue;
+      ctx.globalAlpha = .4 + .6 * q[2];
+      if (m.kind === 'town' || m.kind === 'capital') {
+        ctx.fillStyle = '#ffd98a'; ctx.beginPath(); ctx.arc(q[0], q[1], m.kind === 'capital' ? 4 : 2.4, 0, Math.PI * 2); ctx.fill();
+      } else if (m.kind === 'signal') {
+        ctx.fillStyle = '#c9f4cc'; diamond(q[0], q[1], 6);
+        ctx.fillText(m.label, q[0] + 10, q[1]);
+      } else {
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(q[0], q[1], 6, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 1;
+        ctx.fillStyle = '#ffffff'; ctx.fillText(m.label, q[0] + 10, q[1]);
+      }
+    }
+    ctx.globalAlpha = 1;
+    const parent = b.parent && systemOf(Wd.star).bodies.find((x) => x.id === b.parent);
+    $('mapTitle').textContent = b.name.toUpperCase();
+    $('mapSubtitle').textContent = `${b.type}${parent ? ` · moon of ${parent.name}` : ''} · ${nameOf(Wd.star)} system${lo.rows < lo.H ? ' · charting the surface…' : hi && hi.rows < hi.H ? ` · sharpening ${Math.round(100 * hi.rows / hi.H)}%` : ''}`;
+    $('mapScale').textContent = 'drag to turn the world · scroll or pinch to zoom · zoom out for the system';
+  }
+
   function draw() {
+    if (world) return drawWorld();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalAlpha = 1;
     ctx.fillStyle = '#040911'; ctx.fillRect(0, 0, w, h);
     const s = view.scale, ls = Math.log(s);
@@ -313,6 +483,19 @@ export function createStarMap(o) {
     if (cx < -SYSTEM_RADIUS * s * 1.2 || cx > w + SYSTEM_RADIUS * s * 1.2 || cy < -SYSTEM_RADIUS * s * 1.2 || cy > h + SYSTEM_RADIUS * s * 1.2) return;
     const survey = st.id === here.id ? o.survey() : null;
     ctx.lineWidth = 1;
+    // Belts, Trojan swarms and comets (space-objects.mjs), once the system is surveyed.
+    if (known) {
+      const so = spaceObjectsOf(sys), t = orbitClock();
+      for (const b of so.belts) { ctx.globalAlpha = alpha * .22; ctx.strokeStyle = '#b8a894'; ctx.lineWidth = Math.max(2, b.width * k * s); ctx.beginPath(); ctx.arc(cx, cy, b.R * k * s, 0, Math.PI * 2); ctx.stroke(); }
+      ctx.fillStyle = '#b8a894';
+      for (const tr of so.trojans) { const c = trojanCentre(sys, tr, t), [tx, ty] = toScreen(st.x + c[0] * k, st.y - c[2] * k); ctx.globalAlpha = alpha * .5; for (let i = -2; i <= 2; i++) for (let j = -1; j <= 1; j++) { ctx.beginPath(); ctx.arc(tx + i * 2.5 + j, ty + j * 2.5 - i * .5, .9, 0, Math.PI * 2); ctx.fill(); } }
+      for (const c of so.comets) {
+        const p = cometPosition(c, t), [px, py] = toScreen(st.x + p[0] * k, st.y - p[2] * k), d = Math.hypot(p[0], p[2]) || 1, act = Math.min(1, Math.max(0, (c.a * .9 - Math.hypot(...p)) / (c.a * .75)));
+        ctx.globalAlpha = alpha * .8; ctx.fillStyle = '#dff2ff'; ctx.beginPath(); ctx.arc(px, py, 2, 0, Math.PI * 2); ctx.fill();
+        if (act > .05) { ctx.strokeStyle = '#bfe6ff'; ctx.globalAlpha = alpha * .5 * act; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + p[0] / d * 30 * act, py - p[2] / d * 30 * act); ctx.stroke(); }
+      }
+      ctx.lineWidth = 1; ctx.globalAlpha = 1;
+    }
     for (const b of sys.bodies) {
       const parent = b.parent && sys.bodies.find(p => p.id === b.parent);
       const [bx, by] = bodyXY(st, sys, b), [sx, sy] = toScreen(bx, by);
@@ -385,6 +568,23 @@ export function createStarMap(o) {
       ctx.strokeStyle = '#c9f4cc'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
       ctx.fillStyle = '#edf5ee'; ctx.font = '600 12px system-ui, sans-serif'; ctx.fillText(nameOf(selected.star), sx + r + 6, sy);
     }
+    // Finds between the stars you have picked up (deep-finds.mjs): unknown contacts as a "?",
+    // identified ones by kind; recorded ones a little brighter.
+    if (s > 2 && s < SYSTEM_FROM * 2) {
+      const COL = { nebula: '#ff8fc0', rogue: '#9fb7d0', dwarf: '#ff6a4a', hole: '#ffd27a' };
+      ctx.font = '600 10px system-ui, sans-serif'; ctx.textBaseline = 'middle';
+      for (const f of o.finds?.() || []) {
+        const [fx, fy] = toScreen(f.x, f.y);
+        if (fx < -20 || fx > w + 20 || fy < -20 || fy > h + 20) continue;
+        ctx.globalAlpha = f.recorded ? 1 : .75;
+        ctx.strokeStyle = ctx.fillStyle = f.revealed ? COL[f.kind] : '#c9f4cc';
+        if (!f.revealed) { ctx.textAlign = 'center'; ctx.fillText('?', fx, fy); ctx.textAlign = 'left'; }
+        else if (f.kind === 'nebula') { ctx.globalAlpha *= .5; ctx.beginPath(); ctx.arc(fx, fy, 6, 0, Math.PI * 2); ctx.fill(); }
+        else { ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(fx, fy, 4, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 1; }
+        if (s > 12) { ctx.globalAlpha = .8; ctx.fillText(f.revealed ? f.title : 'Unknown contact', fx + 9, fy); }
+      }
+      ctx.globalAlpha = 1;
+    }
     // In deep space: the ship between the stars, and its course.
     const deep = o.deep();
     if (deep) {
@@ -410,6 +610,15 @@ export function createStarMap(o) {
     } else {
       const d = drawn.find(e => !e.body && e.star.id === here.id);
       if (d) { ctx.fillStyle = 'rgba(237,245,238,.85)'; ctx.font = '600 12px system-ui, sans-serif'; ctx.fillText(`${nameOf(here)} · YOU ARE HERE`, d.sx + d.r + 8, d.sy - d.r - 4); }
+      // The ship itself among the orbits, where it is now.
+      const p = o.shipInSystem?.(), sys = systemOf(here);
+      if (p && sys.chartScale) {
+        const [px, py] = toScreen(here.x + p[0] * sys.chartScale, here.y - p[2] * sys.chartScale);
+        ctx.globalAlpha = smooth(Math.log(SYSTEM_FROM), Math.log(SYSTEM_TO), Math.log(s));
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 1;
+        ctx.fillStyle = '#ffffff'; ctx.font = '600 10px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        ctx.fillText('YOU', px, py + 8); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.globalAlpha = 1;
+      }
     }
   }
 
@@ -470,8 +679,10 @@ export function createStarMap(o) {
     return best;
   }
   function tap(sx, sy, double) {
+    if (world) return;
     const d = hit(sx, sy);
-    if (d) { select(d.star, d.body || null); if (double) d.body && !d.body.ark ? flyToBody(d.star, d.body) : flyToStar(d.star); }
+    // Double-tap a world: its globe (the world view); a star: its system.
+    if (d) { select(d.star, d.body || null); if (double) d.body && !d.body.ark ? (openWorld(d.star, d.body) || flyToBody(d.star, d.body)) : flyToStar(d.star); }
     else if (view.scale < REAL_FROM) { const [x, y] = toWorld(sx, sy); flyTo(x, y, view.scale * 4, 600); }
     else if (double) zoomAt(sx, sy, 2.5);
   }
@@ -479,12 +690,14 @@ export function createStarMap(o) {
   const pointers = new Map(); let moved = 0, pinch = null, lastTap = 0;
   canvas.addEventListener('pointerdown', (e) => {
     canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY }); moved = 0; anim = null;
-    if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), scale: view.scale }; }
+    if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), scale: view.scale, zoom: world?.zoom ?? 1 }; }
   });
   canvas.addEventListener('pointermove', (e) => {
     const prev = pointers.get(e.pointerId); if (!prev) return;
     const cur = { x: e.offsetX, y: e.offsetY }; pointers.set(e.pointerId, cur);
-    if (pointers.size === 1) { const dx = cur.x - prev.x, dy = cur.y - prev.y; moved += Math.abs(dx) + Math.abs(dy); view.x -= dx / view.scale; view.y += dy / view.scale; requestDraw(); }
+    if (pointers.size === 1 && world) { const dx = cur.x - prev.x, dy = cur.y - prev.y, R = Math.min(w, h) * .4 * world.zoom; moved += Math.abs(dx) + Math.abs(dy); world.yaw -= dx / R; world.pitch = clamp(world.pitch + dy / R, -1.45, 1.45); requestDraw(); }
+    else if (pointers.size === 2 && pinch && world) { const [a, b] = [...pointers.values()]; moved += 10; zoomWorld(pinch.zoom * Math.hypot(a.x - b.x, a.y - b.y) / pinch.dist); if (!world) pinch = null; }
+    else if (pointers.size === 1) { const dx = cur.x - prev.x, dy = cur.y - prev.y; moved += Math.abs(dx) + Math.abs(dy); view.x -= dx / view.scale; view.y += dy / view.scale; requestDraw(); }
     else if (pointers.size === 2 && pinch) { const [a, b] = [...pointers.values()]; moved += 10; zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, pinch.scale * Math.hypot(a.x - b.x, a.y - b.y) / pinch.dist / view.scale); }
   });
   const release = (e) => {
@@ -493,12 +706,21 @@ export function createStarMap(o) {
     pointers.delete(e.pointerId); if (pointers.size < 2) pinch = null;
   };
   canvas.addEventListener('pointerup', release); canvas.addEventListener('pointercancel', release);
-  canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoomAt(e.offsetX, e.offsetY, Math.exp(-e.deltaY * (e.ctrlKey ? .01 : .0018))); }, { passive: false });
-  $('mapZoomIn').onclick = () => zoomAt(w / 2, h / 2, 2);
-  $('mapZoomOut').onclick = () => zoomAt(w / 2, h / 2, .5);
-  $('mapViewGalaxy').onclick = () => flyTo(0, 0, minScale(), 1100);
-  $('mapViewLocal').onclick = () => flyTo(here.x, here.y, LOCAL_SCALE);
-  $('mapViewSystem').onclick = () => { select(here, null); flyToStar(here); };
+  // Zooming a world out past its smallest size leaves it for its system.
+  let zoomHold = 0; // after leaving a world, the rest of that scroll gesture is ignored (it ran on out to the galaxy)
+  function zoomWorld(z) {
+    if (z < .62) { const st = world.star; exitWorld(); zoomHold = performance.now() + 900; flyToStar(st); return; }
+    world.zoom = Math.min(3.5, z); requestDraw();
+  }
+  canvas.addEventListener('wheel', (e) => { e.preventDefault(); if (performance.now() < zoomHold) return; if (world) return zoomWorld(world.zoom * Math.exp(-e.deltaY * (e.ctrlKey ? .01 : .0018))); zoomAt(e.offsetX, e.offsetY, Math.exp(-e.deltaY * (e.ctrlKey ? .01 : .0018))); }, { passive: false });
+  $('mapZoomIn').onclick = () => { if (world) { world.zoom = clamp(world.zoom * 1.5, .6, 3.5); return requestDraw(); } zoomAt(w / 2, h / 2, 2); };
+  // Zooming out of a world returns to its system.
+  $('mapZoomOut').onclick = () => { if (world) return zoomWorld(world.zoom > .75 ? Math.max(.62, world.zoom / 1.5) : .5); zoomAt(w / 2, h / 2, .5); };
+  $('mapViewGalaxy').onclick = () => { exitWorld(); flyTo(0, 0, minScale(), 1100); };
+  $('mapViewLocal').onclick = () => { exitWorld(); flyTo(here.x, here.y, LOCAL_SCALE); };
+  $('mapViewSystem').onclick = () => { exitWorld(); select(here, null); flyToStar(here); };
+  // The world view: the world selected on the map, or else the one you are at.
+  $('mapViewWorld').onclick = () => { const b = selected.body && !selected.body.ark ? selected : { star: here, body: o.currentBody?.() }; if (b.body && openWorld(b.star, b.body)) requestDraw(); };
   $('closeStarMap').onclick = () => dialog.close();
   $('mapPanelToggle').onclick = () => document.body.classList.toggle('map-panel-collapsed');
 
@@ -689,8 +911,12 @@ export function createStarMap(o) {
   return {
     open(mode = 'local') {
       scanRadio();
+      // Your marker moves while the map is open (in deep space, in a system, on a world).
+      clearInterval(live); live = setInterval(() => { if (!dialog.open) return clearInterval(live); if (!pointers.size && !anim) requestDraw(); }, 250);
       if (!dialog.open) dialog.showModal();
       resize();
+      exitWorld();
+      if (mode === 'world' && o.currentBody?.() && openWorld(here, o.currentBody())) { draw(); return; }
       if (mode === 'system') {
         const b = o.selectedBody();
         selected = { star: here, body: b || null };
@@ -715,6 +941,7 @@ export function createStarMap(o) {
       if (!dialog.open) dialog.showModal();
       resize();
       const body = systemOf(star).bodies.find((b) => b.id === bodyId) || null;
+      exitWorld();
       selected = { star, body };
       Object.assign(view, focusView(star.x, star.y, body ? systemScale() : LOCAL_SCALE));
       updatePanel(); draw();

@@ -152,74 +152,94 @@ function subFittings(group, dark, noseZ, sternZ) {
     Object.assign(group.userData, { lamps, prop, lamp });
 }
 
-// The Petrel: a sea and storm ship, after the seabird. A long, slim white hull with a
-// keel and a teal waterline, a bubble canopy, gull wings (up from the hull, then down
-// to floats at the bend, so it rides the water level), twin canted tail fins and a
-// single big stern engine with two small ones. Under water the wings fold back along
-// the hull and the same lamps and propeller as the Kestrel come out.
+// The Petrel: a sea and storm ship, after the storm petrel. A flying-boat hull, slate
+// above and pale below with the bird's white band before the tail, a drooped beak with a
+// sensor tube on it, a long glass canopy, and long cranked wings: up from the hull to an
+// engine on each shoulder (clear of the spray), then out and down to a lit tip. A forked
+// tail and one big stern engine. Under water the wings fold back along the hull and the
+// same lamps and propeller as the Kestrel come out.
 function makePetrel() {
     const group = new THREE.Group();
-    const white = new THREE.MeshStandardMaterial({ color: 0xf2f2ec, metalness: 0.2, roughness: 0.45, flatShading: true });
-    const teal = new THREE.MeshStandardMaterial({ color: 0x1f8a8f, metalness: 0.3, roughness: 0.5, flatShading: true });
-    const grey = new THREE.MeshStandardMaterial({ color: 0xc9ced0, metalness: 0.35, roughness: 0.55, flatShading: true, side: THREE.DoubleSide });
-    const dark = new THREE.MeshStandardMaterial({ color: 0x1d2c33, metalness: 0.6, roughness: 0.35 });
+    const slate = new THREE.MeshStandardMaterial({ color: 0x62757f, metalness: 0.3, roughness: 0.5, flatShading: true });
+    const pale = new THREE.MeshStandardMaterial({ color: 0xe6e2d4, metalness: 0.2, roughness: 0.5, flatShading: true });
+    const teal = new THREE.MeshStandardMaterial({ color: 0x2a9d96, metalness: 0.3, roughness: 0.5, flatShading: true });
+    const plateMat = new THREE.MeshStandardMaterial({ color: 0x8496a0, metalness: 0.3, roughness: 0.55, flatShading: true, side: THREE.DoubleSide });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x1a2429, metalness: 0.6, roughness: 0.35 });
     const glass = new THREE.MeshStandardMaterial({ color: 0x1b4f5c, metalness: 0.8, roughness: 0.08, emissive: 0x0d2a30, emissiveIntensity: 0.6 });
-    // Hull: a lathe along z, pointed at the nose (-z), tapering to the stern.
-    const prof = [];
-    for (let i = 0; i <= 16; i++) { const t = i / 16; prof.push(new THREE.Vector2(Math.max(0.02, 0.95 * Math.sin(Math.PI * Math.pow(t, 0.75)) * (t > 0.8 ? 1 - (t - 0.8) * 1.6 : 1)), -4.6 + t * 9)); }
-    const hull = new THREE.Mesh(new THREE.LatheGeometry(prof, 16), white);
-    hull.rotation.x = -Math.PI / 2; hull.scale.set(1, 1, 0.82);
-    group.add(hull);
-    const stripe = new THREE.Mesh(new THREE.LatheGeometry(prof.map((v) => new THREE.Vector2(v.x * 1.02, v.y)), 16, Math.PI * 0.62, Math.PI * 0.76), teal);
-    stripe.rotation.x = -Math.PI / 2; stripe.scale.set(1, 1, 0.82); stripe.position.y = -0.05;
-    group.add(stripe);
-    const keel = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 5.2), teal);
-    keel.position.set(0, -0.85, 0.2);
+    const light = new THREE.MeshBasicMaterial({ color: 0x9ef6e1 });
+    const flameMat = () => new THREE.MeshBasicMaterial({ color: 0x9ef6e1, transparent: true, opacity: 0.8 });
+    // A flat plate cut to a planform: points are (x, z), z aft.
+    const plate = (pts, t) => new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, z))), { depth: t, bevelEnabled: false }).translate(0, 0, -t / 2).rotateX(Math.PI / 2);
+    // Hull: turned on a lathe along its length (nose at -z), wider than it is tall.
+    const girth = new THREE.SplineCurve([[0, 0.03], [0.07, 0.42], [0.2, 0.84], [0.36, 1.0], [0.52, 0.97], [0.7, 0.72], [0.86, 0.42], [1, 0.1]].map(([s, r]) => new THREE.Vector2(s, r))).getPoints(22);
+    const prof = (k = 1, a = 0, b = 1) => girth.filter((p) => p.x >= a - 1e-6 && p.x <= b + 1e-6).map((p) => new THREE.Vector2(Math.max(0.02, p.y * k), 5 - p.x * 9.6)).reverse();
+    const lathe = (pts, mat, phi0 = 0, phi = Math.PI * 2) => { const m = new THREE.Mesh(new THREE.LatheGeometry(pts, 18, phi0, phi), mat); m.rotation.x = -Math.PI / 2; m.scale.set(1.28, 1, 0.92); group.add(m); return m; };
+    lathe(prof(), slate);
+    lathe(prof(1.02), pale, Math.PI * 0.5, Math.PI);            // the pale belly, up to the waterline
+    lathe(prof(1.03, 0.72, 0.82), pale);                         // the white band before the tail
+    lathe(prof(1.035), teal, Math.PI * 0.46, Math.PI * 0.05);    // a thin waterline stripe each side
+    lathe(prof(1.035), teal, Math.PI * 1.49, Math.PI * 0.05);
+    const keel = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.5, 5.4), pale);
+    keel.position.set(0, -0.85, -0.2);
     group.add(keel);
+    const beak = new THREE.Mesh(new THREE.ConeGeometry(0.34, 1.3, 8), dark);
+    beak.rotation.x = -Math.PI / 2 - 0.16; beak.position.set(0, -0.12, -5.2); beak.scale.set(1.2, 1, 0.75);
+    group.add(beak);
+    const tubeNose = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.9, 6), dark);
+    tubeNose.rotation.x = Math.PI / 2; tubeNose.position.set(0, 0.2, -4.55);
+    group.add(tubeNose);
     const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.62, 14, 10), glass);
-    canopy.scale.set(1, 0.7, 1.9); canopy.position.set(0, 0.55, -1.7);
+    canopy.scale.set(1.05, 0.66, 2.4); canopy.position.set(0, 0.68, -2.2);
     group.add(canopy);
+    const spine = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.22, 3.6), slate);
+    spine.position.set(0, 0.84, 1.2); spine.rotation.x = 0.07;
+    group.add(spine);
     group.userData.wings = [];
     group.userData.engines = [];
     group.userData.gear = [];
     group.userData.liftJets = [];
     for (const side of [-1, 1]) {
-        // A gull wing on a pivot at the hull: an inner panel rising outward, an outer panel
-        // falling to a float at the bend, a teal leading edge.
+        // A cranked wing on a pivot at the hull: the inner panel rises to the shoulder
+        // engine, the long outer panel sweeps back and falls to a lit tip.
         const wing = new THREE.Group();
-        wing.position.set(side * 0.55, 0.15, -0.2);
-        const inner = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.08, 1.7), grey);
-        inner.position.set(1.1, 0.38, 0.15); inner.rotation.z = 0.33; inner.rotation.y = -0.12;
-        const outer = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.07, 1.2), grey);
-        outer.position.set(3.35, 0.5, 0.75); outer.rotation.z = -0.22; outer.rotation.y = -0.3;
-        const edge = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.1, 0.14), teal);
-        edge.position.set(3.25, 0.56, 0.17); edge.rotation.z = -0.22; edge.rotation.y = -0.3;
-        const float = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 1.1, 4, 8), white);
-        float.rotation.x = Math.PI / 2; float.position.set(2.3, 0.35, 0.4);
-        const strut = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.3), grey);
-        strut.position.set(2.3, 0.6, 0.4);
-        wing.add(inner, outer, edge, float, strut);
+        wing.position.set(side * 0.7, 0.25, -0.5);
+        const inner = new THREE.Mesh(plate([[0, -0.95], [2.3, -0.35], [2.3, 0.95], [0, 1.05]], 0.12), plateMat);
+        inner.rotation.z = 0.3;
+        const outer = new THREE.Mesh(plate([[0, -0.35], [2.8, 1.3], [2.85, 1.7], [0, 0.95]], 0.1), plateMat);
+        outer.position.set(2.18, 0.67, 0); outer.rotation.z = -0.22;
+        const edge = new THREE.Mesh(plate([[0, -0.37], [2.8, 1.28], [2.8, 1.42], [0, -0.15]], 0.12), teal);
+        edge.position.copy(outer.position); edge.rotation.z = -0.22;
+        const tip = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.7, 4, 8), slate);
+        tip.rotation.x = Math.PI / 2; tip.position.set(4.93, 0.05, 1.55);
+        const tipLight = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), light);
+        tipLight.position.set(4.93, 0.05, 1.08);
+        // The shoulder engine, on top of the crank.
+        const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.38, 2.1, 12), slate);
+        pod.rotation.x = Math.PI / 2; pod.position.set(2.1, 0.98, 0.35);
+        const intake = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.27, 0.3, 12), dark);
+        intake.rotation.x = Math.PI / 2; intake.position.set(2.1, 0.98, -0.8);
+        const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.3, 0.4, 12), dark);
+        nozzle.rotation.x = Math.PI / 2; nozzle.position.set(2.1, 0.98, 1.55);
+        const pylon = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 1.1), slate);
+        pylon.position.set(2.1, 0.72, 0.3);
+        const engine = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.5, 12), flameMat());
+        engine.rotation.x = Math.PI / 2; engine.position.set(2.1, 0.98, 2.5);
+        wing.add(inner, outer, edge, tip, tipLight, pod, intake, nozzle, pylon, engine);
         wing.scale.x = side;
         group.add(wing);
         group.userData.wings.push({ wing, side });
-        // Two small engines beside the stern.
-        const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 1.2, 14), dark);
-        nozzle.rotation.x = Math.PI / 2; nozzle.position.set(side * 0.75, 0.05, 3.3);
-        group.add(nozzle);
-        const engine = new THREE.Mesh(new THREE.ConeGeometry(0.26, 1.6, 14), new THREE.MeshBasicMaterial({ color: 0x9ef6e1, transparent: true, opacity: 0.8 }));
-        engine.rotation.x = Math.PI / 2; engine.position.set(side * 0.75, 0.05, 4.4);
-        group.add(engine);
         group.userData.engines.push(engine);
-        // Twin tail fins, canted outward.
-        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.3, 1.2), teal);
-        fin.position.set(side * 0.45, 0.85, 3.4); fin.rotation.set(-0.35, 0, -side * 0.35);
-        group.add(fin);
+        // The forked tail: two long blades, up and out.
+        const fork = new THREE.Mesh(plate([[0, 0], [2.0, 1.35], [2.0, 1.75], [0, 1.15]], 0.09), plateMat);
+        fork.position.set(side * 0.25, 0.36, 2.9); fork.rotation.z = 0.95; fork.scale.x = side;
+        if (side < 0) fork.rotation.z = -0.95;
+        group.add(fork);
         // Landing feet and lift jets.
         const foot = new THREE.Mesh(new THREE.BoxGeometry(0.28, 1, 0.5), dark);
-        foot.position.set(side * 0.7, -1.1, 0.8);
+        foot.position.set(side * 0.75, -1.1, 0.6);
         group.add(foot);
         group.userData.gear.push(foot);
-        for (const z of [-1.6, 1.8]) {
+        for (const z of [-1.9, 1.9]) {
             const jet = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.7, 14), new THREE.MeshBasicMaterial({ color: 0xa5f7e1, transparent: true, opacity: 0.65, depthWrite: false }));
             jet.rotation.z = Math.PI; jet.position.set(side * 0.6, -2, z);
             group.add(jet);
@@ -227,14 +247,14 @@ function makePetrel() {
         }
     }
     // The big stern engine.
-    const main = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.44, 0.8, 16), dark);
-    main.rotation.x = Math.PI / 2; main.position.set(0, 0, 4.35);
+    const main = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.46, 0.9, 16), dark);
+    main.rotation.x = Math.PI / 2; main.position.set(0, 0, 4.55);
     group.add(main);
-    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.34, 2.2, 16), new THREE.MeshBasicMaterial({ color: 0x9ef6e1, transparent: true, opacity: 0.8 }));
-    flame.rotation.x = Math.PI / 2; flame.position.set(0, 0, 5.8);
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.32, 2.2, 16), flameMat());
+    flame.rotation.x = Math.PI / 2; flame.position.set(0, 0, 6.05);
     group.add(flame);
     group.userData.engines.push(flame);
-    subFittings(group, dark, -3.9, 4.9);
+    subFittings(group, dark, -4.6, 5.1);
     return group;
 }
 // Switch the model: "kestrel" or "petrel" (the Petrel upgrade). Effects follow the shown model.
