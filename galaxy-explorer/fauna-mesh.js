@@ -892,6 +892,7 @@ export function buildFauna(THREE, { body, terrain, radius, signalNormal, budget 
     },
     // A gesture (its greeting, unless another kind is given).
     gesture(creature, kind) { if (creature) startGesture(creature.ex ||= createExpression(creature.r), kind || gestureOf(creature.sp)); },
+    speak(creature, seconds) { if (creature) (creature.ex ||= createExpression(creature.r)).speak = seconds; }, // talking (express.mjs)
     // Keep wild animals out of big towns and cities: zones [{ n (unit), r (metres) }]. Herds
     // living there move out to fitting ground nearby, at once.
     keepOut(zones, test = null) {

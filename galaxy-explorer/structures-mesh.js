@@ -2649,7 +2649,7 @@ export function buildStructures(THREE, { body, terrain, radius, signalNormal, la
 
 // Colours from the world and the builders: stone from its rock, walls from the
 // culture's material, accents from the species' own colours.
-function colours(THREE, body, civ) {
+export function colours(THREE, body, civ) {
   const c = (hex) => new THREE.Color(hex), mix = (a, b, t) => '#' + c(a).lerp(c(b), t).getHexString();
   // The species' own colours (fauna.mjs: base, belly, accent, shimmer) for paint and trim.
   const rock = body.rock, sp = civ.species.colors || {}, prim = sp.accent || sp.base || '#c0503a', sec = sp.shimmer || sp.belly || '#d8c07a';

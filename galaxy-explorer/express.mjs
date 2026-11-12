@@ -87,6 +87,14 @@ export function express(ex, dt, { look = null, mood = null, t = 0, phase = 0, sp
     case 'guarded': pose.pitch -= .06 * m; pose.scale += .06 * m; pose.headPitch += .08 * m; break;
     case 'happy': pose.lift += Math.max(0, Math.sin(t * 6 + phase)) * size * .05 * m * (Math.sin(t * .9 + phase) > 0 ? 1 : .2); break;
   }
+  // Speaking (ex.speak: seconds left): the head bobs with the words, glowing markings pulse.
+  if (ex.speak > 0) {
+    ex.speak -= dt;
+    const s = Math.min(1, ex.speak * 2);
+    pose.headPitch += Math.sin(t * 9.3 + phase) * .07 * s; pose.headYaw += Math.sin(t * 3.1 + phase) * .1 * s;
+    pose.pitch += Math.sin(t * 4.7 + phase) * .025 * s;
+    if ((sp?.glow ?? 0) > .2) pose.glow = Math.max(pose.glow, (Math.sin(t * 7) * .5 + .5) * .6 * s);
+  }
   // The gesture.
   if (ex.gesture) {
     const kind = ex.gesture, dur = DURATION[kind] || 1.8;

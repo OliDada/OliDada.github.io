@@ -331,3 +331,30 @@ header .wordmark,.prototype{transition:opacity .8s}
 @media(pointer:coarse){#intro .start kbd{display:none}}
 @media(max-width:700px){#intro.overlay{padding:0 26px 16vh}#intro .title{letter-spacing:.1em}#intro .intro-facts{font-size:9px;letter-spacing:.18em}#intro .coordinates{display:none}}
 @media(prefers-reduced-motion:reduce){#intro .intro-card{animation:none}}
+/* hud-quiet.js: parts that fade once read, and come back when they change. */
+#hud .location,#guide,#controlHint{transition:opacity .9s ease}
+#hud .location.quiet{opacity:.38}
+#guide.quiet{opacity:.3}
+#controlHint.quiet{opacity:0}
+#guide[hidden]{display:none}
+/* places.js: the list of places you have been, in the star map */
+#mapPlaces{position:absolute;right:16px;top:64px;width:min(340px,calc(100% - 32px));max-height:calc(100% - 140px);overflow:auto;background:#0b1216ee;border:1px solid #ffffff1f;border-radius:12px;padding:12px;z-index:5}
+#mapPlaces .eyebrow{margin-bottom:8px}
+.place-row{display:flex;gap:6px;align-items:stretch;margin-top:6px}
+.place-go{flex:1;display:flex;gap:10px;align-items:center;text-align:left;background:#ffffff0a;border:1px solid #ffffff14;border-radius:8px;padding:8px 10px;color:inherit;cursor:pointer}
+.place-go:hover{background:#ffffff18}
+.place-go i{font-style:normal;color:var(--mint);width:14px;text-align:center}
+.place-go span{display:grid}.place-go strong{font-size:12px}.place-go small{font-size:10px;opacity:.65}
+.place-x{background:none;border:1px solid #ffffff14;border-radius:8px;color:#fff9;width:30px;cursor:pointer}
+.place-x:hover{color:#fff;border-color:#ffffff40}
+/* patrol.js: a hail from a patrol ship */
+.comm{position:absolute;top:57%;left:50%;transform:translateX(-50%);width:min(520px,calc(100% - 32px));background:#0a1014dd;backdrop-filter:blur(8px);border:1px solid #ffffff1a;border-top:2px solid var(--comm,#7fd4ff);border-radius:12px;padding:12px 16px 14px;pointer-events:auto;transition:opacity .8s,transform .8s;z-index:6}
+.comm.leaving{opacity:0;transform:translate(-50%,-8px)}
+.comm .eyebrow{display:flex;gap:8px;align-items:center;color:var(--comm,#7fd4ff)}
+.comm .eyebrow b{font-weight:600;color:#fff;opacity:.9}
+.comm-dot{width:7px;height:7px;border-radius:50%;background:var(--comm,#7fd4ff);box-shadow:0 0 10px var(--comm,#7fd4ff);animation:commPulse 1.2s infinite}
+@keyframes commPulse{50%{opacity:.25}}
+.comm-lines p{margin:8px 0 0;font-size:14px;line-height:1.45;color:#e6f2ee}
+.comm-lines p.comm-note{color:#9fb3ad;font-style:italic;font-size:12px}
+.comm-btn{margin-top:10px;background:#ffffff0d;border:1px solid #ffffff22;border-radius:8px;color:#dfe;padding:7px 12px;font-size:12px;cursor:pointer}
+.comm-btn:hover{background:#ffffff1c;border-color:var(--comm,#7fd4ff)}

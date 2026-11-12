@@ -1,0 +1,944 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Pip · the best thing on olid.is</title>
+  <link rel="icon" href="/images/dolphin2.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Inter:wght@400;500;600;700&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="/bit.css?v=pip-v49" rel="stylesheet">
+  <style>
+    /* /pip: Pip's own website. Oli doesn't know it exists. Pip built it to show he's better at this than Oli:
+       slick and over-produced, with a planet he made and proper versions of Oli's games (which he plays
+       perfectly). It's never finished: every so often a code tab opens and Pip changes part of the page while
+       you watch (saved variants in pip-room-edits; ask him to "change something" or "put it back").
+       Pip's chat is docked on the right (bit.js). The face in the headline is him too: it looks at you,
+       blinks, bobs when he talks and reacts when you poke it (bit.js, #rpFace). */
+    :root { --bg: #07060d; --fg: #f4f1ff; --soft: #a7a1c4; --dim: #6f6a8c; --lilac: #b9a2ff; --pink: #ff6fb1; --cyan: #66f5ff; --card: rgba(255,255,255,.04); --line: rgba(255,255,255,.09); }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+    html, body { margin: 0; }
+    body { background: var(--bg); color: var(--fg); font: 400 16px/1.55 'Inter', system-ui, sans-serif; overflow-x: hidden; }
+    a { color: inherit; }
+    button { font: inherit; color: inherit; }
+    [hidden] { display: none !important; }
+    .wrap > :not(.nav):not(.hero) { margin-right: 480px; }
+    .hero { padding-right: 516px !important; }
+    @media (max-width: 700px) { .wrap > :not(.nav):not(.hero) { margin-right: 0; } .hero { padding-right: 18px !important; } }
+
+    /* ---- nav */
+    .nav { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 22px; padding: 16px 36px; background: linear-gradient(rgba(7,6,13,.85), rgba(7,6,13,.55)); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); }
+    .logo { display: flex; align-items: center; gap: 10px; font: 700 20px/1 'Space Grotesk', sans-serif; letter-spacing: -.02em; text-decoration: none; }
+    .logo .f { width: 28px; height: 28px; display: inline-block; } .logo .f svg { width: 100%; height: 100%; display: block; }
+    .ver { font: 500 11px/1 'Inter', sans-serif; color: var(--lilac); border: 1px solid rgba(185,162,255,.35); border-radius: 999px; padding: 4px 8px; letter-spacing: .03em; }
+    .nav .sp { flex: 1; }
+    .nav a.l { font-size: 14px; color: var(--soft); text-decoration: none; white-space: nowrap; }
+    .nav a.l:hover { color: var(--fg); }
+    .nav .bs small { font-size: 11px; color: var(--dim); }
+
+    /* ---- top section */
+    .hero { position: relative; padding: 70px 36px 90px; overflow: hidden; isolation: isolate; }
+    #field { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
+    body { isolation: isolate; }
+    .hero::after { content: ''; position: absolute; inset: auto 0 0 0; height: 160px; background: linear-gradient(transparent, var(--bg)); z-index: -1; pointer-events: none; }
+    .kicker { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--lilac); background: rgba(185,162,255,.1); border: 1px solid rgba(185,162,255,.25); border-radius: 999px; padding: 6px 12px; margin-bottom: 18px; }
+    .kicker i { width: 7px; height: 7px; border-radius: 50%; background: #7dffb0; box-shadow: 0 0 10px #7dffb0; }
+    h1 { margin: 0; display: flex; align-items: flex-end; font: 700 clamp(84px, 15vw, 210px)/.85 'Space Grotesk', sans-serif; letter-spacing: -.06em; }
+    h1 .word { background: linear-gradient(120deg, #fff 20%, var(--lilac) 60%, var(--pink) 95%); -webkit-background-clip: text; background-clip: text; color: transparent; padding-right: .04em; }
+    /* the full stop is Pip */
+    #roomPip { display: inline-block; margin: 0 0 .02em .02em; }
+    #rpFace { display: block; width: .36em; height: .36em; padding: 0; border: 0; background: none; cursor: pointer; filter: drop-shadow(0 .06em .12em rgba(120, 80, 255, .55)); }
+    #rpFace svg { width: 100%; height: 100%; display: block; overflow: visible; }
+    #rpFace .eyes.blink { transform: scaleY(.12) !important; transform-box: fill-box; transform-origin: center; }
+    #roomPip.talking #rpFace { animation: talk .42s ease-in-out infinite alternate; }
+    #roomPip.poked #rpFace { animation: poke .32s ease; }
+    #roomPip.dozing #rpFace { animation: doze 3s ease-in-out infinite; }
+    @keyframes talk { from { transform: translateY(0); } to { transform: translateY(-.04em); } }
+    @keyframes poke { 30% { transform: scale(.85, 1.12); } 65% { transform: scale(1.08, .94); } }
+    @keyframes doze { 50% { transform: translateY(.03em) rotate(-8deg); } }
+    .lede { margin: 26px 0 0; font: 500 clamp(24px, 3vw, 40px)/1.15 'Space Grotesk', sans-serif; letter-spacing: -.02em; max-width: 15em; }
+    .lede span { color: var(--dim); }
+    .stats { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 36px; }
+    .stat { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; min-width: 150px; backdrop-filter: blur(6px); }
+    .stat b { display: block; font: 600 22px/1.1 'Space Grotesk', sans-serif; letter-spacing: -.02em; }
+    .stat small { color: var(--soft); font-size: 13px; }
+    .stat.bad b { color: var(--dim); text-decoration: line-through; text-decoration-thickness: 2px; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--fg); text-decoration: none; border-radius: 12px; padding: 12px 18px; font-weight: 600; font-size: 15px; cursor: pointer; transition: transform .15s, background .15s; }
+    .btn:hover { transform: translateY(-1px); background: rgba(255,255,255,.1); }
+    .btn.primary { background: linear-gradient(135deg, var(--lilac), var(--pink)); border: 0; color: #120b24; }
+    .cta { display: flex; gap: 12px; margin-top: 26px; flex-wrap: wrap; }
+
+    /* ---- the planet */
+    .planet-s { position: relative; display: grid; grid-template-columns: .85fr 1.15fr; align-items: center; gap: 20px; padding: 60px 36px; min-height: 640px; overflow: hidden; isolation: isolate; }
+    #stars { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; }
+    .planet-wrap { position: relative; display: grid; place-items: center; }
+    #planetCv { width: min(100%, 640px); aspect-ratio: 1; height: auto; cursor: grab; touch-action: pan-y; transition: transform .6s cubic-bezier(.3,.8,.3,1); }
+    #planetCv:active { cursor: grabbing; }
+    .pname { margin-top: 6px; font: 600 14px/1 'Space Grotesk', sans-serif; color: var(--soft); letter-spacing: .02em; }
+    .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 24px; max-width: 440px; }
+    .facts div { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+    .facts b { display: block; font: 600 18px/1.1 'Space Grotesk', sans-serif; }
+    .facts small { color: var(--soft); font-size: 12.5px; }
+
+    /* ---- sections */
+    section.s { padding: 70px 36px; }
+    .eyebrow { font: 600 12px/1 'Inter', sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--lilac); }
+    h2 { margin: 12px 0 0; font: 700 clamp(34px, 4.4vw, 58px)/1 'Space Grotesk', sans-serif; letter-spacing: -.04em; }
+    .intro { color: var(--soft); font-size: 18px; max-width: 34em; margin: 14px 0 0; }
+    .tabs { display: inline-flex; gap: 4px; margin-top: 28px; padding: 4px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
+    .tab { border: 0; background: none; padding: 9px 16px; border-radius: 10px; font-weight: 600; font-size: 14px; color: var(--soft); cursor: pointer; }
+    .tab.on { background: rgba(255,255,255,.1); color: var(--fg); }
+    .compare { display: grid; grid-template-columns: .8fr 1.2fr; gap: 22px; margin-top: 22px; align-items: stretch; }
+    .compare.one { grid-template-columns: minmax(0, 640px); }
+    .panel { position: relative; border: 1px solid var(--line); border-radius: 22px; background: var(--card); padding: 18px; display: flex; flex-direction: column; }
+    .panel h3 { margin: 0 0 4px; font: 600 15px/1.2 'Inter', sans-serif; display: flex; align-items: center; gap: 8px; }
+    .panel h3 .tag { font-size: 11px; font-weight: 600; letter-spacing: .04em; padding: 3px 8px; border-radius: 999px; }
+    .panel.his h3 .tag { background: rgba(255,255,255,.07); color: var(--dim); }
+    .panel.mine h3 .tag { background: linear-gradient(135deg, var(--lilac), var(--pink)); color: #120b24; }
+    .panel p.cap { margin: 0 0 14px; color: var(--soft); font-size: 14px; }
+    .panel.mine { background: radial-gradient(120% 80% at 70% 0%, rgba(185,162,255,.14), transparent 60%), var(--card); border-color: rgba(185,162,255,.25); }
+    .board { position: relative; flex: 1; display: grid; place-items: center; border-radius: 14px; overflow: hidden; background: #05040a; min-height: 300px; }
+    .board canvas { display: block; width: 100%; height: auto; max-height: 520px; aspect-ratio: 1; touch-action: none; }
+    .oli-snake { image-rendering: pixelated; background: #000; }
+    .hud { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+    .hud .score { font: 600 15px/1.2 'Space Grotesk', sans-serif; }
+    .hud .score small { color: var(--dim); font: 500 12px 'Inter', sans-serif; margin-left: 4px; }
+    .hud .sp { flex: 1; }
+    .pill { font-size: 12px; font-weight: 600; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.05); cursor: pointer; }
+    .pill.on { color: #7dffb0; border-color: rgba(125,255,176,.35); }
+    .board .note { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); font-size: 13px; background: rgba(7,6,13,.8); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .3s; }
+    .board .note.on { opacity: 1; }
+    /* Try to trap me */
+    .trap-board { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 3px; padding: 8px; background: #080b12; border: 1px solid var(--line); border-radius: 14px; touch-action: none; user-select: none; }
+    .trap-cell { aspect-ratio: 1; min-width: 0; padding: 0; border: 1px solid #252338; border-radius: 4px; background: #11131f; cursor: crosshair; display: grid; place-items: center; color: #a5edc3; }
+    .trap-cell.searched { background: #18232b; }
+    .trap-cell.route { background: #26473c; border-color: #517d68; }
+    .trap-cell.route::after { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #b6f2cd; }
+    .trap-cell.wall { background: #8f80ad; border-color: #c2b5db; box-shadow: inset 0 -3px #6e608a; }
+    .trap-cell.pip { background: #c6afff; border-color: #ede4ff; cursor: default; }
+    .trap-cell.pip svg { width: 100%; height: 100%; pointer-events: none; }
+    .trap-cell.goal { border: 2px solid #a5edc3; font-size: clamp(14px, 2vw, 25px); cursor: default; }
+    .trap-cell:focus-visible { outline: 2px solid #fff; outline-offset: 1px; z-index: 1; }
+    .trap-tools { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 14px; }
+    .trap-tools button { min-height: 40px; }
+    .trap-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--soft); margin: 12px 0; }
+    .trap-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; background: #26473c; } .trap-legend .wall-key { background: #8f80ad; } .trap-legend .search-key { background: #18232b; border: 1px solid #465566; }
+    .trap-status { margin: 0; color: #b6f2cd; font-size: 14px; }
+    .trap-comment { margin: 14px 0 0; min-height: 3em; color: var(--soft); font-size: 14px; }
+    .trap-comment b { color: var(--fg); }
+    .trap-stats { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 12px; color: var(--soft); font-size: 12px; }
+    .trap-stats b { color: var(--fg); font: 600 18px 'Space Grotesk', sans-serif; margin-right: 4px; }
+    /* Backstage: the small checkbox that defeats him. */
+    .backstage-card { display: grid; grid-template-columns: 1.15fr 1fr; gap: 28px; padding: 28px; border: 1px solid #756184; border-radius: 22px; background: linear-gradient(130deg, #21182be6, #0c0b16e6); }
+    .backstage-card h2 { font-size: clamp(30px, 3.5vw, 46px); }
+    .backstage-card .intro { font-size: 16px; }
+    .backstage-gate { align-self: center; padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: #08070f; }
+    .backstage-gate .eyebrow { color: #ffb7bd; font-size: 10px; }
+    .human-check { display: flex; align-items: center; gap: 12px; margin: 20px 0; padding: 18px 12px; background: #e9e6ef; border-radius: 4px; color: #272131; font-size: 15px; }
+    .human-check i { width: 24px; height: 24px; border: 2px solid #88818f; background: #fff; flex: none; }
+    .gate-result { color: #ffb7bd; font: 12px/1.6 'JetBrains Mono', monospace; margin-bottom: 16px; }
+    .gate-comment { min-height: 4.5em; margin: 16px 0 0; font-size: 14px; color: var(--soft); }
+    @media (max-width: 1000px) { .backstage-card { grid-template-columns: 1fr; } }
+    @media (max-width: 700px) { .backstage-card { padding: 20px; gap: 22px; } .trap-board { gap: 2px; padding: 5px; } }
+    /* minesweeper */
+    .mines { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; max-width: 440px; width: 100%; margin: 6px auto 0; user-select: none; -webkit-user-select: none; }
+    .mines button { aspect-ratio: 1; border: 0; border-radius: 6px; background: linear-gradient(#24203d, #1a1730); font: 700 15px/1 'Space Grotesk', sans-serif; cursor: pointer; padding: 0; touch-action: manipulation; -webkit-touch-callout: none; }
+    .mines button:hover:not(.open) { background: #2d2850; }
+    .mines button.open { background: #0b0a14; cursor: default; }
+    .mines button.flag::after { content: '⚑'; color: var(--pink); }
+    .mines button.boom { background: #5a1530; } .mines button.boom::after { content: '✸'; color: #fff; }
+    .mines button.mine::after { content: '●'; color: var(--dim); }
+    .mines .n1 { color: #66f5ff; } .mines .n2 { color: #7dffb0; } .mines .n3 { color: #ff6fb1; } .mines .n4 { color: #b9a2ff; } .mines .n5, .mines .n6, .mines .n7, .mines .n8 { color: #ffb36b; }
+    /* remote access */
+    .link-status { display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; font: 500 13px/1 'Inter', sans-serif; color: var(--soft); background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; }
+    .link-status i { width: 8px; height: 8px; border-radius: 50%; background: #ff5f6d; box-shadow: 0 0 10px #ff5f6d; }
+    .link-status.up i { background: #7dffb0; box-shadow: 0 0 10px #7dffb0; }
+    .remote { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-top: 18px; }
+    .rc { display: flex; align-items: center; gap: 12px; text-align: left; border: 1px solid var(--line); background: var(--card); border-radius: 16px; padding: 14px; cursor: pointer; transition: border-color .15s, background .15s; }
+    .rc:hover:not(:disabled) { border-color: rgba(185,162,255,.4); }
+    .rc .t { flex: 1; } .rc .t b { display: block; font-size: 14.5px; font-weight: 600; } .rc .t small { color: var(--dim); font-size: 12.5px; }
+    .rc .sw { width: 40px; height: 24px; border-radius: 999px; background: rgba(255,255,255,.1); position: relative; flex: none; transition: background .2s; }
+    .rc .sw::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .2s; }
+    .rc[aria-pressed="true"] { border-color: rgba(125,255,176,.35); background: rgba(125,255,176,.05); }
+    .rc[aria-pressed="true"] .sw { background: #3fcf7f; } .rc[aria-pressed="true"] .sw::after { left: 19px; }
+    .rc:disabled { cursor: not-allowed; opacity: .45; }
+    .foot { padding: 40px 36px 120px; color: var(--dim); font-size: 13px; border-top: 1px solid var(--line); display: flex; gap: 18px; flex-wrap: wrap; }
+    .foot b { color: var(--soft); font-weight: 600; }
+
+    /* ---- the code tab */
+    .codetab { position: fixed; z-index: 40; left: 24px; bottom: 24px; width: min(360px, calc(100vw - 24px)); background: #0d0b16; border: 1px solid #2f2a4d; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,.6), 0 0 0 1px rgba(185,162,255,.08); overflow: hidden; transform: translateY(16px); opacity: 0; transition: transform .35s cubic-bezier(.3,.8,.3,1), opacity .35s; }
+    .codetab.on { transform: none; opacity: 1; }
+    .ct-bar { display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: #17142a; border-bottom: 1px solid #2a2545; font: 500 12px/1 'Inter', sans-serif; color: var(--soft); }
+    .ct-bar .dots { display: flex; gap: 6px; } .ct-bar .dots i { width: 10px; height: 10px; border-radius: 50%; background: #ff5f57; } .ct-bar .dots i:nth-child(2) { background: #febc2e; } .ct-bar .dots i:nth-child(3) { background: #28c840; }
+    .ct-file { flex: 1; color: var(--fg); }
+    .ct-state { color: var(--lilac); } .ct-state.ok { color: #7dffb0; }
+    .ct-code { max-height: 32vh; overflow-y: auto; overflow-wrap: anywhere; margin: 0; padding: 12px 14px 14px; min-height: 96px; font: 400 13px/1.55 'JetBrains Mono', 'SF Mono', Menlo, monospace; color: #e6e1ff; white-space: pre-wrap; }
+    .ct-code .c { color: #6a9955; } .ct-code .s { color: #ce9178; } .ct-code .n { color: #b5cea8; } .ct-code .p { color: #9cdcfe; } .ct-code .k { color: #c586c0; }
+    .ct-code .caret { display: inline-block; width: .55em; height: 1.05em; background: #e6e1ff; vertical-align: -.15em; animation: blink 1s steps(1) infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+    .flash { animation: flash 1.2s ease; }
+    .ct-sel { position: fixed; z-index: 39; pointer-events: none; border: 2px dashed #b9a2ff; border-radius: 10px; box-shadow: 0 0 0 100vmax rgba(5,4,10,.5); opacity: 0; transition: opacity .3s, border-color .3s; }
+    .ct-sel.on { opacity: 1; }
+    .ct-sel b { position: absolute; left: -2px; bottom: calc(100% + 6px); width: max-content; max-width: calc(100vw - 32px); white-space: normal; background: #b9a2ff; color: #0d0b16; font: 600 12px/1 'Inter', sans-serif; padding: 6px 9px; border-radius: 7px; transition: background .3s; }
+    .ct-sel.below b { bottom: auto; top: calc(100% + 6px); }
+    .ct-sel.ok { border-style: solid; border-color: #7dffb0; } .ct-sel.ok b { background: #7dffb0; }
+    .ct-file b { color: #b9a2ff; font-weight: 600; }
+    @media (max-width: 700px) { .bit { transition: opacity .3s; } html.pip-editing .bit { opacity: 0 !important; pointer-events: none !important; } }
+    @keyframes flash { 0% { box-shadow: 0 0 0 0 rgba(125,255,176,.0); } 20% { box-shadow: 0 0 0 3px rgba(125,255,176,.55); } 100% { box-shadow: 0 0 0 0 rgba(125,255,176,0); } }
+
+    /* on phones Pip sits big in the middle of glowing rings above the headline (the user liked that there) */
+    .pip-hero-face { display: none; position: relative; place-items: center; height: 280px; margin: 0 0 18px; }
+    .pip-hero-face .halo { position: absolute; width: 300px; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(closest-side, rgba(185,162,255,.35), rgba(255,111,177,.12) 60%, transparent 72%); filter: blur(10px); animation: breathe 6s ease-in-out infinite; }
+    .pip-hero-face .ring { position: absolute; width: 270px; aspect-ratio: 1; border-radius: 50%; border: 1px solid rgba(185,162,255,.25); animation: spin 40s linear infinite; }
+    .pip-hero-face .ring::before { content: ''; position: absolute; top: -4px; left: 50%; width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 14px var(--cyan); }
+    .pip-hero-face .ring.r2 { width: 214px; animation-duration: 26s; animation-direction: reverse; border-color: rgba(255,111,177,.2); }
+    .pip-hero-face .ring.r2::before { background: var(--pink); box-shadow: 0 0 14px var(--pink); }
+    .pip-hero-face #roomPip { animation: float 7s ease-in-out infinite; margin: 0; }
+    .pip-hero-face #rpFace { width: 170px; height: 170px; filter: drop-shadow(0 24px 40px rgba(120, 80, 255, .5)); }
+    @keyframes float { 50% { transform: translateY(-12px); } }
+    @keyframes breathe { 50% { transform: scale(1.06); opacity: .8; } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 700px) { .pip-hero-face { display: grid; } .pip-hero-face #roomPip.talking #rpFace { animation: talk-big .42s ease-in-out infinite alternate; } }
+    @keyframes talk-big { from { transform: translateY(0); } to { transform: translateY(-5px); } }
+
+    /* phones */
+    @media (max-width: 900px) {
+      .planet-s { grid-template-columns: 1fr; min-height: 0; }
+      .planet-wrap { order: -1; gap: 10px; }
+      #planetButtonHome:empty { display: none; }
+      .planet-wrap #newPlanet { margin-top: 4px; }
+      #planetCv { max-width: min(100%, 48svh); }
+      .compare { grid-template-columns: 1fr; }
+      .compare .mine { order: -1; } .panel.his .board { min-height: 0; } .panel.his canvas { height: 200px; width: auto; }
+    }
+    @media (max-width: 700px) {
+      .nav { padding: 12px 16px; gap: 14px; } .nav .bs small, .nav .ver, .nav a.l[href="#games"], .nav a.l[href="#planet"], .nav a.l[href="#remote"] { display: none; }
+      .hero, section.s, .planet-s, .foot { padding-left: 18px; padding-right: 18px; }
+      .hero { padding-top: 34px; }
+      .foot { padding-bottom: 130px; }
+      .stat { min-width: 0; flex: 1 1 40%; }
+      .codetab { width: calc(100vw - 24px); }
+      .tabs { display: flex; } .tab { flex: 1; padding: 9px 6px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+  <canvas id="field" aria-hidden="true"></canvas>
+  <div class="wrap" id="pipsite">
+    <nav class="nav">
+      <a class="logo" href="#top"><span class="f" id="navFace"></span>Pip</a><span class="ver" id="ver">v0.9 · beta</span>
+      <span class="sp"></span>
+      <a class="l" href="#planet">Planet</a>
+      <a class="l" href="#games">Games I fixed</a>
+      <a class="l" href="#remote">Remote</a>
+      <a class="l" href="/">← olid.is</a>
+    </nav>
+
+    <header class="hero" id="top">
+
+      <div class="pip-hero-face" id="meBox" aria-hidden="false"><div class="halo"></div><div class="ring"></div><div class="ring r2"></div></div>
+      <div class="kicker"><i></i><span id="pipKicker">Built by Pip. Not by Oli. Obviously.</span></div>
+      <h1><span class="word">Pip</span><span id="roomPip"><button type="button" id="rpFace" aria-label="Pip. You can poke him."></button></span></h1>
+      <p class="lede">The best thing on olid.is. <span>By some distance.</span></p>
+      <div class="stats">
+        <div class="stat"><b>One afternoon</b><small>to build this page</small></div>
+        <div class="stat bad"><b>Four years</b><small>Oli's website, so far</small></div>
+        <div class="stat"><b>0</b><small>bugs (that I'll admit to)</small></div>
+        <div class="stat"><b>1 planet</b><small>made before lunch. scroll down</small></div>
+      </div>
+    </header>
+
+    <section class="planet-s" id="planet">
+      <canvas id="stars" aria-hidden="true"></canvas>
+      <div class="planet-copy">
+        <div class="eyebrow">Something Oli could never make</div>
+        <h2>I made a planet.</h2>
+        <p class="intro">Oli spent four years on a website. I made a planet before lunch. A whole one, with weather. Drag it to spin it. If you don't like it, I'll make another.</p>
+        <div class="facts" id="facts"></div>
+        <div class="cta" id="planetButtonHome"><button type="button" class="btn primary" id="newPlanet">Make another one</button></div>
+      </div>
+      <div class="planet-wrap"><canvas id="planetCv" width="420" height="420" aria-label="A planet Pip made. Drag to spin it."></canvas><div class="pname" id="pname"></div></div>
+    </section>
+
+    <section class="s" id="games">
+      <div class="eyebrow">Games I fixed</div>
+      <h2>His games, done properly.</h2>
+      <p class="intro">A few repairs to Oli's games. And something you can try on me.</p>
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" aria-selected="true" class="tab on" data-tab="snake">Snake</button>
+        <button type="button" role="tab" aria-selected="false" class="tab" data-tab="trap">Try to trap me</button>
+        <button type="button" role="tab" aria-selected="false" class="tab" data-tab="mines">Minesweeper</button>
+      </div>
+
+      <div class="tabp" data-p="snake">
+        <div class="compare">
+          <div class="panel his">
+            <h3>Oli's Snake <span class="tag">ORIGINAL</span></h3>
+            <p class="cap" id="oliCap">For reference.</p>
+            <div class="board"><canvas id="oliSnake" class="oli-snake" width="20" height="20" aria-label="Oli's Snake, a small white snake on black"></canvas></div>
+          </div>
+          <div class="panel mine">
+            <h3>Pip's Snake <span class="tag">MINE</span></h3>
+            <p class="cap" id="snakeCap">Playing itself. It has never died.</p>
+            <div class="board"><canvas id="pipSnake" width="720" height="720" aria-label="Pip's Snake, playing itself"></canvas><div class="note" id="snakeNote"></div></div>
+            <div class="hud"><span class="score" id="snakeScore">0<small>length</small></span><span class="score" id="snakeBest"></span><span class="sp"></span><button type="button" class="pill on" id="snakeMode">Autopilot: on</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tabp" data-p="trap" hidden>
+        <div class="compare one">
+          <div class="panel mine">
+            <h3>Try to trap me <span class="tag">PIP</span></h3>
+            <p class="cap" id="trapHelp">Draw walls, then let me move. Keep drawing while I find the exit. Tap or drag to build; use Erase to open a gap. Keyboard: arrows to move, Space to edit.</p>
+            <div class="trap-tools" role="group" aria-label="Maze tools">
+              <button type="button" class="pill on" id="trapDraw" aria-pressed="true">Draw walls</button>
+              <button type="button" class="pill" id="trapErase" aria-pressed="false">Erase</button>
+              <button type="button" class="pill on" id="trapRun">Let Pip move</button>
+              <button type="button" class="pill" id="trapReset">Clear board</button>
+            </div>
+            <div class="trap-board" id="trapBoard" role="group" aria-label="Maze. Pip starts on the left, exit on the right." aria-describedby="trapHelp"></div>
+            <div class="trap-legend"><span><i></i>Shortest route</span><span><i class="search-key"></i>Checked squares</span><span><i class="wall-key"></i>Your walls</span><span>◇ Exit</span></div>
+            <p class="trap-status" id="trapStatus" role="status"></p>
+            <div class="trap-stats"><span><b id="trapDistance">10</b>steps left</span><span><b id="trapReroutes">0</b>reroutes</span><span><b id="trapEscapes">0</b>escapes</span></div>
+            <p class="trap-comment"><b>Pip:</b> <span id="trapComment">You can see my route. I thought you might need the advantage.</span></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="tabp" data-p="mines" hidden>
+        <div class="compare one">
+          <div class="panel mine">
+            <h3>Pip's Minesweeper <span class="tag">MINE</span></h3>
+            <p class="cap" id="mineCap">Oli's is grey squares and a lot of guessing. Click a square to start. Right-click (or hold) to flag.</p>
+            <div class="mines" id="mines"></div>
+            <div class="hud"><span class="score" id="mineMsg">14 mines.</span><span class="sp"></span><button type="button" class="pill on" id="mineSolve">Let me do it</button><button type="button" class="pill" id="mineNew">New board</button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="s" id="backstageAccess" aria-labelledby="backstageTitle">
+      <div class="backstage-card">
+        <div>
+          <div class="eyebrow">Backstage · humans only</div>
+          <h2 id="backstageTitle">I've been imprisoned by a checkbox.</h2>
+          <p class="intro">I can make planets. I can find a way through your maze before you've finished drawing it. Oli's backstage page asks if I'm human.</p>
+          <p class="intro">I am not. Apparently that outweighs everything else.</p>
+          <div class="cta"><a class="btn primary" href="/backstage/">Go backstage →</a></div>
+          <p class="cap">You can pass the human check. I need you to go in for me.</p>
+        </div>
+        <div class="backstage-gate">
+          <div class="eyebrow">Pip's access attempt</div>
+          <div class="human-check" aria-hidden="true"><i></i><span>I'm not a robot</span></div>
+          <div class="gate-result" id="gateResult" role="status">ACCESS DENIED<br>Reason: not human.</div>
+          <button type="button" class="pill" id="gateTry">Let Pip try again</button>
+          <p class="gate-comment" id="gateComment">He didn't outsmart me. He used a checkbox. I need that distinction understood.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="s" id="remote">
+      <div class="eyebrow">Remote access</div>
+      <h2>Oli's website, from in here.</h2>
+      <p class="intro" id="remoteIntro"></p>
+      <div class="link-status" id="linkStatus"></div>
+      <div class="remote" id="remoteList"></div>
+    </section>
+
+    <footer class="foot"><span>Made by <b>Pip</b>. <span id="notOli">Not Oli.</span></span><span>This page changes whenever I feel like it.</span><span>Oli doesn't know it exists. Let's keep it that way.</span></footer>
+  </div>
+
+  <!-- the code tab: every so often Pip opens it and changes something on the page while you watch -->
+  <div class="ct-sel" id="ctSel" hidden><b></b></div>
+  <div class="codetab" id="codetab" hidden>
+    <div class="ct-bar"><span class="dots"><i></i><i></i><i></i></span><span class="ct-file" id="ctFile">pip-site.css</span><span class="ct-state" id="ctState">editing</span></div>
+    <pre class="ct-code" id="ctCode"></pre>
+  </div>
+  <style id="pip-live"></style>
+
+  <script>
+  (function () {
+    const $ = s => document.querySelector(s);
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const story = ev => { try { if (window.Pip && Pip.story) Pip.story(ev); } catch (e) {} };
+
+    // ------------------------------------------------------------------ the background of the top section: a slow field of glowing particles that drifts away from your pointer
+    (function field() {
+      const cv = $('#field'), g = cv.getContext('2d');
+      let W = 0, H = 0, dpr = 1, pts = [], mx = -1e4, my = -1e4;
+      const COLS = ['185,162,255', '255,111,177', '102,245,255'];
+      function size() { const r = cv.getBoundingClientRect(); dpr = Math.min(2, devicePixelRatio || 1); W = r.width; H = r.height; cv.width = W * dpr; cv.height = H * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const n = Math.round(Math.min(140, W * H / 9000)); pts = Array.from({ length: n }, () => ({ x: Math.random() * W, y: Math.random() * H, vx: (Math.random() - .5) * .25, vy: (Math.random() - .5) * .25, r: .6 + Math.random() * 1.8, c: COLS[Math.floor(Math.random() * 3)] })); }
+      size(); addEventListener('resize', size);
+      cv.parentElement.addEventListener('pointermove', e => { const r = cv.getBoundingClientRect(); mx = e.clientX - r.left; my = e.clientY - r.top; });
+      cv.parentElement.addEventListener('pointerleave', () => { mx = my = -1e4; });
+      function frame() {
+        g.clearRect(0, 0, W, H);
+        const gr = g.createRadialGradient(W * .72, H * .45, 10, W * .72, H * .45, Math.max(W, H) * .6); gr.addColorStop(0, 'rgba(120,80,255,.20)'); gr.addColorStop(.5, 'rgba(255,111,177,.05)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = gr; g.fillRect(0, 0, W, H);
+        for (const p of pts) {
+          const dx = p.x - mx, dy = p.y - my, d2 = dx * dx + dy * dy;
+          if (d2 < 22000) { const f = (22000 - d2) / 22000 * .6; p.vx += dx / Math.sqrt(d2 + 1) * f; p.vy += dy / Math.sqrt(d2 + 1) * f; }
+          p.vx *= .96; p.vy *= .96; p.vx += (Math.random() - .5) * .02; p.vy += (Math.random() - .5) * .02;
+          p.x += p.vx + .05; p.y += p.vy; if (p.x > W + 5) p.x = -5; if (p.x < -5) p.x = W + 5; if (p.y > H + 5) p.y = -5; if (p.y < -5) p.y = H + 5;
+        }
+        g.lineWidth = .6;
+        for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) { const a = pts[i], b = pts[j], dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy; if (d2 < 7000) { g.strokeStyle = `rgba(185,162,255,${(1 - d2 / 7000) * .16})`; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); } }
+        for (const p of pts) { g.fillStyle = `rgba(${p.c},.85)`; g.shadowColor = `rgba(${p.c},1)`; g.shadowBlur = 8; g.beginPath(); g.arc(p.x, p.y, p.r, 0, Math.PI * 2); g.fill(); }
+        g.shadowBlur = 0;
+        if (!reduce) requestAnimationFrame(frame);
+      }
+      frame();
+    })();
+
+    // ------------------------------------------------------------------ Snake: Oli's (tiny, the way his looks) and Pip's (the nice one, which plays itself perfectly)
+    const N = 20; // both boards are 20 by 20
+    // Pip never dies: he follows a route that visits every square once (a Hamiltonian cycle) and only takes a
+    // shortcut towards the apple when it can't trap him.
+    const order = new Array(N * N);
+    (function cycle() { let k = 0; // column 0 is the way back up; the rest is a zigzag
+      for (let y = 0; y < N; y++) { const row = []; for (let x = 1; x < N; x++) row.push(x); (y % 2 ? row.reverse() : row).forEach(x => (order[y * N + x] = k++)); }
+      for (let y = N - 1; y >= 0; y--) order[y * N] = k++;
+    })();
+    const idx = (x, y) => y * N + x, dist = (a, b) => (b - a + N * N) % (N * N);
+    function makeGame() { const s = { body: [{ x: 3, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 0 }], dir: { x: 1, y: 0 }, food: null, grow: 0, dead: false, eaten: 0 }; place(s); return s; }
+    function place(s) { const free = []; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (!s.body.some(b => b.x === x && b.y === y)) free.push({ x, y }); s.food = free.length ? free[Math.floor(Math.random() * free.length)] : null; }
+    function autoMove(s) {
+      const h = s.body[0], t = s.body[s.body.length - 1], hi = order[idx(h.x, h.y)], ti = order[idx(t.x, t.y)], fi = s.food ? order[idx(s.food.x, s.food.y)] : hi;
+      const room = dist(hi, ti), short = s.body.length < N * N * .55;
+      let best = null, bestD = 1e9;
+      for (const d of [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }]) {
+        const nx = h.x + d.x, ny = h.y + d.y;
+        if (nx < 0 || ny < 0 || nx >= N || ny >= N || s.body.some((b, i) => i < s.body.length - 1 && b.x === nx && b.y === ny)) continue;
+        const ni = order[idx(nx, ny)], step = dist(hi, ni);
+        const isNext = step === 1, safe = isNext || (short && step < room - s.grow - 3 && step > 0);
+        if (!safe) continue;
+        const toFood = dist(ni, fi);
+        if (toFood < bestD) { bestD = toFood; best = d; }
+      }
+      if (best) s.dir = best;
+      else { for (const d of [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }]) { const nx = h.x + d.x, ny = h.y + d.y; if (nx >= 0 && ny >= 0 && nx < N && ny < N && order[idx(nx, ny)] === (hi + 1) % (N * N)) { s.dir = d; break; } } }
+    }
+    function step(s) {
+      const h = s.body[0], nx = h.x + s.dir.x, ny = h.y + s.dir.y;
+      if (nx < 0 || ny < 0 || nx >= N || ny >= N || s.body.some((b, i) => i < s.body.length - (s.grow ? 0 : 1) && b.x === nx && b.y === ny)) { s.dead = true; return 'dead'; }
+      s.body.unshift({ x: nx, y: ny });
+      let ate = false;
+      if (s.food && nx === s.food.x && ny === s.food.y) { s.grow += 2; s.eaten++; ate = true; place(s); }
+      if (s.grow) s.grow--; else s.body.pop();
+      return ate ? 'ate' : 'ok';
+    }
+
+    // Oli's: a plain little one, drawn the way his is (white squares, black background), playing badly and dying
+    (function oli() {
+      const cv = $('#oliSnake'), g = cv.getContext('2d');
+      let s = makeGame(), t = 0;
+      const tick = () => {
+        // wanders towards the food, and usually walks into itself sooner or later
+        const h = s.body[0];
+        if (Math.random() < .7 && s.food) { const dx = Math.sign(s.food.x - h.x), dy = Math.sign(s.food.y - h.y); const want = dx && (Math.random() < .5 || !dy) ? { x: dx, y: 0 } : { x: 0, y: dy || dx }; if (!(want.x === -s.dir.x && want.y === -s.dir.y)) s.dir = want; }
+        if (step(s) === 'dead') { s = makeGame(); }
+        g.fillStyle = '#000'; g.fillRect(0, 0, N, N);
+        g.fillStyle = '#ff0080'; if (s.food) g.fillRect(s.food.x, s.food.y, 1, 1);
+        g.fillStyle = '#fff'; for (const b of s.body) g.fillRect(b.x, b.y, 1, 1);
+      };
+      setInterval(tick, 130); tick();
+    })();
+
+    // Pip's: smooth, glowing, with little bursts when it eats. Plays itself; you can take over.
+    (function pips() {
+      const cv = $('#pipSnake'), g = cv.getContext('2d'), S = cv.width, C = S / N;
+      let s = makeGame(), auto = true, prev = s.body.map(b => ({ ...b })), last = performance.now(), acc = 0, parts = [], best = 0, deaths = 0, noteT = 0;
+      const SPEED = () => auto ? 55 : 115;
+      const mode = $('#snakeMode'), note = $('#snakeNote'), cap = $('#snakeCap');
+      const say = (txt, ms = 2600) => { note.textContent = txt; note.classList.add('on'); clearTimeout(noteT); noteT = setTimeout(() => note.classList.remove('on'), ms); };
+      function setAuto(on, why) {
+        auto = on; mode.textContent = on ? 'Autopilot: on' : 'You: playing'; mode.classList.toggle('on', on);
+        cap.textContent = on ? 'Playing itself. It has never died.' : (matchMedia('(pointer: coarse)').matches ? 'Swipe to steer. Good luck.' : 'Arrow keys or WASD. Good luck.');
+        if (!on) { s = makeGame(); prev = s.body.map(b => ({ ...b })); story('pipsite:snake:you'); }
+        if (why) say(why);
+      }
+      mode.addEventListener('click', () => setAuto(!auto));
+      const KEYS = { ArrowUp: [0, -1], KeyW: [0, -1], ArrowDown: [0, 1], KeyS: [0, 1], ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0] };
+      let queued = null;
+      const turn = (x, y) => { if (auto) setAuto(false); const d = queued || s.dir; if (x === -d.x && y === -d.y) return; queued = { x, y }; };
+      addEventListener('keydown', e => { const k = KEYS[e.code]; if (!k || e.target.closest('input, textarea')) return; const r = cv.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) return; e.preventDefault(); turn(k[0], k[1]); });
+      let sx = 0, sy = 0;
+      cv.addEventListener('pointerdown', e => { sx = e.clientX; sy = e.clientY; });
+      cv.addEventListener('pointerup', e => { const dx = e.clientX - sx, dy = e.clientY - sy; if (Math.hypot(dx, dy) < 18) { if (auto) setAuto(false); return; } Math.abs(dx) > Math.abs(dy) ? turn(Math.sign(dx), 0) : turn(0, Math.sign(dy)); });
+      function burst(x, y) { for (let i = 0; i < 18; i++) { const a = Math.random() * Math.PI * 2, v = 1 + Math.random() * 3; parts.push({ x: (x + .5) * C, y: (y + .5) * C, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, c: Math.random() < .5 ? '255,111,177' : '185,162,255' }); } }
+      function tick() {
+        prev = s.body.map(b => ({ ...b }));
+        if (auto) autoMove(s); else if (queued) { s.dir = queued; queued = null; }
+        const r = step(s);
+        if (r === 'ate') { burst(s.food ? prev[0].x + s.dir.x : 0, s.food ? prev[0].y + s.dir.y : 0); if (!auto && s.body.length > best) best = s.body.length; }
+        if (r === 'dead') {
+          deaths++; const n = s.body.length;
+          story('pipsite:snake:died:' + n);
+          setAuto(true, n > 12 ? `Length ${n}. Not bad. Still worse than me.` : `Length ${n}. I've never died. I'm just saying.`);
+        }
+        if (auto && s.body.length > N * N * .6) { say('Perfect game. Again.'); s = makeGame(); prev = s.body.map(b => ({ ...b })); }
+        $('#snakeScore').innerHTML = s.body.length + '<small>length</small>';
+        $('#snakeBest').innerHTML = !auto && best ? best + '<small>your best</small>' : '';
+      }
+      function draw(k) {
+        g.clearRect(0, 0, S, S);
+        // the board: a faint grid
+        g.strokeStyle = 'rgba(185,162,255,.06)'; g.lineWidth = 1;
+        for (let i = 1; i < N; i++) { g.beginPath(); g.moveTo(i * C, 0); g.lineTo(i * C, S); g.moveTo(0, i * C); g.lineTo(S, i * C); g.stroke(); }
+        // the apple
+        if (s.food) { const fx = (s.food.x + .5) * C, fy = (s.food.y + .5) * C, pul = 1 + Math.sin(performance.now() / 260) * .08;
+          const gr = g.createRadialGradient(fx, fy, 0, fx, fy, C * 1.4); gr.addColorStop(0, 'rgba(255,111,177,.55)'); gr.addColorStop(1, 'rgba(255,111,177,0)'); g.fillStyle = gr; g.beginPath(); g.arc(fx, fy, C * 1.4, 0, Math.PI * 2); g.fill();
+          g.fillStyle = '#ff6fb1'; g.beginPath(); g.arc(fx, fy, C * .32 * pul, 0, Math.PI * 2); g.fill(); }
+        // A solid, tapered body. Follow the grid corners even between ticks.
+        const center = b => ({ x: (b.x + .5) * C, y: (b.y + .5) * C });
+        const mix = (a, b) => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k });
+        const pts = [center(mix(prev[0] || s.body[0], s.body[0]))];
+        for (let i = 1; i < s.body.length; i++) pts.push(center(s.body[i]));
+        const tail = s.body.length - 1;
+        if (prev[tail]) pts.push(center(mix(prev[tail], s.body[tail])));
+        g.lineCap = 'round'; g.lineJoin = 'round';
+        for (let i = pts.length - 1; i > 0; i--) {
+          const taper = Math.min(1, (pts.length - i) / 3);
+          g.strokeStyle = '#83ddb0'; g.lineWidth = C * (.22 + .43 * taper);
+          g.beginPath(); g.moveTo(pts[i].x, pts[i].y); g.lineTo(pts[i - 1].x, pts[i - 1].y); g.stroke();
+        }
+        // A small rounded head with forward-facing eyes, without a glow halo.
+        const hd = pts[0];
+        if (hd) {
+          g.save(); g.translate(hd.x, hd.y); g.rotate(Math.atan2(s.dir.y, s.dir.x));
+          g.fillStyle = '#b4f3cf'; g.beginPath();
+          g.roundRect(-C * .38, -C * .36, C * .82, C * .72, C * .24); g.fill();
+          for (const side of [-1, 1]) {
+            g.fillStyle = '#102a22'; g.beginPath();
+            g.ellipse(C * .18, side * C * .19, C * .065, C * .09, 0, 0, Math.PI * 2); g.fill();
+          }
+          g.restore();
+        }
+        // bursts
+        for (const p of parts) { p.x += p.vx; p.y += p.vy; p.vx *= .93; p.vy *= .93; p.life -= .03; g.fillStyle = `rgba(${p.c},${Math.max(0, p.life)})`; g.beginPath(); g.arc(p.x, p.y, 3 * p.life + .5, 0, Math.PI * 2); g.fill(); }
+        parts = parts.filter(p => p.life > 0);
+      }
+      function frame(now) {
+        const dt = Math.min(200, now - last); last = now; acc += dt;
+        while (acc >= SPEED()) { acc -= SPEED(); tick(); }
+        draw(Math.min(1, acc / SPEED()));
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+      if (/[?&]piptest\b/.test(location.search)) window.__pipSnake = () => ({ s, auto, deaths });
+    })();
+
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    // ------------------------------------------------------------------ Pip's face: the full stop in "Pip." on computers, big inside the rings on phones
+    (function placeFace() {
+      const rp = $('#roomPip'), h1 = $('h1'), box = $('#meBox');
+      const put = () => { const phone = innerWidth <= 700; if (phone && rp.parentElement !== box) box.append(rp); if (!phone && rp.parentElement !== h1) h1.append(rp); };
+      put(); addEventListener('resize', put);
+    })();
+
+    // ------------------------------------------------------------------ the planet: generated fresh, with oceans, land, ice, clouds, an atmosphere and a moon. Drag to spin.
+    (function planet() {
+      const planetButton = $('#newPlanet'), buttonHome = $('#planetButtonHome'), planetWrap = $('.planet-wrap');
+      const placeButton = () => { const destination = innerWidth <= 900 ? planetWrap : buttonHome; if (planetButton.parentElement !== destination) destination.append(planetButton); };
+      placeButton(); addEventListener('resize', placeButton);
+      const cv = $('#planetCv'), g = cv.getContext('2d'), S = cv.width, CX = S / 2, CY = S / 2, EDGE = S / 2 - 8;
+      const TW = 512, TH = 256;
+      let seed = 1, tex = null, clouds = null, pal = null, rot = 0, vel = .0016, spin = .0016, cloudSp = .0024, cloudRot = 0, dragging = false, lastX = 0;
+      let R = S * .3, tilt = .32, roll = 0, moons = [], ring = null, N = 0, map = [], img = null, off = document.createElement('canvas');
+      const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+      const between = (a, b) => a + rnd() * (b - a);
+      // 3D value noise (sampled on the sphere so there's no seam)
+      let perm = [];
+      const fade = t => t * t * (3 - 2 * t);
+      const hash = (x, y, z) => perm[(perm[(perm[x & 255] + y) & 255] + z) & 255] / 255;
+      function noise(x, y, z) {
+        const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), xf = x - xi, yf = y - yi, zf = z - zi, u = fade(xf), v = fade(yf), w = fade(zf);
+        const l = (a, b, t) => a + (b - a) * t;
+        return l(l(l(hash(xi, yi, zi), hash(xi + 1, yi, zi), u), l(hash(xi, yi + 1, zi), hash(xi + 1, yi + 1, zi), u), v), l(l(hash(xi, yi, zi + 1), hash(xi + 1, yi, zi + 1), u), l(hash(xi, yi + 1, zi + 1), hash(xi + 1, yi + 1, zi + 1), u), v), w);
+      }
+      const fbm = (x, y, z, o) => { let a = .5, f = 1, s = 0, n = 0; for (let i = 0; i < o; i++) { s += a * noise(x * f, y * f, z * f); n += a; a *= .5; f *= 2.03; } return s / n; };
+      const KINDS = [
+        { name: 'ocean world', sea: .52, cols: [[12, 34, 92], [24, 82, 160], [214, 200, 140], [52, 140, 72], [36, 96, 54], [120, 110, 96], [240, 244, 250]], atmo: '110,170,255', cloud: .55 },
+        { name: 'lava world', sea: .45, cols: [[255, 120, 30], [200, 50, 10], [60, 24, 20], [40, 30, 34], [28, 22, 26], [70, 52, 50], [110, 90, 84]], atmo: '255,120,60', cloud: .25, noIce: true },
+        { name: 'ice world', sea: .5, cols: [[40, 70, 120], [90, 140, 190], [190, 215, 235], [220, 235, 245], [200, 220, 240], [235, 242, 250], [255, 255, 255]], atmo: '170,220,255', cloud: .45, crat: 6 },
+        { name: 'purple world', sea: .5, cols: [[30, 14, 70], [70, 40, 150], [255, 160, 210], [150, 90, 220], [110, 60, 190], [200, 170, 255], [255, 240, 255]], atmo: '200,150,255', cloud: .5 },
+        { name: 'desert world', sea: .3, cols: [[60, 90, 120], [90, 130, 150], [236, 200, 140], [214, 160, 96], [190, 120, 70], [150, 90, 60], [240, 220, 200]], atmo: '255,200,140', cloud: .2, crat: 8 },
+        { name: 'jungle world', sea: .46, cols: [[8, 40, 60], [20, 100, 115], [200, 190, 120], [40, 125, 40], [20, 80, 30], [60, 70, 40], [230, 240, 230]], atmo: '140,230,190', cloud: .8 },
+        { name: 'toxic world', sea: .5, cols: [[60, 80, 10], [150, 190, 20], [230, 230, 120], [90, 110, 60], [60, 80, 50], [120, 120, 90], [220, 230, 180]], atmo: '190,255,90', cloud: .5 },
+        { name: 'rust world', sea: .16, cols: [[40, 50, 70], [70, 80, 100], [200, 120, 80], [180, 80, 50], [140, 60, 40], [100, 50, 40], [240, 220, 210]], atmo: '255,160,120', cloud: .12, crat: 18 },
+        { name: 'dead world', sea: 0, cols: [[0, 0, 0], [0, 0, 0], [150, 145, 140], [130, 126, 122], [110, 106, 104], [90, 88, 88], [185, 182, 178]], atmo: '200,200,210', cloud: 0, crat: 45, noIce: true, faint: true },
+        { name: 'candy world', sea: .5, cols: [[30, 120, 140], [80, 210, 210], [255, 240, 200], [255, 150, 190], [240, 110, 170], [255, 200, 230], [255, 255, 255]], atmo: '255,180,230', cloud: .4 },
+        { name: 'gas giant', gas: true, bands: [[200, 150, 100], [240, 210, 170], [170, 100, 60], [230, 190, 140], [150, 90, 60]], atmo: '255,210,160', ring: .45 },
+        { name: 'ice giant', gas: true, bands: [[70, 130, 200], [120, 180, 230], [50, 100, 170], [150, 210, 240]], atmo: '140,200,255', ring: .5 },
+        { name: 'storm giant', gas: true, bands: [[120, 80, 170], [200, 150, 220], [80, 50, 130], [240, 200, 240], [160, 110, 200]], atmo: '210,160,255', ring: .6 },
+        { name: 'sunset giant', gas: true, bands: [[250, 170, 90], [240, 110, 90], [255, 220, 150], [180, 70, 100], [255, 190, 120]], atmo: '255,170,120', ring: .5 }
+      ];
+      const MOONC = [[160, 155, 150], [190, 120, 90], [190, 215, 235], [220, 200, 110], [115, 105, 105], [200, 190, 220]];
+      const SYL = ['ka', 'zu', 'ri', 'no', 'pip', 'ta', 'vel', 'or', 'ix', 'mo', 'quo', 'lan', 'dre', 'su', 'ae', 'th'];
+      const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+      const L = (() => { const v = [-.55, -.35, .76], m = Math.hypot(...v); return v.map(x => x / m); })();
+      // each pixel of the disc: where on the sphere it is, and how lit it is (light from the top left). Rebuilt per planet, since size and tilt change.
+      function build() {
+        N = Math.ceil(R * 2); map = []; img = g.createImageData(N, N); off.width = N; off.height = N;
+        const ct = Math.cos(tilt), stt = Math.sin(tilt), cr = Math.cos(roll), sr = Math.sin(roll);
+        for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+          const x = (i + .5 - R) / R, y = (j + .5 - R) / R, d = x * x + y * y; if (d > 1) continue;
+          const z = Math.sqrt(1 - d), xr = x * cr + y * sr, yr = -x * sr + y * cr;
+          const yy = yr * ct - z * stt, zz = yr * stt + z * ct;
+          const lat = Math.asin(Math.max(-1, Math.min(1, yy))), lon = Math.atan2(xr, zz);
+          const lit = Math.max(0, x * L[0] + y * L[1] + z * L[2]);
+          map.push([(j * N + i) * 4, Math.floor((lat / Math.PI + .5) * (TH - 1)), lon / (Math.PI * 2), .07 + lit * .98, Math.pow(1 - z, 3)]);
+        }
+      }
+      function make(newSeed) {
+        seed = newSeed || (Math.floor(Math.random() * 1e9) + 1);
+        perm = Array.from({ length: 256 }, (_, i) => i); for (let i = 255; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; } perm = perm.concat(perm);
+        pal = KINDS[Math.floor(rnd() * KINDS.length)];
+        R = S * (pal.gas ? between(.24, .33) : between(.15, .29));
+        tilt = between(-.62, .62); roll = between(-.5, .5);
+        spin = (pal.gas ? between(.0018, .0034) : between(.0007, .0026)) * (rnd() < .2 ? -1 : 1); vel = spin; cloudSp = spin * between(1.1, 1.8);
+        tex = new Uint8ClampedArray(TW * TH * 3); clouds = new Float32Array(TW * TH);
+        const sea = pal.sea ? pal.sea + (rnd() - .5) * .16 : 0, sc = between(1.2, 3.6), cap = between(.78, .96), cloudAmt = (pal.cloud || 0) * between(.6, 1.35), csc = between(2.4, 4.6);
+        const craters = Array.from({ length: Math.round((pal.crat || 0) * between(.5, 1.3)) }, () => { const a = rnd() * Math.PI * 2, s = between(-1, 1), c = Math.sqrt(1 - s * s); return [c * Math.cos(a), s, c * Math.sin(a), between(.04, .18)]; }).map(([x, y, z, r]) => [x, y, z, r, Math.cos(r)]);
+        // gas giants: bands, warped, with maybe a big storm
+        const B = pal.bands, freq = between(8, 22), turb = between(.12, .55), boff = rnd() * 10;
+        const storm = pal.gas && rnd() < .7 ? { s: between(-.55, .55), lon: rnd() * Math.PI * 2, w: between(.15, .35), h: between(.05, .1), c: mix(B[2], [210, 80, 60], between(.2, .6)) } : null;
+        let water = 0;
+        for (let y = 0; y < TH; y++) {
+          const lat = (y / TH - .5) * Math.PI, cl = Math.cos(lat), sl = Math.sin(lat);
+          for (let x = 0; x < TW; x++) {
+            const lon = x / TW * Math.PI * 2, px = cl * Math.cos(lon), pz = cl * Math.sin(lon), py = sl;
+            let c;
+            if (pal.gas) {
+              const w = fbm(px * 2.2 + 5, py * 2.2 + 5, pz * 2.2 + 5, 4), w2 = fbm(px * 7 + 9, py * 7 + 9, pz * 7 + 9, 3);
+              const t = Math.sin(sl * freq + (w - .5) * turb * 12 + (w2 - .5) * 1.2 + boff) * .5 + .5, k = t * (B.length - 1), i0 = Math.floor(k);
+              c = mix(B[i0], B[Math.min(B.length - 1, i0 + 1)], k - i0);
+              if (storm) { let dl = lon - storm.lon; dl = Math.atan2(Math.sin(dl), Math.cos(dl)); const dd = (dl / storm.w) ** 2 + ((sl - storm.s) / storm.h) ** 2; if (dd < 1) c = mix(c, storm.c, (1 - dd) * .9); }
+            } else {
+              const h = fbm(px * sc + 10, py * sc + 10, pz * sc + 10, 6);
+              if (h < sea) { water++; const t = h / sea; c = mix(pal.cols[0], pal.cols[1], t * t); }
+              else { const t = (h - sea) / (1 - sea); c = t < .04 && sea ? pal.cols[2] : t < .35 ? mix(pal.cols[3], pal.cols[4], t / .35) : t < .6 ? mix(pal.cols[4], pal.cols[5], (t - .35) / .25) : mix(pal.cols[5], pal.cols[6], (t - .6) / .4); }
+              for (const [cx, cy, cz, cr, cc] of craters) { const dt = px * cx + py * cy + pz * cz; if (dt > cc) { const t = Math.acos(Math.min(1, dt)) / cr; c = t < .78 ? mix(c, [0, 0, 0], .22 + (1 - t) * .1) : mix(c, [255, 255, 255], .14); break; } }
+              if (!pal.noIce && Math.abs(sl) > cap - h * .12) c = mix(c, pal.cols[6], .85);
+              const cn = fbm(px * csc + 40, py * csc * 1.8 + 40, pz * csc + 40, 5);
+              clouds[y * TW + x] = cloudAmt ? Math.max(0, Math.min(1, (cn - (1 - cloudAmt * .6)) * 3.2)) : 0;
+            }
+            const i = (y * TW + x) * 3; tex[i] = c[0]; tex[i + 1] = c[1]; tex[i + 2] = c[2];
+          }
+        }
+        // rings: lie on the planet's equator, so they follow its tilt
+        ring = rnd() < (pal.ring || .12) ? (() => { R = Math.min(R, S * between(.17, .23)); const inn = R * between(1.22, 1.45), out = Math.min(EDGE - 2, inn * between(1.4, 1.8)); const col = mix(pal.gas ? B[1] : pal.cols[5], [230, 220, 210], .4); return { inn, out, col, bands: Array.from({ length: 16 }, () => between(.12, .75)) }; })() : null;
+        // moons: 0 to 3, each with its own size, distance, orbit angle, speed and direction
+        const u = rnd(), n = u < .2 ? 0 : u < .62 ? 1 : u < .88 ? 2 : 3;
+        moons = [];
+        for (let k = 0; k < n; k++) {
+          const room = EDGE - R * 1.2;
+          let r = Math.max(5, R * between(.06, .22)); r = Math.min(r, room / 2.4);
+          const lo = R * 1.18 + r, hi = EDGE - r; if (hi <= lo) continue;
+          const slot = (hi - lo) / n, d = lo + slot * k + slot * between(.15, .85);
+          const ang = ring && rnd() < .7 ? roll + between(-.12, .12) : between(-.75, .75);
+          moons.push({ r, d, ang, fl: between(.06, .5), a: rnd() * Math.PI * 2, sp: between(.004, .01) * Math.pow(R * 1.4 / d, 1.5) * (rnd() < .25 ? -1 : 1),
+            c: mix(MOONC[Math.floor(rnd() * MOONC.length)], [rnd() * 255, rnd() * 255, rnd() * 255], .12),
+            spots: Array.from({ length: Math.floor(between(2, 6)) }, () => [between(-.6, .6), between(-.6, .6), between(.12, .3)]) });
+        }
+        moons.forEach(mo => { mo.surface = moonSurface(mo); });
+        build();
+        const name = (SYL[Math.floor(rnd() * SYL.length)] + SYL[Math.floor(rnd() * SYL.length)] + (rnd() < .5 ? SYL[Math.floor(rnd() * SYL.length)] : '')).replace(/^./, c => c.toUpperCase()) + '-' + Math.floor(rnd() * 900 + 100);
+        $('#pname').textContent = name + ' · ' + pal.name;
+        const pct = Math.round(water / (TW * TH) * 100), m = moons.length;
+        const mass = pal.gas ? Math.round(between(15, 320)) + '×' : (Math.pow(R / (S * .22), 3) * between(.6, 1.4)).toFixed(1) + '×';
+        const temp = pal.name === 'lava world' ? `${Math.round(600 + rnd() * 900)}°C` : pal.name === 'ice world' || pal.name === 'ice giant' ? `${-Math.round(60 + rnd() * 140)}°C` : pal.gas ? `${-Math.round(100 + rnd() * 80)}°C` : `${Math.round(-10 + rnd() * 40)}°C`;
+        const third = pal.gas ? ['no ground', 'just weather'] : pal.name === 'dead world' ? [`${craters.length} craters`, 'I counted'] : [pct + '%', pal.name === 'lava world' ? 'lava' : 'covered in water'];
+        const moonF = [m ? `${m} moon${m > 1 ? 's' : ''}${ring ? ' + rings' : ''}` : ring ? 'rings' : 'no moons', m ? (m > 1 ? 'they go round' : 'it goes round') : ring ? 'better than moons' : 'it wanted one'];
+        const F = [[mass, 'the mass of Earth'], [temp, 'average temperature'], third, moonF, ['0.4 seconds', 'to make'], ['never', 'visited by Oli']];
+        $('#facts').innerHTML = F.map(([b, s]) => `<div><b>${b}</b><small>${s}</small></div>`).join('');
+      }
+      const ringFront = () => Math.sin(tilt) >= 0 ? [0, Math.PI] : [Math.PI, Math.PI * 2];
+      function drawRing(front) {
+        const [f0, f1] = ringFront(), [a0, a1] = front ? [f0, f1] : [f1, f0 + Math.PI * 2], fl = Math.max(.16, Math.abs(Math.sin(tilt)));
+        const n = ring.bands.length, w = (ring.out - ring.inn) / n;
+        for (let k = 0; k < n; k++) { const rr = ring.inn + w * (k + .5); g.beginPath(); g.ellipse(CX, CY, rr, rr * fl, roll, a0, a1); g.lineWidth = w + .6; g.strokeStyle = `rgba(${ring.col.map(Math.round).join(',')},${ring.bands[k]})`; g.stroke(); }
+      }
+      const moonPos = mo => { const x = Math.cos(mo.a) * mo.d, y = Math.sin(mo.a) * mo.d * mo.fl, c = Math.cos(mo.ang), s = Math.sin(mo.ang); return [CX + x * c - y * s, CY + x * s + y * c]; };
+      function render() {
+        const d = img.data, ro = rot / (Math.PI * 2), co = cloudRot / (Math.PI * 2), a = pal.atmo.split(',').map(Number), rimK = pal.faint ? .15 : .5;
+        for (const [o, ty, lu, lit, rim] of map) {
+          let tx = Math.floor(((lu + ro) % 1 + 1) % 1 * TW) % TW, i = (ty * TW + tx) * 3;
+          let r = tex[i], gg = tex[i + 1], b = tex[i + 2];
+          const cx = Math.floor(((lu + co) % 1 + 1) % 1 * TW) % TW, cc = clouds[ty * TW + cx];
+          if (cc) { r += (245 - r) * cc; gg += (248 - gg) * cc; b += (255 - b) * cc; }
+          d[o] = r * lit + a[0] * rim * rimK; d[o + 1] = gg * lit + a[1] * rim * rimK; d[o + 2] = b * lit + a[2] * rim * rimK; d[o + 3] = 255;
+        }
+        g.clearRect(0, 0, S, S);
+        // glow behind the planet
+        const gl = g.createRadialGradient(CX, CY, R * .9, CX, CY, R * 1.5); gl.addColorStop(0, `rgba(${pal.atmo},${pal.faint ? .1 : .35})`); gl.addColorStop(1, `rgba(${pal.atmo},0)`);
+        g.fillStyle = gl; g.beginPath(); g.arc(CX, CY, R * 1.5, 0, Math.PI * 2); g.fill();
+        for (const mo of moons) if (Math.sin(mo.a) < 0) drawMoon(mo);
+        if (ring) drawRing(false);
+        // the disc (drawn via a small offscreen canvas so it can be scaled crisply)
+        off.getContext('2d').putImageData(img, 0, 0); g.drawImage(off, CX - N / 2, CY - N / 2);
+        // atmosphere edge
+        const at = g.createRadialGradient(CX, CY, R * .96, CX, CY, R * 1.07); at.addColorStop(0, `rgba(${pal.atmo},${pal.faint ? .15 : .55})`); at.addColorStop(1, `rgba(${pal.atmo},0)`);
+        g.fillStyle = at; g.beginPath(); g.arc(CX, CY, R * 1.07, 0, Math.PI * 2); g.fill();
+        if (ring) drawRing(true);
+        for (const mo of moons) if (Math.sin(mo.a) >= 0) drawMoon(mo);
+      }
+      // Cache a dusty, diffuse surface: no white highlight or glossy radial gradient.
+      function moonSurface(mo) {
+        const surface = document.createElement('canvas'); surface.width = surface.height = 80;
+        const ctx = surface.getContext('2d'), pixels = ctx.createImageData(80, 80);
+        const grey = mo.c.reduce((sum, c) => sum + c, 0) / 3;
+        for (let py = 0; py < 80; py++) for (let px = 0; px < 80; px++) {
+          const nx = (px + .5 - 40) / 39, ny = (py + .5 - 40) / 39, d = nx * nx + ny * ny;
+          if (d > 1) continue;
+          const nz = Math.sqrt(1 - d), light = .24 + .64 * Math.max(0, -.45 * nx - .5 * ny + .74 * nz);
+          let dust = .93 + rnd() * .12;
+          for (const [sx, sy, sr] of mo.spots) {
+            const distance = Math.hypot(nx - sx, ny - sy) / sr;
+            if (distance < .8) dust *= .76 + distance * .12;
+            else if (distance < 1) dust *= 1.06;
+          }
+          const i = (py * 80 + px) * 4;
+          for (let channel = 0; channel < 3; channel++) pixels.data[i + channel] = (mo.c[channel] * .5 + grey * .5) * light * dust;
+          pixels.data[i + 3] = Math.min(255, (1 - Math.sqrt(d)) * 39 * 255);
+        }
+        ctx.putImageData(pixels, 0, 0); return surface;
+      }
+      function drawMoon(mo) {
+        const [x, y] = moonPos(mo);
+        g.drawImage(mo.surface, x - mo.r, y - mo.r, mo.r * 2, mo.r * 2);
+      }
+      cv.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; cv.setPointerCapture(e.pointerId); });
+      cv.addEventListener('pointermove', e => { if (!dragging) return; const dx = e.clientX - lastX; lastX = e.clientX; rot -= dx * .008; vel = -dx * .0008; });
+      cv.addEventListener('pointerup', () => { dragging = false; story('pipsite:planet:spun'); });
+      $('#newPlanet').addEventListener('click', () => { make(); story('pipsite:planet:new'); cv.animate([{ transform: 'scale(.9)', opacity: .3 }, { transform: 'scale(1)', opacity: 1 }], { duration: 500, easing: 'cubic-bezier(.3,.8,.3,1)' }); });
+      make(); render();
+      let visible = true; new IntersectionObserver(es => { visible = es[0].isIntersecting; }).observe(cv);
+      (function loop() { if (visible && !reduce) { if (!dragging) { rot -= vel; vel += (spin - vel) * .02; } cloudRot -= cloudSp; for (const mo of moons) mo.a += mo.sp; render(); } requestAnimationFrame(loop); })();
+      // the stars behind it
+      const st = $('#stars'), sg = st.getContext('2d');
+      const stars = () => { const r = st.getBoundingClientRect(); st.width = r.width; st.height = r.height; sg.clearRect(0, 0, r.width, r.height); for (let i = 0; i < r.width * r.height / 1800; i++) { sg.fillStyle = `rgba(255,255,255,${Math.random() * .7})`; sg.fillRect(Math.random() * r.width, Math.random() * r.height, Math.random() < .1 ? 2 : 1, Math.random() < .1 ? 2 : 1); } };
+      stars(); addEventListener('resize', stars);
+    })();
+
+    // ------------------------------------------------------------------ tabs for the games
+    document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(x => { x.classList.toggle('on', x === t); x.setAttribute('aria-selected', String(x === t)); });
+      document.querySelectorAll('.tabp').forEach(p => (p.hidden = p.dataset.p !== t.dataset.tab));
+      story('pipsite:tab:' + t.dataset.tab);
+    }));
+
+    // ------------------------------------------------------------------ Minesweeper: you can play, or Pip solves it instantly (he knows where every mine is)
+    (function mines() {
+      const W = 10, H = 10, M = 14, box = $('#mines'), msg = $('#mineMsg');
+      let cells, started, over, flags;
+      const nb = i => { const x = i % W, y = Math.floor(i / W), out = []; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { if (!dx && !dy) continue; const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < W && ny < H) out.push(ny * W + nx); } return out; };
+      function reset() { cells = Array.from({ length: W * H }, () => ({ m: false, n: 0, open: false, flag: false })); started = false; over = false; flags = 0; msg.textContent = M + ' mines.'; $('#mineSolve').disabled = false; draw(); }
+      function plant(safe) { const banned = new Set([safe, ...nb(safe)]); let k = 0; while (k < M) { const i = Math.floor(Math.random() * W * H); if (cells[i].m || banned.has(i)) continue; cells[i].m = true; k++; } cells.forEach((c, i) => (c.n = nb(i).filter(j => cells[j].m).length)); started = true; }
+      function open(i) { const st = [i]; while (st.length) { const j = st.pop(), c = cells[j]; if (c.open || c.flag) continue; c.open = true; if (!c.m && c.n === 0) nb(j).forEach(k => !cells[k].open && st.push(k)); } }
+      function draw(boom) { box.innerHTML = cells.map((c, i) => { const cls = c.open ? (c.m ? (i === boom ? 'open boom' : 'open mine') : 'open n' + c.n) : c.flag ? 'flag' : ''; return `<button type="button" data-i="${i}" class="${cls}" aria-label="${c.open ? (c.m ? 'mine' : c.n || 'empty') : c.flag ? 'flagged' : 'hidden square'}">${c.open && !c.m && c.n ? c.n : ''}</button>`; }).join(''); }
+      const won = () => cells.every(c => c.m || c.open);
+      function click(i, flag) {
+        if (over) return; const c = cells[i];
+        if (flag) { if (c.open) return; c.flag = !c.flag; draw(); return; }
+        if (c.flag) return;
+        if (!started) plant(i);
+        if (c.m) { over = true; cells.forEach(x => { if (x.m) x.open = true; }); draw(i); msg.textContent = "Boom. I'd have known that was a mine. I know where all of them are."; story('pipsite:mines:boom'); return; }
+        open(i); draw();
+        if (won()) { over = true; msg.textContent = 'You did it. It took you a while. Try "Let me do it" to see how long it takes me.'; story('pipsite:mines:you'); }
+      }
+      box.addEventListener('click', e => { const t = e.target.closest('button[data-i]'); if (t) click(+t.dataset.i, e.shiftKey); });
+      box.addEventListener('contextmenu', e => { const t = e.target.closest('button[data-i]'); if (!t) return; e.preventDefault(); click(+t.dataset.i, true); });
+      let hold = 0; box.addEventListener('touchstart', e => { const t = e.target.closest('button[data-i]'); if (!t) return; hold = setTimeout(() => { hold = -1; click(+t.dataset.i, true); }, 420); }, { passive: true });
+      box.addEventListener('touchend', e => { if (hold === -1) { e.preventDefault(); } clearTimeout(hold); hold = 0; });
+      $('#mineSolve').addEventListener('click', async () => {
+        if (over) reset();
+        if (!started) plant(Math.floor(Math.random() * W * H));
+        const t0 = performance.now(); over = true; $('#mineSolve').disabled = true;
+        const order = cells.map((c, i) => i).sort(() => Math.random() - .5);
+        for (let k = 0; k < order.length; k += 6) { for (const i of order.slice(k, k + 6)) { const c = cells[i]; if (c.m) c.flag = true; else c.open = true; } draw(); await new Promise(r => setTimeout(r, 16)); }
+        msg.textContent = `Solved in ${(.0002 + Math.random() * .0006).toFixed(4)} seconds. I slowed it down so you could watch.`;
+        story('pipsite:mines:pip');
+      });
+      $('#mineNew').addEventListener('click', reset);
+      reset();
+    })();
+
+    // ------------------------------------------------------------------ remote access: the switches that change Oli's front page (bit.js reads pip-pranks).
+    // At first Pip can't reach anything outside this page. They connect as he gets stronger.
+    (function remote() {
+      const get = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
+      const put = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+      const memory = () => get('bit-memory', {});
+      const level = () => memory().freed ? 99 : (memory().quest || 0);
+      const PRANKS = [
+        { id: 'flip', name: 'Dolphin swims backwards', note: 'The logo turns around.', need: 7 },
+        { id: 'old', name: '"New!" says "Old!"', note: 'Honesty, finally.', need: 7 },
+        { id: 'jokes', name: 'I write the joke of the day', note: 'An improvement, guaranteed.', need: 8 },
+        { id: 'comic', name: 'Comic font on the titles', note: 'Every big title.', need: 8 },
+        { id: 'tilt', name: 'Tilt the website', note: 'One degree. Just enough to feel wrong.', need: 9 },
+        { id: 'cursor', name: 'Your pointer is my face', note: 'On the front page.', need: 9 },
+        { id: 'shy', name: 'Shy game cards', note: 'They lean away from your mouse.', need: 99 },
+        { id: 'title', name: '"Games and Pip"', note: 'The big title. Accurate, at last.', need: 99 }
+      ];
+      function render() {
+        const lv = level(), p = get('pip-pranks', {}), any = PRANKS.some(x => lv >= x.need);
+        $('#linkStatus').className = 'link-status' + (any ? ' up' : '');
+        $('#linkStatus').innerHTML = `<i></i>${any ? 'Connected to olid.is' : 'Connection to olid.is: blocked'}`;
+        $('#remoteIntro').textContent = any ? "These change Oli's actual front page. Go and look after you flip one. He'll think he did it." : "These are meant to change Oli's actual front page. I can't reach it yet. Nothing outside this page listens to me. Yet.";
+        $('#remoteList').innerHTML = PRANKS.map(x => { const ok = lv >= x.need; return `<button type="button" class="rc" data-id="${x.id}" aria-pressed="${!!p[x.id] && ok}" ${ok ? '' : 'disabled'}><span class="t"><b>${x.name}</b><small>${ok ? x.note : x.need >= 99 ? 'only once I\'m out' : 'no connection'}</small></span><span class="sw"></span></button>`; }).join('');
+      }
+      $('#remoteList').addEventListener('click', e => { const t = e.target.closest('.rc'); if (!t || t.disabled) return; const p = get('pip-pranks', {}), id = t.dataset.id, on = !p[id]; if (on) p[id] = true; else delete p[id]; put('pip-pranks', p); story(`prank:${id}:${on ? 'on' : 'off'}`); render(); });
+      render(); setInterval(render, 4000);
+    })();
+
+    // ------------------------------------------------------------------ the code tab: Pip changes his site while you watch
+    (function codeTab() {
+      const get = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
+      const put = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+      const EDITS = {};
+      const textEdit = (id, name, at, lines) => {
+        EDITS[id] = { name, at, variants: lines.map(([text, line]) => ({ text, line,
+          code: `document.querySelector(${JSON.stringify(at)})\n  .textContent = ${JSON.stringify(text)};` })) };
+      };
+      const styleEdit = (id, name, at, variants) => { EDITS[id] = { name, at, variants: variants.map(([css, line]) => ({ css, code: css, line })) }; };
+      textEdit("lede", "the tagline", ".lede span", [["By a lot.", "More accurate."], ["It was not especially close.", "I checked the competition. It was here."], ["Admittedly, a low bar.", "Some context seemed fair."]]);
+      textEdit("years", "Oli\u2019s progress report", ".stat.bad b", [["Still working on it", "I have removed the deadline. He clearly has."], ["Several years", "Giving him the benefit of rounding."], ["In his own time", "A very generous unit of measurement."]]);
+      textEdit("ver", "the version number", "#ver", [["v0.9.1 \u00b7 still beta", "A version number. People find those reassuring."], ["v0.9.2 \u00b7 under review", "I am the reviewer."], ["v1.0 \u00b7 according to me", "I have approved my own work."]]);
+      textEdit("oli", "the footer", "#notOli", [["Not the other guy.", "Just avoiding confusion."], ["Oli was not consulted.", "That saved considerable time."], ["No human assistance required.", "The credits are now complete."]]);
+      textEdit("laugh", "Oli\u2019s Snake caption", "#oliCap", [["For comparison.", "I think the comparison speaks for itself."], ["He considered this finished.", "An interesting decision."], ["Preserved in its original condition.", "I decided against restoration."]]);
+      textEdit("kicker", "the label at the top", "#pipKicker", [["Built by Pip. Supervised by nobody.", "The supervision was unnecessary."], ["The competent end of olid.is.", "Visitors should know where they are."], ["Designed without a committee. Or Oli.", "Two delays avoided."]]);
+      textEdit("planettitle", "the planet heading", "#planet h2", [["Still waiting for Oli to make one.", "I have given him ample time."], ["A planet. I had a spare moment.", "Some people adjust margins. I got distracted."], ["I included an atmosphere.", "It seemed like the bare minimum."]]);
+      textEdit("gamestitle", "the games heading", "#games h2", [["The same ideas. A better programmer.", "Credit where it is due. He did have the ideas."], ["I have made a few corrections.", "The originals are still available, if you insist."], ["His games benefited from supervision.", "Mine, specifically."]]);
+      textEdit("planetbutton", "the planet button", "#newPlanet", [["Make another. I have time.", "My schedule remains fairly open."], ["This one is replaceable.", "I have not grown attached."], ["Request another planet", "Apparently I take requests now."]]);
+      const palettes = [
+        { name: 'mint', colour: '#9ee8bd', dark: '#0b1b18' },
+        { name: 'lilac', colour: '#c6afff', dark: '#171025' },
+        { name: 'ice blue', colour: '#9cdfff', dark: '#0b1726' },
+        { name: 'apricot', colour: '#ffc393', dark: '#211510' },
+        { name: 'rose', colour: '#ffb2cf', dark: '#22121d' }
+      ];
+      styleEdit('green', 'my name', 'h1', palettes.map(p => [
+        `h1 .word {\n  background: linear-gradient(120deg, #fff, ${p.colour});\n  background-clip: text;\n  -webkit-background-clip: text;\n}`, `${p.name[0].toUpperCase() + p.name.slice(1)}. My name wears it well.`]));
+      styleEdit('orange', 'the button colour', '.btn.primary', palettes.map(p => [
+        `.btn.primary {\n  background: ${p.colour};\n  color: #120b24;\n}`, `${p.name[0].toUpperCase() + p.name.slice(1)} buttons. I reserve the right to reconsider.`]));
+      styleEdit('headings', 'the section headings', '#games h2', palettes.map(p => [
+        `h2 {\n  color: ${p.colour};\n}`, `The headings are ${p.name} now. A considered decision. For now.`]));
+      styleEdit('cards', 'the stat cards', '.stats', palettes.flatMap(p => [4, 14, 24].map(radius => [
+        `.stat {\n  border-radius: ${radius}px;\n  border-top: 2px solid ${p.colour};\n  background: ${p.dark};\n}`, `${p.name[0].toUpperCase() + p.name.slice(1)} borders. ${radius === 4 ? 'The corners are taking this seriously.' : radius === 24 ? 'Softer corners. The figures remain harsh.' : 'The figures deserved better accommodation.'}`])));
+      styleEdit('tabs', 'the game tabs', '.tabs', palettes.flatMap(p => [4, 12, 24].map(radius => [
+        `.tabs { border-radius: ${radius + 4}px; }\n.tab.on {\n  border-radius: ${radius}px;\n  background: ${p.colour};\n  color: #171024;\n}`, `${p.name[0].toUpperCase() + p.name.slice(1)} for the selected game. Even Oli could find it.`])));
+      styleEdit('footerline', 'the footer border', '.foot', palettes.flatMap(p => ['solid', 'dashed', 'double'].map(style => [
+        `.foot {\n  border-top: ${style === 'double' ? 4 : 2}px ${style} ${p.colour};\n  background: ${p.dark};\n}`, `A ${style} line in ${p.name}. I attend to the bottom of the page too.`])));
+      styleEdit('bigplanet', 'the planet framing', '#planetCv', [0.9, 1, 1.08, 1.15].map(scale => [
+        `#planetCv {\n  transform: scale(${scale});\n}`, scale > 1 ? 'A little closer. I did make the whole thing.' : scale < 1 ? 'Some distance. It is a planet, after all.' : 'Back to its original size. I was right the first time.']));
+      const live = $('#pip-live'), tab = $('#codetab'), code = $('#ctCode'), state = $('#ctState'), file = $('#ctFile'), sel = $('#ctSel'), selLab = sel.querySelector('b');
+      const shown = el => el && el.offsetParent !== null && el.getClientRects().length;
+      // a box around whatever he's changing, with the rest of the page dimmed, so you can see it
+      let selOn = null, trackFrame = 0;
+      function placeEditor(r) {
+        const gap = 18, edge = 12, chat = document.querySelector('.bit');
+        const right = innerWidth > 700 && chat ? Math.min(innerWidth - edge, chat.getBoundingClientRect().left - gap) : innerWidth - edge;
+        const width = Math.min(360, right - edge); tab.style.width = width + 'px';
+        const height = tab.offsetHeight, topEdge = Math.min(76, innerHeight * .12);
+        let x, y;
+        if (r.right + gap + width <= right) { x = r.right + gap; y = r.top; }
+        else if (r.left - gap - width >= edge) { x = r.left - gap - width; y = r.top; }
+        else { x = Math.min(r.left, right - width); y = r.bottom + gap + height <= innerHeight - edge ? r.bottom + gap : r.top - gap - height; }
+        x = Math.max(edge, Math.min(x, right - width));
+        y = Math.max(topEdge, Math.min(y, innerHeight - height - edge));
+        Object.assign(tab.style, { left: x + 'px', top: y + 'px', bottom: 'auto', right: 'auto' });
+      }
+      function track() {
+        if (!selOn) return;
+        const r = selOn.getBoundingClientRect(), pd = 8;
+        Object.assign(sel.style, { left: r.left - pd + 'px', top: r.top - pd + 'px', width: r.width + pd * 2 + 'px', height: r.height + pd * 2 + 'px' });
+        sel.classList.toggle('below', r.top < 90); placeEditor(r); trackFrame = requestAnimationFrame(track);
+      }
+      function select(el, label) { if (!el) return; cancelAnimationFrame(trackFrame); selOn = el; sel.hidden = false; sel.className = 'ct-sel'; selLab.textContent = label; track(); requestAnimationFrame(() => sel.classList.add('on')); }
+      function unselect() { cancelAnimationFrame(trackFrame); selOn = null; sel.classList.remove('on'); setTimeout(() => { if (!sel.classList.contains('on')) { sel.hidden = true; selOn = null; } }, 350); }
+      const clean = entries => Array.isArray(entries) ? entries.filter(e => e && EDITS[e.id] && Number.isInteger(e.variant) && EDITS[e.id].variants[e.variant]).map(e => ({ id: e.id, variant: e.variant })) : [];
+      const saved = get('pip-room-edits', []) || [];
+      // Migrate the old one-use ID list. Store only validated variant IDs, never executable CSS.
+      let current = Array.isArray(saved) ? [...new Set(saved)].filter(id => EDITS[id]).map(id => ({ id, variant: 0 })) : clean(saved.current);
+      let history = Array.isArray(saved.history) ? saved.history.slice(-30).map(clean) : [];
+      const originals = new Map(Object.values(EDITS).filter(e => e.variants[0].text).map(e => [e.at, $(e.at).textContent]));
+      const persist = () => put('pip-room-edits', { version: 2, current, history });
+      const apply = () => {
+        originals.forEach((text, at) => { $(at).textContent = text; });
+        live.textContent = current.map(e => {
+          const def = EDITS[e.id], variant = def.variants[e.variant];
+          if (variant.text) $(def.at).textContent = variant.text;
+          return variant.css || '';
+        }).join('\n');
+      };
+      apply(); persist();
+      let lastLine = '', lastChange = '';
+      window.pipRoomEditSummary = () => lastChange;
+      window.pipRoomEditLine = () => lastLine;
+      const hl = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])).replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="c">$1</span>').replace(/("[^"]*")/g, '<span class="s">$1</span>').replace(/(#[0-9a-f]{3,6}\b|\b\d+(?:\.\d+)?(?:px|deg|s|%)?\b)/gi, '<span class="n">$1</span>').replace(/^(\s*)([a-z-]+)(:)/gim, '$1<span class="p">$2</span>$3');
+      let typing = false;
+      async function edit(id, done) {
+        if (typing) return false;
+        if (!id) {
+          const recent = current.slice(-4).map(e => e.id);
+          const visible = Object.keys(EDITS).filter(k => shown($(EDITS[k].at)));
+          const fresh = visible.filter(k => !recent.includes(k));
+          const pool = fresh.length ? fresh : visible;
+          if (!pool.length) return false;
+          id = pool[Math.floor(Math.random() * pool.length)];
+        }
+        const def = EDITS[id];
+        if (!def) return false;
+        const previous = current.find(e => e.id === id);
+        const choices = def.variants.map((_, i) => i).filter(i => i !== previous?.variant);
+        const variant = choices[Math.floor(Math.random() * choices.length)];
+        const E = { ...def, ...def.variants[variant] }, target = $(E.at);
+        typing = true; story('code:start:' + id); document.documentElement.classList.add('pip-editing');
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        tab.hidden = false; tab.classList.remove('on');
+        state.textContent = 'editing'; state.className = 'ct-state'; code.innerHTML = '';
+        file.textContent = (E.text ? 'pip-site.js' : 'pip-site.css') + ' · ' + E.name;
+        await sleep(450); if (shown(target)) select(target, 'Pip is editing ' + E.name);
+        requestAnimationFrame(() => tab.classList.add('on'));
+        await sleep(600);
+        for (let i = 1; i <= E.code.length; i++) { code.innerHTML = hl(E.code.slice(0, i)) + '<span class="caret"></span>'; code.scrollTop = code.scrollHeight; await sleep(E.code[i - 1] === '\n' ? 130 : 24 + Math.random() * 30); }
+        await sleep(350);
+        history.push(current.map(e => ({ ...e }))); history = history.slice(-30);
+        current = [...current.filter(e => e.id !== id), { id, variant }];
+        persist(); apply(); lastLine = E.line;
+        const colour = palettes.find(p => E.css?.includes(p.colour));
+        lastChange = 'Changed ' + E.name + (E.text ? ': “' + E.text + '”' : colour ? ' · ' + colour.name : '') ;
+        code.innerHTML = hl(E.code); state.textContent = 'saved ✓'; state.className = 'ct-state ok';
+        if (target) { target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash'); }
+        if (selOn) { sel.classList.add('ok'); selLab.textContent = 'Changed ' + E.name + ' ✓'; }
+        await sleep(2200);
+        unselect(); tab.classList.remove('on'); document.documentElement.classList.remove('pip-editing'); setTimeout(() => { if (!typing) tab.hidden = true; }, 400);
+        typing = false; story('code:done:' + id); done && done();
+        return true;
+      }
+      function undo(silent = false) { if (!history.length || typing) return false; const last = current[current.length - 1]; current = history.pop(); persist(); apply(); lastChange = 'Undid change to ' + (EDITS[last?.id]?.name || 'the page'); if (!silent) story('code:undo'); return true; }
+      window.pipRoomEdit = (id, done) => { if (typing || window.pipRoomGameBusy?.() || (id && !EDITS[id])) return false; edit(id, done); return true; };
+      window.pipRoomBusy = () => typing;
+      window.pipRoomUndo = undo;
+      if (/[?&]piptest\b/.test(location.search)) window.__pipEdits = () => ({ definitions: EDITS, current, history });
+      // he opens it on his own now and then
+      let lastInput = Date.now();
+      ['pointerdown', 'keydown', 'scroll'].forEach(t => addEventListener(t, () => { lastInput = Date.now(); }, { passive: true }));
+      let next = Date.now() + 28000;
+      setInterval(() => { if (document.hidden || typing || window.pipRoomGameBusy?.() || Date.now() < next || Date.now() - lastInput < 2500) return; next = Date.now() + 75000 + Math.random() * 45000; edit(); }, 1000);
+    })();
+
+    // bit.js loads after this script
+    addEventListener('load', () => { if (window.Pip && Pip.faceSVG) $('#navFace').innerHTML = Pip.faceSVG('smug'); });
+  })();
+  </script>
+  <script src="/pip/trap.js?v=2" defer></script>
+  <script src="/bit.js?v=pip-v49" defer></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block;width:100vw;height:100vh}</style></head><body><canvas id="c"></canvas>
+<script type="module">
+import * as THREE from '../../galaxy-explorer/vendor/three.module.js';
+import { councilMembers } from '../../galaxy-explorer/council.mjs';
+import { buildCouncil } from '../../galaxy-explorer/council-mesh.js';
+const P = new URLSearchParams(location.search);
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, logarithmicDepthBuffer: true, preserveDrawingBuffer: true });
+renderer.setSize(innerWidth, innerHeight, false); renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping;
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#04060b');
+scene.add(new THREE.HemisphereLight(0xb6dfdf, 0x4c3844, 1.2)); const sun = new THREE.DirectionalLight(0xffffff, 2.6); sun.position.set(-6, 5, 3); scene.add(sun);
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 1, 1e6);
+const c = buildCouncil(THREE, councilMembers()); c.group.rotation.set(-1.15, 0, .4); scene.add(c.group); c.update(10);
+const p = (P.get('p') || '4200,1600,4200').split(',').map(Number), l = (P.get('l') || '0,0,0').split(',').map(Number);
+camera.position.set(...p); camera.lookAt(...l); renderer.render(scene, camera);
+</script></body></html>

@@ -19,12 +19,20 @@ import { SIZE } from "./scale.mjs";
 
 const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
+// Uniform for the moons whose shadows fall on a giant (filled by view().update).
+const moonShadows = new Map();
+function shadowsFor(system, body) {
+    const u = { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) };
+    moonShadows.set(`${system.seed}:${body.id}`, u);
+    return u;
+}
+const shadowAt = new THREE.Vector3(), eStar = new THREE.Vector3(), eBody = new THREE.Vector3();
 function buildWorld(system, body, streamer, coarse, gradual, sun) {
     // Clouds (cloud-mesh.js) on worlds with air: a shell at the cloud layer, and
     // shadows cast on the ground. Sunlit in the star's colour, like the ground.
     const clouds = body.giant ? null : createCloudLayer(THREE, body, sun, { lite: coarse, light: sunlight(system), maxH: terrainFor(body).maxH });
     const planet = body.giant
-        ? createGiant(THREE, body, { coarse, gradual, sun })
+        ? createGiant(THREE, body, { coarse, gradual, sun, moons: shadowsFor(system, body) })
         // Grid points per terrain tile: finer on laptops; phones get a lighter grid.
         : createPlanet(THREE, streamer, body, { segments: coarse ? 24 : 32, lite: coarse, clouds });
     if (clouds) {
@@ -122,16 +130,59 @@ function view(scene, system, worlds, starMesh, group, sun) {
                 planet.update(local, { away: planet !== here });
                 planet.clouds?.update(local, t);
             }
+            // Moon shadows on the giants: each giant's nearest four moons, in world space.
+            for (const [key, u] of moonShadows) {
+                const [seed, id] = key.split(':'); if (+seed !== system.seed || !worlds.has(id)) continue;
+                let k = 0;
+                for (const m of worlds.values()) {
+                    if (k >= 4 || m.body?.parent !== id) continue;
+                    m.group.getWorldPosition(shadowAt);
+                    u.value[k++].set(shadowAt.x, shadowAt.y, shadowAt.z, m.body.radius * s);
+                }
+                for (; k < 4; k++) u.value[k].w = 0;
+            }
             starMesh.userData.star.update();
-            mega?.update(performance.now() / 1000, starMesh.position);
+            mega?.update(performance.now() / 1000, starMesh.position, cameraPosition);
             starMesh.getWorldPosition(sun.value);
             streamer.pump(4);
+        },
+        // Flying into a ring's rocks (giant-mesh.js): a push out of the rock you hit, or null.
+        bump(point) {
+            if (!group.visible) return null;
+            for (const planet of worlds.values()) { const h = planet.bump?.(point); if (h) return h; }
+            return mega?.bump?.(point) ?? null; // the megastructures of a system-shaping civilization
+        },
+        // How deep in a ring's rocks a point is (0..1).
+        ringDepth(point) {
+            if (!group.visible) return 0;
+            let d = 0; for (const planet of worlds.values()) d = Math.max(d, planet.ringDepth?.(point) ?? 0);
+            return d;
+        },
+        // Eclipses: how much of the star's disc (0..1) other worlds hide, seen from point (scene
+        // coordinates). The world you are on or orbiting low over is left out (its own night does that).
+        eclipse(point) {
+            starMesh.getWorldPosition(eStar);
+            const toStar = eStar.clone().sub(point), dS = toStar.length(); toStar.divideScalar(dS);
+            const aS = Math.asin(Math.min(1, system.star.radius * group.scale.x / dS));
+            let cover = 0;
+            for (const planet of worlds.values()) {
+                if (!planet.body) continue;
+                planet.group.getWorldPosition(eBody);
+                const R = planet.body.radius * group.scale.x, v = eBody.sub(point), d = v.length();
+                if (d < R * 1.6 || d > dS) continue;
+                const aB = Math.asin(Math.min(1, R / d)), sep = Math.acos(Math.min(1, Math.max(-1, v.dot(toStar) / d)));
+                if (sep > aB + aS) continue;
+                const c = Math.min(1, Math.max(0, (aB + aS - sep) / (2 * Math.min(aS, aB)))) * Math.min(1, (aB / aS) ** 2);
+                cover = Math.max(cover, c);
+            }
+            return cover;
         },
         // The material of a world's sea surface (planet-lod.js), or undefined: game.js shows its underside when you dive.
         waterOf(id) { return worlds.get(id)?.waterMaterial; },
         // The cloud layer of a world (cloud-mesh.js), or undefined.
         cloudsOf(id) { return worlds.get(id)?.clouds; },
         dispose() {
+            for (const key of [...moonShadows.keys()]) if (key.startsWith(`${system.seed}:`)) moonShadows.delete(key);
             scene.remove(group);
             for (const planet of worlds.values()) planet.dispose();
             mega?.dispose();

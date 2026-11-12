@@ -34,6 +34,14 @@ const CSS = `
 .ct-offers button small{display:block;font-size:9px;color:var(--muted);margin-top:4px;letter-spacing:.5px}
 .ct-actions{display:flex;gap:8px;margin-top:14px}
 .ct-actions button{flex:1}
+.ct-who{display:flex;gap:10px;align-items:baseline;margin:2px 0 2px}.ct-who strong{font-size:15px;color:var(--ink)}.ct-who span{font-size:10px;letter-spacing:1px;color:var(--muted);text-transform:uppercase}
+.ct-quirk{font-size:11px!important;color:var(--muted)!important;font-style:italic;margin:0 0 6px!important}
+.ct-talk{margin:10px 0 4px;padding:10px 12px;border-radius:8px;background:#ffffff08;border:1px solid var(--line)}
+.ct-talk .said{font-size:14px;line-height:1.5;color:var(--ink);margin:0}
+.ct-talk .body{font-size:11px;color:var(--mint);font-style:italic;margin:6px 0 0}
+.ct-topics{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.ct-topics button{font-size:11px;padding:6px 10px;border-radius:14px}
+.ct-topics button.asked{opacity:.45}
 `;
 
 export function createContactUI({ onClose = () => {} } = {}) {
@@ -43,13 +51,16 @@ export function createContactUI({ onClose = () => {} } = {}) {
   // Not modal, so Escape is ours to handle.
   addEventListener('keydown', (e) => { if (e.code === 'Escape' && dialog.open) { e.preventDefault(); dialog.close(); } });
   const h = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
-  let state = null;
+  let state = null, typing = 0;
+  // Their words, typed out as they say them.
+  const type = (el, text) => { const id = ++typing; let i = 0; const step = () => { if (id !== typing) { el.textContent = text; return; } el.textContent = text.slice(0, ++i); if (i < text.length) setTimeout(step, 14); }; step(); };
 
   function render() {
     const s = state, rel = s.rel;
     dialog.replaceChildren();
     const close = h('button', 'close', '×'); close.setAttribute('aria-label', 'Close'); close.onclick = () => dialog.close(); dialog.append(close);
     dialog.append(h('div', 'ct-eyebrow', s.where), h('h2', null, s.title), h('p', 'ct-sub', s.sub));
+    if (s.persona) { const who = h('div', 'ct-who'); who.append(h('strong', null, s.persona.name), h('span', null, `${s.persona.role} · ${s.persona.temper}`)); dialog.append(who, h('p', 'ct-quirk', s.persona.quirk.line)); }
     const ladder = h('div', 'ct-ladder');
     for (const st of STEPS) ladder.append(h('span', STEPS.indexOf(st) <= STEPS.indexOf(rel.step) ? 'on' : '', st));
     dialog.append(ladder);
@@ -63,6 +74,18 @@ export function createContactUI({ onClose = () => {} } = {}) {
       dialog.append(greet); actions(); return;
     }
     dialog.append(h('p', 'ct-ask', s.ask), log);
+    if (s.topics?.length) {
+      const box = h('div', 'ct-talk');
+      if (s.said) { const said = h('p', 'said'); box.append(said); if (s.said.shown) said.textContent = s.said.text; else { s.said.shown = true; type(said, s.said.text); } if (s.said.body) box.append(h('p', 'body', s.said.body)); }
+      else box.append(h('p', 'said', s.opening || 'They wait for you to speak.'));
+      const row = h('div', 'ct-topics');
+      for (const tp of s.topics) {
+        const b = h('button', s.asked?.has(tp.id) ? 'asked' : '', tp.label);
+        b.onclick = () => { (s.asked ||= new Set()).add(tp.id); s.said = s.ask2(tp); render(); };
+        row.append(b);
+      }
+      box.append(row); dialog.append(box);
+    }
     const left = PER_MEETING - rel.given;
     if (left > 0 && s.offers.length) {
       dialog.append(h('div', 'ct-eyebrow', `SHOW THEM SOMETHING FROM YOUR CODEX · ${left} MORE THIS MEETING`));

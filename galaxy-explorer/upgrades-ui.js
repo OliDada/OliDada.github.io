@@ -196,7 +196,8 @@ export function createUpgradeScreen({ codex, onUnlock, onOpen, touch = false, pl
       parts.push(h('div', { class: 'eyebrow' }, 'FIRST STEPS'), h('h2', {}, 'Scan what you find'),
         h('p', {}, mode === 'walk' ? `Aim the crosshair at a plant, an animal or a rock nearby. When the ring appears, ${hold} until it fills.` : 'Land and step outside. What you scan is recorded, and what you record builds your gear.'));
     } else if (!main) {
-      parts.push(h('div', { class: 'eyebrow' }, 'UPGRADES'), h('h2', {}, 'The main line is complete'));
+      // Nothing left on the main line: no panel, unless a side task is still open.
+      if (side) parts.push(h('div', { class: 'eyebrow' }, 'SIDE RESEARCH'), h('h2', {}, side.upgrade.name), h('div', { class: 'guide-side' }, side.ready ? 'Ready to install' : `${doneCount(side)} of ${side.needs.length} tasks`));
     } else {
       const u = main.upgrade, ch = CHAPTERS.find((c) => c.id === u.chapter);
       parts.push(h('div', { class: 'eyebrow' }, main.ready ? 'READY TO INSTALL' : 'RESEARCHING', h('span', {}, `${ch.name.toUpperCase()} · STEP ${u.order}`)), h('h2', {}, u.name));
@@ -214,6 +215,7 @@ export function createUpgradeScreen({ codex, onUnlock, onOpen, touch = false, pl
     guide.classList.toggle('ready', !!main?.ready);
     guide.classList.toggle('first', firstSteps);
     guide.replaceChildren(...parts);
+    guide.hidden = !parts.length;
   }
 
   function refresh() {

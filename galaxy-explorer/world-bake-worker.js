@@ -9,6 +9,6 @@ self.onmessage = (e) => {
   const { id, body, W, H, y0, y1 } = e.data;
   let t = null;
   try { t = terrainFor(body); } catch { /* nothing to paint */ }
-  const col = paintBand(t, body, W, H, y0, y1);
-  self.postMessage({ id, y0, y1, col }, [col.buffer]);
+  const grad = new Float32Array((y1 - y0) * W * 3), col = paintBand(t, body, W, H, y0, y1, grad);
+  self.postMessage({ id, y0, y1, col, grad }, [col.buffer, grad.buffer]);
 };

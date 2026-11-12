@@ -527,8 +527,9 @@ export function buildStationDeck(THREE, { seed, tier, level, civ, colours, organ
     obstacles: () => [...obstacles.filter((o) => o.h > 0), ...crew.map((c) => ({ x: c.x, z: c.z, r: c.rad, h: c.size }))],
     crew: () => crew.map((c) => ({ i: c.i, x: c.x, z: c.z, r: c.rad, top: crewMesh?.extent.top ?? 1, state: c.state, job: c.job?.kind ?? null, carrying: c.carrying, speed: c.speed })),
     // Talking with one of the crew (contact): it stops, turns to you and attends. i: crew index or null.
-    talkWith(i) { for (const c of crew) c.talk = c.i === i ? { stance } : null; },
+    talkWith(i, s = stance) { for (const c of crew) c.talk = c.i === i ? { stance: s } : null; }, // (s: a passing mood, as they talk)
     gesture(i, kind) { const c = crew[i]; if (c) startGesture(c.ex, kind || gestureOf(species)); },
+    speak(i, seconds) { const c = crew[i]; if (c) c.ex.speak = seconds; }, // talking (express.mjs)
   };
 }
 

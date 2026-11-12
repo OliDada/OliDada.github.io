@@ -1,0 +1,64 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block;width:100vw;height:100vh}#out{position:fixed;inset:0;width:100vw;height:100vh;object-fit:none;object-position:0 0;display:none}</style></head>
+<body><canvas id="c"></canvas><img id="out">
+<script type="module">
+// Dev tool: composes a still of a real system (thumbnail for olid.is). ?star=&moon=&giant=
+import * as THREE from '../../galaxy-explorer/vendor/three.module.js';
+import { starById } from '../../galaxy-explorer/galaxy.mjs';
+import { generateSystem } from '../../galaxy-explorer/system.mjs';
+import { createSystemView } from '../../galaxy-explorer/system-view.js';
+import { createTerrainStreamer } from '../../galaxy-explorer/planet-lod.js';
+import { createKestrel } from '../../galaxy-explorer/kestrel.js';
+import { systemPositions } from '../../galaxy-explorer/orbits.mjs';
+const P = new URLSearchParams(location.search);
+const W = +(P.get('w') || 1600), H = +(P.get('h') || 896);
+const star = starById(P.get('star') || '-917_1261_0_0'), system = generateSystem(star.seed);
+const moon = system.bodies.find(b => b.id === (P.get('moon') || 'moon-1')), giant = system.bodies.find(b => b.id === moon.parent);
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, logarithmicDepthBuffer: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H, false); renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#03060c');
+const camera = new THREE.PerspectiveCamera(+(P.get('fov') || 50), W / H, 0.5, 1e9);
+scene.add(new THREE.HemisphereLight(0x8fb0c8, 0x1a1420, .35));
+const sun = new THREE.DirectionalLight(new THREE.Color(system.star.color).lerp(new THREE.Color(0xffffff), .45), 3.4); scene.add(sun); scene.add(sun.target);
+const streamer = createTerrainStreamer();
+const view = createSystemView(scene, system, streamer);
+let pos, M, G;
+const setTime = (t) => { pos = systemPositions(system, t); M = new THREE.Vector3(...pos.get(moon.id)); G = new THREE.Vector3(...pos.get(giant.id)); view.place(pos, M); };
+setTime(0);
+// Phase angle at the giant between the star and the moon, for times t (to pick a gibbous view).
+window.phases = (t0, t1, n) => { const out = []; for (let i = 0; i <= n; i++) { const t = t0 + (t1 - t0) * i / n, q = systemPositions(system, t), m = new THREE.Vector3(...q.get(moon.id)), g = new THREE.Vector3(...q.get(giant.id)); out.push([Math.round(t), Math.round(m.clone().sub(g).angleTo(g.clone().negate()) * 57.3)]); } return out; };
+// Stars: a sphere of points, denser along a band (the galaxy's disc seen from inside), and a few bright ones.
+{ const n = 9000, g = new THREE.BufferGeometry(), p = new Float32Array(n * 3), c = new Float32Array(n * 3);
+  const band = new THREE.Vector3(.3, .9, .2).normalize(); let s = 7;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < n; i++) { let v; do { v = new THREE.Vector3(rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1); } while (v.lengthSq() > 1 || v.lengthSq() < .01); v.normalize();
+    if (i < n * .6) { const d = v.dot(band); v.addScaledVector(band, -d * .85).normalize(); }
+    v.multiplyScalar(8e7); p.set([v.x, v.y, v.z], i * 3); const b = .25 + rnd() ** 4 * 1.2, w = rnd(); c.set([b * (w < .3 ? 1 : .8), b * .88, b * (w > .7 ? 1.15 : .85)], i * 3); }
+  g.setAttribute('position', new THREE.BufferAttribute(p, 3)); g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ size: 1.6, sizeAttenuation: false, vertexColors: true, depthWrite: false }))); }
+const kestrel = createKestrel(); const shipScene = new THREE.Scene(); shipScene.add(kestrel.ship); const sun2 = sun.clone(); shipScene.add(sun2, sun2.target, new THREE.HemisphereLight(0x8fb0c8, 0x1a1420, .5)); window.kestrel = kestrel; window.camera = camera; window.render = () => { sun2.position.copy(sun.position); sun2.target.position.copy(sun.target.position); renderer.autoClear = true; renderer.render(scene, camera); renderer.autoClear = false; renderer.clearDepth(); renderer.render(shipScene, camera); renderer.autoClear = true; }; kestrel.ship.scale.setScalar(+(P.get('ship') || 1));
+// shoot({ cam: [x,y,z] relative to moon in units of moon radius, look: point between moon (0) and giant (1), ...})
+window.shoot = async (o = {}) => {
+  if (o.t != null) setTime(o.t);
+  const Rm = moon.radius, toG = G.clone().sub(M), up = new THREE.Vector3(0, 1, 0), side = toG.clone().normalize().cross(up).normalize();
+  const back = toG.clone().normalize().negate();
+  const cam = new THREE.Vector3().addScaledVector(back, (o.back ?? 2.2) * Rm).addScaledVector(up, (o.up ?? .9) * Rm).addScaledVector(side, (o.side ?? .8) * Rm);
+  camera.position.copy(cam);
+  const look = toG.clone().multiplyScalar(o.look ?? .35).addScaledVector(up, (o.lookUp ?? 0) * Rm).addScaledVector(side, (o.lookSide ?? 0) * Rm);
+  camera.lookAt(look); camera.rotateZ(o.roll ?? 0);
+  // Ship: ahead of the camera, a little below and to the side, heading toward the giant.
+  const f = new THREE.Vector3(); camera.getWorldDirection(f);
+  const r = new THREE.Vector3().crossVectors(f, camera.up).normalize(), u = new THREE.Vector3().crossVectors(r, f);
+  kestrel.ship.position.copy(cam).addScaledVector(f, o.shipD ?? 26).addScaledVector(r, o.shipX ?? 6).addScaledVector(u, o.shipY ?? -4);
+  kestrel.ship.lookAt(kestrel.ship.position.clone().add(look.clone().sub(kestrel.ship.position).normalize().multiplyScalar(-1)));
+  kestrel.ship.rotateZ(o.bank ?? .25); kestrel.ship.visible = o.shipOn ?? true;
+  sun.position.copy(new THREE.Vector3().sub(M)).normalize().multiplyScalar(1000).add(cam); sun.target.position.copy(cam);
+  for (let i = 0; i < (o.frames ?? 90); i++) { view.update(camera.position, streamer); window.render(); await new Promise(r => requestAnimationFrame(r)); }
+  return { Rm, Rg: giant.radius, dist: toG.length() };
+};
+window.tile = (k) => { const out = document.getElementById('out'), cv = document.getElementById('c');
+  if (k == null) { out.style.display = 'none'; cv.style.display = 'block'; return; }
+  out.src = cv.toDataURL('image/png'); out.style.display = 'block'; cv.style.display = 'none';
+  out.style.objectPosition = `${-(k % 2) * innerWidth}px ${-Math.floor(k / 2) * innerHeight}px`; };
+window.vecs = () => ({ M, G, giant, view }); window.ready = true;
+</script></body></html>

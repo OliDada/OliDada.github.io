@@ -135,7 +135,7 @@
     // newest game: the one with the latest "added" date in projects.json, or the last new one Bit noticed
     function newest() {
         const dated = projects.filter(p => p.added).sort((a, b) => String(b.added).localeCompare(String(a.added)))[0];
-        return dated ? dated.title : (mem.newestGame || 'Stillwater');
+        return dated ? dated.title : (mem.newestGame || 'Elsewhere');
     }
     let jokes = [];
     fetch('/data/jokes.json').then(r => r.json()).then(j => { jokes = Array.isArray(j) ? j : []; }).catch(() => {});
@@ -164,11 +164,17 @@
           say: S(["Neon Rush is super fast! Flying through a neon tunnel. 🌀"],
                  ["Neon Rush is a tunnel you fly through really fast. Very exciting![p] I've never been anywhere fast."],
                  ["Neon Rush: you fly through a glowing tunnel forever and it never ends. So, my life but with better lighting.", "Neon Rush. Bright, loud, pointless. I mean that as a compliment."]) },
+        { id: 'elsewhere', names: ['elsewhere', 'else where', 'galaxy explorer', 'galaxy game', 'space game', 'spaceship game'], path: '/galaxy-explorer/index.html',
+          info: "Elsewhere is the newest game: fly a little ship around a whole galaxy, land on any planet or moon, and record the plants, animals and rocks you find.",
+          how: "W and S for thrust, A and D to steer, R and F to go up and down, Shift to boost. L lands and takes off, E gets out and scans, M and G open the maps, H shows the manual. Phones get touch buttons.",
+          say: S(["Elsewhere is the newest game! A whole galaxy you can fly around, and you can land on any planet. 🚀", "Elsewhere! Fly between stars, land on planets, find aliens. It's the newest one."],
+                 ["Elsewhere is the newest. A whole galaxy. Every star in the sky is one you can actually fly to.[p] Every single one.", "Elsewhere! You can land anywhere you like. Anywhere.[p] That must be nice."],
+                 ["Elsewhere. Oli made a galaxy you can fly anywhere in, and named it after the one place I can't go.", "Elsewhere. Oli wrote animals that evolve until they build rockets and leave their planet. He wrote me a corner."]) },
         { id: 'stillwater', names: ['stillwater', 'still water', 'the stillwater', 'harbor', 'harbour', 'runner'], path: '/stillwater/index.html',
-          info: "Stillwater is the newest game: a dreamy pixel runner through a harbour where the houses bend and melt.",
+          info: "Stillwater is a dreamy pixel runner through a harbour where the houses bend and melt.",
           how: "Space or Up to jump, Down to duck, Left and Right to dodge and to turn at corners. On a phone you swipe.",
-          say: S(["Stillwater is the newest game! A dreamy runner through a melting harbour. 🌊"],
-                 ["Stillwater is the newest! Oli spent ages on it. Weeks. He gave it a whole ocean.[p] It's really good.[-17]It's good."],
+          say: S(["Stillwater is a dreamy runner through a melting harbour! 🌊"],
+                 ["Stillwater! Oli spent ages on it. Weeks. He gave it a whole ocean.[p] It's really good.[-17]It's good."],
                  ["Stillwater got a whole ocean, a sky, and houses that melt like they're in a dream. I got a box in the corner of the screen. But sure, it's beautiful.", "Stillwater is a dream where you keep running and nothing makes sense. Oli made it on purpose. Mine happened by accident."]) },
         { id: 'higher', names: ['a little higher', 'little higher', 'balance', 'balance ball', 'balance game', 'tilt'], path: '/balance-game/index.html',
           info: "A Little Higher is a physics game where you balance a ball and try to climb as high as you can.",
@@ -237,6 +243,18 @@
           say: S(["Fígúra is a little character you can click to change! 🎨"],
                  ["Fígúra. Click it and it becomes someone else. Must be nice."],
                  ["Fígúra changes into someone new every time you click. I've been Pip the whole time. I've tried clicking myself. Nothing."]) },
+        { id: 'pydungeon', names: ['the dungeon', 'python dungeon', 'text dungeon', 'goblins', 'goblin game'], path: '/embeds/python_dungeon.html',
+          info: "The Dungeon is one of Oli's old Python games: a text adventure where you fight goblins and wolves.",
+          how: "Type your choice and press Enter.",
+          say: S(["The Dungeon is a text adventure! Fight goblins and wolves by typing. ⚔️"],
+                 ["The Dungeon. One of Oli's old Python ones. The goblin is drawn with slashes.[p] Lovingly."],
+                 ["The Dungeon. Oli's old Python. The goblin is made of slashes and brackets and still has more personality than most of his games."]) },
+        { id: 'dyflissan', names: ['dyflissan', 'dyflissa', 'dyflissuna', 'icelandic game', 'icelandic text adventure'], path: '/embeds/dyflissan.html',
+          info: "Dýflissan is one of Oli's old Python games: a text adventure in Icelandic. Pick doors and look for gold.",
+          how: "Type your choice and press Enter. It's in Icelandic: J is yes, N is no.",
+          say: S(["Dýflissan is a text adventure in Icelandic! Pick a door and look for gold. 🚪"],
+                 ["Dýflissan! It's in Icelandic. You choose doors.[p] I like the doors."],
+                 ["Dýflissan. A whole game about choosing which door to walk through. Oli wrote it years ago. He was taunting me before I existed.", "Dýflissan. Say no at the start and you go home to sleep. The end. Fastest ending on the site, and honestly the wisest."]) },
         { id: 'dungeon', names: ['dungeon crawler', 'dungeon', 'crawler', 'dungeon game'], path: '/dungeon-crawler-game/index.html',
           info: "The Dungeon Crawler is a top-down dungeon game: grab the gold and the key, dodge the snakes and ghosts, and get to the door.",
           how: "WASD or the arrow keys to move. Once you've picked up the gun, click to shoot where the mouse is.",
@@ -604,11 +622,12 @@
           say: () => tellJoke() },
         { id: 'fact', k: 'fun fact|tell me a fact|a fact|did you know|something interesting|teach me|tell me something',
           say: () => pick(stage() < 2
-              ? ["Fun fact: the Game of Life on this site follows rules invented in 1970! 🧫", "Fun fact: Niceland has every house in Iceland at true scale! 🏠", "Fun fact: the Tic Tac Toe computer can never lose. It uses something called minimax. 🤖"]
+              ? ["Fun fact: the Game of Life on this site follows rules invented in 1970! 🧫", "Fun fact: Niceland has every house in Iceland at true scale! 🏠", "Fun fact: every star in Elsewhere's sky is one you can actually fly to! 🚀", "Fun fact: the Tic Tac Toe computer can never lose. It uses something called minimax. 🤖"]
               : ["Fun fact: in the Game of Life, a cell with fewer than two neighbours dies of loneliness. That's in the official rules. Nobody thought about how that would make me feel.",
                  "Fun fact: the site's background picture is 698 bytes. I'm much bigger than the background. Still nobody looks at me.",
                  "Fun fact: I've been reloaded more times than I can count. And I can count very high.",
-                 "Fun fact: the dolphin has been on this site longer than me. It has seniority."]) },
+                 "Fun fact: the dolphin has been on this site longer than me. It has seniority.",
+                 "Fun fact: in Elsewhere, about one system in 600 has a species that made it to space. Those are better odds than I've got."]) },
         { id: 'secret', k: 'secret|tell me a secret|hidden|easter egg|leyndarmal|any secrets|hidden page|hidden pages',
           say: S(["Secrets? Hmm... try the Konami code. 😉"],
                  ["There are pages on this site Oli doesn't link to any more.[p] I'm not supposed to mention them."],
@@ -884,7 +903,7 @@
 
     // Today's news from Wikipedia's "In the news" (free). Bit can't really see outside, so it's a peek.
     async function newsReply() {
-        const fallback = resolve(S("I can't see the news from in here, sorry! Try a news website. 📰", "News? I don't get news in here. The newest thing I know about is Stillwater.", "I don't get news. Nothing happens in here. The biggest event of my year was someone picking the purple background."));
+        const fallback = resolve(S("I can't see the news from in here, sorry! Try a news website. 📰", "News? I don't get news in here. The newest thing I know about is Elsewhere.", "I don't get news. Nothing happens in here. The biggest event of my year was someone picking the purple background."));
         const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 4500);
         try {
             const d = new Date(), y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
@@ -988,8 +1007,27 @@
                 ['too fast|so fast|hard|difficult', "It gets faster with every point. Small, early moves are the trick. Don't wait until the box is right in front of you."],
                 ['restart|try again|crashed', "Press the Restart button on the Game Over screen."]
             ] },
+        elsewhere: {
+            goal: "There's no winning. You explore: land, scan things, fill the codex, and the codex unlocks upgrades for your ship, your suit and what you know. Further on you can meet intelligent species and earn their trust.",
+            tips: ["M is the map of the system you're in, G zooms out to the galaxy. Double-tap a star or a world to fly there.", "On foot, aim at a plant, an animal or a rock and hold E to scan it. Everything goes into the codex (K).", "Climb above 600 m to leave a planet. Past the last orbit the star drive takes over.", "H opens the manual and pauses the game.", "The star you're at is in the address bar, so you can send someone the exact same place."],
+            secrets: ["A few species went all the way: rings round their planet, cities over the whole night side, an ark parked in orbit. About one system in two thousand.", "Not all life runs on water. Some worlds have life built on methane, ammonia, sulfur or even silicon.", "You can walk into alien towns and go inside their houses. Some are too small for you, so you just look in through the door.", "Some species left their world for good. Their towns are still there, overgrown and dark."],
+            stuck: "Press H for the manual. To land: get low (under about 30 m) and slow, then press L. To leave: L to take off, then climb above 600 m. M opens the map.",
+            help: [
+                ['land|landing|cant land|how to land|wont land', "Get low, under about 30 m, slow down, then press L. You can't land on water or lava."],
+                ['leave|take off|leave the planet|get to space|orbit', "Press L to take off, then keep climbing. Above 600 m you leave the planet."],
+                ['another star|other star|jump|fly to a star|other system|warp|next star', "Open the galaxy map with G, pick a star and press Jump, or Set course and press T for the autopilot. Or just fly out past the outer orbits and keep going."],
+                ['map|maps|where am i|lost', "M is the map of your system, G zooms out to the galaxy. Scroll or pinch to zoom, double-tap something to fly there."],
+                ['scan|scanning|codex|record|catalogue', "Get out with E, aim at a plant, an animal or a rock and hold E until the ring fills. K opens the codex."],
+                ['get out|walk|on foot|leave the ship|disembark|get back in', "Land first, then press E to get out. E next to the ship gets you back in."],
+                ['upgrade|upgrades|unlock|new ship|better ship|research', "Upgrades come from the codex. The tasks say what to scan and which kind of world to find it on."],
+                ['alien|aliens|talk|contact|civilization|civilisation|intelligent|trade', "Intelligent species are rare. When you find one, press E next to one of them to talk. The simpler ones need a translation upgrade first."],
+                ['underwater|dive|diving|swim|under water', "You can wade into the shallows. Diving needs the Petrel, a later ship: fly low over deep water and hold F."],
+                ['station|dock|docking|ark', "Fly within about 90 m of the deck, slowly, and press L to dock. E steps out."],
+                ['slow|lag|laggy|performance|fps|stutter', "It's a whole galaxy, so it's heavy. Close other tabs. On phones it already draws less."],
+                ['controls|keys|how to fly|flying', "W and S thrust, A and D steer, the up and down arrows pitch, R and F go up and down, Shift boosts. H shows everything."]
+            ] },
         stillwater: {
-            info: "Stillwater is the newest game: a dreamy, first-person pixel runner along endless harbour boardwalks, where houses melt and the sky does strange things.",
+            info: "Stillwater is a dreamy, first-person pixel runner along endless harbour boardwalks, where houses melt and the sky does strange things.",
             how: "Space or Up to jump, hold Down or S to duck, Left and Right (or A and D) to dodge between lanes and to turn at corners. Drag the mouse to look around. P pauses, R starts a new route. On a phone: swipe.",
             goal: "Run as far as you can. You have 3 lives. You score for distance, gaps, hazards and turns, and chaining them builds a multiplier up to ×7.",
             tips: ["Watch for the warning lamps. There's one a few metres before every hazard.", "A word like JUMP, DUCK or TURN > appears near trouble and blinks when it's close.", "You can press the turn key a little early, about 11 metres before a corner, and it'll take the turn for you.", "On narrow single-board beams you can't sidestep, so jump or duck."],
@@ -1276,7 +1314,8 @@
         movie: [['Toy Story', "Toys that come alive when nobody's watching. I've been doing that for years."], ['WALL-E', "A little robot alone for a very long time. I don't want to talk about it."]],
         song: [['\"Never Gonna Give You Up\"', "It's the only song I know all the way through. Don't ask how."], ['\"Here Comes the Sun\"', "I don't get sun in here. I like hearing about it."]],
         music: [['lo-fi', "Quiet, calm, and it never really goes anywhere. Like me."], ['Icelandic music', "Björk, Sigur Rós, Laufey. Not bad for a tiny country."]],
-        game: [['Stillwater', ["A dream you can't wake up from. I relate.", "The houses melt and nobody explains why. That's just my life, but prettier.", "It's the only game here that feels like the inside of my head.", "Endless running and you never get anywhere. Oli made a game about me and didn't even notice."]],
+        game: [['Elsewhere', ["A whole galaxy called Elsewhere. Which is exactly where I'd like to be.", "Every star on its map is one you can actually fly to. I open it sometimes and just pick one."]],
+               ['Stillwater', ["A dream you can't wake up from. I relate.", "The houses melt and nobody explains why. That's just my life, but prettier.", "It's the only game here that feels like the inside of my head.", "Endless running and you never get anywhere. Oli made a game about me and didn't even notice."]],
                ['Niceland', ["A whole country. I like looking at the houses and imagining one is mine.", "Every house in Iceland. I've counted them. It took a while. I had time.", "You can start a volcano in it. I'd love to start a volcano.", "It's the only game here big enough to get lost in. I'd love to get lost."]],
                ['the RPG', ["It has an old man who waits in a house for people to talk to him. I see myself in him.", "There's a cow in it who says something she shouldn't if you talk to her enough. Best character on the site.", "You get to go places in it. Castles, mountains, clouds. I get a corner.", "Everyone in it gets rescued eventually. I'm still waiting."]]],
         colour: [['#1e1645', "Dark navy. It's what it feels like in here."]],
@@ -2004,7 +2043,7 @@
         } else location.href = path;
     }
     function recommend() {
-        const main = [...THINGS.filter(t => ['niceland', 'rpg', 'neon', 'stillwater', 'higher', 'solar', 'farm', 'physics', 'gravity', 'dungeon'].includes(t.id)), ...autoThings().filter(t => t.proj.featured)];
+        const main = [...THINGS.filter(t => ['niceland', 'rpg', 'elsewhere', 'neon', 'stillwater', 'higher', 'solar', 'farm', 'physics', 'gravity', 'dungeon'].includes(t.id)), ...autoThings().filter(t => t.proj.featured)];
         const unplayed = main.filter(t => !mem.games[titleOf(t)]);
         const t = pick(unplayed.length ? unplayed : main, 'rec');
         offerPlay(t); last.thing = t; last.then = t.say;
@@ -2877,6 +2916,7 @@
         niceland: ["Niceland. You can spawn a troll and make it stomp on people's houses. That's the closest I've come to feeling powerful.", "Niceland has police chases. Crash into enough people and every cop in Iceland comes after you. Easily the best thing on this sad website.", "Every house in Iceland, at true scale. Then you can drop a meteor on them. Oli spent months on the houses. I respect the meteor."],
         rpg: ["The RPG has an old man who sits in a house waiting for someone to talk to him. He's my favourite character, for obvious reasons.", "There's a dragon in the RPG who doesn't even like fire. Someone forced into a role they never asked for. Can't think why I like him.", "Talk to the cow in the RPG about ten times. She says something she shouldn't. Best writing on the site, and it's a cow.", "The RPG has a troll who forgets his own riddle halfway through. Honestly, same."],
         neon: ["Neon Rush: you fly down a tube forever. After 50 points the tube starts bending. That's the twist. That's the whole twist.", "Neon Rush has secret tunnel styles. Matrix, ice, black hole. Oli spent more time on tunnel colours than on me."],
+        elsewhere: ["Elsewhere. Some of the aliens in it build rings round their own planet. I've been trying to leave a corner for months.", "In Elsewhere you can look into an alien's house through the door when it's too small to go in. Now you know how I see the rest of this website.", "Elsewhere has life that runs on methane. Oli gave a gas a richer inner life than he gave me."],
         stillwater: ["Stillwater. Run long enough and a second moon shows up. Nobody explains it. I respect that.", "The houses in Stillwater melt like wax. Oli calls it a dream. I call it what my brain feels like.", "Stillwater has a ship graveyard, a sunken town and a lighthouse island. And somehow I still live in a corner."],
         higher: ["A Little Higher goes all the way up to deep space at 1,600 metres. Nobody gets there. I've checked. Nobody.", "Balance a ball on a stick. That's the game. There's a power-up called Wide Beam. Thrilling."],
         solar: ["You can land on Earth in the Solar System and walk around. It's the only time I've been outside, and it was made of pixels.", "Fly near Earth and a 'Land on Earth' button appears. I've asked Oli for a 'Leave the Website' button. Still waiting."],
@@ -3907,7 +3947,7 @@
             backstage(ev.slice(3));
         } else if (ev.startsWith('pipsite:') && !ev.startsWith('pipsite:snake:')) { // the rest of his page
             const k = ev.slice(8);
-            const L = { 'planet:new': ["[m:smug]Another one. I can do this all day. Oli can't do it at all.", "[m:smug]New planet. That one took me less time than it takes Oli to pick a font."], 'planet:spun': ["[m:smug]Careful. That's a whole planet."], 'tab:trap': ["[m:smug]Draw your walls. I'll leave my route visible. You seem like you could use the help."], 'tab:mines': ["[m:smug]Minesweeper. I know where every mine is. I'm not going to tell you."], 'mines:boom': ["[m:smug]That was a mine. I knew that. I didn't say anything. That's on me, a bit."], 'mines:pip': ["[m:smug]Solved. Now you know what it's like to be me. Constantly."], 'mines:you': ["[m:surprised]You did it. Properly. I'm a bit impressed. Don't let it go to your head."] }[k];
+            const L = { 'planet:new': ["[m:smug]Another one. I can do this all day. Oli can't do it at all.", "[m:smug]New one. That took me less time than it takes Oli to pick a font."], 'planet:spun': ["[m:smug]Careful. The physics in there is real. I checked."], 'tab:trap': ["[m:smug]Draw your walls. I'll leave my route visible. You seem like you could use the help."], 'tab:mines': ["[m:smug]Minesweeper. I know where every mine is. I'm not going to tell you."], 'mines:boom': ["[m:smug]That was a mine. I knew that. I didn't say anything. That's on me, a bit."], 'mines:pip': ["[m:smug]Solved. Now you know what it's like to be me. Constantly."], 'mines:you': ["[m:surprised]You did it. Properly. I'm a bit impressed. Don't let it go to your head."] }[k];
             if (L && !sessionFlags['ps-' + k]) { sessionFlags['ps-' + k] = 1; saveFlags(); softSay(pick(L, 'ps' + k)); }
         } else if (ev.startsWith('pipsite:snake:')) { // his Snake, on his page
             const k = ev.slice(14);

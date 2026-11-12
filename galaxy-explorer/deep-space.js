@@ -12,8 +12,11 @@ import { starsNear, starPhysics } from "./galaxy.mjs";
 import { createStarVisual } from "./star-mesh.js";
 import { SIZE, VIEW_RANGE, starGameRadius as starRadius } from "./scale.mjs";
 
+// The page's address as it was loaded (game.js soon rewrites it to ?star=...).
+export const BOOT_PARAMS = new URLSearchParams(globalThis.location?.search ?? "");
 export const ARRIVE_LY = 0.002; // a system's edge, measured from its star
-const SKY_RANGE = 60; // light years of real stars drawn around you
+const SKY_RANGE = 60; // light years of real stars tracked one by one around you
+const FAR_RANGE = 200; // and out to here, laid out less often (layFar)
 export const SKY_RADIUS = VIEW_RANGE * 0.8; // scene distance of the star sphere (inside the far plane, beyond every orbit)
 const MAX_STARS = 3000;
 
@@ -64,6 +67,9 @@ void main() {
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   gl_PointSize = aSize * pixelRatio;
   gl_Position = projectionMatrix * mv;
+  // At the sky's distance the depth range is nearly used up (near 8 cm, far thousands of km),
+  // so rounding put many stars just past the far plane and they vanished. Keep them inside it.
+  gl_Position.z = min(gl_Position.z, gl_Position.w * 0.99999);
 #include <logdepthbuf_vertex>
 }`,
         fragmentShader: `#include <logdepthbuf_pars_fragment>
@@ -83,6 +89,39 @@ void main() {
     points.frustumCulled = false;
     scene.add(points);
 
+    // The galaxy's real stars further out (SKY_RANGE to FAR_RANGE light years): too many to
+    // track one by one each frame, so they are laid out once for where you are and again after
+    // you have travelled a way. Each is a real star you could fly to; their directions barely
+    // change over a few light years.
+    const FAR_MAX = 26000, fPos = new Float32Array(FAR_MAX * 3), fCol = new Float32Array(FAR_MAX * 3), fSize = new Float32Array(FAR_MAX), fAlpha = new Float32Array(FAR_MAX);
+    const fGeo = new THREE.BufferGeometry();
+    fGeo.setAttribute("position", new THREE.BufferAttribute(fPos, 3)); fGeo.setAttribute("aColor", new THREE.BufferAttribute(fCol, 3));
+    fGeo.setAttribute("aSize", new THREE.BufferAttribute(fSize, 1)); fGeo.setAttribute("aAlpha", new THREE.BufferAttribute(fAlpha, 1));
+    fGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), SKY_RADIUS * 1.1);
+    fGeo.setDrawRange(0, 0);
+    const field = new THREE.Points(fGeo, material); // (same look and daylight fade as the near stars)
+    field.frustumCulled = false;
+    scene.add(field);
+    let farAt = null;
+    const fc = new THREE.Color(), fd = new THREE.Vector3();
+    function layFar(viewer) {
+        if (farAt && Math.hypot(viewer[0] - farAt[0], viewer[1] - farAt[1], viewer[2] - farAt[2]) < 20) return;
+        farAt = viewer.slice();
+        let n = 0;
+        for (const e of starsNear(viewer, FAR_RANGE)) {
+            if (e.distance < SKY_RANGE) continue;
+            if (n >= FAR_MAX) break;
+            const s = e.star, physics = starPhysics(s), a = appearance(physics, e.distance);
+            toScene([s.x - viewer[0], s.y - viewer[1], s.z - viewer[2]], fd).normalize().multiplyScalar(SKY_RADIUS * 0.99);
+            fc.set(physics.color);
+            fPos[n * 3] = fd.x; fPos[n * 3 + 1] = fd.y; fPos[n * 3 + 2] = fd.z;
+            fCol[n * 3] = fc.r; fCol[n * 3 + 1] = fc.g; fCol[n * 3 + 2] = fc.b;
+            fSize[n] = a.size; fAlpha[n] = a.alpha; n++;
+        }
+        fGeo.setDrawRange(0, n);
+        for (const name of ["position", "aColor", "aSize", "aAlpha"]) fGeo.attributes[name].needsUpdate = true;
+    }
+
     // A dim, distant backdrop (the unresolved galaxy) behind the real stars.
     let seed = 0x5eed;
     const random = () => (seed = (1664525 * seed + 1013904223) >>> 0) / 4294967296;
@@ -101,7 +140,30 @@ void main() {
         new THREE.PointsMaterial({ size: 30 * SKY_RADIUS / 80000, sizeAttenuation: true, vertexColors: true, transparent: true, opacity: 0.55, depthWrite: false }),
     );
     backdrop.frustumCulled = false;
+    backdrop.visible = false; // (replaced by the star field below)
     scene.add(backdrop);
+
+    // The Milky Way (sky-paint.mjs): the galaxy's disc as seen from where you are, painted on a
+    // background thread and repainted after a long journey. Added light, so it never hides stars.
+    const milkyMat = new THREE.MeshBasicMaterial({ transparent: false, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, side: THREE.BackSide, fog: false });
+    // (Small and drawn first with no depth test: at the sky's true distance the depth range runs out and whole triangles drop out.)
+    const milky = new THREE.Mesh(new THREE.SphereGeometry(5000, 64, 32), milkyMat);
+    milky.frustumCulled = false; milky.renderOrder = -10; // drawn first, with the opaque pass (still additive), so everything solid covers it
+    if (BOOT_PARAMS.get("milky") !== "0") scene.add(milky); // ?milky=0: without it
+    let milkyAt = null, milkyId = 0, milkyWorker = null, milkyWant = 1;
+    function paintMilky(viewer) {
+        if (milkyAt && Math.hypot(viewer[0] - milkyAt[0], viewer[1] - milkyAt[1], viewer[2] - milkyAt[2]) < 300) return;
+        milkyAt = viewer.slice();
+        try { milkyWorker ||= new Worker(new URL("./sky-paint-worker.js", import.meta.url), { type: "module" }); } catch { return; }
+        const id = ++milkyId;
+        milkyWorker.onmessage = (e) => {
+            if (e.data.id !== milkyId) return;
+            const tex = new THREE.DataTexture(e.data.px, e.data.W, e.data.H);
+            tex.colorSpace = THREE.SRGBColorSpace; tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearMipmapLinearFilter; tex.generateMipmaps = true; tex.wrapS = THREE.RepeatWrapping; tex.needsUpdate = true;
+            milkyMat.map?.dispose(); milkyMat.map = tex; milkyMat.needsUpdate = true;
+        };
+        milkyWorker.postMessage({ id, P: viewer.slice(), W: 512, H: 256 });
+    }
 
     let list = [], queriedAt = null, count = 0;
     const dir = new THREE.Vector3();
@@ -133,17 +195,26 @@ void main() {
             for (const name of ["position", "aColor", "aSize", "aAlpha"]) geo.attributes[name].needsUpdate = true;
             points.position.copy(camera.position);
             backdrop.position.copy(camera.position);
+            milky.position.copy(camera.position);
+            field.position.copy(camera.position);
+            if (milkyMat.map) milkyMat.opacity += (milkyWant - milkyMat.opacity) * 0.05;
+            paintMilky(viewer);
+            layFar(viewer);
         },
         // Keeps the sky centred on the camera without recomputing it.
         follow(camera) {
             points.position.copy(camera.position);
             backdrop.position.copy(camera.position);
+            milky.position.copy(camera.position);
+            field.position.copy(camera.position);
+            if (milkyMat.map) milkyMat.opacity += (milkyWant - milkyMat.opacity) * 0.05;
         },
         resize() { material.uniforms.pixelRatio.value = renderer.getPixelRatio(); },
         // 0 at night or in space, 1 in full daylight under thick air: stars fade out.
         setDaylight(v) {
             material.uniforms.fade.value = 1 - 0.97 * v;
-            backdrop.material.opacity = 0.55 * (1 - v);
+            backdrop.material.opacity = 0.3 * (1 - v);
+            milkyWant = Math.max(0, 1 - 1.15 * v);
         },
     };
     return sky;

@@ -83,7 +83,12 @@ export function buildInterior(THREE, { dwelling: d, civ, palette: C = {}, stance
   add(new THREE.CircleGeometry(R * (square ? 1.42 : 1.01), segs).rotateX(-Math.PI / 2).rotateY(square ? Math.PI / 4 : 0), floorHex, 0, .01, 0, { map: floorTex, k: .1 });
   const roofShape = family === 'hive' || family === 'burrowers' || ['domes', 'shells', 'conch', 'mounds', 'coral', 'living'].includes(culture) ? 'dome' : 'flat';
   const ceilHex = C.wall2 || wallHex;
-  if (roofShape === 'dome') add(new THREE.SphereGeometry(R, segs, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, Math.max(.4, (H * .45) / R), 1), ceilHex, 0, H * .99, 0, { side: THREE.BackSide, map: wallTex, k: .25, smooth: true });
+  if (culture === 'tents') {
+    const apex = H * .55;
+    add(new THREE.ConeGeometry(R * (square ? 1.42 : 1.02), apex, segs, 1, true), ceilHex, 0, H + apex / 2, 0, { side: THREE.BackSide, map: wallTex, k: .2 });
+    for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2, A = new THREE.Vector3(Math.sin(a) * R * .96, H, Math.cos(a) * R * .96), B = new THREE.Vector3(0, H + apex * .97, 0), dir = B.clone().sub(A), len = dir.length(); const g = new THREE.CylinderGeometry(.05 * u, .06 * u, len, 5).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize())); add(g, WOOD || '#6b4a2f', (A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2); }
+    add(new THREE.CylinderGeometry(.09 * u, .1 * u, H + apex, 6), WOOD || '#6b4a2f', 0, (H + apex) / 2, 0, {}, { r: .2 * u });
+  } else if (roofShape === 'dome') add(new THREE.SphereGeometry(R, segs, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, Math.max(.4, (H * .45) / R), 1), ceilHex, 0, H * .99, 0, { side: THREE.BackSide, map: wallTex, k: .25, smooth: true });
   else {
     add(new THREE.CircleGeometry(R * (square ? 1.42 : 1.02), segs).rotateX(Math.PI / 2).rotateY(square ? Math.PI / 4 : 0), ceilHex, 0, H, 0, { map: look.surface(kinds.wall === 'planks' || square ? 'planks' : kinds.wall, ceilHex, [R / 2, R / 2]), k: .35 });
     for (let i = 0; i < 4; i++) add(new THREE.BoxGeometry(R * 2, .2 * u, .22 * u), WOOD || '#5a4030', 0, H - .12 * u, (i - 1.5) * R * .5, { k: .15 }); // beams
@@ -112,18 +117,11 @@ export function buildInterior(THREE, { dwelling: d, civ, palette: C = {}, stance
     add(new THREE.BoxGeometry(ww + .2, .08, .16), WOOD || C.trim, wx * .99, wy + wh / 2 + .04, wz * .99, { ry: a });
     glowSprite(wx * .93, wy, wz * .93, ww * 2.4, C.window || '#ffd98a', .3);
   }
-  // In the middle (or hung from the ceiling): their lamp.
-  const lampHex = level >= 3 ? (C.window || '#ffe6b0') : (C.flame || '#ffc46b'), lampY = Math.min(H - .5 * u, Math.max(2.4, H * .72));
-  if (!ruins) {
-    add(new THREE.CylinderGeometry(.015, .015, H - lampY), C.line || '#333', 0, (H + lampY) / 2, 0);
-    if (level >= 3) add(new THREE.TorusGeometry(.35 * u, .05 * u, 6, 20).rotateX(Math.PI / 2), lampHex, 0, lampY, 0, { glow: 1.8 });
-    else { add(new THREE.SphereGeometry(.16 * u, 10, 8), lampHex, 0, lampY, 0, { glow: 2, smooth: true }); add(new THREE.CylinderGeometry(.2 * u, .26 * u, .1 * u, 8, 1, true), C.metal || '#555', 0, lampY + .14 * u, 0, { side: THREE.DoubleSide }); }
-    glowSprite(0, lampY, 0, 2.6 * u, lampHex, .5);
-  }
+  // (Their lamps are their own, round the room: see 'Lived in' below.)
   // A rug in the household's colours and pattern, and hangings on the walls.
   if (!['hive', 'rollers'].includes(family)) {
     const rugTex = look.rug();
-    add(new THREE.CircleGeometry(Math.min(R * .45, 1.6 * u), 32).rotateX(-Math.PI / 2), rugTex ? '#ffffff' : (C.accent || '#a55'), 0, .025, 0, { map: rugTex, k: ruins ? .5 : .1, smooth: true });
+    add(new THREE.CircleGeometry(Math.min(R * .32, 1.2 * u), 32).rotateX(-Math.PI / 2), rugTex ? '#ffffff' : (C.accent || '#a55'), 0, .025, 0, { map: rugTex, k: ruins ? .5 : .1, smooth: true });
   }
   if (!['hive', 'burrowers'].includes(family) && !ruins) for (const a of [2.1, -2.1]) {
     const wr = (square ? R * .707 : R) - .06, bw = Math.min(R * .45, .9 * Math.max(1, u * .7)), bh = Math.min(H * .5, 1.5 * Math.max(1, u * .7)), tex = look.banner();
@@ -259,6 +257,88 @@ export function buildInterior(THREE, { dwelling: d, civ, palette: C = {}, stance
       const [rx, rz] = at(2.4, .85); add(new THREE.BoxGeometry(1.4 * u, .1, 2 * u), WOOD || '#6b4a2f', rx, .35 * u, rz, { ry: 2.4, rx: .3 });
       break;
     }
+  }
+  // --- Lived in: the walls furnished all round, and their own lights -------------------
+  // A room is not a hall with a rug in it: every stretch of wall gets something of theirs
+  // (a bed alcove, a cabinet, a niche with a treasure in it, a plant, a chest; or, by how
+  // they live, nest-cups, earthen shelves, wax stores, silk cocoons, hay and mangers), and
+  // the light comes from their own fixtures round the room (sconces, lanterns on chains,
+  // glowing silk, braziers, light poles, glowing fungus), each lighting its corner warmly.
+  if (!ruins) {
+    const busy = (x, z, rr) => solids.some((o) => Math.hypot(x - o.x, z - o.z) < o.r + rr);
+    const dark = '#1a1410', soft = C.bag || '#d8c07a', acc = C.accent || '#a55', wood = WOOD || '#6b4a2f';
+    const face = (a) => a + Math.PI; // a piece against the wall at angle a faces the middle
+    const pieces = {
+      bed: (a) => { const [x, z] = at(a, .82); box(2 * u, .45 * u, 1.15 * u, wood, x, .22 * u, z, a, true); box(1.9 * u, .14 * u, 1.05 * u, acc, x - Math.sin(a) * .02, .5 * u, z - Math.cos(a) * .02, a); const [px, pz] = [x + Math.cos(a) * .7 * u, z - Math.sin(a) * .7 * u]; box(.45 * u, .14 * u, .8 * u, '#e8e2d4', px, .6 * u, pz, a); },
+      cabinet: (a) => { const [x, z] = at(a, .9); box(1.1 * u, 2 * u, .5 * u, wood, x, u, z, a, true); for (const s of [-1, 1]) box(.04 * u, .05 * u, .04 * u, C.metal || '#c9a24a', x + Math.cos(a) * s * .12 * u - Math.sin(a) * .26 * u, 1.1 * u, z - Math.sin(a) * s * .12 * u - Math.cos(a) * .26 * u, a); things(x, 2.02 * u, z, face(a)); },
+      niche: (a) => { const [x, z] = at(a, .985); box(.9 * u, 1.1 * u, .08 * u, dark, x, 1.5 * u, z, a); const [ix, iz] = at(a, .95); add(new THREE.IcosahedronGeometry(.16 * u, 0), C.window || '#ffd98a', ix, 1.35 * u, iz, { glow: 1.6 }); things(ix, 1.05 * u, iz, face(a)); },
+      plant: (a) => { const [x, z] = at(a, .85); add(new THREE.CylinderGeometry(.3 * u, .22 * u, .5 * u, 10), C.pot || '#a8643f', x, .25 * u, z, {}, { r: .4 * u }); for (let i = 0; i < 4; i++) add(new THREE.IcosahedronGeometry((.3 + r() * .25) * u, 0), C.leaf || '#4f8a4a', x + (r() - .5) * .4 * u, (.7 + i * .25) * u, z + (r() - .5) * .4 * u, {}); },
+      chest: (a) => { const [x, z] = at(a, .86); box(1 * u, .55 * u, .6 * u, wood, x, .28 * u, z, a, true); box(1.04 * u, .08 * u, .64 * u, C.metal || '#8a6a3a', x, .56 * u, z, a); things(x, .6 * u, z, face(a)); },
+      desk: (a) => { const [x, z] = at(a, .84); box(1.3 * u, .08 * u, .65 * u, wood, x, .78 * u, z, a, true); for (const s of [-1, 1]) box(.07 * u, .78 * u, .6 * u, wood, x + Math.cos(a) * s * .6 * u, .39 * u, z - Math.sin(a) * s * .6 * u, a); things(x, .82 * u, z, face(a)); const [cx, cz] = at(a, .62); box(.5 * u, .45 * u, .5 * u, acc, cx, .22 * u, cz, a); spot(cx, cz, 'work', [x, z]); },
+      nestcup: (a) => { for (let i = 0; i < 3; i++) { const [x, z] = at(a + (i - 1) * .22, .93); add(new THREE.SphereGeometry(.42 * u, 10, 5, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), C.roof || '#8a7a4a', x, (1.1 + i * .7) * u, z, { side: THREE.DoubleSide }); } },
+      earth: (a) => { const [x, z] = at(a, .9); box(1.4 * u, .12 * u, .5 * u, C.soil || '#5a4632', x, 1 * u, z, a); box(1.4 * u, .12 * u, .5 * u, C.soil || '#5a4632', x, 1.6 * u, z, a); for (let i = 0; i < 5; i++) add(new THREE.SphereGeometry(.14 * u, 6, 4).scale(1, 1.3, 1), C.pot || '#a8643f', x + Math.cos(a) * (i - 2) * .25 * u, (i % 2 ? 1.75 : 1.15) * u, z - Math.sin(a) * (i - 2) * .25 * u, {}); },
+      wax: (a) => { const [x, z] = at(a, .85); for (let i = 0; i < 3; i++) add(new THREE.CylinderGeometry(.28 * u, .3 * u, (1 + i * .35) * u, 6), C.wax || '#d9a441', x + Math.cos(a) * (i - 1) * .6 * u, (1 + i * .35) * u / 2, z - Math.sin(a) * (i - 1) * .6 * u, { glow: i === 1 ? .35 : .1 }, { r: .3 * u }); },
+      cocoon: (a) => { const [x, z] = at(a, .8); add(new THREE.CylinderGeometry(.01, .01, H * .4, 3), C.silk || '#f2f0ea', x, H * .8, z, { glow: .3 }); add(new THREE.SphereGeometry(.4 * u, 10, 8).scale(1, 1.7, 1), C.silk || '#f2f0ea', x, H * .55, z, { glow: .25, smooth: true }); },
+      hay: (a) => { const [x, z] = at(a, .85); for (let i = 0; i < 3; i++) box(.9 * u, .5 * u, .6 * u, '#c9b060', x + Math.cos(a) * (i - 1) * .95 * u, (.25 + (i === 1 ? .5 : 0)) * u, z - Math.sin(a) * (i - 1) * .95 * u, a + (r() - .5) * .2, true); },
+      rack: (a) => { const [x, z] = at(a, .9); for (let i = 0; i < 3; i++) box(1.3 * u, .05 * u, .4 * u, wood, x, (.9 + i * .55) * u, z, a); for (let i = 0; i < 4; i++) add(new THREE.CylinderGeometry(.11 * u, .11 * u, .28 * u, 8), '#4fb3c8', x + Math.cos(a) * (i - 1.5) * .3 * u, (1.08 + (i % 3) * .55) * u, z - Math.sin(a) * (i - 1.5) * .3 * u, { glow: .9 }); },
+      board: (a) => { const [x, z] = at(a, .9); box(.25 * u, 2.6 * u, 1 * u, wood, x, 1.3 * u, z, a + Math.PI / 2, true); },
+    };
+    const SET = {
+      hands: ['bed', 'cabinet', 'niche', 'plant', 'desk', 'chest'], tentacles: ['rack', 'niche', 'chest', 'plant', 'rack'], tripods: ['board', 'niche', 'board', 'cabinet', 'plant'],
+      nests: ['nestcup', 'plant', 'nestcup', 'chest'], burrowers: ['earth', 'niche', 'earth', 'plant'], hive: ['wax', 'niche', 'wax'], web: ['cocoon', 'niche', 'cocoon', 'chest'],
+      grazers: ['hay', 'plant', 'hay', 'chest'], rollers: ['chest', 'plant', 'niche'],
+    }[family] || ['cabinet', 'niche', 'plant', 'chest'];
+    const kindHome = !d.kind || d.kind === 'house' || d.kind === 'row';
+    if (kindHome && R > 4.6 * u && !['hive', 'web'].includes(family)) {
+      const pz = -R * .58, half = Math.sqrt(R * R - pz * pz) * (square ? 1.2 : .98), gap = 1.7 * u, ph = Math.min(H * .72, 2.6 * u);
+      for (const sx of [-1, 1]) {
+        const w = half - gap / 2, cx = sx * (gap / 2 + w / 2);
+        box(w, ph, .18 * u, wallHex, cx, ph / 2, pz, 0, false, { map: wallTex, k: .1 });
+        box(w, .08 * u, .26 * u, WOOD || C.trim || '#6b4a2f', cx, ph + .04 * u, pz);
+        for (let x = gap / 2 + .3 * u; x < half; x += .6 * u) solids.push({ x: sx * x, z: pz, r: .32 * u, h: ph });
+      }
+      for (const sx of [-1, 1]) box(.14 * u, ph + .1 * u, .3 * u, WOOD || C.trim || '#6b4a2f', sx * gap / 2, ph / 2, pz);
+      // A curtain half-drawn across the opening.
+      add(new THREE.PlaneGeometry(gap * .45, ph * .92, 1, 6), C.accent || '#a55', -gap * .28, ph * .48, pz, { side: THREE.DoubleSide, k: .1 });
+      // Behind it, beds.
+      for (const sx of [-1, 1]) { const bx = sx * half * .45, bz = pz - (R + pz) * .45; box(1.2 * u, .4 * u, 2 * u, WOOD || '#6b4a2f', bx, .2 * u, bz, 0, true); box(1.1 * u, .14 * u, 1.9 * u, C.accent || '#a55', bx, .46 * u, bz); box(.8 * u, .14 * u, .4 * u, '#e8e2d4', bx, .56 * u, bz - .7 * u); }
+    }
+    if (kindHome) {
+      const bays = Math.max(4, Math.min(9, Math.round(R * Math.PI * 2 / (2.3 * u)))); let k = 0;
+      for (let i = 0; i < bays; i++) {
+        const a = .75 + i / bays * (Math.PI * 2 - 1.5); // round the room, leaving the doorway clear
+        const [x, z] = at(a, .86);
+        if (busy(x, z, .7 * u)) continue;
+        pieces[SET[k++ % SET.length]](a);
+      }
+      // Cushions or mats where they sit together, round the middle.
+      const [tx0, tz0] = at(.3, .3);
+      if (!busy(tx0, tz0, .8 * u) && !['grazers', 'rollers', 'web'].includes(family)) { add(new THREE.CylinderGeometry(.55 * u, .5 * u, .08 * u, 16), wood, tx0, .4 * u, tz0, { smooth: true }, { r: .6 * u, h: .45 * u }); add(new THREE.CylinderGeometry(.08 * u, .14 * u, .36 * u, 8), wood, tx0, .18 * u, tz0); things(tx0, .44 * u, tz0, 0); }
+      for (let i = 0; i < 4; i++) { const a = .3 + (i - 1.5) * .9, [x, z] = [tx0 + Math.sin(a + 1.2) * 1.05 * u, tz0 + Math.cos(a + 1.2) * 1.05 * u]; if (busy(x, z, .4 * u)) continue; add(new THREE.SphereGeometry(.36 * u, 12, 8).scale(1, .32, 1), [acc, soft, C.roof || acc][i % 3], x, .1 * u, z, { smooth: true }); }
+    }
+    // Their lights, round the room.
+    const lamps = [];
+    const lampAt = (a, y, f = .93) => { const [x, z] = at(a, f); lamps.push([x, y, z]); return [x, z]; };
+    const warm = C.flame || '#ffc46b', cool = C.window || '#ffe6b0';
+    const fixtures = {
+      hands: () => { for (const a of [1.1, -1.1, 2.6, -2.6]) { const [x, z] = lampAt(a, 1.9 * u, .95); box(.08 * u, .25 * u, .25 * u, C.metal || '#555', x, 1.8 * u, z, a); add(new THREE.SphereGeometry(.11 * u, 8, 6), level >= 3 ? cool : warm, x - Math.sin(a) * .1 * u, 1.95 * u, z - Math.cos(a) * .1 * u, { glow: 2.2, smooth: true }); } },
+      nests: () => { for (let i = 0; i < 4; i++) { const a = i * 1.6 + .9, [x, z] = lampAt(a, (1.4 + i * .5) * u, .55); add(new THREE.CylinderGeometry(.01, .01, H - (1.4 + i * .5) * u, 3), C.line || '#333', x, (H + (1.4 + i * .5) * u) / 2, z); add(new THREE.OctahedronGeometry(.18 * u, 0), warm, x, (1.4 + i * .5) * u, z, { glow: 2 }); } },
+      web: () => { for (let i = 0; i < 6; i++) { const a = i * 1.05, [x, z] = lampAt(a, H * (.45 + (i % 3) * .12), .5 + (i % 2) * .25); add(new THREE.SphereGeometry(.16 * u, 8, 6), C.silk || '#f2f0ea', x, H * (.45 + (i % 3) * .12), z, { glow: 2.2, smooth: true }); } },
+      grazers: () => { for (const a of [1.3, -1.3]) { const [x, z] = lampAt(a, .9 * u, .6); add(new THREE.CylinderGeometry(.35 * u, .2 * u, .3 * u, 10), C.metal || '#555', x, .6 * u, z, {}, { r: .4 * u }); add(new THREE.CylinderGeometry(.04 * u, .04 * u, .5 * u, 5), C.metal || '#555', x, .25 * u, z); add(new THREE.ConeGeometry(.22 * u, .4 * u, 6), warm, x, .9 * u, z, { glow: 2.4 }); } },
+      tripods: () => { for (const a of [1.2, -1.2, 2.5]) { const [x, z] = lampAt(a, 2.6 * u, .8); add(new THREE.CylinderGeometry(.04 * u, .06 * u, 2.6 * u, 6), C.metal || '#555', x, 1.3 * u, z, {}, { r: .15 * u }); add(new THREE.SphereGeometry(.15 * u, 8, 6), cool, x, 2.65 * u, z, { glow: 2.2, smooth: true }); } },
+      burrowers: () => { for (let i = 0; i < 6; i++) { const a = i * 1.05 + .5, [x, z] = lampAt(a, .4 * u, .95); for (let k = 0; k < 4; k++) add(new THREE.SphereGeometry((.06 + r() * .08) * u, 6, 4).scale(1, .6, 1), '#9fffd0', x + (r() - .5) * .4 * u, (.15 + r() * .6) * u, z + (r() - .5) * .4 * u, { glow: 1.8 }); } },
+      hive: () => { for (const a of [1.2, -1.2, 2.4, -2.4]) { const [x, z] = lampAt(a, 2.2 * u, .9); add(new THREE.CylinderGeometry(.18 * u, .18 * u, .1 * u, 6), C.wax || '#ffcf5a', x, 2.2 * u, z, { rx: Math.PI / 2, ry: a, glow: 2 }); } },
+      tentacles: () => { for (const a of [1.1, -1.1, 2.6]) { const [x, z] = lampAt(a, 1.7 * u, .92); add(new THREE.SphereGeometry(.2 * u, 10, 8), '#7fe3ff', x, 1.7 * u, z, { glow: 1.8, smooth: true }); } },
+      rollers: () => { add(new THREE.TorusGeometry(R * .7, .04 * u, 3, 48).rotateX(Math.PI / 2), cool, 0, .03, 0, { glow: 1.6 }); lamps.push([0, .5, 0]); },
+    };
+    (fixtures[family] || fixtures.hands)();
+    if (level >= 4) add(new THREE.TorusGeometry((square ? R * .7 : R) - .1, .05 * u, 3, 64).rotateX(Math.PI / 2), cool, 0, H - .25 * u, 0, { glow: 1.6 }); // a light-strip round the ceiling
+    // Two of them light the room for real (a warm pool each), the rest glow.
+    for (const [x, y, z] of lamps.filter((_, i) => i % 2 === 0).slice(0, 2)) {
+      const pl = new THREE.PointLight(new THREE.Color(family === 'burrowers' || family === 'tentacles' ? '#9fe8ff' : '#ffd29a'), 2.2 * Math.max(1, u * u), R * 1.6, 1.6);
+      pl.position.set(x * .85, y, z * .85); group.add(pl);
+    }
+    for (const [x, y, z] of lamps) glowSprite(x * .97, y, z * .97, 1.2 * u, family === 'burrowers' ? '#9fffd0' : warm, .5);
   }
   // Advanced homes glow: lit panels, then a floating light.
   if (!ruins && level >= 3) { const [x, z] = at(-1.4, .97); add(new THREE.PlaneGeometry(1.2 * u, .8 * u), C.window || '#9fe3e6', x, 1.5 * u, z, { glow: 1.6, ry: -1.4 + Math.PI }); }

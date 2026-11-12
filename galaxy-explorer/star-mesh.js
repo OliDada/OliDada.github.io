@@ -54,7 +54,7 @@ void main() {
   float limb = 0.35 + 0.65 * pow(mu, 0.55);
   vec3 hot = mix(tint, vec3(1.0), 0.55);
   vec3 col = mix(tint * 0.9, hot, g) * limb * (1.0 - spots * 0.6);
-  gl_FragColor = vec4(col * 1.35, 1.0);
+  gl_FragColor = vec4(col * 1.6, 1.0); // (brighter than white: the glow in post.js picks it out)
 }`;
 
 export function createStarVisual({ radius, color, seed = 1 }) {

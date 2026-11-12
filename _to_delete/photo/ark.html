@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block;width:100vw;height:100vh}</style></head><body><canvas id="c"></canvas>
+<script type="module">
+import * as THREE from '../../galaxy-explorer/vendor/three.module.js';
+import { starById } from '../../galaxy-explorer/galaxy.mjs';
+import { generateSystem } from '../../galaxy-explorer/system.mjs';
+import { civilizationOf } from '../../galaxy-explorer/civilizations.mjs';
+import { buildMegastation } from '../../galaxy-explorer/megastation.js';
+const sys = generateSystem(starById('-924_1255_5_0').seed);
+let civ = null; for (const b of sys.bodies) { const c = civilizationOf(b); if (c && c.arkName) { civ = c; break; } }
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, logarithmicDepthBuffer: true, preserveDrawingBuffer: true });
+renderer.setSize(innerWidth, innerHeight, false); renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#05080f');
+scene.add(new THREE.HemisphereLight(0xb6dfdf, 0x4c3844, 2.0)); const sun = new THREE.DirectionalLight(0xffffff, 3.1); sun.position.set(-600, 550, 350); scene.add(sun);
+const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, .5, 1e6);
+let ark = buildMegastation(THREE, civ); scene.add(ark.group);
+window.build = (form) => { scene.remove(ark.group); ark.dispose(); ark = buildMegastation(THREE, civ, { form }); scene.add(ark.group); return window.info(); };
+window.view = (p, l) => { camera.position.set(...p); camera.lookAt(...l); ark.update(performance.now() / 1000); renderer.render(scene, camera); return ark.form; };
+window.hit = (a, b) => { const p = new THREE.Vector3(...a), q = new THREE.Vector3(...b), n = Math.ceil(p.distanceTo(q) / 1.6); for (let i = 0; i <= n; i++) { const x = p.clone().lerp(q, i / n); if (ark.collide(x, 3.2)) return i / n; } return -1; };
+window.arkObj = () => ark;
+window.info = () => ({ form: ark.form, size: Math.round(ark.size), walk: !!ark.walk, deck: ark.deck.group.position.toArray().map(Math.round) });
+window.ready = true;
+</script></body></html>
+<script type="module">
+await new Promise(r => setTimeout(r, 300));
+const P = new URLSearchParams(location.search);
+if (P.get('grid')) {
+  const shots = [], cam = P.get('cam') || 'out';
+  for (const f of P.get('grid').split(',')) { build(f); const s = info().size;
+    if (cam === 'out') view([s * 1.5, s * .7, s * 1.3], [0, 0, 0]); else if (cam === 'back') view([s * 1.2, s * .6, -s * 1.5], [0, 0, 0]);
+    else if (cam === 'rel') { const d = info().deck, a = P.get('p').split(',').map(Number), b = P.get('l').split(',').map(Number); view([d[0] + a[0], d[1] + a[1], d[2] + a[2]], [d[0] + b[0], d[1] + b[1], d[2] + b[2]]); }
+    else { const d = info().deck; view([d[0] + 220, d[1] + 70, d[2] + 120], [d[0] - 80, d[1] + 40, d[2] - 600]); }
+    shots.push(document.getElementById('c').toDataURL('image/jpeg', .8)); }
+  const d = document.createElement('div'); d.style.cssText = 'position:fixed;inset:0;display:grid;grid-template-columns:repeat(' + (P.get('cols') || 3) + ',1fr);background:#000';
+  for (const s of shots) { const i = new Image(); i.src = s; i.style.cssText = 'width:100%;height:auto'; d.appendChild(i); }
+  document.body.appendChild(d);
+}
+</script>

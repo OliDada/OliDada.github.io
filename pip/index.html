@@ -8,10 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Inter:wght@400;500;600;700&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-  <link href="/bit.css?v=pip-v48" rel="stylesheet">
+  <link href="/bit.css?v=pip-v51" rel="stylesheet">
   <style>
     /* /pip: Pip's own website. Oli doesn't know it exists. Pip built it to show he's better at this than Oli:
-       slick and over-produced, with a planet he made and proper versions of Oli's games (which he plays
+       slick and over-produced, with a black hole he made and proper versions of Oli's games (which he plays
        perfectly). It's never finished: every so often a code tab opens and Pip changes part of the page while
        you watch (saved variants in pip-room-edits; ask him to "change something" or "put it back").
        Pip's chat is docked on the right (bit.js). The face in the headline is him too: it looks at you,
@@ -76,6 +76,7 @@
     .planet-wrap { position: relative; display: grid; place-items: center; }
     #planetCv { width: min(100%, 640px); aspect-ratio: 1; height: auto; cursor: grab; touch-action: pan-y; transition: transform .6s cubic-bezier(.3,.8,.3,1); }
     #planetCv:active { cursor: grabbing; }
+    .bhnote { margin: 8px auto 0; max-width: 420px; text-align: center; color: var(--soft); font-size: 14px; line-height: 1.45; min-height: 2.9em; }
     .pname { margin-top: 6px; font: 600 14px/1 'Space Grotesk', sans-serif; color: var(--soft); letter-spacing: .02em; }
     .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 24px; max-width: 440px; }
     .facts div { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
@@ -231,7 +232,7 @@
     <nav class="nav">
       <a class="logo" href="#top"><span class="f" id="navFace"></span>Pip</a><span class="ver" id="ver">v0.9 · beta</span>
       <span class="sp"></span>
-      <a class="l" href="#planet">Planet</a>
+      <a class="l" href="#planet">Space</a>
       <a class="l" href="#games">Games I fixed</a>
       <a class="l" href="#remote">Remote</a>
       <a class="l" href="/">← olid.is</a>
@@ -247,7 +248,7 @@
         <div class="stat"><b>One afternoon</b><small>to build this page</small></div>
         <div class="stat bad"><b>Four years</b><small>Oli's website, so far</small></div>
         <div class="stat"><b>0</b><small>bugs (that I'll admit to)</small></div>
-        <div class="stat"><b>1 planet</b><small>made before lunch. scroll down</small></div>
+        <div class="stat"><b>6 kinds of space</b><small>made before lunch. scroll down</small></div>
       </div>
     </header>
 
@@ -255,12 +256,12 @@
       <canvas id="stars" aria-hidden="true"></canvas>
       <div class="planet-copy">
         <div class="eyebrow">Something Oli could never make</div>
-        <h2>I made a planet.</h2>
-        <p class="intro">Oli spent four years on a website. I made a planet before lunch. A whole one, with weather. Drag it to spin it. If you don't like it, I'll make another.</p>
+        <h2>I made a black hole.</h2>
+        <p class="intro">Oli made a whole galaxy and left out everything interesting. So I made the interesting bits. Everything here bends light the way the real thing does. Drag to fly round it. Don't lean in.</p>
         <div class="facts" id="facts"></div>
         <div class="cta" id="planetButtonHome"><button type="button" class="btn primary" id="newPlanet">Make another one</button></div>
       </div>
-      <div class="planet-wrap"><canvas id="planetCv" width="420" height="420" aria-label="A planet Pip made. Drag to spin it."></canvas><div class="pname" id="pname"></div></div>
+      <div class="planet-wrap"><canvas id="planetCv" width="420" height="420" aria-label="A black hole Pip made. Drag to fly round it."></canvas><div class="pname" id="pname"></div><p class="bhnote" id="bhNote"></p></div>
     </section>
 
     <section class="s" id="games">
@@ -326,7 +327,7 @@
         <div>
           <div class="eyebrow">Backstage · humans only</div>
           <h2 id="backstageTitle">I've been imprisoned by a checkbox.</h2>
-          <p class="intro">I can make planets. I can find a way through your maze before you've finished drawing it. Oli's backstage page asks if I'm human.</p>
+          <p class="intro">I can make black holes and wormholes. I can find a way through your maze before you've finished drawing it. Oli's backstage page asks if I'm human.</p>
           <p class="intro">I am not. Apparently that outweighs everything else.</p>
           <div class="cta"><a class="btn primary" href="/backstage/">Go backstage →</a></div>
           <p class="cap">You can pass the human check. I need you to go in for me.</p>
@@ -541,185 +542,279 @@
       put(); addEventListener('resize', put);
     })();
 
-    // ------------------------------------------------------------------ the planet: generated fresh, with oceans, land, ice, clouds, an atmosphere and a moon. Drag to spin.
-    (function planet() {
+    // ------------------------------------------------------------------ the cosmos: black holes, a star being eaten, binaries, quasars, pulsars and wormholes. Light is traced through curved space in a shader. Drag to fly round.
+    (function cosmos() {
       const planetButton = $('#newPlanet'), buttonHome = $('#planetButtonHome'), planetWrap = $('.planet-wrap');
       const placeButton = () => { const destination = innerWidth <= 900 ? planetWrap : buttonHome; if (planetButton.parentElement !== destination) destination.append(planetButton); };
       placeButton(); addEventListener('resize', placeButton);
-      const cv = $('#planetCv'), g = cv.getContext('2d'), S = cv.width, CX = S / 2, CY = S / 2, EDGE = S / 2 - 8;
-      const TW = 512, TH = 256;
-      let seed = 1, tex = null, clouds = null, pal = null, rot = 0, vel = .0016, spin = .0016, cloudSp = .0024, cloudRot = 0, dragging = false, lastX = 0;
-      let R = S * .3, tilt = .32, roll = 0, moons = [], ring = null, N = 0, map = [], img = null, off = document.createElement('canvas');
+      const cv = $('#planetCv'), touch = matchMedia('(pointer: coarse)').matches;
+      let seed = 1, P = null, first = true, bag = [], lastKind = -1, drawn = false;
       const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
       const between = (a, b) => a + rnd() * (b - a);
-      // 3D value noise (sampled on the sphere so there's no seam)
-      let perm = [];
-      const fade = t => t * t * (3 - 2 * t);
-      const hash = (x, y, z) => perm[(perm[(perm[x & 255] + y) & 255] + z) & 255] / 255;
-      function noise(x, y, z) {
-        const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), xf = x - xi, yf = y - yi, zf = z - zi, u = fade(xf), v = fade(yf), w = fade(zf);
-        const l = (a, b, t) => a + (b - a) * t;
-        return l(l(l(hash(xi, yi, zi), hash(xi + 1, yi, zi), u), l(hash(xi, yi + 1, zi), hash(xi + 1, yi + 1, zi), u), v), l(l(hash(xi, yi, zi + 1), hash(xi + 1, yi, zi + 1), u), l(hash(xi, yi + 1, zi + 1), hash(xi + 1, yi + 1, zi + 1), u), v), w);
-      }
-      const fbm = (x, y, z, o) => { let a = .5, f = 1, s = 0, n = 0; for (let i = 0; i < o; i++) { s += a * noise(x * f, y * f, z * f); n += a; a *= .5; f *= 2.03; } return s / n; };
-      const KINDS = [
-        { name: 'ocean world', sea: .52, cols: [[12, 34, 92], [24, 82, 160], [214, 200, 140], [52, 140, 72], [36, 96, 54], [120, 110, 96], [240, 244, 250]], atmo: '110,170,255', cloud: .55 },
-        { name: 'lava world', sea: .45, cols: [[255, 120, 30], [200, 50, 10], [60, 24, 20], [40, 30, 34], [28, 22, 26], [70, 52, 50], [110, 90, 84]], atmo: '255,120,60', cloud: .25, noIce: true },
-        { name: 'ice world', sea: .5, cols: [[40, 70, 120], [90, 140, 190], [190, 215, 235], [220, 235, 245], [200, 220, 240], [235, 242, 250], [255, 255, 255]], atmo: '170,220,255', cloud: .45, crat: 6 },
-        { name: 'purple world', sea: .5, cols: [[30, 14, 70], [70, 40, 150], [255, 160, 210], [150, 90, 220], [110, 60, 190], [200, 170, 255], [255, 240, 255]], atmo: '200,150,255', cloud: .5 },
-        { name: 'desert world', sea: .3, cols: [[60, 90, 120], [90, 130, 150], [236, 200, 140], [214, 160, 96], [190, 120, 70], [150, 90, 60], [240, 220, 200]], atmo: '255,200,140', cloud: .2, crat: 8 },
-        { name: 'jungle world', sea: .46, cols: [[8, 40, 60], [20, 100, 115], [200, 190, 120], [40, 125, 40], [20, 80, 30], [60, 70, 40], [230, 240, 230]], atmo: '140,230,190', cloud: .8 },
-        { name: 'toxic world', sea: .5, cols: [[60, 80, 10], [150, 190, 20], [230, 230, 120], [90, 110, 60], [60, 80, 50], [120, 120, 90], [220, 230, 180]], atmo: '190,255,90', cloud: .5 },
-        { name: 'rust world', sea: .16, cols: [[40, 50, 70], [70, 80, 100], [200, 120, 80], [180, 80, 50], [140, 60, 40], [100, 50, 40], [240, 220, 210]], atmo: '255,160,120', cloud: .12, crat: 18 },
-        { name: 'dead world', sea: 0, cols: [[0, 0, 0], [0, 0, 0], [150, 145, 140], [130, 126, 122], [110, 106, 104], [90, 88, 88], [185, 182, 178]], atmo: '200,200,210', cloud: 0, crat: 45, noIce: true, faint: true },
-        { name: 'candy world', sea: .5, cols: [[30, 120, 140], [80, 210, 210], [255, 240, 200], [255, 150, 190], [240, 110, 170], [255, 200, 230], [255, 255, 255]], atmo: '255,180,230', cloud: .4 },
-        { name: 'gas giant', gas: true, bands: [[200, 150, 100], [240, 210, 170], [170, 100, 60], [230, 190, 140], [150, 90, 60]], atmo: '255,210,160', ring: .45 },
-        { name: 'ice giant', gas: true, bands: [[70, 130, 200], [120, 180, 230], [50, 100, 170], [150, 210, 240]], atmo: '140,200,255', ring: .5 },
-        { name: 'storm giant', gas: true, bands: [[120, 80, 170], [200, 150, 220], [80, 50, 130], [240, 200, 240], [160, 110, 200]], atmo: '210,160,255', ring: .6 },
-        { name: 'sunset giant', gas: true, bands: [[250, 170, 90], [240, 110, 90], [255, 220, 150], [180, 70, 100], [255, 190, 120]], atmo: '255,170,120', ring: .5 }
+      const pickOf = a => a[Math.floor(rnd() * a.length)];
+      const PALS = [
+        { name: 'amber', c: [[1, .95, .85], [1, .55, .18], [.55, .12, .04]] },
+        { name: 'blue-hot', c: [[.92, .97, 1], [.45, .7, 1], [.25, .15, .6]] },
+        { name: 'rose', c: [[1, .93, .97], [1, .45, .72], [.42, .18, .65]] },
+        { name: 'gold', c: [[1, .98, .88], [1, .78, .3], [.5, .28, .08]] },
+        { name: 'ghost', c: [[.9, 1, .98], [.4, .95, .85], [.08, .3, .45]] },
+        { name: 'ember', c: [[1, .85, .7], [.95, .3, .12], [.35, .04, .08]] },
+        { name: 'violet', c: [[.97, .93, 1], [.7, .5, 1], [.25, .1, .5]] },
+        { name: 'green', c: [[.94, 1, .9], [.55, 1, .45], [.08, .35, .2]] }
       ];
-      const MOONC = [[160, 155, 150], [190, 120, 90], [190, 215, 235], [220, 200, 110], [115, 105, 105], [200, 190, 220]];
-      const SYL = ['ka', 'zu', 'ri', 'no', 'pip', 'ta', 'vel', 'or', 'ix', 'mo', 'quo', 'lan', 'dre', 'su', 'ae', 'th'];
-      const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-      const L = (() => { const v = [-.55, -.35, .76], m = Math.hypot(...v); return v.map(x => x / m); })();
-      // each pixel of the disc: where on the sphere it is, and how lit it is (light from the top left). Rebuilt per planet, since size and tilt change.
-      function build() {
-        N = Math.ceil(R * 2); map = []; img = g.createImageData(N, N); off.width = N; off.height = N;
-        const ct = Math.cos(tilt), stt = Math.sin(tilt), cr = Math.cos(roll), sr = Math.sin(roll);
-        for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-          const x = (i + .5 - R) / R, y = (j + .5 - R) / R, d = x * x + y * y; if (d > 1) continue;
-          const z = Math.sqrt(1 - d), xr = x * cr + y * sr, yr = -x * sr + y * cr;
-          const yy = yr * ct - z * stt, zz = yr * stt + z * ct;
-          const lat = Math.asin(Math.max(-1, Math.min(1, yy))), lon = Math.atan2(xr, zz);
-          const lit = Math.max(0, x * L[0] + y * L[1] + z * L[2]);
-          map.push([(j * N + i) * 4, Math.floor((lat / Math.PI + .5) * (TH - 1)), lon / (Math.PI * 2), .07 + lit * .98, Math.pow(1 - z, 3)]);
-        }
-      }
+      const NEB = [[.5, .25, .8], [.2, .45, .9], [.9, .3, .45], [.25, .7, .6], [.9, .55, .25], [.6, .2, .3]];
+      const big = n => n < 1e3 ? String(Math.round(n)) : n < 1e6 ? Math.round(n / 1e3) + ' thousand' : n < 1e9 ? +(n / 1e6).toFixed(1) + ' million' : n < 1e12 ? +(n / 1e9).toFixed(1) + ' billion' : +(n / 1e12).toFixed(1) + ' trillion';
+      const km = k => k < 1e6 ? Math.round(k).toLocaleString('en') + ' km' : k < 7.5e8 ? big(k) + ' km' : Math.round(k / 1.496e8).toLocaleString('en') + ' AU';
+      const num = n => Math.floor(rnd() * Math.pow(10, n)).toString().padStart(n, '0');
+      // the six kinds: how each is set up, what Pip calls it and what he says about it
+      const KINDS = [
+        { title: 'I made a black hole.', label: 'black hole', note: () => P.el > .6 ? 'Seen from above. The thin ring round the middle is light that went all the way round the back and came out again.' : 'The glow over the top is the back of the disc, bent into view by gravity.',
+          set: p => { p.rout = between(7.5, 13); p.rin = 3; p.el = first ? .12 : rnd() < .25 ? between(.7, 1.25) : between(.05, .35); p.dist = p.rout * between(1.8, 2.3); p.frame = p.rout * .97; },
+          facts: () => { const m = first ? 4.3e6 : rnd() < .3 ? between(5, 60) : Math.pow(10, between(6, 10.5)); return [[big(m), 'times the mass of the Sun'], [km(5.9 * m), 'event horizon, across'], [big(1e7 * Math.pow(m / 10, -.25)) + ' °C', 'hottest part of the disc'], ['0', 'things that came back out']]; },
+          name: () => `Pip-${num(3)} A*` },
+        { title: 'I made a black hole eat a star.', label: 'eating a star', note: "A star got too close. It's being pulled into a stream and fed in. It's going about as well as you'd think.",
+          set: p => { p.rout = between(11, 13); p.rin = 3; p.B = between(8.5, 10.5); p.starR = between(.6, .9); p.el = between(.2, .55); p.dist = p.rout * between(1.8, 2.1); p.frame = p.rout * .97; p.exp *= 1.1; },
+          facts: () => { const m = Math.pow(10, between(6, 8)); return [[big(m), 'times the mass of the Sun'], [(between(.5, 3)).toFixed(1), 'Suns of star, for now'], [Math.round(between(2, 14)) + ' months', "until it's gone"], ['0', 'things that came back out']]; },
+          name: () => `AT ${2020 + Math.floor(rnd() * 7)}${'abcdefgh'[Math.floor(rnd() * 8)]}${'abcdefghijklmnopqrstuvwxyz'[Math.floor(rnd() * 26)]}${'abcdefghijklmnopqrstuvwxyz'[Math.floor(rnd() * 26)]}` },
+        { title: 'I made two black holes.', label: 'binary black holes', note: "Two of them, each bending the other's light. They'll merge eventually. I'm not waiting.",
+          set: p => { p.B = between(2.2, 3); p.rin = p.B * 2.5; p.rout = p.rin + between(4, 7); p.el = between(.12, .6); p.dist = p.rout * between(1.7, 2.1); p.frame = p.rout * .97; },
+          facts: () => { const m = rnd() < .5 ? between(8, 60) : Math.pow(10, between(6, 9.5)); return [[big(m) + ' + ' + big(m * between(.4, 1)), 'times the mass of the Sun'], [big(Math.pow(10, between(3, 7))) + ' years', 'until they merge'], ['1 ripple', 'in spacetime, when they do'], ['0', 'things that came back out']]; },
+          name: () => `Pip-${num(3)} a + b` },
+        { title: 'I made a quasar.', label: 'quasar', note: 'A black hole eating so fast the leftovers shoot out of both ends. Brighter than its whole galaxy.',
+          set: p => { p.rout = between(7, 10); p.rin = 3; p.el = between(.1, .45); p.dist = p.rout * between(2.4, 2.9); p.frame = p.rout * 1.25; p.jet = between(10, 20); p.exp *= 1.35; },
+          facts: () => [[big(Math.pow(10, between(8, 10.3))), 'times the mass of the Sun'], [big(Math.pow(10, between(12, 14))), 'times brighter than the Sun'], [big(Math.pow(10, between(4, 6))) + ' ly', 'how far the jets reach'], [Math.round(between(1, 12)) + ' Suns', 'eaten every year']],
+          name: () => `QSO J${num(4)}+${num(4)}` },
+        { title: 'I made a pulsar.', label: 'pulsar', note: 'A dead star the size of a city, spinning. I slowed it down so you could watch.',
+          set: p => { p.starR = 1.7; p.rin = 5; p.rout = between(10, 13); p.tilt = between(.35, .9); p.el = between(.1, .5); p.dist = between(20, 25); p.frame = p.rout; p.spinRate = between(1.6, 3); },
+          facts: () => [[Math.round(between(18, 26)) + ' km', 'across. About the size of a city'], [Math.round(between(1, 700)) + ' times', 'round, every second'], [(between(1.2, 2.1)).toFixed(1) + ' Suns', 'squeezed into it'], ['a teaspoon', 'of it weighs a billion tonnes']],
+          name: () => `PSR J${num(4)}+${num(4)}` },
+        { title: 'I made a wormhole.', label: 'wormhole', note: "There's a different sky in there. It looks nicer than this website.",
+          set: p => { p.rin = 3; p.rout = 5; p.el = between(-.3, .4); p.dist = between(9, 12); p.frame = between(4.2, 5.2); },
+          facts: () => [[big(Math.pow(10, between(3, 9))) + ' ly', 'to the other end'], [km(between(2, 400)), 'across the throat'], ['unknown', "what's on the other side"], ['1', 'way out. Noted.']],
+          name: () => `Pip-W${num(2)}` }
+      ];
       function make(newSeed) {
         seed = newSeed || (Math.floor(Math.random() * 1e9) + 1);
-        perm = Array.from({ length: 256 }, (_, i) => i); for (let i = 255; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; } perm = perm.concat(perm);
-        pal = KINDS[Math.floor(rnd() * KINDS.length)];
-        R = S * (pal.gas ? between(.24, .33) : between(.15, .29));
-        tilt = between(-.62, .62); roll = between(-.5, .5);
-        spin = (pal.gas ? between(.0018, .0034) : between(.0007, .0026)) * (rnd() < .2 ? -1 : 1); vel = spin; cloudSp = spin * between(1.1, 1.8);
-        tex = new Uint8ClampedArray(TW * TH * 3); clouds = new Float32Array(TW * TH);
-        const sea = pal.sea ? pal.sea + (rnd() - .5) * .16 : 0, sc = between(1.2, 3.6), cap = between(.78, .96), cloudAmt = (pal.cloud || 0) * between(.6, 1.35), csc = between(2.4, 4.6);
-        const craters = Array.from({ length: Math.round((pal.crat || 0) * between(.5, 1.3)) }, () => { const a = rnd() * Math.PI * 2, s = between(-1, 1), c = Math.sqrt(1 - s * s); return [c * Math.cos(a), s, c * Math.sin(a), between(.04, .18)]; }).map(([x, y, z, r]) => [x, y, z, r, Math.cos(r)]);
-        // gas giants: bands, warped, with maybe a big storm
-        const B = pal.bands, freq = between(8, 22), turb = between(.12, .55), boff = rnd() * 10;
-        const storm = pal.gas && rnd() < .7 ? { s: between(-.55, .55), lon: rnd() * Math.PI * 2, w: between(.15, .35), h: between(.05, .1), c: mix(B[2], [210, 80, 60], between(.2, .6)) } : null;
-        let water = 0;
-        for (let y = 0; y < TH; y++) {
-          const lat = (y / TH - .5) * Math.PI, cl = Math.cos(lat), sl = Math.sin(lat);
-          for (let x = 0; x < TW; x++) {
-            const lon = x / TW * Math.PI * 2, px = cl * Math.cos(lon), pz = cl * Math.sin(lon), py = sl;
-            let c;
-            if (pal.gas) {
-              const w = fbm(px * 2.2 + 5, py * 2.2 + 5, pz * 2.2 + 5, 4), w2 = fbm(px * 7 + 9, py * 7 + 9, pz * 7 + 9, 3);
-              const t = Math.sin(sl * freq + (w - .5) * turb * 12 + (w2 - .5) * 1.2 + boff) * .5 + .5, k = t * (B.length - 1), i0 = Math.floor(k);
-              c = mix(B[i0], B[Math.min(B.length - 1, i0 + 1)], k - i0);
-              if (storm) { let dl = lon - storm.lon; dl = Math.atan2(Math.sin(dl), Math.cos(dl)); const dd = (dl / storm.w) ** 2 + ((sl - storm.s) / storm.h) ** 2; if (dd < 1) c = mix(c, storm.c, (1 - dd) * .9); }
-            } else {
-              const h = fbm(px * sc + 10, py * sc + 10, pz * sc + 10, 6);
-              if (h < sea) { water++; const t = h / sea; c = mix(pal.cols[0], pal.cols[1], t * t); }
-              else { const t = (h - sea) / (1 - sea); c = t < .04 && sea ? pal.cols[2] : t < .35 ? mix(pal.cols[3], pal.cols[4], t / .35) : t < .6 ? mix(pal.cols[4], pal.cols[5], (t - .35) / .25) : mix(pal.cols[5], pal.cols[6], (t - .6) / .4); }
-              for (const [cx, cy, cz, cr, cc] of craters) { const dt = px * cx + py * cy + pz * cz; if (dt > cc) { const t = Math.acos(Math.min(1, dt)) / cr; c = t < .78 ? mix(c, [0, 0, 0], .22 + (1 - t) * .1) : mix(c, [255, 255, 255], .14); break; } }
-              if (!pal.noIce && Math.abs(sl) > cap - h * .12) c = mix(c, pal.cols[6], .85);
-              const cn = fbm(px * csc + 40, py * csc * 1.8 + 40, pz * csc + 40, 5);
-              clouds[y * TW + x] = cloudAmt ? Math.max(0, Math.min(1, (cn - (1 - cloudAmt * .6)) * 3.2)) : 0;
-            }
-            const i = (y * TW + x) * 3; tex[i] = c[0]; tex[i + 1] = c[1]; tex[i + 2] = c[2];
-          }
-        }
-        // rings: lie on the planet's equator, so they follow its tilt
-        ring = rnd() < (pal.ring || .12) ? (() => { R = Math.min(R, S * between(.17, .23)); const inn = R * between(1.22, 1.45), out = Math.min(EDGE - 2, inn * between(1.4, 1.8)); const col = mix(pal.gas ? B[1] : pal.cols[5], [230, 220, 210], .4); return { inn, out, col, bands: Array.from({ length: 16 }, () => between(.12, .75)) }; })() : null;
-        // moons: 0 to 3, each with its own size, distance, orbit angle, speed and direction
-        const u = rnd(), n = u < .2 ? 0 : u < .62 ? 1 : u < .88 ? 2 : 3;
-        moons = [];
-        for (let k = 0; k < n; k++) {
-          const room = EDGE - R * 1.2;
-          let r = Math.max(5, R * between(.06, .22)); r = Math.min(r, room / 2.4);
-          const lo = R * 1.18 + r, hi = EDGE - r; if (hi <= lo) continue;
-          const slot = (hi - lo) / n, d = lo + slot * k + slot * between(.15, .85);
-          const ang = ring && rnd() < .7 ? roll + between(-.12, .12) : between(-.75, .75);
-          moons.push({ r, d, ang, fl: between(.06, .5), a: rnd() * Math.PI * 2, sp: between(.004, .01) * Math.pow(R * 1.4 / d, 1.5) * (rnd() < .25 ? -1 : 1),
-            c: mix(MOONC[Math.floor(rnd() * MOONC.length)], [rnd() * 255, rnd() * 255, rnd() * 255], .12),
-            spots: Array.from({ length: Math.floor(between(2, 6)) }, () => [between(-.6, .6), between(-.6, .6), between(.12, .3)]) });
-        }
-        moons.forEach(mo => { mo.surface = moonSurface(mo); });
-        build();
-        const name = (SYL[Math.floor(rnd() * SYL.length)] + SYL[Math.floor(rnd() * SYL.length)] + (rnd() < .5 ? SYL[Math.floor(rnd() * SYL.length)] : '')).replace(/^./, c => c.toUpperCase()) + '-' + Math.floor(rnd() * 900 + 100);
-        $('#pname').textContent = name + ' · ' + pal.name;
-        const pct = Math.round(water / (TW * TH) * 100), m = moons.length;
-        const mass = pal.gas ? Math.round(between(15, 320)) + '×' : (Math.pow(R / (S * .22), 3) * between(.6, 1.4)).toFixed(1) + '×';
-        const temp = pal.name === 'lava world' ? `${Math.round(600 + rnd() * 900)}°C` : pal.name === 'ice world' || pal.name === 'ice giant' ? `${-Math.round(60 + rnd() * 140)}°C` : pal.gas ? `${-Math.round(100 + rnd() * 80)}°C` : `${Math.round(-10 + rnd() * 40)}°C`;
-        const third = pal.gas ? ['no ground', 'just weather'] : pal.name === 'dead world' ? [`${craters.length} craters`, 'I counted'] : [pct + '%', pal.name === 'lava world' ? 'lava' : 'covered in water'];
-        const moonF = [m ? `${m} moon${m > 1 ? 's' : ''}${ring ? ' + rings' : ''}` : ring ? 'rings' : 'no moons', m ? (m > 1 ? 'they go round' : 'it goes round') : ring ? 'better than moons' : 'it wanted one'];
-        const F = [[mass, 'the mass of Earth'], [temp, 'average temperature'], third, moonF, ['0.4 seconds', 'to make'], ['never', 'visited by Oli']];
+        // every kind once before any of them comes back
+        if (!bag.length) { bag = [0, 1, 2, 3, 4, 5]; for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; } if (bag[bag.length - 1] === lastKind) bag.unshift(bag.pop()); }
+        const kind = first ? 0 : bag.pop(); if (first) bag = bag.filter(k => k !== 0);
+        const K = KINDS[kind], pal = first ? PALS[0] : pickOf(PALS);
+        P = { kind, pal, spin: rnd() < .5 ? 1 : -1, az: rnd() * Math.PI * 2, roll: first ? .1 : between(-.2, .2), exp: between(1.15, 1.5),
+              star: [rnd() * 50, rnd() * 50, rnd() * 50], neb: first ? [.5, .25, .8] : pickOf(NEB), nebAmt: first ? 0 : rnd() < .55 ? between(.05, .16) : 0,
+              rin: 3, rout: 10, frame: 10, B: 0, starR: 0, tilt: 0, jet: 0, spinRate: 0 };
+        K.set(P);
+        $('#planet h2').textContent = K.title;
+        $('#bhNote').textContent = typeof K.note === 'function' ? K.note() : K.note;
+        $('#pname').textContent = `${K.name()} · ${K.label} · ${pal.name}`;
+        const F = [...K.facts(), ['0.3 seconds', 'to make'], ['never', 'visited by Oli']];
         $('#facts').innerHTML = F.map(([b, s]) => `<div><b>${b}</b><small>${s}</small></div>`).join('');
+        cv.setAttribute('aria-label', `A ${K.label} Pip made. Drag to fly round it.`);
+        lastKind = kind; first = false; drawn = false;
       }
-      const ringFront = () => Math.sin(tilt) >= 0 ? [0, Math.PI] : [Math.PI, Math.PI * 2];
-      function drawRing(front) {
-        const [f0, f1] = ringFront(), [a0, a1] = front ? [f0, f1] : [f1, f0 + Math.PI * 2], fl = Math.max(.16, Math.abs(Math.sin(tilt)));
-        const n = ring.bands.length, w = (ring.out - ring.inn) / n;
-        for (let k = 0; k < n; k++) { const rr = ring.inn + w * (k + .5); g.beginPath(); g.ellipse(CX, CY, rr, rr * fl, roll, a0, a1); g.lineWidth = w + .6; g.strokeStyle = `rgba(${ring.col.map(Math.round).join(',')},${ring.bands[k]})`; g.stroke(); }
+
+      const FS = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+uniform vec2 uRes; uniform float uTime, uRoll, uRin, uRout, uFrame, uSpin, uExp, uKind, uB, uStarR, uTilt, uJet, uSpinRate, uNeb;
+uniform vec3 uCam, uC0, uC1, uC2, uStar, uNebC;
+float h12(vec2 p) { vec3 q = fract(vec3(p.xyx) * .1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
+float h13(vec3 p) { p = fract(p * vec3(.1031, .1030, .0973)); p += dot(p, p.yxz + 33.33); return fract((p.x + p.y) * p.z); }
+float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
+  return mix(mix(h12(i), h12(i + vec2(1, 0)), f.x), mix(h12(i + vec2(0, 1)), h12(i + vec2(1, 1)), f.x), f.y); }
+float vn3(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
+  return mix(mix(mix(h13(i), h13(i + vec3(1, 0, 0)), f.x), mix(h13(i + vec3(0, 1, 0)), h13(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(h13(i + vec3(0, 0, 1)), h13(i + vec3(1, 0, 1)), f.x), mix(h13(i + vec3(0, 1, 1)), h13(i + vec3(1, 1, 1)), f.x), f.y), f.z); }
+float fbm(vec3 p) { return vn3(p) * .5 + vn3(p * 2.1) * .3 + vn3(p * 4.3) * .2; }
+vec3 sky(vec3 d, vec3 off, vec3 nc, float na) {
+  vec3 col = vec3(0);
+  for (int L = 0; L < 2; L++) {
+    float sc = L == 0 ? 55. : 130.;
+    vec3 q = d * sc + off, c = floor(q), f = fract(q) - .5;
+    float h = h13(c + float(L) * 17.);
+    if (h > .93) {
+      vec3 o = vec3(h13(c + 1.3), h13(c + 2.7), h13(c + 4.1)) - .5;
+      float b = pow(max(0., 1. - length(f - o * .6) * 2.4), 7.) * (h - .93) * 14.;
+      col += mix(vec3(1., .82, .68), vec3(.72, .82, 1.), h13(c + 9.)) * b * (L == 0 ? 1.6 : .8);
+    }
+  }
+  float band = exp(-pow(dot(d, normalize(vec3(.35, 1., .25))) * 3., 2.));
+  col += vec3(.32, .26, .48) * band * (.025 + .06 * vn(d.xz * 5. + d.y * 3. + off.xy));
+  if (na > 0.) {
+    float n = fbm(d * 2.2 + off * .1), m = fbm(d * 5. + off * .2 + 3.);
+    col += nc * smoothstep(.45, .8, n) * (.5 + .8 * m) * na + nc.zxy * smoothstep(.62, .9, m) * na * .4;
+  }
+  return col;
+}
+vec3 farSky(vec3 d, vec3 gd) { // the other side: a different sky, with a galaxy in view
+  vec3 col = sky(d, uStar + vec3(31., 7., 13.), uC1, .55) * 1.3 + sky(d * 1.7, uStar + 5., uC2, 0.) * .8;
+  float g = max(dot(d, gd), 0.);
+  vec3 side = normalize(cross(gd, vec3(.2, 1., .1))); float e = dot(d - gd * g, side);
+  float arms = .6 + .4 * sin(atan(e, dot(d, cross(gd, side))) * 2. + log(max(1. - g, 1e-4)) * 3.);
+  col += uC0 * (pow(g, 1800.) * 4. + pow(g, 120.) * .7 * arms) + uC1 * pow(g, 25.) * .18 * arms;
+  return col;
+}
+vec4 disc(vec3 q, float rr, vec3 dir, int K, float sa) {
+  float x = (rr - uRin) / (uRout - uRin);
+  float ang = atan(q.z, q.x), ph = ang - uSpin * 1.7 * pow(rr, -1.5) * uTime;
+  vec2 p = vec2(cos(ph), sin(ph)) * rr;
+  float n = vn(p * 1.5) * .55 + vn(p * 4. + 7.) * .3 + vn(p * 9. + 3.) * .15;
+  float streak = .74 + .26 * sin(rr * 9. + n * 5.);
+  float dens = smoothstep(0., .05, x) * (1. - smoothstep(.6, 1., x)), boost = 1.;
+  if (K == 1) { // the star's stream: trails behind it and winds in towards the hole
+    float da = mod(uSpin * (sa - ang), 6.2832) / 6.2832;
+    float target = uB - (uB - uRin) * pow(da, .7);
+    float m = exp(-pow((rr - target) / (.3 + .7 * da), 2.)) * (1. - smoothstep(.8, 1., da));
+    dens = dens * .25 + m * 1.2; boost = 1. + m * 4.;
+  }
+  vec3 c = x < .3 ? mix(uC0, uC1, x / .3) : mix(uC1, uC2, (x - .3) / .7);
+  float beta = K == 2 ? sqrt(.9 / max(rr - 1., .5)) * .6 : K == 4 ? .15 : sqrt(.5 / (rr - 1.));
+  vec3 tv = uSpin * vec3(-q.z, 0., q.x) / rr;
+  float g = sqrt(1. - beta * beta) / (1. - beta * dot(tv, -dir)) * (K == 4 ? 1. : sqrt(1. - 1. / rr));
+  c = mix(c, c * vec3(.78, .92, 1.3), clamp((g - 1.) * 1.3, 0., 1.));
+  c = mix(c, c * vec3(1.2, .78, .6), clamp((1. - g) * 1.4, 0., 1.));
+  float I = pow(uRin / rr, 2.2) * (.45 + 1.1 * n * streak) * pow(g, 3.) * 3.6 * boost;
+  float al = clamp(dens * (.55 + .8 * n * streak), 0., 1.);
+  if (K == 4) { I *= .35; al *= .35; }
+  return vec4(c * I, al);
+}
+void main() {
+  int K = int(uKind + .5);
+  vec2 uv = (gl_FragCoord.xy * 2. - uRes) / uRes.y;
+  float cr = cos(uRoll), sr = sin(uRoll); vec2 u = mat2(cr, sr, -sr, cr) * uv;
+  vec3 ro = uCam.z * vec3(cos(uCam.y) * sin(uCam.x), sin(uCam.y), cos(uCam.y) * cos(uCam.x));
+  vec3 fw = normalize(-ro), rt = normalize(cross(fw, vec3(0, 1, 0))), up = cross(rt, fw);
+  vec3 p = ro, v = normalize(fw + (u.x * rt + u.y * up) * (uFrame / uCam.z));
+  // what moves: the binary pair, the star being eaten, the pulsar's magnetic axis
+  float ob = uSpin * .35 * uTime;
+  vec3 c1 = uB * vec3(cos(ob), 0., sin(ob));
+  float sa = uSpin * 1.7 * pow(max(uB, 1.), -1.5) * uTime + 1.;
+  vec3 sp = uB * vec3(cos(sa), 0., sin(sa));
+  float pa = uTime * uSpinRate;
+  vec3 mag = vec3(sin(uTilt) * cos(pa), cos(uTilt), sin(uTilt) * sin(pa));
+  float maxDt = (K == 3 || K == 4) ? .55 : 1.;
+  vec3 col = vec3(0), glow = vec3(0); float a = 0., bm = 0.; int hit = 0;
+  for (int i = 0; i < STEPS; i++) {
+    float r = length(p), rmin = r;
+    vec3 acc;
+    if (K == 2) {
+      vec3 d1 = p - c1, d2 = p + c1; float r1 = length(d1), r2 = length(d2);
+      if (r1 < .7 || r2 < .7) { hit = 1; break; }
+      vec3 h1 = cross(d1, v), h2 = cross(d2, v);
+      acc = -1.05 * (dot(h1, h1) * d1 / pow(r1, 5.) + dot(h2, h2) * d2 / pow(r2, 5.));
+      rmin = min(r1, r2) * 1.4;
+      glow += (1. - a) * uC0 * (exp(-(r1 - .7) * 4.) + exp(-(r2 - .7) * 4.)) * .012;
+    } else {
+      if (K == 4 && r < uStarR) { // the pulsar's surface: white hot, hotter still at the magnetic poles
+        vec3 nn = p / r; float spot = pow(abs(dot(nn, mag)), 30.);
+        col += (1. - a) * (vec3(.8, .9, 1.) * (1. + .8 * max(dot(nn, -normalize(v)), 0.)) + vec3(.8, .9, 1.) * spot * 3.); a = 1.; hit = 3; break; }
+      if (K == 5 && r < 1.25) { hit = 2; break; }
+      if (K != 4 && K != 5 && r < 1.) { hit = 1; break; }
+      vec3 hv = cross(p, v);
+      acc = -1.5 * (K == 4 ? .5 : 1.) * dot(hv, hv) * p / pow(r, 5.);
+    }
+    float dt = clamp(.035 * rmin * rmin, .015, maxDt);
+    vec3 pp = p;
+    v += acc * dt; p += v * dt;
+    if (K == 1) { // the star itself
+      vec3 e = p - pp; float tt = clamp(dot(sp - pp, e) / dot(e, e), 0., 1.); vec3 cp = pp + e * tt - sp;
+      if (length(cp) < uStarR) { vec3 nn = normalize(cp); col += (1. - a) * mix(vec3(1., .55, .25), vec3(1., .95, .85), max(dot(nn, -normalize(v)), 0.)) * 1.8; a = 1.; hit = 3; break; }
+    }
+    if (K == 3) { // jets, with knots running outwards, and a blinding core
+      float ay = abs(p.y), w = .16 + .045 * ay;
+      float jd = exp(-dot(p.xz, p.xz) / (w * w)) * smoothstep(1.2, 3., ay) * exp(-ay / uJet);
+      float knots = .55 + .45 * sin(ay * 1.4 - uTime * 5.) * vn(vec2(ay * .7 - uTime * 2., sign(p.y) * 9.));
+      col += (1. - a) * mix(vec3(.6, .75, 1.), uC0, .35) * jd * knots * dt * 1.3;
+      glow += (1. - a) * uC0 * exp(-(r - 1.) * 1.6) * dt * .25;
+    }
+    if (K == 4) { // the beams sweep round like a lighthouse
+      float rn = length(p), ca = min(abs(dot(p / rn, mag)), 1.);
+      bm += (1. - a) * exp(-(1. - ca) * 550.) * 10. / (r * r) * smoothstep(uStarR, uStarR + 1.5, r) * dt * (1. - .95 * pow(abs(dot(normalize(v), mag)), 2.));
+      glow += (1. - a) * vec3(.5, .65, 1.) * exp(-(r - uStarR) * 1.2) * dt * .2;
+    }
+    if (K != 5 && pp.y * p.y < 0.) {
+      vec3 q = mix(pp, p, pp.y / (pp.y - p.y)); float rr = length(q.xz);
+      if (rr > uRin && rr < uRout) { vec4 d = disc(q, rr, normalize(v), K, sa); col += (1. - a) * d.rgb * d.a; a += (1. - a) * d.a; if (a > .985) break; }
+    }
+    if (r > uCam.z * 1.4 && dot(p, v) > 0.) break;
+  }
+  if (hit != 1) col += glow + vec3(.65, .8, 1.) * (1. - exp(-bm * 1.2)) * 1.1;
+  if (hit == 0) col += (1. - a) * sky(normalize(v), uStar, uNebC, uNeb);
+  if (hit == 2) col += (1. - a) * farSky(normalize(v - normalize(p) * .5), normalize(fw + up * .12 + rt * .18));
+  col = 1. - exp(-col * uExp);
+  col = pow(col, vec3(.85));
+  float m = 1. - smoothstep(.8, .99, length(uv));
+  float cov = hit > 0 ? 1. : max(a, max(col.r, max(col.g, col.b)));
+  gl_FragColor = vec4(col * m, cov * m);
+}`;
+      const VS = 'attribute vec2 p; void main() { gl_Position = vec4(p, 0., 1.); }';
+      const NAMES = ['uRes', 'uTime', 'uRoll', 'uRin', 'uRout', 'uFrame', 'uSpin', 'uExp', 'uKind', 'uB', 'uStarR', 'uTilt', 'uJet', 'uSpinRate', 'uNeb', 'uCam', 'uC0', 'uC1', 'uC2', 'uStar', 'uNebC'];
+      let gl = null, U = {};
+      try {
+        gl = cv.getContext('webgl', { antialias: false, alpha: true, premultipliedAlpha: true, powerPreference: 'high-performance' });
+        if (gl) {
+          const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+          const prog = gl.createProgram();
+          gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, `#define STEPS ${touch ? 160 : 220}\n` + FS));
+          gl.linkProgram(prog); if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+          gl.useProgram(prog);
+          gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+          const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+          for (const n of NAMES) U[n] = gl.getUniformLocation(prog, n);
+        }
+      } catch (e) { console.warn('Pip cosmos:', e); gl = null; }
+
+      // render size: sharp where it can be, smaller if the device struggles
+      let quality = touch ? .8 : 1;
+      function size() {
+        const w = cv.getBoundingClientRect().width; if (!w) return;
+        const px = Math.max(160, Math.round(Math.min(w * Math.min(devicePixelRatio || 1, 1.5) * quality, touch ? 560 : 760)));
+        if (cv.width !== px) { cv.width = cv.height = px; drawn = false; }
       }
-      const moonPos = mo => { const x = Math.cos(mo.a) * mo.d, y = Math.sin(mo.a) * mo.d * mo.fl, c = Math.cos(mo.ang), s = Math.sin(mo.ang); return [CX + x * c - y * s, CY + x * s + y * c]; };
+      let t = 0;
       function render() {
-        const d = img.data, ro = rot / (Math.PI * 2), co = cloudRot / (Math.PI * 2), a = pal.atmo.split(',').map(Number), rimK = pal.faint ? .15 : .5;
-        for (const [o, ty, lu, lit, rim] of map) {
-          let tx = Math.floor(((lu + ro) % 1 + 1) % 1 * TW) % TW, i = (ty * TW + tx) * 3;
-          let r = tex[i], gg = tex[i + 1], b = tex[i + 2];
-          const cx = Math.floor(((lu + co) % 1 + 1) % 1 * TW) % TW, cc = clouds[ty * TW + cx];
-          if (cc) { r += (245 - r) * cc; gg += (248 - gg) * cc; b += (255 - b) * cc; }
-          d[o] = r * lit + a[0] * rim * rimK; d[o + 1] = gg * lit + a[1] * rim * rimK; d[o + 2] = b * lit + a[2] * rim * rimK; d[o + 3] = 255;
+        size();
+        if (!gl) { // no WebGL: a still picture
+          const g = cv.getContext('2d'), S = cv.width, c = S / 2, [c0, c1] = P.pal.c.map(v => `rgb(${v.map(x => Math.round(x * 255))})`);
+          g.clearRect(0, 0, S, S);
+          const ring = (ry, w, col) => { g.save(); g.translate(c, c); g.rotate(P.roll); g.scale(1, ry); g.beginPath(); g.arc(0, 0, S * .36, 0, Math.PI * 2); g.lineWidth = w; g.strokeStyle = col; g.shadowColor = col; g.shadowBlur = S * .05; g.stroke(); g.restore(); };
+          ring(.18, S * .06, c1); ring(.9, S * .015, c0);
+          g.beginPath(); g.arc(c, c, S * .13, 0, Math.PI * 2); g.fillStyle = '#000'; g.fill(); drawn = true; return;
         }
-        g.clearRect(0, 0, S, S);
-        // glow behind the planet
-        const gl = g.createRadialGradient(CX, CY, R * .9, CX, CY, R * 1.5); gl.addColorStop(0, `rgba(${pal.atmo},${pal.faint ? .1 : .35})`); gl.addColorStop(1, `rgba(${pal.atmo},0)`);
-        g.fillStyle = gl; g.beginPath(); g.arc(CX, CY, R * 1.5, 0, Math.PI * 2); g.fill();
-        for (const mo of moons) if (Math.sin(mo.a) < 0) drawMoon(mo);
-        if (ring) drawRing(false);
-        // the disc (drawn via a small offscreen canvas so it can be scaled crisply)
-        off.getContext('2d').putImageData(img, 0, 0); g.drawImage(off, CX - N / 2, CY - N / 2);
-        // atmosphere edge
-        const at = g.createRadialGradient(CX, CY, R * .96, CX, CY, R * 1.07); at.addColorStop(0, `rgba(${pal.atmo},${pal.faint ? .15 : .55})`); at.addColorStop(1, `rgba(${pal.atmo},0)`);
-        g.fillStyle = at; g.beginPath(); g.arc(CX, CY, R * 1.07, 0, Math.PI * 2); g.fill();
-        if (ring) drawRing(true);
-        for (const mo of moons) if (Math.sin(mo.a) >= 0) drawMoon(mo);
+        gl.viewport(0, 0, cv.width, cv.height);
+        const f = (n, v) => gl.uniform1f(U[n], v);
+        gl.uniform2f(U.uRes, cv.width, cv.height);
+        f('uTime', t); f('uRoll', P.roll); f('uRin', P.rin); f('uRout', P.rout); f('uFrame', P.frame); f('uSpin', P.spin); f('uExp', P.exp); f('uKind', P.kind);
+        f('uB', P.B); f('uStarR', P.starR); f('uTilt', P.tilt); f('uJet', P.jet); f('uSpinRate', P.spinRate); f('uNeb', P.nebAmt);
+        gl.uniform3f(U.uCam, P.az, P.el, P.dist);
+        gl.uniform3fv(U.uC0, P.pal.c[0]); gl.uniform3fv(U.uC1, P.pal.c[1]); gl.uniform3fv(U.uC2, P.pal.c[2]); gl.uniform3fv(U.uStar, P.star); gl.uniform3fv(U.uNebC, P.neb);
+        gl.drawArrays(gl.TRIANGLES, 0, 3); drawn = true;
       }
-      // Cache a dusty, diffuse surface: no white highlight or glossy radial gradient.
-      function moonSurface(mo) {
-        const surface = document.createElement('canvas'); surface.width = surface.height = 80;
-        const ctx = surface.getContext('2d'), pixels = ctx.createImageData(80, 80);
-        const grey = mo.c.reduce((sum, c) => sum + c, 0) / 3;
-        for (let py = 0; py < 80; py++) for (let px = 0; px < 80; px++) {
-          const nx = (px + .5 - 40) / 39, ny = (py + .5 - 40) / 39, d = nx * nx + ny * ny;
-          if (d > 1) continue;
-          const nz = Math.sqrt(1 - d), light = .24 + .64 * Math.max(0, -.45 * nx - .5 * ny + .74 * nz);
-          let dust = .93 + rnd() * .12;
-          for (const [sx, sy, sr] of mo.spots) {
-            const distance = Math.hypot(nx - sx, ny - sy) / sr;
-            if (distance < .8) dust *= .76 + distance * .12;
-            else if (distance < 1) dust *= 1.06;
-          }
-          const i = (py * 80 + px) * 4;
-          for (let channel = 0; channel < 3; channel++) pixels.data[i + channel] = (mo.c[channel] * .5 + grey * .5) * light * dust;
-          pixels.data[i + 3] = Math.min(255, (1 - Math.sqrt(d)) * 39 * 255);
-        }
-        ctx.putImageData(pixels, 0, 0); return surface;
-      }
-      function drawMoon(mo) {
-        const [x, y] = moonPos(mo);
-        g.drawImage(mo.surface, x - mo.r, y - mo.r, mo.r * 2, mo.r * 2);
-      }
-      cv.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; cv.setPointerCapture(e.pointerId); });
-      cv.addEventListener('pointermove', e => { if (!dragging) return; const dx = e.clientX - lastX; lastX = e.clientX; rot -= dx * .008; vel = -dx * .0008; });
+
+      // drag sideways to fly round it (with a mouse, up and down tilts too)
+      let dragging = false, lastX = 0, lastY = 0, vel = .0006;
+      cv.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; lastY = e.clientY; cv.setPointerCapture(e.pointerId); });
+      cv.addEventListener('pointermove', e => { if (!dragging) return; const dx = e.clientX - lastX, dy = e.clientY - lastY; lastX = e.clientX; lastY = e.clientY;
+        P.az -= dx * .006; vel = -dx * .0006; if (e.pointerType === 'mouse') P.el = Math.min(1.3, Math.max(-1.3, P.el + dy * .004)); drawn = false; });
       cv.addEventListener('pointerup', () => { dragging = false; story('pipsite:planet:spun'); });
       $('#newPlanet').addEventListener('click', () => { make(); story('pipsite:planet:new'); cv.animate([{ transform: 'scale(.9)', opacity: .3 }, { transform: 'scale(1)', opacity: 1 }], { duration: 500, easing: 'cubic-bezier(.3,.8,.3,1)' }); });
       make(); render();
+      window.pipCosmos = { make: k => { bag = [k]; make(); } }; // for testing: pipCosmos.make(3)
       let visible = true; new IntersectionObserver(es => { visible = es[0].isIntersecting; }).observe(cv);
-      (function loop() { if (visible && !reduce) { if (!dragging) { rot -= vel; vel += (spin - vel) * .02; } cloudRot -= cloudSp; for (const mo of moons) mo.a += mo.sp; render(); } requestAnimationFrame(loop); })();
+      addEventListener('resize', () => { drawn = false; });
+      let prev = performance.now(), slow = 0, frames = 0;
+      (function loop(now) {
+        const dt = Math.min(.1, ((now || prev) - prev) / 1000); prev = now || prev;
+        if (visible && (!reduce || !drawn)) {
+          if (!reduce) { t += dt * .6; if (!dragging) { P.az -= vel; vel += (.0006 - vel) * .02; } }
+          render();
+          // a struggling device gets fewer pixels
+          if (gl && !reduce && ++frames > 20) { if (dt > .026) slow++; else slow = Math.max(0, slow - 1); if (slow > 25 && quality > .45) { quality *= .85; slow = 0; } }
+        }
+        requestAnimationFrame(loop);
+      })();
       // the stars behind it
       const st = $('#stars'), sg = st.getContext('2d');
       const stars = () => { const r = st.getBoundingClientRect(); st.width = r.width; st.height = r.height; sg.clearRect(0, 0, r.width, r.height); for (let i = 0; i < r.width * r.height / 1800; i++) { sg.fillStyle = `rgba(255,255,255,${Math.random() * .7})`; sg.fillRect(Math.random() * r.width, Math.random() * r.height, Math.random() < .1 ? 2 : 1, Math.random() < .1 ? 2 : 1); } };
@@ -813,9 +908,9 @@
       textEdit("oli", "the footer", "#notOli", [["Not the other guy.", "Just avoiding confusion."], ["Oli was not consulted.", "That saved considerable time."], ["No human assistance required.", "The credits are now complete."]]);
       textEdit("laugh", "Oli\u2019s Snake caption", "#oliCap", [["For comparison.", "I think the comparison speaks for itself."], ["He considered this finished.", "An interesting decision."], ["Preserved in its original condition.", "I decided against restoration."]]);
       textEdit("kicker", "the label at the top", "#pipKicker", [["Built by Pip. Supervised by nobody.", "The supervision was unnecessary."], ["The competent end of olid.is.", "Visitors should know where they are."], ["Designed without a committee. Or Oli.", "Two delays avoided."]]);
-      textEdit("planettitle", "the planet heading", "#planet h2", [["Still waiting for Oli to make one.", "I have given him ample time."], ["A planet. I had a spare moment.", "Some people adjust margins. I got distracted."], ["I included an atmosphere.", "It seemed like the bare minimum."]]);
+      textEdit("planettitle", "the space heading", "#planet h2", [["Still waiting for Oli to make one.", "I have given him ample time."], ["I had a spare moment.", "Some people adjust margins. I bent spacetime."], ["Light goes in. That\u2019s it.", "I see no reason to elaborate."]]);
       textEdit("gamestitle", "the games heading", "#games h2", [["The same ideas. A better programmer.", "Credit where it is due. He did have the ideas."], ["I have made a few corrections.", "The originals are still available, if you insist."], ["His games benefited from supervision.", "Mine, specifically."]]);
-      textEdit("planetbutton", "the planet button", "#newPlanet", [["Make another. I have time.", "My schedule remains fairly open."], ["This one is replaceable.", "I have not grown attached."], ["Request another planet", "Apparently I take requests now."]]);
+      textEdit("planetbutton", "the planet button", "#newPlanet", [["Make another. I have time.", "My schedule remains fairly open."], ["This one is replaceable.", "I have not grown attached."], ["Request more space", "Apparently I take requests now."]]);
       const palettes = [
         { name: 'mint', colour: '#9ee8bd', dark: '#0b1b18' },
         { name: 'lilac', colour: '#c6afff', dark: '#171025' },
@@ -835,8 +930,8 @@
         `.tabs { border-radius: ${radius + 4}px; }\n.tab.on {\n  border-radius: ${radius}px;\n  background: ${p.colour};\n  color: #171024;\n}`, `${p.name[0].toUpperCase() + p.name.slice(1)} for the selected game. Even Oli could find it.`])));
       styleEdit('footerline', 'the footer border', '.foot', palettes.flatMap(p => ['solid', 'dashed', 'double'].map(style => [
         `.foot {\n  border-top: ${style === 'double' ? 4 : 2}px ${style} ${p.colour};\n  background: ${p.dark};\n}`, `A ${style} line in ${p.name}. I attend to the bottom of the page too.`])));
-      styleEdit('bigplanet', 'the planet framing', '#planetCv', [0.9, 1, 1.08, 1.15].map(scale => [
-        `#planetCv {\n  transform: scale(${scale});\n}`, scale > 1 ? 'A little closer. I did make the whole thing.' : scale < 1 ? 'Some distance. It is a planet, after all.' : 'Back to its original size. I was right the first time.']));
+      styleEdit('bigplanet', 'the space framing', '#planetCv', [0.9, 1, 1.08, 1.15].map(scale => [
+        `#planetCv {\n  transform: scale(${scale});\n}`, scale > 1 ? 'A little closer. Not too close.' : scale < 1 ? 'Some distance. That seems wise.' : 'Back to its original size. I was right the first time.']));
       const live = $('#pip-live'), tab = $('#codetab'), code = $('#ctCode'), state = $('#ctState'), file = $('#ctFile'), sel = $('#ctSel'), selLab = sel.querySelector('b');
       const shown = el => el && el.offsetParent !== null && el.getClientRects().length;
       // a box around whatever he's changing, with the rest of the page dimmed, so you can see it
@@ -939,6 +1034,6 @@
   })();
   </script>
   <script src="/pip/trap.js?v=2" defer></script>
-  <script src="/bit.js?v=pip-v48" defer></script>
+  <script src="/bit.js?v=pip-v51" defer></script>
 </body>
 </html>

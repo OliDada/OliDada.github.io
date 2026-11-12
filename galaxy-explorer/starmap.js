@@ -15,6 +15,9 @@ import { networkFor, describeNetwork } from './settlements.mjs';
 import { plural } from './structures.mjs';
 import { terrainFor } from './terrain.mjs';
 import { paintBand } from './world-paint.mjs';
+import { ringProfile } from './giant-mesh.js';
+import { devEnabled } from './dev-panel.js';
+const DEV = devEnabled();
 import { spaceObjectsOf, cometPosition, trojanCentre } from './space-objects.mjs';
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -205,13 +208,30 @@ export function createStarMap(o) {
       const core = Math.exp(-(x * x + y * y) / (VISUAL_EXTENT * .06) ** 2), k = (j * n + i) * 4;
       img.data[k] = 110 + 140 * core; img.data[k + 1] = 120 + 95 * core; img.data[k + 2] = 190 - 40 * core; img.data[k + 3] = v * 120;
     }
-    g.putImageData(img, 0, 0); return c;
+    g.putImageData(img, 0, 0);
+    paintGalaxyImage();
+    return c;
+  }
+  // The painted galaxy (galaxy-paint.mjs): arms, dust lanes, star-forming knots, a blazing core.
+  // Painted once on a background thread; the plain haze shows until it is ready.
+  let painted = null, painting = false;
+  function paintGalaxyImage() {
+    if (painting) return; painting = true;
+    try {
+      const wk = new Worker(new URL('./galaxy-paint-worker.js', import.meta.url), { type: 'module' });
+      wk.onmessage = (e) => {
+        const { n, px } = e.data, c = document.createElement('canvas'); c.width = c.height = n;
+        c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(px.buffer), n, n), 0, 0);
+        painted = c; wk.terminate(); requestDraw();
+      };
+      wk.postMessage({ n: 1536 });
+    } catch { /* no workers: keep the haze */ }
   }
 
   // --- The world view: one world up close ---------------------------------------
   // Below the system level: the chosen world as a globe you turn by dragging, painted from
   // its real terrain (the same colours, seas and relief you fly over) or, for a giant, its
-  // bands. Marked on it: the signal, where you are, and the towns of its builders once you
+  // bands. Marked on it: where you are, and the towns of its builders once you
   // have seen them. The side panel shows the world's facts and what you have recorded there.
   // The globe is painted once into a small map (a few rows a frame, so the map stays
   // responsive), and drawn from that each time it turns.
@@ -223,7 +243,7 @@ export function createStarMap(o) {
   let world = null, bakers = null, bakeId = 0;
   const unit3 = (v) => { const l = Math.hypot(...v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
   const hexRgb = (hx) => [1, 3, 5].map((i) => parseInt(String(hx || '#888888').slice(i, i + 2), 16) / 255);
-  const level = ([W, H]) => ({ W, H, tex: new Float32Array(W * H * 3), rows: 0, ready: new Uint8Array(H) });
+  const level = ([W, H]) => ({ W, H, tex: new Float32Array(W * H * 3), grad: new Float32Array(W * H * 3), rows: 0, ready: new Uint8Array(H) });
   function openWorld(star, body) {
     if (!body || body.ark || !isSurveyed(star)) return false;
     let terrain = null;
@@ -244,9 +264,29 @@ export function createStarMap(o) {
     return true;
   }
   const exitWorld = () => { world = null; };
+  // Zooming out of a world: the system opens close in on that world and pulls back to show the
+  // whole of it, while the globe shrinks into the world's place on the chart and fades.
+  let ghost = null;
+  function leaveWorld() {
+    const Wd = world, st = Wd.star, body = Wd.body;
+    exitWorld(); zoomHold = performance.now() + 900;
+    const sys = systemOf(st), [bx, by] = bodyXY(st, sys, body), start = clamp(systemScale() * 40, minScale(), MAX_SCALE);
+    Object.assign(view, focusView(bx, by, start));
+    if (Wd.canvas && Wd.lastR) ghost = { img: Wd.canvas, R: Wd.lastR, cx: Wd.lastC[0], cy: Wd.lastC[1], bx, by, t0: performance.now() };
+    flyTo(st.x, st.y, systemScale(), 1100);
+  }
+  function drawGhost() {
+    if (!ghost) return;
+    const p = Math.min(1, (performance.now() - ghost.t0) / 650), e = 1 - (1 - p) ** 3;
+    if (p >= 1) { ghost = null; return; }
+    const [sx, sy] = toScreen(ghost.bx, ghost.by), r = ghost.R * (1 - e) + 4 * e;
+    ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalAlpha = 1 - e;
+    ctx.drawImage(ghost.img, ghost.cx + (sx - ghost.cx) * e - r, ghost.cy + (sy - ghost.cy) * e - r, r * 2, r * 2);
+    ctx.restore();
+    requestDraw();
+  }
   function worldMarks(star, body, terrain) {
     const marks = [];
-    if (terrain?.site) marks.push({ n: unit3(terrain.site), label: 'SIGNAL', kind: 'signal' });
     // Towns, once their builders have been seen (the survey's traces).
     try {
       const survey = star.id === here.id ? o.survey() : readSurvey(systemOf(star).seed), civ = civOf(body);
@@ -264,7 +304,9 @@ export function createStarMap(o) {
     // The coarse map, here, a few rows a frame.
     while (lo.rows < lo.H && performance.now() - t0 < 10) {
       const y1 = Math.min(lo.H, lo.rows + 4);
-      lo.tex.set(paintBand(t, b, lo.W, lo.H, lo.rows, y1), lo.rows * lo.W * 3);
+      const g = new Float32Array((y1 - lo.rows) * lo.W * 3);
+      lo.tex.set(paintBand(t, b, lo.W, lo.H, lo.rows, y1, g), lo.rows * lo.W * 3);
+      lo.grad.set(g, lo.rows * lo.W * 3);
       lo.rows = y1;
     }
     requestDraw();
@@ -288,8 +330,9 @@ export function createStarMap(o) {
       if (!band) return;
       wk.onmessage = (e) => {
         if (e.data.id !== id) return;
-        const { y0, y1, col } = e.data;
+        const { y0, y1, col, grad } = e.data;
         hi.tex.set(col, y0 * hi.W * 3);
+        if (grad) hi.grad.set(grad, y0 * hi.W * 3);
         for (let y = y0; y < y1; y++) hi.ready[y] = 1;
         hi.rows += y1 - y0;
         if (world?.maps === maps) requestDraw();
@@ -301,12 +344,70 @@ export function createStarMap(o) {
   }
   // A texel's colour and height from a map, with bilinear filtering (fx, fy in texels).
   const SAMPLE = [0, 0, 0, 0];
+  // The same for the slope (a vector on the sphere, world-paint.mjs), into GRAD.
+  const GRAD = [0, 0, 0];
+  function sampleGrad(m, fx, fy) {
+    const W = m.W, H = m.H, x0 = Math.floor(fx), y0 = clamp(Math.floor(fy), 0, H - 1), tx = fx - x0, ty = fy - Math.floor(fy);
+    const xa = ((x0 % W) + W) % W, xb = (xa + 1) % W, yb = Math.min(H - 1, y0 + 1);
+    const a = y0 * W + xa, bI = y0 * W + xb, c = yb * W + xa, d = yb * W + xb, g = m.grad;
+    for (let k = 0; k < 3; k++) GRAD[k] = (g[a * 3 + k] * (1 - tx) + g[bI * 3 + k] * tx) * (1 - ty) + (g[c * 3 + k] * (1 - tx) + g[d * 3 + k] * tx) * ty;
+    return GRAD;
+  }
   function sampleMap(m, fx, fy) {
     const W = m.W, H = m.H, x0 = Math.floor(fx), y0 = clamp(Math.floor(fy), 0, H - 1), tx = fx - x0, ty = fy - Math.floor(fy);
     const xa = ((x0 % W) + W) % W, xb = (xa + 1) % W, yb = Math.min(H - 1, y0 + 1);
     const a = y0 * W + xa, bI = y0 * W + xb, c = yb * W + xa, d = yb * W + xb;
     for (let k = 0; k < 3; k++) SAMPLE[k] = (m.tex[a * 3 + k] * (1 - tx) + m.tex[bI * 3 + k] * tx) * (1 - ty) + (m.tex[c * 3 + k] * (1 - tx) + m.tex[d * 3 + k] * tx) * ty;
     return SAMPLE;
+  }
+  // A world's rings as the game draws them (giant-mesh.js / system-view.js): their size, plane
+  // (a giant's equator; a rocky world's rings lean on their own), banding and colour.
+  function ringLook(b) {
+    const cached = ringCache.get(b); if (cached) return cached;
+    const R = b.radius, ice = b.physics?.kind === 'ice';
+    const inner = b.giant ? (ice ? 1.45 : 1.3) : 1.2, outer = b.giant ? (ice ? 1.95 : 2.25) : Math.min(1.95, (R + 210 * SIZE) / R);
+    const tilt = b.giant ? 0 : (((b.seed % 1000) / 1000) - 0.5) * 0.5;
+    const N = 96, prof = ringProfile(b, N), col = hexRgb(b.crystal || '#c8c0b0');
+    const look = { inner, outer, u: [Math.cos(tilt), Math.sin(tilt), 0], w: [0, 0, 1], N, prof, col, alpha: b.giant ? 1 : .8 };
+    ringCache.set(b, look); return look;
+  }
+  const ringCache = new WeakMap();
+  function drawRing(r, e, n, f, cx, cy, R, front, L) {
+    const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    // The ring's circle projects to an ellipse: screen axes from its two in-plane directions.
+    const ux = dot(r.u, e), uy = -dot(r.u, n), wx = dot(r.w, e), wy = -dot(r.w, n), uf = dot(r.u, f), wf = dot(r.w, f);
+    const phi = Math.atan2(wf, uf); // facing you most at angle phi
+        // Lit side: its plane faces the light or not (dimmer from the unlit side).
+    const nrm = [r.u[1] * r.w[2] - r.u[2] * r.w[1], r.u[2] * r.w[0] - r.u[0] * r.w[2], r.u[0] * r.w[1] - r.u[1] * r.w[0]];
+    const lightW = [0, 1, 2].map((k) => e[k] * L[0] + n[k] * L[1] + f[k] * L[2]);
+    const lit = .45 + .55 * Math.min(1, Math.abs(dot(nrm, lightW)) * 1.6);
+    ctx.save();
+    ctx.setTransform(dpr * ux * R, dpr * uy * R, dpr * wx * R, dpr * wy * R, dpr * cx, dpr * cy);
+    // The ring is painted once, seen from straight above, into a picture (smooth, no stripes of
+    // separate strokes), then laid onto its ellipse and cut to the near or far half.
+    if (!r.img) {
+      const S = 1024, c = document.createElement('canvas'); c.width = c.height = S;
+      const g = c.getContext('2d'), im = g.createImageData(S, S), d = im.data;
+      for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+        const rr = Math.hypot(x + .5 - S / 2, y + .5 - S / 2) / (S / 2) * r.outer, u = (rr - r.inner) / (r.outer - r.inner);
+        if (u <= 0 || u >= 1) continue;
+        const fi = u * (r.N - 1), i0 = Math.floor(fi), t = fi - i0, i1 = Math.min(r.N - 1, i0 + 1);
+        const a = (r.prof[i0 * 2] * (1 - t) + r.prof[i1 * 2] * t) * r.alpha, br = r.prof[i0 * 2 + 1] * (1 - t) + r.prof[i1 * 2 + 1] * t;
+        const o = (y * S + x) * 4;
+        d[o] = Math.min(255, r.col[0] * 255 * br); d[o + 1] = Math.min(255, r.col[1] * 255 * br); d[o + 2] = Math.min(255, r.col[2] * 255 * br); d[o + 3] = 255 * a * .92;
+      }
+      g.putImageData(im, 0, 0); r.img = c;
+    }
+    // Cut to the half nearer to (or further from) you: the side of the line through the centre
+    // across the direction phi, in the ring's own plane.
+    const big = r.outer * 1.1, cs = Math.cos(phi), sn = Math.sin(phi), sgn = front ? 1 : -1;
+    ctx.beginPath();
+    ctx.moveTo(-sn * big, cs * big); ctx.lineTo(-sn * big + sgn * cs * big, cs * big + sgn * sn * big);
+    ctx.lineTo(sn * big + sgn * cs * big, -cs * big + sgn * sn * big); ctx.lineTo(sn * big, -cs * big); ctx.closePath();
+    ctx.clip();
+    ctx.globalAlpha = lit; ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(r.img, -r.outer, -r.outer, r.outer * 2, r.outer * 2);
+    ctx.restore();
   }
   function drawWorld() {
     const Wd = world, b = Wd.body, lo = Wd.maps.lo, hi = Wd.maps.hi;
@@ -321,7 +422,7 @@ export function createStarMap(o) {
     if (!Wd.img || Wd.img.width !== G) Wd.img = new ImageData(G, G);
     const px = Wd.img.data, cyaw = Math.cos(Wd.yaw), syaw = Math.sin(Wd.yaw), cp = Math.cos(Wd.pitch), sp = Math.sin(Wd.pitch);
     const f = [syaw * cp, sp, cyaw * cp], e = [cyaw, 0, -syaw], n = [f[1] * e[2] - f[2] * e[1], f[2] * e[0] - f[0] * e[2], f[0] * e[1] - f[1] * e[0]];
-    const L = unit3([-.55, .5, .67]), hc = Wd.haze || (Wd.haze = hexRgb(b.atmosphere)), airy = b.physics?.pressure > .05 || b.giant ? .35 : .1;
+    const L = unit3([-.55, .5, .67]), Lw = [0, 1, 2].map((k) => e[k] * L[0] + n[k] * L[1] + f[k] * L[2]), hc = Wd.haze || (Wd.haze = hexRgb(b.atmosphere)), airy = b.physics?.pressure > .05 || b.giant ? .35 : .1;
     const TAU = Math.PI * 2;
     for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) {
       const u = (x + .5) / G * 2 - 1, v = 1 - (y + .5) / G * 2, rr = u * u + v * v, o4 = (y * G + x) * 4;
@@ -333,7 +434,10 @@ export function createStarMap(o) {
       let m = hi && hi.ready[Math.min(hi.H - 1, Math.floor(gy * hi.H))] && hi.ready[Math.min(hi.H - 1, Math.floor(gy * hi.H) + 1)] ? hi : lo;
       if (m === lo && Math.floor(gy * lo.H) >= lo.rows) { px[o4] = 30; px[o4 + 1] = 42; px[o4 + 2] = 52; px[o4 + 3] = 255; continue; } // still being painted
       const s = sampleMap(m, gx * m.W - .5, gy * m.H - .5), r0 = s[0], g0 = s[1], b0 = s[2];
-      const shade = .3 + .8 * Math.max(0, u * L[0] + v * L[1] + z * L[2]); // (relief is in the map)
+      // Relief lit by the globe's own light: the surface normal tipped by the slope (no swirl at the poles).
+      const gd = sampleGrad(m, gx * m.W - .5, gy * m.H - .5), K = 2.5;
+      const nx = wx - K * gd[0], ny = wy - K * gd[1], nz = wz - K * gd[2], nl = Math.hypot(nx, ny, nz) || 1;
+      const shade = .3 + .8 * Math.max(0, (nx * Lw[0] + ny * Lw[1] + nz * Lw[2]) / nl);
       const hz = airy * Math.pow(1 - z, 2.2);
       px[o4] = Math.min(255, 255 * (r0 * shade * (1 - hz) + hc[0] * hz * .9));
       px[o4 + 1] = Math.min(255, 255 * (g0 * shade * (1 - hz) + hc[1] * hz * .9));
@@ -349,7 +453,12 @@ export function createStarMap(o) {
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R * 1.12, 0, Math.PI * 2); ctx.fill();
     }
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    // Rings: the far half behind the globe, the near half in front of it.
+    const ring = b.ringed ? ringLook(b) : null;
+    if (ring) drawRing(ring, e, n, f, cx, cy, R, false, L);
     ctx.drawImage(tmp, cx - R, cy - R, R * 2, R * 2);
+    if (ring) drawRing(ring, e, n, f, cx, cy, R, true, L);
+    Wd.lastR = R; Wd.lastC = [cx, cy];
     // Rings of a ringed giant: a flat ellipse in front of and behind it (simple).
     // Marks on the near side.
     const proj = (m) => { const d = m[0] * f[0] + m[1] * f[1] + m[2] * f[2]; return d > .05 ? [cx + R * (m[0] * e[0] + m[1] * e[1] + m[2] * e[2]), cy - R * (m[0] * n[0] + m[1] * n[1] + m[2] * n[2]), d] : null; };
@@ -375,7 +484,8 @@ export function createStarMap(o) {
     $('mapScale').textContent = 'drag to turn the world · scroll or pinch to zoom · zoom out for the system';
   }
 
-  function draw() {
+  function draw() { drawChart(); if (!world) drawGhost(); }
+  function drawChart() {
     if (world) return drawWorld();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalAlpha = 1;
     ctx.fillStyle = '#040911'; ctx.fillRect(0, 0, w, h);
@@ -387,8 +497,11 @@ export function createStarMap(o) {
       haze ||= buildHaze();
       const [hx, hy] = toScreen(-VISUAL_EXTENT / 2, VISUAL_EXTENT / 2);
       ctx.globalAlpha = hazeA; ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(haze, hx, hy, VISUAL_EXTENT * s, VISUAL_EXTENT * s);
+      ctx.drawImage(painted || haze, hx, hy, VISUAL_EXTENT * s, VISUAL_EXTENT * s);
     }
+    // Over the painting, the points are sparkle: added as light, and fainter where it is detailed.
+    ctx.globalCompositeOperation = painted ? 'lighter' : 'source-over';
+    const sparkle = painted ? 1 - .45 * hazeA : 1;
     // 2. Procedural light, one quadtree level finer every time the view halves.
     const fakeA = 1 - smooth(Math.log(REAL_FROM), Math.log(REAL_TO), ls);
     if (fakeA > 0) {
@@ -401,7 +514,7 @@ export function createStarMap(o) {
         const size = 1.1 + Math.max(0, 1.1 - (finest - L) * .25);
         for (let tx = tx0; tx <= tx1; tx++) for (let ty = ty0; ty <= ty1; ty++) {
           for (const b of visualTile(L, tx, ty).buckets) {
-            ctx.globalAlpha = a * b.alpha; ctx.fillStyle = b.color;
+            ctx.globalAlpha = a * b.alpha * sparkle; ctx.fillStyle = b.color;
             for (let i = 0; i < b.xs.length; i++) {
               const sx = w / 2 + (b.xs[i] - view.x) * s, sy = h / 2 - (b.ys[i] - view.y) * s;
               if (sx > -2 && sx < w + 2 && sy > -2 && sy < h + 2) ctx.fillRect(sx, sy, size, size);
@@ -410,7 +523,7 @@ export function createStarMap(o) {
         }
       }
     }
-    ctx.globalAlpha = 1; drawn = [];
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; drawn = [];
     // 3. Real stars (a slab of the disc around your height; distances stay 3D).
     const realA = smooth(Math.log(REAL_FROM), Math.log(REAL_TO), ls);
     const sysA = smooth(Math.log(SYSTEM_FROM), Math.log(SYSTEM_TO), ls);
@@ -709,7 +822,7 @@ export function createStarMap(o) {
   // Zooming a world out past its smallest size leaves it for its system.
   let zoomHold = 0; // after leaving a world, the rest of that scroll gesture is ignored (it ran on out to the galaxy)
   function zoomWorld(z) {
-    if (z < .62) { const st = world.star; exitWorld(); zoomHold = performance.now() + 900; flyToStar(st); return; }
+    if (z < .62) { leaveWorld(); return; }
     world.zoom = Math.min(3.5, z); requestDraw();
   }
   canvas.addEventListener('wheel', (e) => { e.preventDefault(); if (performance.now() < zoomHold) return; if (world) return zoomWorld(world.zoom * Math.exp(-e.deltaY * (e.ctrlKey ? .01 : .0018))); zoomAt(e.offsetX, e.offsetY, Math.exp(-e.deltaY * (e.ctrlKey ? .01 : .0018))); }, { passive: false });
@@ -836,7 +949,8 @@ export function createStarMap(o) {
       if (heard) $('mapDescription').textContent += `${decoded() ? ` Radio signals: ${whoIs(heard)}` : ' An unidentified radio signal. A Signal decoder would tell who is sending it.'} ${heard.distance.toFixed(0)} light years from ${nameOf(here)}.${inRange.has(star.id) || isHere ? '' : ' Too far for one jump: set a course and fly, or jump closer star by star.'}`;
       const lum = p.luminosity < .01 ? p.luminosity.toFixed(4) : p.luminosity.toFixed(2);
       $('mapFacts').textContent = `${p.temperature} K · ${p.mass.toFixed(2)} M☉ · ${lum} L☉ · ${p.age.toFixed(1)} billion years${isHere ? '' : ` · ${starDistance(star, here).toFixed(1)} ly away${heightWords(heightOf(star)) ? `, ${heightWords(heightOf(star))} you` : ''}`}`;
-      const beacon = !inRange.has(star.id) && beaconAt(star), reachable = inRange.has(star.id) || beacon, ready = o.canJump();
+      // Dev mode (?dev): any star is a jump away, and the drive is always ready.
+      const beacon = !inRange.has(star.id) && beaconAt(star), reachable = DEV || inRange.has(star.id) || beacon, ready = DEV || o.canJump();
       btn.disabled = isHere || !reachable || !ready;
       btn.textContent = isHere ? 'You are here' : !reachable ? `Beyond jump range (${range.toFixed(1)} ly)` : ready ? `${beacon ? 'Return by beacon' : 'Jump'} to ${nameOf(star)} ↗` : 'Jump drive not ready';
       btn.onclick = () => { if (!btn.disabled) o.onJump(star, nameOf(star)); };
@@ -847,7 +961,7 @@ export function createStarMap(o) {
       courseBtn.textContent = coursed ? 'Clear course ×' : `${deep ? 'Fly' : 'Set course'} to ${nameOf(star)} ↗`;
       courseBtn.onclick = () => { if (coursed) { o.clearCourse(); updatePanel(); } else o.onCourse(star); };
       if (deep) {
-        btn.hidden = true;
+        btn.hidden = !DEV; // (dev mode: jump from anywhere, even between the stars)
         const ly = Math.hypot(star.x - deep.position[0], star.y - deep.position[1], star.z - deep.position[2]);
         note = `${ly.toFixed(1)} ly from your position. The star drive slows as you near a star, so arrivals are gentle.`;
       } else btn.hidden = false;

@@ -1,0 +1,41 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block;width:100vw;height:100vh}#grid{position:fixed;inset:0;display:grid;grid-template-columns:1fr 1fr;background:#000;color:#fff;font:11px sans-serif}#grid div{position:relative}#grid span{position:absolute;left:4px;top:4px;background:#0008;padding:2px 4px}</style></head><body><canvas id="c"></canvas>
+<script type="module">
+import * as THREE from '../../galaxy-explorer/vendor/three.module.js';
+import { starsNear, HOME_POINT } from '../../galaxy-explorer/galaxy.mjs';
+import { generateSystem } from '../../galaxy-explorer/system.mjs';
+import { civilizationOf } from '../../galaxy-explorer/civilizations.mjs';
+import { colours } from '../../galaxy-explorer/structures-mesh.js';
+import { buildInterior } from '../../galaxy-explorer/interior.js';
+const P = new URLSearchParams(location.search);
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(innerWidth / 2, innerHeight / 3, false); renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
+const camera = new THREE.PerspectiveCamera(70, (innerWidth / 2) / (innerHeight / 3), .05, 200);
+// Find civilizations of different families and levels.
+const found = new Map(), want = +(P.get('n') || 6), kinds = (P.get('kind') || 'house').split(',');
+for (const s of starsNear(HOME_POINT, 60)) {
+  const sys = generateSystem(s.star.seed);
+  for (const b of sys.bodies) { const c = civilizationOf(b); if (!c || c.underwater || (c.level || 0) < 2) continue; const key = c.family + (P.get('bylevel') ? c.level : ''); if (!found.has(key)) found.set(key, { c, b }); }
+  if (found.size >= want) break;
+}
+const grid = document.createElement('div'); grid.id = 'grid'; document.body.append(grid);
+let k = 0;
+for (const { c, b } of [...found.values()].slice(0, want)) {
+  const scene = new THREE.Scene(); scene.background = new THREE.Color('#000');
+  scene.add(new THREE.HemisphereLight(0xb6dfdf, 0x4c3844, .5));
+  const light = new THREE.PointLight(0xffd9a8, 0, 40, 1.4); scene.add(light);
+  const u = Math.max(.55, c.unit || 1), foot = Math.max(4.5, 5.5 * u), h = Math.max(4, 4.5 * u);
+  const d = { base: new THREE.Matrix4(), foot, h, kind: kinds[k % kinds.length], door: new THREE.Vector3(), face: new THREE.Vector3(0, 0, 1) };
+  try {
+    const room = buildInterior(THREE, { dwelling: d, civ: c, palette: colours(THREE, b, c), stance: 'welcome', ruins: false, seed: 'r' + k, light });
+    scene.add(room.group); room.group.updateMatrixWorld(true);
+    light.intensity = (0.8 + c.level * 0.15) * Math.max(1.5, room.radius * room.radius) * 0.9; light.distance = room.radius * 4; light.decay = 2;
+    light.position.set(0, room.height * .8, 0);
+    room.update?.(.016, 1, { x: room.start.x, z: room.start.z });
+    camera.position.set(room.start.x, 1.7, room.start.z); camera.lookAt(0, 1.2, -room.radius);
+    renderer.render(scene, camera);
+    const cell = document.createElement('div'); const img = new Image(); img.src = renderer.domElement.toDataURL('image/jpeg', .85); img.style.width = '100%';
+    const tag = document.createElement('span'); tag.textContent = `${c.family} · ${c.culture} · L${c.level} · ${d.kind}`; cell.append(img, tag); grid.append(cell);
+  } catch (e) { const cell = document.createElement('div'); cell.textContent = c.family + ' ERR ' + e.message; grid.append(cell); }
+  k++;
+}
+</script></body></html>

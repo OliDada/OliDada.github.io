@@ -26,6 +26,7 @@ import {
     createNearStar,
     createDriveStreaks,
     createWorldDots,
+    BOOT_PARAMS,
 } from "./deep-space.js";
 import { setupInput } from "./input.js";
 import { updateHUD, updateWaypoint } from "./hud.js";
@@ -72,7 +73,12 @@ import { createUpgradeScreen } from "./upgrades-ui.js";
 import { findScanTarget, followTarget, cardFor, wordFor, titleFor, verbFor } from "./scanning.js";
 import { setupDev } from "./dev-panel.js";
 import { createScanUI } from "./scan-ui.js";
-import { civilizationOf, colonistOf, arkPosition } from "./civilizations.mjs";
+import { civilizationOf, colonistOf, arkPosition, civilizationsIn } from "./civilizations.mjs";
+import { createPost } from "./post.js";
+import { quietHud } from "./hud-quiet.js";
+import { rememberPlace, placesPanel, setGoto, takeGoto } from "./places.js";
+import { patrolFor, createPatrol } from "./patrol.js";
+import { personaOf, talkTopics, bodyLine } from "./persona.mjs";
 
 // Surface flight uses coordinates relative to the current world; space travel is continuous.
 const $ = (id) => document.getElementById(id);
@@ -244,6 +250,11 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
+// Glow around bright things (post.js); ?glow=0 turns it off. Lighter on phones.
+const post = BOOT_PARAMS.get("glow") === "0"
+    ? { enabled: false, render: (s, c) => renderer.render(s, c) }
+    : createPost(renderer, TIER === "low" ? { samples: 0, levels: 4 } : {});
+const hudQuiet = quietHud(); // the HUD fades what you have read (hud-quiet.js)
 const scene = new THREE.Scene();
 // Lamplight inside a home (interior.js). Always in the scene (dark until you go in), so
 // going in never makes every material rebuild its shader for one more light.
@@ -347,7 +358,7 @@ function buildSite() {
     site.group.position.set(0, 0, 0);
     site.halo.farFrom.value = 1e9;
     site.halo.farTo.value = 1e9 + 1;
-    site.group.visible = true;
+    site.group.visible = mode !== "deep"; // (a site finished while you are already out between the stars stays hidden)
     scene.add(site.group);
     if (!activeBody.giant) codex.add(worldEntry(system, activeBody, siteTotals()));
 }
@@ -620,9 +631,21 @@ function startAtFind(kind) {
     deepNear = findsNear(galactic, DETECT_LY + 0.25);
     sky.update(galactic, camera);
 }
+// A patrol ship of a spacefaring people meets you when you arrive (patrol.js); ?patrol forces one.
+let patrol = null;
+function setupPatrol() {
+    patrol?.dispose();
+    patrol = null;
+    if (offChart && !params.has("patrol")) return;
+    try {
+        const civ = patrolFor(system, currentStar.id, { force: params.has("patrol") });
+        if (civ) patrol = createPatrol(THREE, scene, civ, $("hud"), { starId: currentStar.id, name: system.name });
+    } catch (e) { console.warn("patrol", e); }
+}
 function start() {
     if (started) return;
     started = true;
+    setupPatrol();
     if (params.get("find")) setTimeout(() => startAtFind(params.get("find")), 50);
     $("hud").inert = false;
     $("intro").inert = true;
@@ -934,6 +957,7 @@ const input = setupInput({
         cruise: () => cruiseOrAutopilot(),
         clear: () => clearTarget(),
         help: () => {
+            hudQuiet.wakeAll();
             if ($("help").open) $("help").close();
             else {
                 keys.clear();
@@ -1090,6 +1114,7 @@ const giantClearance = (body) => Math.max(250, body.radius * 0.02);
 // one band and the other way in the next, harder the deeper you go, and carries the ship
 // and the loose cloud around it. Lightning lights the murk on stormy giants.
 const crushDepth = (body) => { const d = cloudDepth(codex.unlocked) || (DIVE_TEST ? 1500 : 0); return d ? Math.min(d, body.radius * 0.06) : 0; };
+let bumpShake = 0; // a jolt from hitting a ring rock, fading
 const dive = { body: null, k: 0, depth: 0, flash: 0, told: 0, wind: 0, puffs: null, off: [], last: null };
 const DIVE_AIR = new THREE.Color(), DIVE_DEEP = new THREE.Color(), DIVE_FLASH = new THREE.Color(0xdfe8ff), DIVE_TINT = new THREE.Color(), DIVE_TOP = new THREE.Color(), DIVE_LOW = new THREE.Color();
 // Soft cloud: camera-facing lumps with ragged edges, lit from the sun's side and from above,
@@ -1350,6 +1375,10 @@ function updateSpace(dt) {
         (keys.has("ArrowUp") ? 1 : 0) - (keys.has("ArrowDown") ? 1 : 0);
     shipForward.applyAxisAngle(right, pitch * dt * 0.7 + m.pitch).normalize();
     spaceUp.applyAxisAngle(right, pitch * dt * 0.7 + m.pitch).normalize();
+    // Out in a system the view slowly rolls level with the orbital plane (roll only: the nose
+    // stays where you point it), so giants and their rings aren't seen on their side just
+    // because of where you came from. Not while diving into a giant's clouds.
+    if (dive.k < 0.1) { const lv = Y.clone().addScaledVector(shipForward, -Y.dot(shipForward)); if (lv.lengthSq() > 0.04) spaceUp.lerp(lv.normalize(), Math.min(1, dt * 0.6)).normalize(); }
     const boost = keys.has("ShiftLeft") || keys.has("ShiftRight"),
         brake = keys.has("KeyX"),
         reach = spaceReach(shipPosition.clone().add(worldOrigin));
@@ -1397,6 +1426,21 @@ function updateSpace(dt) {
         if (toastTime <= 0) toast(message);
     };
     holdOff(vec(), system.star.radius + 140, `Stellar exclusion zone. Turn away from ${system.star.name}.`);
+    // Among a ring's rocks the drive holds you to a speed you can steer at (as near a world).
+    const inRing = systemView.ringDepth(shipPosition);
+    if (inRing > 0.05) {
+        const cap = 160 + 1400 * (1 - inRing) ** 2;
+        if (Math.abs(speed) > cap) { speed = damp(speed, Math.sign(speed) * cap, 2.2, dt); if (toastTime <= 0) toast("In the ring: slowing among the rocks.", 2); }
+    }
+    // A ring's rocks: you glance off them with a jolt rather than flying through.
+    const rockHit = systemView.bump(shipPosition);
+    if (rockHit) {
+        shipPosition.add(rockHit.push);
+        const out = rockHit.push.clone().normalize(), into = -shipForward.dot(out);
+        if (into > 0) speed *= 1 - 0.6 * into;
+        bumpShake = Math.min(1, bumpShake + 0.25 + Math.min(0.5, Math.abs(speed) / 400));
+        if (toastTime <= 0) toast(rockHit.what || "Ring debris. Slow down among the rocks.", 2);
+    }
     // Close to a star the hull heats up: the view glows and warnings start well
     // before the hard limit above.
     heat = clamp(1 - (global.length() - system.star.radius - 140) / (system.star.radius * 0.5), 0, 1) * heatScale(codex.unlocked);
@@ -1527,7 +1571,7 @@ function updateCruise(dt) {
     bankAngle = damp(bankAngle, 0, 3, dt);
     // Ease "up" toward the system's up, but only as far as the nose allows (never toward the nose itself).
     const level = Y.clone().addScaledVector(shipForward, -Y.dot(shipForward));
-    if (level.lengthSq() > 0.04) spaceUp.lerp(level.normalize(), dt * 0.4 * Math.sqrt(level.lengthSq())).normalize();
+    if (level.lengthSq() > 0.04) spaceUp.lerp(level.normalize(), Math.min(1, dt * 1.5 * Math.sqrt(level.lengthSq()))).normalize();
     orientSpace(dt);
     // Build the destination's landing site halfway, not in the frame you arrive.
     if (!travel.prepared && t > 0.5) {
@@ -1939,6 +1983,7 @@ function arriveInSystem(star, offset) {
         clearSites();
         starMap.setHere(star, system);
         loadSurvey(null);
+        setupPatrol();
         if (course?.id === star.id) course = null;
     }
     nearStar.hide();
@@ -2066,13 +2111,26 @@ $("randomSystem").onclick = () => {
     const value = crypto.getRandomValues(new Uint32Array(1))[0];
     location.search = `?seed=${value}`;
 };
+// The world the ship is close to while flying in space: within a few of its radii (giants
+// count as near out to their moons' reach), nearest first. Null when nothing is that close.
+let mapFocus = null;
+function worldNearShip() {
+    let best = null, bd = Infinity;
+    for (const b of system.bodies) {
+        const d = positionOf(b).sub(worldOrigin).distanceTo(shipPosition) - b.radius;
+        if (d < b.radius * (b.giant ? 1.6 : 2.5) && d < bd) { bd = d; best = b; }
+    }
+    return best;
+}
 function openMap() {
     if ($("help").open || $("discovery").open) return;
     keys.clear();
     // At a world (in its orbit, flying low, landed or on foot): the map opens on that world;
     // zooming out goes on to the system, the neighbourhood and the galaxy.
-    // In deep space it opens on the ship, between the stars.
-    starMap.open(mode === "deep" ? "local" : ["space", "transit"].includes(mode) ? "system" : "world");
+    // In deep space it opens on the ship, between the stars. Out in a system but close to a world
+    // (a giant you are holding above, a moon you are passing), it opens on that world.
+    mapFocus = mode === "space" ? worldNearShip() : null;
+    starMap.open(mode === "deep" ? "local" : mapFocus ? "world" : ["space", "transit"].includes(mode) ? "system" : "world");
 }
 $("mapBtn").onclick = openMap;
 
@@ -2292,6 +2350,7 @@ function updateManeuver(dt) {
             maneuver = null;
             toast(afloat ? `Splashdown. The Petrel rides the swell.${canDiveHere() ? " Press F to dive." : " Take off and land on shore to go on foot."}` : `Touchdown. Engines idle. Press E to leave the ${shipName()}.`);
             if (!afloat) arriveAtTown();
+            keepPlace("landing");
         }
     } else {
         // Charge, lift vertically, then gently hand control back above the terrain.
@@ -2560,6 +2619,7 @@ const deckM = new THREE.Matrix4(),
     tmpS = new THREE.Vector3();
 let dock = null, // { deck, civ, ark } of the station you are at (ark: a spaceborne civilization's, megastation.js)
     deckX = 0, deckZ = 0, deckYaw = 0, // you, on foot on the deck (its own frame)
+    deckY = 0, // how high you stand above the deck (an ark's walkways: megastation.js walk)
     greeted = new Set(), // stations whose crew have met you (this session)
     lastDockHint = -100;
 const stationDeck = () => site?.structures?.deck || null;
@@ -2680,6 +2740,7 @@ function updateUndocking(dt) {
 // Stepping out onto the deck beside the ship, facing the spire.
 function leaveShipOnDeck() {
     const p = dock.deck.pads[0], toC = vec(-p.x, 0, -p.z).normalize();
+    deckY = 0;
     deckX = p.x + toC.x * 5.5 - toC.z * 2;
     deckZ = p.z + toC.z * 5.5 + toC.x * 2;
     deckYaw = Math.atan2(toC.z, toC.x);
@@ -2687,6 +2748,7 @@ function leaveShipOnDeck() {
     jumpHeight = jumpVelocity = 0;
     mode = "deck";
     deckTime = 0;
+    keepPlace(dock.ark ? "ark" : "station", dock.ark?.name || (dock.civ?.species?.name ? `the station of the ${plural(dock.civ.species.name)}` : "a station"));
     const key = dock.civ?.id ?? activeBody.id;
     if (!greeted.has(key)) {
         greeted.add(key);
@@ -2697,7 +2759,7 @@ function leaveShipOnDeck() {
     } else toast(dock.ark ? `Back on the deck of ${dock.ark.name}.` : `Back on the deck of the ${dock.civ?.species?.name ?? ""} station.`.replace("  ", " "));
 }
 const shipOnDeck = () => (dock ? { x: dock.deck.pads[0].x, z: dock.deck.pads[0].z, r: 3.4 } : null);
-const nearShipOnDeck = () => dock && Math.hypot(deckX - dock.deck.pads[0].x, deckZ - dock.deck.pads[0].z) < 6.5;
+const nearShipOnDeck = () => dock && deckY < 1 && Math.hypot(deckX - dock.deck.pads[0].x, deckZ - dock.deck.pads[0].z) < 6.5;
 function updateDeck(dt) {
     deckTime += dt;
     deckFrame();
@@ -2716,7 +2778,17 @@ function updateDeck(dt) {
         jumpVelocity -= 9.8 * dt;
         if (jumpHeight <= 0) jumpHeight = jumpVelocity = 0;
     }
-    if (moving) {
+    const walk = dock.ark?.walk;
+    if (moving && walk) {
+        // In an ark's port: off the deck onto the hall floor, up the terminals' stairs, along
+        // their balconies and over the bridge. On the deck itself its own obstacles still count.
+        const nx = deckX + (dx / len) * walkingSpeed * dt, nz = deckZ + (dz / len) * walkingSpeed * dt;
+        let [rx, rz] = walk.onDeck(nx, nz, deckY, PLAYER_RADIUS) ? dock.deck.resolve(deckX, deckZ, nx, nz, PLAYER_RADIUS, jumpHeight) : [nx, nz];
+        const s = shipOnDeck(), to = walk.support(rx, rz, deckY);
+        if (!walk.blocked(rx, rz, deckY, to) && (Math.hypot(rx - s.x, rz - s.z) >= s.r + PLAYER_RADIUS || deckY > 3)) { deckX = rx; deckZ = rz; }
+    }
+    if (walk) deckY = THREE.MathUtils.damp(deckY, walk.support(deckX, deckZ, deckY), 14, dt);
+    if (moving && !walk) {
         const nx = deckX + (dx / len) * walkingSpeed * dt, nz = deckZ + (dz / len) * walkingSpeed * dt;
         const [rx, rz] = dock.deck.resolve(deckX, deckZ, nx, nz, PLAYER_RADIUS, jumpHeight), s = shipOnDeck();
         // Your own ship on its pad is solid too.
@@ -2805,8 +2877,17 @@ function animateStation(dt) {
     for (const a of systemView.arks?.() ?? []) {
         a.group.updateWorldMatrix(true, false);
         const inv = a.group.matrixWorld.clone().invert(), l = shipPosition.clone().applyMatrix4(inv);
-        if (l.length() > a.size + 50) continue;
-        if (a.collide(l, SHIP_RADIUS)) { shipPosition.copy(l.applyMatrix4(a.group.matrixWorld)); speed *= 0.9; }
+        if (l.length() > a.size + 50) { a._prev = null; continue; }
+        // Sweep from last frame's spot so fast flight can't skip through a floor or wall.
+        const from = a._prev ?? l.clone(), n = Math.min(64, Math.ceil(from.distanceTo(l) / (SHIP_RADIUS * 0.5)));
+        let hit = false;
+        const p = from.clone();
+        for (let i = 1; i <= Math.max(1, n); i++) {
+            p.lerpVectors(from, l, i / Math.max(1, n));
+            if (a.collide(p, SHIP_RADIUS)) { hit = true; break; }
+        }
+        if (hit) { l.copy(p); shipPosition.copy(p.applyMatrix4(a.group.matrixWorld)); speed *= 0.9; }
+        a._prev = l.clone();
     }
     // Flying close by: say once in a while that you can dock.
     if (animationTime - lastDockHint > 25 && near && near.reach < DOCK_REACH * 0.8 && near.local.y > -4) {
@@ -3055,6 +3136,19 @@ function talkTo(civ, { where = "", waited = 0, stance = stanceOf(civ), partner =
     if (document.pointerLockElement) document.exitPointerLock?.();
     const rel = relations.meet(civ), home = system.bodies.find((b) => b.id === civ.home), homeSeed = String(system.seed);
     const early = applyReached(civ, relations.settle(civ, stance));
+    // The one before you, as a person (persona.mjs): a name, a job, a temper; and what you can ask.
+    const placeKind = mode === "deck" ? (dock?.ark ? "ark" : "deck") : indoor ? "home" : "town";
+    const persona = personaOf(civ, partner?.i ?? partner?.creature?.id ?? partner?.creature?.seed ?? "one", placeKind);
+    const others = civilizationsIn(system).filter((c) => c.id !== civ.id && !c.spaceborne);
+    const topics = talkTopics(civ, persona, {
+        home: home?.name, homeType: home?.type, stance, step: rel.step, ark: civ.arkName,
+        others: others.length ? `There are the ${plural(others[0].species.name)}, on ${system.bodies.find((b) => b.id === others[0].home)?.name ?? "another world"}. We ${stance === "guarded" ? "keep an eye on them" : "trade with them, now and then"}.` : `Not in this system. You are the first stranger we have ever met.`,
+    });
+    const FEEL = { glad: "welcome", curious: "curious", uneasy: "wary", proud: "guarded" };
+    const feel = (feeling) => { // their body answers too
+        if (partner?.herd) partner.herd.talkWith(partner.creature, FEEL[feeling] || stance);
+        if (partner?.deck) partner.deck.talkWith(partner.i, FEEL[feeling] || stance);
+    };
     contactUI.open({
         where: `${where}${home ? ` · ${home.name.toUpperCase()}` : ""}`,
         title: `The ${plural(civ.species.name)}`,
@@ -3063,6 +3157,19 @@ function talkTo(civ, { where = "", waited = 0, stance = stanceOf(civ), partner =
         greeted: stepAtLeast(rel.step, "contact"),
         stanceLine: { welcome: "They seem glad you came.", curious: "They lean in, studying you.", wary: "They keep a careful distance.", guarded: "They are watchful, and slow to warm." }[stance],
         ask: askOf(civ),
+        persona,
+        topics,
+        opening: { welcome: `${persona.name} waits, plainly glad of the company.`, curious: `${persona.name} studies you, head on one side.`, wary: `${persona.name} waits for you to speak first.`, guarded: `${persona.name} watches you, unblinking.` }[stance],
+        ask2: (tp) => {
+            const r = tp.answer();
+            feel(r.feeling);
+            const secs = Math.min(9, r.text.length * 0.045); // they speak it aloud, the head moving with the words
+            if (partner?.herd) partner.herd.speak?.(partner.creature, secs);
+            if (partner?.deck) partner.deck.speak?.(partner.i, secs);
+            if (r.gesture) gesture();
+            voices.say(speaker, { mood: { glad: "happy", curious: "curious", uneasy: "wary", proud: "guarded" }[r.feeling] || mood });
+            return { text: r.text, body: bodyLine(speaker, r.feeling) };
+        },
         offers: offersFor(civ, rel, homeSeed),
         log: early.map((text) => ({ text, gift: true })),
         greet: () => {
@@ -3206,7 +3313,7 @@ function drawScanMarker() {
 function updateCamera(dt) {
     if (mode === "deck") {
         // On a station's deck: the same eye as on foot, in the deck's own frame.
-        const eye = vec(deckX, 1.75 + jumpHeight + Math.sin(bob) * 0.025, deckZ).applyMatrix4(deckM);
+        const eye = vec(deckX, deckY + 1.75 + jumpHeight + Math.sin(bob) * 0.025, deckZ).applyMatrix4(deckM);
         const look = vec(Math.cos(deckYaw) * Math.cos(lookPitch), Math.sin(lookPitch), Math.sin(deckYaw) * Math.cos(lookPitch)).applyQuaternion(deckQ);
         camera.position.copy(eye);
         camera.up.copy(deckUp());
@@ -3334,8 +3441,9 @@ function updateCamera(dt) {
             .addScaledVector(up, (diving ? -1.5 : -7 * (1 - smoothstep((altitude() - 120) / 480))) * (1 - sb) - 10 * pull);
         // A faint shake when really moving (more with boost).
         const shake = Math.max(0, rushLevel - 0.45) / 0.55;
-        if (shake > 0) {
-            const a = 0.35 * shake * shake * (boosting ? 1.4 : 1) * framing, t = animationTime;
+        bumpShake = Math.max(0, bumpShake - dt * 2.2);
+        if (shake > 0 || bumpShake > 0) {
+            const a = 0.35 * shake * shake * (boosting ? 1.4 : 1) * framing + 2.2 * bumpShake * bumpShake, t = animationTime;
             look.addScaledVector(up, a * (Math.sin(t * 31) + Math.sin(t * 17.3)) * 0.5);
             look.addScaledVector(back.clone().cross(up), a * (Math.sin(t * 27.1) + Math.sin(t * 13.7)) * 0.5);
         }
@@ -4227,6 +4335,12 @@ function frame(now) {
     if (!paused) {
         animationTime += dt;
         if (started) {
+            // A patrol ship meeting you (patrol.js), whatever you are doing.
+            if (patrol) {
+                const r = patrol.update(dt, { pos: shipPosition, fwd: shipForward, up: spaceUp }, mode === "space" && !jumpAnim);
+                if (r.hold && mode === "space") speed = damp(speed, 0, 1.2, dt); // asked to hold position
+                if (patrol.done) { patrol.dispose(); patrol = null; }
+            }
             if (mode === "deep") updateDeep(dt);
             else if (mode === "space") jumpAnim ? updateJump(dt) : updateSpace(dt);
             else if (mode === "transit") updateCruise(dt);
@@ -4318,10 +4432,15 @@ function frame(now) {
         finishSky();
         // Indoors, the daylight comes in only by the door and windows: the room is lit by its own lamp.
         // No haze or fog in a room either.
+        // An eclipse: a moon or planet in front of the star dims its light (and the sky's).
+        const ecl = mode === "deep" ? 0 : Math.max(0, systemView.eclipse(camera.position) - eclipseCover); // (eclipses seen from a world's surface already dim it: phenomena.mjs)
+        const eclLit = ecl > 0.01 ? [sun.intensity, hemi.intensity] : null;
+        if (eclLit) { sun.intensity *= 1 - 0.96 * ecl; hemi.intensity *= 1 - 0.6 * ecl; }
         const lit = indoor ? [sun.intensity, hemi.intensity, fill.intensity, scene.fog?.density] : null;
         if (lit) { sun.intensity *= 0.08; hemi.intensity *= 0.3; fill.intensity *= 0.2; if (scene.fog?.density !== undefined) scene.fog.density = 0.0005; }
-        renderer.render(scene, camera); // the full-screen map hides the scene
+        post.render(scene, camera); // the full-screen map hides the scene
         if (lit) { [sun.intensity, hemi.intensity, fill.intensity] = lit; if (lit[3] !== undefined) scene.fog.density = lit[3]; }
+        if (eclLit) [sun.intensity, hemi.intensity] = eclLit;
         perf.tick(now);
     }
 }
@@ -4419,6 +4538,50 @@ requestAnimationFrame(frame);
 // --- Galaxy travel: jumps reload into the destination system. ---
 let jumping = false;
 let beaconCache = { n: -1, set: null };
+// --- Fast travel to places you have been (places.js) ---------------------------------
+function keepPlace(kind, label) {
+    if (offChart) return;
+    let name = label, n = null;
+    if (kind === "landing") {
+        n = shipPosition.clone().normalize();
+        const near = placesOfInterest().map((p) => ({ p, d: p.n.angleTo(n) * RADIUS })).sort((a, b) => a.d - b.d)[0];
+        name = near && near.d < 2500 ? near.p.name.replace(/^./, (c) => c.toUpperCase()) : `A landing site on ${activeBody.name}`;
+        if (near && near.d < 2500 && near.p.name !== "the signal site") kind = "town";
+    }
+    rememberPlace({ star: currentStar.id, world: activeBody.id, n: n && n.toArray(), name, where: `${activeBody.name} · ${system.name}`, kind });
+}
+// Arrive just above a remembered place (or near its world, for an ark or a station).
+function arriveAtPlace(p) {
+    if (!p.n) { toast(`Fast travel: ${activeBody.name}. ${p.name} is near.`, 5); return; }
+    const n = vec(...p.n).normalize();
+    mode = "flight";
+    shipPosition.copy(n).multiplyScalar(surfaceRadius(n) + 260);
+    const f = tangent(Math.abs(n.y) < 0.95 ? Y.clone() : vec(1, 0, 0), n);
+    if (f.lengthSq() > 1e-9) shipForward.copy(f.normalize());
+    speed = verticalSpeed = 0; autoApproach = false; target = selectedBody = null;
+    camera.position.copy(shipPosition).addScaledVector(shipForward, -30).addScaledVector(n, 12);
+    toast(`Fast travel: above ${p.name}.`, 5);
+}
+function travelTo(p) {
+    if (!["flight", "space", "landed", "deep"].includes(mode)) return void toast("Fast travel leaves from the cockpit: board your ship first.", 4);
+    places.close();
+    starMap.close();
+    keys.clear();
+    if (p.star === loadedId && p.world === activeBody.id && !offChart) { arriveAtPlace(p); return; }
+    const star = starById(p.star);
+    if (!star) return;
+    setGoto(p);
+    jumping = true;
+    galaxyState.current = star.id;
+    galaxyState.visited.add(star.id);
+    saveGalaxyState(galaxyState);
+    try { sessionStorage.setItem("elsewhere-arrival", star.id); } catch {}
+    if (mode === "space") jumpAnim = { t: 0, duration: 2.6, aim: shipForward.clone() };
+    playJump(p.name, () => {
+        try { history.replaceState(null, "", `?star=${star.id}&world=${p.world}${params.has("dev") ? "&dev" : ""}`); } catch {}
+        location.reload();
+    });
+}
 const starMap = createStarMap({
     jumpRange: () => jumpRangeNow(),
     charted: () => { const now = performance.now(); if (now - chartedCache.at > 1000) chartedCache = { at: now, set: relations.effects().charted }; return chartedCache.set; },
@@ -4483,7 +4646,7 @@ const starMap = createStarMap({
     }),
     selectedBody: () => selectedBody,
     // The world view (starmap.js): the world you are at, and where on it you are.
-    currentBody: () => activeBody,
+    currentBody: () => mapFocus || activeBody, // (mapFocus: set as the map opens, see openMap)
     // Where the ship is in this system (system coordinates, metres), for the map's marker.
     shipInSystem: () => (mode === "deep" ? null : shipPosition.clone().add(worldOrigin).toArray()),
     shipNormal: (body) => body?.id === activeBody.id && !["space", "transit", "deep"].includes(mode) ? (mode === "walk" ? playerPos() : shipPosition).clone().normalize().toArray() : null,
@@ -4515,6 +4678,8 @@ const starMap = createStarMap({
         beginCruise();
     },
 });
+const places = placesPanel($("starMap"), travelTo); // the list of places you have been (places.js)
+$("mapPlacesBtn").onclick = () => places.toggle();
 function openGalaxy() {
     if ($("help").open || $("discovery").open) return;
     keys.clear();
@@ -4529,18 +4694,22 @@ try {
         sessionStorage.removeItem("elsewhere-arrival");
         start();
         arriveNear(activeBody);
-        // Out of the jump still moving: the ship glides in and settles where it used to appear.
-        const glide = 30000, back = glide / 2.6;
-        shipPosition.addScaledVector(shipForward, -back);
-        camera.position.addScaledVector(shipForward, -back);
-        speed = glide;
-        driveFade = 1;
-        drivePower = 0.8;
-        playArrival();
-        toast(
-            `Jump complete: ${system.name}, a ${system.star.physics.spectralClass} star with ${system.bodies.length} worlds. ${activeBody.name} is ahead.`,
-            6,
-        );
+        const goto = takeGoto(currentStar.id, activeBody.id);
+        if (goto) { playArrival(); arriveAtPlace(goto); } // (a fast-travel arrival: no glide in)
+        else {
+            // Out of the jump still moving: the ship glides in and settles where it used to appear.
+            const glide = 30000, back = glide / 2.6;
+            shipPosition.addScaledVector(shipForward, -back);
+            camera.position.addScaledVector(shipForward, -back);
+            speed = glide;
+            driveFade = 1;
+            drivePower = 0.8;
+            playArrival();
+            toast(
+                `Jump complete: ${system.name}, a ${system.star.physics.spectralClass} star with ${system.bodies.length} worlds. ${activeBody.name} is ahead.`,
+                6,
+            );
+        }
     }
 } catch {}
 // Not a jump arrival after all (or storage is blocked): show the start menu as usual.
