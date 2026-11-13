@@ -65,7 +65,7 @@ function pick(k) {
   for (const [i, d] of reg) if (from[i] !== k) anim[i] = { from: from[i], t: t0 + d * 16 };
   owned = reg; $('moves').textContent = today.moves; renderPal();
   blip(260 + Math.min(800, gained * 14), .12, .06); buzz(6);
-  if (reg.size === N * N) { today.done = true; today.res = [{ c: today.moves <= PAR ? 'g' : today.moves <= PAR + 3 ? 'y' : 'o' }]; setTimeout(() => finish(true), 900); }
+  if (reg.size === N * N) { today.done = true; today.res = [{ c: today.moves <= PAR + 1 ? 'g' : today.moves <= PAR + 4 ? 'y' : 'o' }]; setTimeout(() => finish(true), 900); }
   save();
 }
 function frame(now) {

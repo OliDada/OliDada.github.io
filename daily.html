@@ -30,6 +30,8 @@
       .dg-card:not(.is-going):not(.is-done) .dg-btn { opacity: .6; }
       .dg-sq { display: flex; gap: 4px; order: -1; }
       .dg-sq i { width: 13px; height: 13px; border-radius: 4px; border: 2px solid var(--ink); background: transparent; }
+      .dg-sep { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; margin: 2px 0 -4px; font-weight: 800; font-size: 13px; opacity: .55; }
+      .dg-sep::before, .dg-sep::after { content: ""; flex: 1; border-top: 2px dashed currentColor; }
       .dg-sq i.g { background: #2FB36D; } .dg-sq i.y { background: #F2B33D; } .dg-sq i.o { background: #F28A3D; } .dg-sq i.r { background: #F0563E; }
       @media (max-width: 1100px) { .daily-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
       @media (max-width: 860px) { .daily-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -71,14 +73,14 @@
               <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
             </span>
           </a>
-          <a class="dg-card stk" style="--g:#FFB8A8" aria-label="Pinpoint. Pin each shape at its balance point." href="/pinpoint/index.html" data-key="pinpoint:v1" data-field="res" data-launch="12">
-            <img src="data/thumbnails/pinpoint-thumbnail.png" alt="">
+          <a class="dg-card stk" style="--g:#D8C2FF" aria-label="Mix. Match the colour, one drop at a time." href="/mix/index.html" data-key="mix:v1" data-field="res" data-launch="12">
+            <img src="data/thumbnails/mix-thumbnail.png" alt="">
             <span class="dg-body">
               <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
             </span>
           </a>
-          <a class="dg-card stk" style="--g:#9FDCCF" aria-label="Ballpark. How big? How many? Guess the number." href="/ballpark/index.html" data-key="magnitude:v3" data-field="res" data-launch="12">
-            <img src="data/thumbnails/ballpark-thumbnail.png" alt="">
+          <a class="dg-card stk" style="--g:#FFB3A0" aria-label="Peek. Poke holes in the cover. Name the picture in as few peeks as you can." href="/peek/index.html" data-key="peek:v1" data-field="res" data-launch="13" data-rounds="3">
+            <img src="data/thumbnails/peek-thumbnail.png" alt="">
             <span class="dg-body">
               <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
             </span>
@@ -95,8 +97,8 @@
               <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
             </span>
           </a>
-          <a class="dg-card stk" style="--g:#D8C2FF" aria-label="Mix. Match the colour, one drop at a time." href="/mix/index.html" data-key="mix:v1" data-field="res" data-launch="12">
-            <img src="data/thumbnails/mix-thumbnail.png" alt="">
+          <a class="dg-card stk" style="--g:#D2C2FF" aria-label="Swap. Four hidden groups. Swap the words into the right rows." href="/swap/index.html" data-key="swap:v1" data-field="res" data-launch="13" data-rounds="4" data-kind="swap">
+            <img src="data/thumbnails/swap-thumbnail.png" alt="">
             <span class="dg-body">
               <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
             </span>
@@ -107,8 +109,8 @@
               <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
             </span>
           </a>
-          <a class="dg-card stk" style="--g:#D2C2FF" aria-label="Swap. Four hidden groups. Swap the words into the right rows." href="/swap/index.html" data-key="swap:v1" data-field="res" data-launch="13" data-rounds="4" data-kind="swap">
-            <img src="data/thumbnails/swap-thumbnail.png" alt="">
+          <a class="dg-card stk" style="--g:#FFB8A8" aria-label="Pinpoint. Pin each shape at its balance point." href="/pinpoint/index.html" data-key="pinpoint:v1" data-field="res" data-launch="12">
+            <img src="data/thumbnails/pinpoint-thumbnail.png" alt="">
             <span class="dg-body">
               <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
             </span>
@@ -125,14 +127,8 @@
               <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
             </span>
           </a>
-          <a class="dg-card stk" style="--g:#B9CCFF" aria-label="Spike. A year of Wikipedia views. Name the page from its graph." href="/spike/index.html" data-key="spike:v1" data-field="res" data-launch="13" data-rounds="3">
-            <img src="data/thumbnails/spike-thumbnail.png" alt="">
-            <span class="dg-body">
-              <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
-            </span>
-          </a>
-          <a class="dg-card stk" style="--g:#FFB3A0" aria-label="Peek. Poke holes in the cover. Name the picture in as few peeks as you can." href="/peek/index.html" data-key="peek:v1" data-field="res" data-launch="13" data-rounds="3">
-            <img src="data/thumbnails/peek-thumbnail.png" alt="">
+          <a class="dg-card stk" style="--g:#9FDCCF" aria-label="Ballpark. How big? How many? Guess the number." href="/ballpark/index.html" data-key="magnitude:v3" data-field="res" data-launch="12">
+            <img src="data/thumbnails/ballpark-thumbnail.png" alt="">
             <span class="dg-body">
               <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
             </span>
@@ -143,8 +139,8 @@
               <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
             </span>
           </a>
-          <a class="dg-card stk" style="--g:#FFE3A3" aria-label="Time Capsule. The most-read Wikipedia pages from a mystery day. Guess when." href="/capsule/index.html" data-key="capsule:v1" data-field="res" data-launch="13" data-rounds="3">
-            <img src="data/thumbnails/capsule-thumbnail.png" alt="">
+          <a class="dg-card stk" style="--g:#A9D6FF" aria-label="Trace. See a shape for three seconds. Draw it from memory." href="/trace/index.html" data-key="trace:v3" data-field="res" data-launch="13">
+            <img src="data/thumbnails/trace-thumbnail.png" alt="">
             <span class="dg-body">
               <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
             </span>
@@ -184,6 +180,13 @@
           else if (n > 0) { c.classList.add('is-going'); btn.textContent = `${n}/${rank ? 2 : rounds} done` + fire; }
           else btn.textContent = 'Not played' + fire;
         }
+        // Games already finished today move to the end, keeping their order.
+        const grid = document.querySelector('.daily-grid');
+        const played = cards.filter(c => c.classList.contains('is-done'));
+        if (played.length && played.length < cards.length) {   // a quiet divider before the finished ones
+          const sep = document.createElement('div'); sep.className = 'dg-sep'; sep.innerHTML = '<span>Played today</span>'; grid.appendChild(sep);
+        }
+        played.forEach(c => grid.appendChild(c));
         document.getElementById('dgDone').textContent = `${done} of ${cards.length} played`;
       })();
     </script>

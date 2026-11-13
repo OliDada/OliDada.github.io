@@ -189,7 +189,7 @@ function start(i) {
 function renderDots() { $('dots').innerHTML = items.map((_, i) => { const r = today.res[i]; return `<div class="dot ${r ? r.c : ''} ${i === I && !r ? 'on' : ''}"></div>`; }).join(''); }
 
 /* ---------- lock + reveal ---------- */
-function grade(km) { if (km <= 100) return ['g', 'Spot on']; if (km <= 500) return ['y', 'Close']; if (km <= 1500) return ['o', 'Right region']; return ['r', 'Way off']; }
+function grade(km) { if (km <= 250) return ['g', 'Spot on']; if (km <= 1000) return ['y', 'Close']; if (km <= 2500) return ['o', 'Right region']; return ['r', 'Way off']; }
 const pointsFor = km => Math.round(100 * Math.exp(-km / 1500));
 const fmtKm = km => Math.round(km).toLocaleString('en-US') + ' km';
 function lock() {

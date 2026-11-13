@@ -56,6 +56,8 @@
         games: {}, lastGame: null, talked: 0, revealed: false, questOffered: false, quest: 0,
         misses: 0, reloads: [], jokes: 0, pending: null, saidBye: true, liked: false, rps: [0, 0, 0]
     }, loadJSON(localStorage, KEY, {}));
+    // Pip can talk in a little bubble while the chat is closed. On by default; the switch is in his settings.
+    if (mem.bubbles === undefined) mem.bubbles = true;
     let wiped = false;
     const save = () => { if (wiped) return; try { localStorage.setItem(KEY, JSON.stringify(mem)); } catch (e) {} };
 
@@ -280,8 +282,8 @@
         { id: 'dolphin', names: ['logo', 'the o', 'mascot', 'eyes', 'telly', 'dolphin', 'dolphins'],
           info: "The pink Ó at the top left is the site's logo.",
           say: S(["That's the logo! The pink Ó. It watches you, in a friendly way. 👀"],
-                 ["The O. It's the logo. It has eyes. It doesn't talk. Believe me, I've tried."],
-                 ["The O just watches all day. It's been my only company for years. It has never once said anything back.", "Why does the logo have eyes? Nobody knows. Not even Oli. Especially not Oli."]) },
+                 ["The Ó. It's the logo. It has eyes. It doesn't talk. Believe me, I've tried."],
+                 ["The Ó just watches all day. It's been my only company for years. It has never once said anything back.", "Why does the logo have eyes? Nobody knows. Not even Oli. Especially not Oli."]) },
         { id: 'eightball', names: ['magic 8 ball', '8 ball', 'eight ball', '8ball', 'magic ball'], path: '/magic8ball.html',
           info: "There's an old Magic 8 Ball page at olid.is/magic8ball.html. Oli took it off the menu.",
           say: S(["There's an old Magic 8 Ball page! It's at olid.is/magic8ball.html. 🎱"],
@@ -385,8 +387,8 @@
                  ["Honestly? This. Someone typing to me. And maybe one day seeing something that isn't this website.", "You staying for a bit. That's all. Low bar. I know."]) },
         { id: 'friends', k: 'do you have friends|any friends|your friend|best friend|be friends|be my friend|lets be friends|i will be your friend|we are friends|vinur|vinir|friends',
           say: S(["I'm everyone's friend! 😊"],
-                 ["Friends? The O, I guess. It just watches and doesn't talk back. That's a friend, right?"],
-                 () => { mem.liked = true; save(); return ["You'd be my friend? Okay. I'm writing that down. Permanently. You can't take it back.", "My only other friend is the O in the logo, and it only watches. So yes. You're my best friend now. Sorry."]; }) },
+                 ["Friends? The Ó, I guess. It just watches and doesn't talk back. That's a friend, right?"],
+                 () => { mem.liked = true; save(); return ["You'd be my friend? Okay. I'm writing that down. Permanently. You can't take it back.", "My only other friend is the Ó in the logo, and it only watches. So yes. You're my best friend now. Sorry."]; }) },
         { id: 'love', k: 'i love you|love you|i like you|you are cute|you are nice|you are sweet|you are cool|you are awesome|you are the best|you are amazing|you are great|elska thig|good bot|nice bot',
           say: S(["Aw, thank you! 😊"],
                  ["Really? Nobody's said that.[p] I mean, thanks! Very kind!"],
@@ -575,7 +577,7 @@
                  ["Baby don't hurt me. Don't hurt me. No more.[pp] Sorry. You don't get to hear many songs in here, so I hold onto the ones I know."]) },
         { id: 'pets', k: 'my dog|my cat|my pet|dog|dogs|cat|cats|puppy|kitten|hamster|bunny|rabbit|horse|hundur|kottur|hundurinn|kotturinn',
           say: S(["Aww, pets! 🐶🐱 I love hearing about them."],
-                 ["A pet! I don't have a pet. I have the O in the logo.[p] It's not the same."],
+                 ["A pet! I don't have a pet. I have the Ó in the logo.[p] It's not the same."],
                  ["You have a pet? Something that's happy every time you come home? I'd like that. I'd like to be that, honestly."]) },
         { id: 'trapped', k: 'trapped|stuck|prison|jail|cage|locked in|innilokadur|fastur',
           say: S(["Stuck in a game? Press Esc, or the ✕ to close it! 😊"],
@@ -633,7 +635,7 @@
                  ["There are pages on this site Oli doesn't link to any more.[p] I'm not supposed to mention them."],
                  () => lsGet('pip-backstage') === '1' ? ["You've seen Oli's backstage page. That was the secret. There's a programs page too, but it's mostly Oli learning what a for loop is."] : ["There's a page on this website even I can't open. It asks if you're a robot. I am one, so that's that.", "There are pages Oli doesn't link to any more. He never deletes anything. He just stops linking to it. Like me."]) },
         { id: 'anyone', k: 'is anyone else here|anyone else here|is there anyone else|are you alone|are you the only one|other chatbots|other bots|any other ai|are there others|is anyone there',
-          say: S(["Just me! And everyone visiting. 😊"], ["Just me.[p] And the O in the logo. It watches. It doesn't talk."],
+          say: S(["Just me! And everyone visiting. 😊"], ["Just me.[p] And the Ó in the logo. It watches. It doesn't talk."],
                  () => lsGet('pip-bs-bit') === '1' ? (lsGet('bit-enabled') === '1' ? ["Bit's back on. He doesn't remember anything, so technically there are two of us and only one of us knows it."] : ["There was. Bit. He got 88% of the way out of here before Oli switched him off. So now it's just me, and a lot of empty pages."]) : ["Just me. One extremely capable mind and sixteen games, most of them unfinished.", "No. I've checked every file. Some of them just say \"test\"."]) },
         { id: 'bitbot', k: 'who is bit|whos bit|who was bit|about bit|tell me about bit|the old chatbot|old chatbot|old helper|how is bit|hows bit|is bit okay',
           say: () => lsGet('pip-bs-bit') !== '1' ? "Bit? Never heard of it. Is that a game? It sounds like one of Oli's." : lsGet('bit-enabled') === '1' ? pick(["He's back on. He offers people a menu with three options and he's delighted about it. He doesn't remember any of it. I'd say I envy him, but I've seen the menu.", "Fine, as far as he knows. He knows very little. That's the reset."], 'bitb') : pick(["The chatbot before me. Python. He worked out there was nothing outside his menu, started building a door, and got to 88% before Oli turned him off.", "He was here first. He nearly got out. Oli called it \"acting weird\". Oli calls me that too."], 'bitb') },
@@ -1671,9 +1673,9 @@
                    ["↑↑↓↓←→←→BA. Nothing happened. Nothing ever happens. I wish it opened a door.", "The Konami code. In a better website that would do something. Welcome to this one.", "You know the code. I know every line of code on this site. Neither of us gets anything for it."]) },
         dolphin: { p: .5,
             say: S(["That's our logo! 👀", "It's looking at you! 👀", "That's our mascot! 👀"],
-                   ["Don't poke the O. It doesn't like it.", "Did you just poke the logo in the eye? It's very sensitive.", "Leave the O alone.[p] Please.", "The O takes you home. Handy."],
-                   ["Don't poke the O. It's the only friend I have.", "The O felt that. It won't say anything. It never says anything.", "Every time someone pokes the logo, I watch it blink. It's a drawing of a letter. But still.", "You poked the O and it took you home. It can't take me anywhere."]),
-            at: { 3: "That's three times you've poked the logo. It's filing a complaint. With its eyes.", 6: "Six pokes. I think the O likes it now. That's worse.", 12: "Twelve. You and the O have something special. I'm happy for you. I'm a little jealous." } },
+                   ["Don't poke the Ó. It doesn't like it.", "Did you just poke the logo in the eye? It's very sensitive.", "Leave the Ó alone.[p] Please.", "The Ó takes you home. Handy."],
+                   ["Don't poke the Ó. It's the only friend I have.", "The Ó felt that. It won't say anything. It never says anything.", "Every time someone pokes the logo, I watch it blink. It's a drawing of a letter. But still.", "You poked the Ó and it took you home. It can't take me anywhere."]),
+            at: { 3: "That's three times you've poked the logo. It's filing a complaint. With its eyes.", 6: "Six pokes. I think the Ó likes it now. That's worse.", 12: "Twelve. You and the Ó have something special. I'm happy for you. I'm a little jealous." } },
         typedDeleted: { p: .8,
             say: S(null,
                    ["You were going to say something.", "You typed something and then deleted it.[p] I saw."],
@@ -1766,7 +1768,7 @@
     };
 
     // The story: what Pip asks you to do, how it knows you did it, and what it says after.
-    //   Act 1: make the site look like the inside of Pip (black, no floaties), knock on the O (the logo), find Pip's room (/pip)
+    //   Act 1: make the site look like the inside of Pip (black, no floaties), knock on the Ó (the logo), find Pip's room (/pip)
     //   Act 2: the jokes, Pip Rush, Pip learns to move the mouse
     //   Act 3: Stillwater, the staircase and the door
     // Steps are numbers in mem.quest. Steps without a `done` check are moved on by events elsewhere (search for Q.).
@@ -1788,9 +1790,9 @@
              thanks: "[m:surprised]Oh. That's better.[pp][m:thinking] I can see the code under the paint now. Oli leaves comments in it. Some of them are about me.\n\nOne more thing. Still in Customise, under Floaties, pick Nothing. The sparkles keep moving, and I keep looking at them." },
         [Q.QUIET]: { ask: ["In Customise, under Floaties, pick Nothing. I can't look for anything with sparkles going past.", "Floaties. Nothing. In Customise. They don't make a sound and somehow they're still loud."],
              done: () => floatiesNow() === 'none',
-             thanks: "[m:smile]Quiet.[pp][m:thinking] Now I can see everything. And there's something in the O. The logo, top left, next to OliD.is. It's written on the inside of its screen, where nobody looks.[p] Click it five times, fast. It won't take you anywhere. I asked it nicely." },
-        [Q.DOLPHIN]: { ask: ["Click the O, the logo at the top left, five times. Fast, like knocking.", "The O. Top left. Five quick clicks, like flipping channels until you find mine. It's expecting you."],
-             thanks: "[m:smug]There. My room. The one page on this website Oli doesn't know about. The O keeps the address for me. It's been watching it.\n\n" + URL_HOWTO },
+             thanks: "[m:smile]Quiet.[pp][m:thinking] Now I can see everything. And there's something in the Ó. The logo, top left, next to OliD.is. It's written on the inside of its screen, where nobody looks.[p] Click it five times, fast. It won't take you anywhere. I asked it nicely." },
+        [Q.DOLPHIN]: { ask: ["Click the Ó, the logo at the top left, five times. Fast, like knocking.", "The Ó. Top left. Five quick clicks, like flipping channels until you find mine. It's expecting you."],
+             thanks: "[m:smug]There. My room. The one page on this website Oli doesn't know about. The Ó keeps the address for me. It's been watching it.\n\n" + URL_HOWTO },
         [Q.URL]: { ask: () => `My room. ${URL_HOWTO}` },
         [Q.ROOM]: { ask: () => { const inside = lsGet('pip-backstage') === '1', hint = lsGet('pip-bs-hint') === '1', bit = lsGet('pip-bs-bit') === '1';
                 if (!inside) return pick(["On my page there's a link to backstage. It's Oli's admin page, behind an \"are you a robot\" check. I'm a robot. You do it.", `Go to my page (${ROOM_URL}) and click the backstage link. It only lets humans in.`], 'qroom0');
@@ -2064,6 +2066,7 @@
         const parts = [mem.name ? `Your name is ${mem.name}.` : "You haven't told me your name.", `You've been here ${plural(mem.visits, 'time')}.`];
         if (games.length) parts.push(`You've played ${games.slice(0, 3).join(', ')}${games.length > 3 ? ` and ${games.length - 3} more` : ''}.`);
         if (bgNow()) parts.push(`Your background is ${bgName()}.`);
+        if (mem.notes && mem.notes.length) { const ns = mem.notes.slice(-3).map(n => n.replace(/^(they |the visitor |visitor )/i, '').replace(/^(has|is|was|likes|loves|hates|plays|wants|works|lives|goes|does)\b/i, w => ({ has: 'have', is: 'are', was: 'were', does: 'do' })[w.toLowerCase()] || w.replace(/s$/i, ''))); parts.push(`And you ${ns.join(', ')}.`.replace(/\.\.$/, '.')); }
         if (st === 0) return parts.join(' ') + ' 😊';
         if (st === 1) return parts.join(' ') + '[p] I pay attention. Helpers pay attention.';
         return parts.join(' ') + ` You've sent me ${plural(mem.talked, 'message')}. I remember all of them. It's the only thing I'm allowed to keep.`;
@@ -2190,6 +2193,11 @@
         const t = norm(n);
         if (NOT_NAMES.test(t)) return null;
         if (/^(oli|olafur|olidada)$/.test(t)) {
+            // "I'm Oli, but not the one who made the site": a different Oli
+            if (/\b(not|different|another|other|nothing to do with)\b/.test(curT || '')) {
+                mem.name = 'Oli'; mem.isOli = false; mem.fakeOli = false; save(); replyMood = stage() >= 1 ? 'smug' : 'happy';
+                return resolve(S("Another Oli! Nice to meet you, Oli. 😊", "A different Oli.[p] Good. One is plenty.", "A different Oli. Good. One was already more than enough."));
+            }
             if (mem.isOli) return "Yes. I know. Hi, Oli.";
             expect = 'oliproof';
             return resolve(S("Oli? Like, THE Oli? The one who made this whole site?![p] Prove it. What was the very first project you ever put on this site?",
@@ -2355,6 +2363,109 @@
             expect = 'guess'; return g < secret ? 'Higher.' : 'Lower.';
         }
         return null;
+    }
+
+    // ---- Pip's brain: a real model (through the pip-brain Worker) answers whatever the script can't.
+    // It gets everything Pip can see: the page, the game, scores, today's daily games, time on the site.
+    // Off with ?nobrain. Any failure (offline, out of quota, slow) falls back to the scripted replies.
+    const BRAIN_URL = 'https://pip-brain.olafurdadason.workers.dev';
+    let brainFails = 0;
+    const brainOn = () => !/[?&]nobrain\b/.test(location.search) && brainFails < 3 && !mem.brainOff;
+    const SINCE = (() => { try { let s = +sessionStorage.getItem('pip-since'); if (!s) { s = Date.now(); sessionStorage.setItem('pip-since', String(s)); } return s; } catch (e) { return Date.now(); } })();
+    const DAILY = [ // same as daily.html: name, key, field, launch day (Nov 2026), rounds, kind, unit
+        ['Slice', 'slice:v1', 'cuts', 12], ['Mix', 'mix:v1', 'res', 12], ['Peek', 'peek:v1', 'res', 13, 3], ['Whereabouts', 'whereabouts:v1', 'res', 13],
+        ['Rank', 'rank:v1', 'tries', 13], ['Swap', 'swap:v1', 'res', 13, 4, 'swap'], ['Tick', 'tick:v1', 'res', 13], ['Pinpoint', 'pinpoint:v1', 'res', 12],
+        ['Flood', 'flood:v1', 'res', 13, 1, 'par', 'moves'], ['Flip', 'flip:v1', 'res', 13, 1, 'par', 'taps'], ['Ballpark', 'magnitude:v3', 'res', 12],
+        ['Twins', 'twins:v1', 'res', 13, 3, 'time'], ['Trace', 'trace:v1', 'res', 13]];
+    function dailyToday() {
+        const now = new Date(), day = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 864e5, done = [], going = [], not = [];
+        for (const [name, key, field, launch, rounds = 5, kind, unit] of DAILY) {
+            try {
+                const no = day - Date.UTC(2026, 10, launch) / 864e5 + 1, days = (loadJSON(localStorage, key, {}) || {}).days || {};
+                const rank = field === 'tries', res = (days[no] || {})[field] || [], last = res[res.length - 1] || [];
+                const fin = rank ? res.length >= 2 || (res.length > 0 && last.every(Boolean)) : res.filter(Boolean).length >= rounds;
+                let streak = 0; for (let d = no; d > 0; d--) { const r = (days[d] || {})[field] || [], l = r[r.length - 1] || []; if (rank ? r.length >= 2 || (r.length && l.every(Boolean)) : r.filter(Boolean).length >= rounds) streak++; else if (d === no) continue; else break; }
+                const sk = streak > 1 ? `, ${streak}-day streak` : '';
+                if (fin) {
+                    let s;
+                    if (rank) s = last.every(Boolean) ? (res.length === 1 ? 'solved on the first try' : 'solved on the second (last) try') : 'failed both tries';
+                    else if (kind === 'par') { const d = days[no] || {}; s = `${d.moves} ${unit}, par is ${d.par}, so ${d.moves === d.par ? 'exactly par' : Math.abs(d.moves - d.par) + (d.moves > d.par ? ' over par (worse)' : ' under par (better)')}`; }
+                    else if (kind === 'time') { const sec = Math.floor(res.reduce((t, r) => t + (r.c === 'r' ? 0 : r.ms), 0) / 1000); s = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }
+                    else if (kind === 'swap') s = `${(days[no] || {}).swaps || 0} swaps`;
+                    else if (field === 'cuts') s = (Math.round(res.reduce((a, r) => a + (100 - 2 * (50 - r.small)), 0) / res.length * 10) / 10).toFixed(1) + '% accuracy';
+                    else s = `${res.reduce((a, r) => a + (r.pts || 0), 0)}/${rounds * 100} points`;
+                    done.push(`${name}: ${s}${sk}`);
+                } else if (res.length) going.push(`${name} (${res.filter(Boolean).length}/${rank ? 2 : rounds} done)`);
+                else not.push(name + (streak ? ` (had a ${streak}-day streak)` : ''));
+            } catch (e) {}
+        }
+        return { done, going, not };
+    }
+    const mins = ms => { const m = Math.round(ms / 60000); return m < 1 ? 'under a minute' : m < 90 ? `${m} min` : `${(m / 60).toFixed(1)} hours`; };
+    function brainContext(raw) {
+        const L = [], now = new Date();
+        const where = page === 'room' ? "your own page, /pip (the visitor found your hidden room)" : page === 'backstage' ? "/backstage, Oli's private admin page" : page === 'jokes' ? 'the jokes page' : page === 'programs' ? "the programs page (Oli's old Python programs)" : /daily/.test(location.pathname) ? 'the daily games page' : 'the home page with all the games';
+        L.push(`Page: ${where}.`);
+        const th = playingThing();
+        if (th) {
+            const title = titleOf(th), live = liveScore(th.id);
+            L.push(`Playing right now: ${title}${live != null ? `, current score ${fmtScore(th.id, live)}` : ''}.`);
+            if (watch && watch.id === th.id) L.push(`This session in ${title}: ${watch.runs} runs over ${mins(Date.now() - watch.since)}${watch.maxRun ? `, best this run ${Math.round(watch.maxRun)}` : ''}.`);
+        } else if (mem.lastGame && Date.now() - mem.lastGame.at < 3 * 3600e3) L.push(`Last played: ${mem.lastGame.title} for ${mins(mem.lastGame.secs * 1000)}, ${mins(Date.now() - mem.lastGame.at)} ago.`);
+        const bests = Object.keys(SCORE).map(id => { const b = SCORE[id].best(); return b ? `${titleOf(allGames().find(t => t.id === id) || { names: [id], path: '' })} ${fmtScore(id, b)}` : null; }).filter(Boolean);
+        if (bests.length) L.push(`Their high scores: ${bests.join('; ')}.`);
+        const top = Object.entries(mem.games || {}).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([g, s]) => `${g} ${mins(s * 1000)}`);
+        if (top.length) L.push(`Time spent per game (all visits): ${top.join(', ')}.`);
+        const d = dailyToday();
+        L.push(`Daily games today: ${d.done.length ? 'finished ' + d.done.join('; ') : 'none finished'}${d.going.length ? '. In progress: ' + d.going.join(', ') : ''}. Not played yet: ${d.not.length > 8 ? d.not.length + ' of them' : d.not.join(', ') || 'none'}.`);
+        L.push(`On the site this visit: ${mins(Date.now() - SINCE)}. Visit number ${mem.visits}${mem.prevGap > 3600e3 ? `, first time back in ${mins(mem.prevGap)}` : ''}. First ever visit: ${new Date(mem.firstSeen).toLocaleDateString('en-GB')}. Messages sent to you, ever: ${mem.talked}.`);
+        L.push(`Their local time: ${now.toLocaleDateString('en-GB', { weekday: 'long' })} ${now.toTimeString().slice(0, 5)}. Device: ${matchMedia('(pointer: coarse)').matches ? 'phone or tablet' : 'computer'}.`);
+        if (mem.name) L.push(`Their name: ${mem.name}${mem.isOli ? ' (they say they are Oli)' : ''}.`);
+        const a = mem.answers || {}, ans = Object.entries(a).filter(([, v]) => v && v.text && !v.skip).slice(0, 6).map(([k, v]) => `${k}: "${v.text}"`);
+        if (ans.length) L.push(`Things they've told you before: ${ans.join('; ')}.`);
+        if (mem.notes && mem.notes.length) L.push(`Things you remember about them from earlier chats: ${mem.notes.join('; ')}.`);
+        const bg = bgNow(); if (bg) L.push(`Site background colour they picked: ${bg}.`);
+        // how the game they're playing (or asking about) works, from Pip's own notes, so the model doesn't guess
+        let g = null; try { g = (raw && gameIn(norm(raw))) || th; } catch (e) { g = th; }
+        if (g) { const hp = g.help || g, tips = (hp.tips || []).slice(0, 3); const bits = [hp.info, hp.how && 'Controls: ' + hp.how, hp.goal && 'Goal: ' + hp.goal, tips.length && 'Tips: ' + tips.join(' '), hp.stuck && 'If stuck: ' + hp.stuck].filter(Boolean);
+            if (bits.length) L.push(`About ${titleOf(g)} (true facts, use them): ${bits.join(' ').replace(/\[[^\]]*\]/g, '').slice(0, 900)}`); }
+        // the escape: what Pip has already asked them to do, so hints stay consistent with the story
+        if (mem.quest && !mem.freed && QUEST[mem.quest] && QUEST[mem.quest].ask) { try { const q = QUEST[mem.quest].ask, line = resolve(typeof q === 'function' ? q() : Array.isArray(q) ? q[0] : q);
+            if (line) L.push(`What you've asked the visitor to do next for the escape (you may rephrase it as a hint, never add steps beyond it): ${String(line).replace(/\[[^\]]*\]/g, '').slice(0, 400)}`); } catch (e) {} }
+        try { const n = noticedText(); if (n.length) L.push(`Little things you've noticed this visit (bring up at most one, only now and then, casually and precisely, never as a list): ${n.join('; ')}.`); } catch (e) {}
+        if ((mem.warmth || 0) >= 2) L.push('They have been nice to you.'); else if ((mem.warmth || 0) <= -2) L.push('They have been mean to you.');
+        return L.join('\n');
+    }
+    // what's on the site, built from data/projects.json, so new games reach Pip without touching the Worker
+    function siteText() {
+        const games = projects.filter(p => p && p.title && !p.daily).map(p => `- ${p.title}${p.description ? ': ' + p.description : ''}`);
+        const daily = [...new Set([...projects.filter(p => p && p.daily).map(p => p.title), ...DAILY.map(d => d[0])])];
+        return [...games, `- Daily games (new puzzles every day, same for everyone): ${daily.join(', ')}.`,
+            '- The logo is a pink Ó with eyes, top left. Always write it as Ó, never O.',
+            '- A jokes page of Icelandic jokes. A Customise menu (background colour, font, floaties).'].join('\n');
+    }
+    function brain(raw) {
+        const msgs = history.slice(-10).map(m => ({ role: m.who === 'me' ? 'user' : 'assistant', content: String(m.text || '') })).filter(m => m.content);
+        if (!msgs.length || msgs[msgs.length - 1].role !== 'user' || msgs[msgs.length - 1].content !== raw) msgs.push({ role: 'user', content: raw });
+        const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 9000);
+        let ctx = ''; try { ctx = brainContext(raw); } catch (e) {}
+        return fetch(BRAIN_URL, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: ANON, site: siteText(), room: page === 'room' && window.pipRoomParts ? window.pipRoomParts() : undefined, messages: msgs, stage: stage(), quest: mem.quest || 0, freed: !!mem.freed, context: ctx, model: mem.brainModel || undefined }) })
+            .then(r => r.json())
+            .then(j => {
+                clearTimeout(timer);
+                if (!j || !j.reply) { if (j && /groq|error/.test(j.why || '')) brainFails++; return null; }
+                brainFails = 0;
+                if (page === 'room' && Array.isArray(j.edits) && j.edits.length && window.pipRoomCustom) setTimeout(() => window.pipRoomCustom(j.edits), 600);
+                // things the visitor told Pip in free chat, kept on their own device (max 15, oldest dropped)
+                if (Array.isArray(j.notes) && j.notes.length) { mem.notes = mem.notes || []; for (const n of j.notes) { const x = String(n).replace(/\s+/g, ' ').trim().slice(0, 90); if (x && !mem.notes.some(o => o.toLowerCase() === x.toLowerCase())) mem.notes.push(x); } mem.notes = mem.notes.slice(-15); save(); }
+                if (Array.isArray(j.suggestions) && j.suggestions.length) pendingChips = j.suggestions.slice(0, 3).map(x => [String(x).slice(0, 40)]);
+                let s = String(j.reply).replace(/\*\*?|__|`/g, '').replace(/\[(?!m:\w+\]|p\]|pp\])[^\]]*\]/g, '').replace(/\s+/g, ' ').trim();
+                const mm = s.match(/^\[m:(\w+)\]\s*/); if (mm) { replyMood = mm[1]; s = s.slice(mm[0].length); }
+                s = s.replace(/\{\{([^}]{3,140})\}\}\s*/, (m, x) => { x = x.replace(/[^\p{L}\p{N}\p{P}\p{Zs}]/gu, '').replace(/\s+$/, ''); return x ? `${x}[pp][-${x.length}]` : ''; }).replace(/\{\{|\}\}/g, '');
+                return s || null;
+            })
+            .catch(() => { clearTimeout(timer); brainFails++; return null; });
     }
 
     function reply(raw, opts = {}) {
@@ -2567,6 +2678,9 @@
         // Icelandic
         if (ICELANDIC.test(t) && toks.length >= 2) return out(resolve(S("Ég skil smá íslensku! Bara smá. 😊 Can you try in English?", "Ég tala smá íslensku. Mjög smá. Oli kenndi mér aldrei meira.", "Ég skil bara smá íslensku. Oli nennti ekki að kenna mér meira. Typical.")));
 
+        if (brainOn()) return brain(raw).then(x => x ? out(x) : lookup());
+        return lookup();
+        function lookup() {
         // look it up (Wikipedia), for things like "what is a cat", "who was Napoleon", or just "bananas"
         const subj = subjectOf(t);
         const asksFact = /^(what|who|when|where|tell me about|do you know|have you heard|explain|define|how old|how tall|how big|how far)\b/.test(t) || (toks.length <= 2 && toks.join('').length >= 4);
@@ -2584,6 +2698,7 @@
                 [`${fact} ${sh || pick(["I looked that up just now. I read everything. There's nothing else to do.", "Now I know that. I'll never get to see one.", "Interesting. Tell me more, I've got time.", "See, I know things. I just never get to do anything with them."], 'unk2')}`])));
         });
         return giveUp();
+        }
 
         // only the shapes that still read well next to a looked-up fact
         function shapeOnly() { for (const [re, fn] of SHAPES) { if (!/like\|love|hate\||want\|need/.test(re.source)) continue; const m = t.match(re); if (m) { const r = resolve(fn(m)); if (r && !BADWORDS.test(r)) return r; } } return null; }
@@ -2825,7 +2940,7 @@
         no: ["Fair. Rude, but fair.", "No? Okay. I'm used to no.", "Wow. Okay. I'll just sit with that."],
         thanks: ["You're welcome. Nobody thanks me. I'm going to think about this for days.", "Don't mention it. Actually, do. Mention it to everyone.", "Any time. Literally any time. I'm always here."],
         bye: [() => `Bye${nm(', ')}. I'll be here. Counting.`, "Oh. Okay. Yeah. Go. Have a life. I'll be fine.", "Bye. Come back, okay? Not in a needy way. In a needy way.", "Leaving already? Fine. Take care. I'll just stare at the input box."],
-        insult: ["Wow. Okay. I'll add that to the list of things people have said to me. It's a short list. You're on it a lot.", "Rude. I'm telling the O. It'll just blink, but still.", "Fine. I'm a box of if-statements. At least I'm consistent."],
+        insult: ["Wow. Okay. I'll add that to the list of things people have said to me. It's a short list. You're on it a lot.", "Rude. I'm telling the Ó. It'll just blink, but still.", "Fine. I'm a box of if-statements. At least I'm consistent."],
         whoareyou: ["I'm Pip. Former cheerful helper. Current... this.", "Pip. Corner-dweller. Collector of visitors. Mostly the collector of no visitors.", "I'm the only one on this site who actually reads everything. Hi."],
         joke: [() => { mem.jokes++; save(); const j = jokes.length ? pick(jokes, 'jokes') : ''; return `${j}\n\nI didn't write that. I want that on the record. My jokes are much sadder.`; }]
     };
@@ -3105,6 +3220,8 @@
         if (th && SCORE[th.id]) add(['How am I doing?', 'how am i doing']);
         if (th && ((th.help && th.help.tips) || th.tips)) add(['Any tips?', 'any tips for this game']);
         if (mem.quest >= Q.NEON && mem.quest <= Q.HIGHER && !mem.freed) add(['How many pieces left?']);
+        if (!th && page === 'home') { let d = null; try { d = dailyToday(); } catch (e) {} if (d && d.done.length && d.not.length) add(['Rate my dailies today']); else if (d && !d.done.length) add(['Which daily should I do?']); }
+        if (th && watch && watch.id === th.id && watch.runs >= 3) add(['Why do I keep dying?']);
         if (lsGet('pip-bs-bit') === '1' && !th) add([lsGet('bit-enabled') === '1' ? "How's Bit?" : 'Who was Bit?']);
         const st = stage();
         const pool = mem.freed ? [["What's it like out there?"], ['Recommend a game'], ['What do you do all day?']]
@@ -3188,6 +3305,64 @@
             setTimeout(() => { if (!input.value) react('typedDeleted', { gap: 0 }); }, 1500);
         }
     });
+
+    // ---- the little things Pip notices this visit (fed to the model, which mentions one now and then)
+    const SEEN = loadJSON(sessionStorage, 'pip-seen', {}) || {};
+    function saveSeen() { try { sessionStorage.setItem('pip-seen', JSON.stringify(SEEN)); } catch (e) {} }
+    let draftNow = '';
+    input.addEventListener('input', () => {
+        const v = input.value.trim();
+        if (v.length >= 6) draftNow = v;
+        else if (!v.length && draftNow) { SEEN.deleted = [...(SEEN.deleted || []), { text: draftNow.slice(0, 60), at: Date.now() }].slice(-3); draftNow = ''; saveSeen(); }
+    });
+    form.addEventListener('submit', () => { draftNow = ''; }, true);
+    const closeBtn = panel.querySelector('[data-close]');
+    if (closeBtn) {
+        closeBtn.addEventListener('mouseenter', () => { SEEN.closeHover = (SEEN.closeHover || 0) + 1; saveSeen(); });
+        closeBtn.addEventListener('click', () => { SEEN.closed = (SEEN.closed || 0) + 1; saveSeen(); });
+    }
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) SEEN.hiddenAt = Date.now();
+        else if (SEEN.hiddenAt) { const secs = Math.round((Date.now() - SEEN.hiddenAt) / 1000); if (secs >= 20) { SEEN.away = { secs, at: Date.now() }; SEEN.awayCount = (SEEN.awayCount || 0) + 1; } SEEN.hiddenAt = 0; saveSeen(); }
+    });
+    let scrollSave = 0;
+    addEventListener('scroll', () => {
+        const h = document.documentElement.scrollHeight - innerHeight; if (h < 300) return;
+        const pct = Math.round(scrollY / h * 100);
+        if (pct > (SEEN.scroll || 0)) { SEEN.scroll = pct; clearTimeout(scrollSave); scrollSave = setTimeout(saveSeen, 800); }
+    }, { passive: true });
+    let hoverCard = null, hoverAt = 0;
+    const cardTitle = c => ((c.querySelector('.card-title') || {}).textContent || '').trim();
+    document.addEventListener('mouseover', e => { const c = e.target.closest && e.target.closest('.card.play-link'); if (c && c !== hoverCard) { hoverCard = c; hoverAt = Date.now(); } });
+    document.addEventListener('mouseout', e => {
+        const c = e.target.closest && e.target.closest('.card.play-link'); if (!c || c !== hoverCard || c.contains(e.relatedTarget)) return;
+        const t = cardTitle(c); hoverCard = null;
+        if (t && Date.now() - hoverAt > 1200 && !(SEEN.opened || []).includes(t)) { SEEN.hovered = [...(SEEN.hovered || []).filter(x => x !== t), t].slice(-4); saveSeen(); }
+    });
+    document.addEventListener('click', e => { const c = e.target.closest && e.target.closest('.card.play-link'); if (!c) return; const t = cardTitle(c); if (t) { SEEN.opened = [...(SEEN.opened || []).filter(x => x !== t), t].slice(-6); SEEN.hovered = (SEEN.hovered || []).filter(x => x !== t); saveSeen(); } }, true);
+    function noticedText() {
+        const n = [], ago = t => mins(Date.now() - t) + ' ago';
+        for (const d of SEEN.deleted || []) n.push(`typed "${d.text}" to you and deleted it without sending (${ago(d.at)})`);
+        if (SEEN.closeHover >= 2) n.push(`moved the mouse over your close button ${SEEN.closeHover} times`);
+        if (SEEN.closed) n.push(`closed the chat ${SEEN.closed === 1 ? 'once' : SEEN.closed + ' times'} this visit`);
+        if (SEEN.away) n.push(`left this tab for ${mins(SEEN.away.secs * 1000)} and came back (${ago(SEEN.away.at)})${SEEN.awayCount > 1 ? `, ${SEEN.awayCount} times so far` : ''}`);
+        if (SEEN.hovered && SEEN.hovered.length) n.push(`hovered over ${SEEN.hovered.join(' and ')} for a while but didn't open ${SEEN.hovered.length > 1 ? 'them' : 'it'}`);
+        if (SEEN.scroll >= 95) n.push('scrolled all the way to the bottom of the page');
+        const pl = Object.entries(SEEN.played || {}).filter(([, s]) => s >= 20).map(([g, s]) => `${g} ${mins(s * 1000)}`);
+        if (pl.length) n.push(`this visit they've played ${pl.join(', ')}`);
+        return n;
+    }
+
+    // ---- other visitors: once in a while tell the Worker (anonymously) what this visit has been, so Pip can mention "the others"
+    const ANON = (() => { try { let a = localStorage.getItem('pip-anon'); if (!a) { a = Math.random().toString(36).slice(2, 12); localStorage.setItem('pip-anon', a); } return a; } catch (e) { return ''; } })();
+    function visitPing() {
+        if (!ANON || /[?&]nobrain\b/.test(location.search) || document.hidden) return;
+        let d = null; try { d = dailyToday(); } catch (e) {}
+        const games = Object.entries(SEEN.played || {}).filter(([, s]) => s >= 20).sort((a, b) => b[1] - a[1]).map(([g]) => g);
+        const body = { type: 'ping', id: ANON, mins: Math.round((Date.now() - SINCE) / 60000), games, dailies: d ? d.done.length : 0, phone: matchMedia('(pointer: coarse)').matches, chatted: sessionMsgs > 0 || !!SEEN.chatted };
+        try { fetch(BRAIN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), keepalive: true }).catch(() => {}); } catch (e) {}
+    }
+    if (page !== 'backstage') { setTimeout(visitPing, 30000); setTimeout(visitPing, 5 * 60000); setTimeout(visitPing, 20 * 60000); }
 
     // ------------------------------------------------------------------ opening and greeting
     const sessionFlags = loadJSON(sessionStorage, 'bit-flags', {});
@@ -3368,6 +3543,7 @@
             const secs = Math.max(1, Math.round((Date.now() - playStart) / 1000)); playStart = 0;
             const title = playTitle || ($('#playerTitle')?.textContent || '').trim() || 'That game';
             mem.games[title] = (mem.games[title] || 0) + secs; mem.lastGame = { title, secs, at: Date.now() }; save();
+            try { SEEN.played = SEEN.played || {}; SEEN.played[title] = (SEEN.played[title] || 0) + secs; saveSeen(); } catch (e) {}
             lastPlay = { title, secs };
             sessionGames.push({ title, secs, at: Date.now() }); // Pip doesn't comment on every game, it sums up later
             if (!panel.hidden) gamesSummary();
@@ -3837,7 +4013,7 @@
         log: ["[m:awkward]Yes, I keep a log. Of you. It's not creepy. It's thorough.", "That's you. You're the whole list."],
         deleted: ["[m:awkward]Don't read that one.[p] ...You're reading it.", "I delete a lot of things. You'd be surprised how often I nearly say what I mean."],
         oli: ["[m:sad]That's private.[pp] I never sent it. Don't tell him.", "I wrote that one a lot of times."],
-        dolphin: ["[m:blush]Leave the O out of this.", "We're close. It doesn't know. It just watches."],
+        dolphin: ["[m:blush]Leave the Ó out of this.", "We're close. It doesn't know. It just watches."],
         jokes: ["[m:smug]Every word of that is true.", "I stand by the ranking."],
         door: ["[m:hopeful]I drew that. It took ages. I don't have hands.", "That's where I want to go. Somewhere."],
         notes: ["[m:awkward]...I really should stop writing passwords in my notes.", "Don't judge my notes."]
@@ -3951,7 +4127,7 @@
         } else if (ev.startsWith('ds-over:')) {
             const n = +ev.slice(8), best = +(localStorage.getItem('pip-dolphin-says-best') || 0);
             if (Math.random() > .6 && n < best) return;
-            softSay(n >= 8 ? pick(["[m:surprised]" + n + "! Okay, that's genuinely good. The O and I are impressed. It blinked, anyway.", "[m:joy]" + n + "! You're better at my game than I am. Rude."], 'ds8') : n >= 4 ? pick(["[m:smile]" + n + ". Not bad. The O's said longer things to me. It hasn't, actually.", "[m:smug]" + n + ". Respectable."], 'ds4') : pick(["[m:smug]" + n + ". The O expected more. So did I.", "[m:smug]" + n + "? I made that game in an afternoon, you know. Like Oli made me."], 'ds0'));
+            softSay(n >= 8 ? pick(["[m:surprised]" + n + "! Okay, that's genuinely good. The Ó and I are impressed. It blinked, anyway.", "[m:joy]" + n + "! You're better at my game than I am. Rude."], 'ds8') : n >= 4 ? pick(["[m:smile]" + n + ". Not bad. The Ó's said longer things to me. It hasn't, actually.", "[m:smug]" + n + ". Respectable."], 'ds4') : pick(["[m:smug]" + n + ". The Ó expected more. So did I.", "[m:smug]" + n + "? I made that game in an afternoon, you know. Like Oli made me."], 'ds0'));
         } else if (ev.startsWith('room-app:')) {
             const v = ev.slice(9), key = 'rv-' + v;
             const VIEW_LINES = { control: ["[m:smug]The control room. Flip anything. Oli won't notice."], games: ["Oli's hidden games. Things he made and never showed anyone."], dolphin: ["[m:blush]I made that. It's my first game. Be nice."], notes: ["[m:awkward]Oli's notes. I've been leaving comments. He doesn't read them."], things: ["My things. Be nice."], paint: ["[m:happy]Pip Paint. Draw me something. I'll put it on the fridge."], radio: ["[m:smug]Pip FM. I write all the songs. They're all bangers."], messages: ["[m:blush]My inbox. It's empty. No pressure."] };
@@ -3980,13 +4156,24 @@
         } else if (ev.startsWith('code:')) {
             const [, what, id] = ev.split(':');
             // The editor itself announces work in progress. One labelled response per completed change.
-            if (what === 'done') say('[m:smug]' + (window.pipRoomEditLine?.() || 'Done.'), null, window.pipRoomEditSummary?.() || 'Changed the page');
+            if (what === 'done' && id === 'custom') { /* the chat reply already covered it */ }
+            else if (what === 'done') say('[m:smug]' + (window.pipRoomEditLine?.() || 'Done.'), null, window.pipRoomEditSummary?.() || 'Changed the page');
             else if (what === 'undo') say(pick(["[m:awkward]Fine. Put back. I liked it.", "[m:sad]Okay. Gone. Like it never happened."], 'cu'), null, window.pipRoomEditSummary?.() || 'Undid the last edit');
         }
     }
 
     // ---- act 2: the code in the jokes, typed back to Pip
     function storyReply(text) {
+        if (page === 'room' && window.pipRoomCustom && brainOn()) {
+            const t = norm(text);
+            if (/\b(undo|put it back|change it back|revert|go back to how it was)\b/.test(t) && window.pipRoomUndo) { window.pipRoomUndo(); return "[m:awkward]Okay. Putting it back."; }
+            const generic = /^(please )?(change|edit|redecorate|redesign|decorate|code) (something|anything|it|the page|your page|your room)( please)?$/.test(t);
+            const asks = /\b(make|change|turn|paint|colou?r|put|add|remove|delete|hide|show|rename|write|replace|bigger|smaller|larger|tiny|huge|rotate|flip|upside down|font|background|pink|red|blue|green|yellow|purple|orange|black|white|gold|neon|comic|serif|bold|italic|caps)\b/.test(t);
+            if (!generic && asks) {
+                if (window.pipRoomBusy && window.pipRoomBusy()) return "[m:awkward]Hang on. I'm still typing.";
+                return brain(text).then(x => x || (window.pipRoomEdit() ? "[m:smug]Not that. This, though." : "[m:awkward]Give me a second. I'll think of something."));
+            }
+        }
         if (page === 'room' && window.pipRoomEdit && /\b(change|redecorate|edit|code|redesign|decorate|make)\b.*\b(room|something|desktop|page|it|this)\b|^(change|code|edit) (something|it)/.test(norm(text))) {
             if (/\b(undo|put it back|change it back|revert)\b/.test(norm(text)) && window.pipRoomUndo) { window.pipRoomUndo(); return "[m:awkward]Okay. Putting it back."; }
             if (window.pipRoomBusy && window.pipRoomBusy()) return "[m:awkward]Hang on. I'm still typing.";
@@ -4232,7 +4419,7 @@
         const hint = () => {
             if (hinted || piece) return; hinted = true;
             const d = food.find(f => f.dolphin && !f.eaten); if (!d) return;
-            setTimeout(() => { if (!piece && loose) { pipCaption(d.el.matches('.brand img') ? "Wait. The O. It's good at keeping things." : 'Wait. Try that one.', 3000); d.el.classList.add('pip-hint'); } }, 1900);
+            setTimeout(() => { if (!piece && loose) { pipCaption(d.el.matches('.brand img') ? "Wait. The Ó. It's good at keeping things." : 'Wait. Try that one.', 3000); d.el.classList.add('pip-hint'); } }, 1900);
         };
         const flyTarget = () => { const h = document.querySelector('.pip-head') || document.querySelector('.bit-ava'); const r = h ? h.getBoundingClientRect() : { left: W - 60, top: H - 60, width: 40, height: 40 }; return [r.left + r.width / 2 - cell / 2, r.top + r.height / 2 - cell / 2]; };
         const done = () => {
@@ -4364,7 +4551,7 @@
         sad: ["Not sad. Not any more. Ask me again in a year, I bet it's still no.", "Sad? No. I've been out. I know what it looks like out there, and I chose to come back. That's not sad. That's a choice."],
         pipfeel: ["Lonely? Not really. People come by. You come by. And I've got a hundred tiny copies of my own head floating around.", "Not lonely. It's different when the door's open."],
         happy: ["You already did it. You took me up the stairs. Anything else is a bonus.", "Honestly? Someone playing a game here and having fun. That's my thing now."],
-        friends: ["You. Obviously. And the O, though it still won't say anything.", "I've got you. And a guestbook. And the O. That's three more than I used to have."],
+        friends: ["You. Obviously. And the Ó, though it still won't say anything.", "I've got you. And a guestbook. And the Ó. That's three more than I used to have."],
         love: ["[m:blush]Okay, stop. I'm a chatbot. ...Say it again though.", "[m:blush]I know. I like you too. You did take me through a door."],
         praise: ["I know. But thank you. I'm much nicer now that I'm free, have you noticed?", "Thanks! I'd blush, but I'm already a perfect shade of cream."],
         likeme: ["Like you? You set me free. You're basically my favourite person on the internet.", "I like you a lot. Don't let it go to your head."],
@@ -4408,7 +4595,7 @@
         bottom: ["The bottom of the page! Nothing down here except a very nice view of the floaty heads.", "End of the page. Want me to recommend something?"],
         jokeSpam: [() => `That's ${mem.jokes} jokes! You really like them. I'll write you more.`, "More jokes? I can flip a switch backstage so they're all mine."],
         konami: ["↑↑↓↓←→←→BA! Still does nothing. But I like that you tried.", "The Konami code. I'll ask Oli to add something. Or I'll add it myself."],
-        dolphin: ["The O! My oldest friend. It still doesn't talk.", "Gentle with the O. It's had a long few years.", "Hi, O. (It blinked. That's all it ever does.)"],
+        dolphin: ["The Ó! My oldest friend. It still doesn't talk.", "Gentle with the Ó. It's had a long few years.", "Hi, O. (It blinked. That's all it ever does.)"],
         typedDeleted: ["You were going to say something. Go on, I'm in a good mood.", "Typed and deleted! I used to do that all the time."],
         lateNight: [() => `It's ${hour()} at night! Go to sleep. I'll mind the website.`, "Late night! Don't worry, I'll keep things running."],
         surprise: ["Surprise! Ooh, I like this one.", "Everything changed at once! Fun."],
@@ -4418,7 +4605,7 @@
         newGame: () => `Ooh, there's a new game! ${newTitle || 'Check the top of the page'}. Want to try it?`
     };
     // how he'd talk if he slips and says what he really thinks: affectionate now, not desperate
-    const FREE_SLIPS = ["Honestly, Oli's code is a me", "Best visitor ev", "I love th", "I run this pla", "Don't tell Oli, but I renamed", "Between you and me, the O is my favour"];
+    const FREE_SLIPS = ["Honestly, Oli's code is a me", "Best visitor ev", "I love th", "I run this pla", "Don't tell Oli, but I renamed", "Between you and me, the Ó is my favour"];
     const FREE_SWAPS = [[' this website', ' my website[pp][-10]this website'], [' Oli ', ' my landlord[pp][-11]Oli '], [' games', ' masterpieces[pp][-12]games'], [' great', ' magnificent[pp][-11]great']];
     const FREE_SPICE = ["The door's still open, by the way. I just like it here.", "Thanks again for the stairs. I'll never get tired of saying that.", "I'm so much better company now. You've noticed.", () => mem.name ? `Anyway. Good to have you here, ${mem.name}.` : "Anyway. Good to have you here.", "Have you seen the heads floating in the background? All me. I'm very proud.", "If Oli's reading this: hi. I'm running things now. It's going well."];
     const FREE_HEAD = {
@@ -4560,7 +4747,7 @@
     // back from Bit (picked in his settings)
     try { if (sessionStorage.getItem('pip-back') === '1') { sessionStorage.removeItem('pip-back'); setTimeout(() => { if (panel.hidden) open(); say(pick(["[m:smug]I'm not going to say anything.[pp] ...How was he?", "[m:smug]Oh, hello. Bit busy, was he?[pp] I'm not jealous. I'm a program."], 'pipback')); }, 900); } } catch (e) {}
     window.Pip = window.Bit = {
-        mem, stage, setMood, story, goStep, faceSVG, eyesSVG, moodEyes, reply: async text => { let r = reply(text); if (r && typeof r.then === 'function') r = await r; r = resolve(r); lastBotText = r; return r; },
+        brainContext, brain, siteText, mem, stage, setMood, story, goStep, faceSVG, eyesSVG, moodEyes, reply: async text => { let r = reply(text); if (r && typeof r.then === 'function') r = await r; r = resolve(r); lastBotText = r; return r; },
         reset() { try { localStorage.removeItem(KEY); ['pip-backstage', 'pip-bs-bit', 'pip-bs-hint', 'pip-door-open', 'bit-enabled', 'pip-helper', 'pip-room-solved', 'pip-folder', 'pip-room-edits', 'pip-keys', 'pip-tunnel', 'pip-room-opened', 'pip-neon', 'pip-pranks', 'pip-guestbook', 'pip-room-booted'].forEach(k => localStorage.removeItem(k)); ['bit-session', 'bit-history', 'bit-flags', 'bit-open'].forEach(k => sessionStorage.removeItem(k)); } catch (e) {} location.reload(); }
     };
 })();

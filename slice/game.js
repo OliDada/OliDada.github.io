@@ -181,7 +181,7 @@ function doCut(a, b) {
   swish(); buzz(25); $('flash').classList.remove('go'); void $('flash').offsetWidth; $('flash').classList.add('go');
   stage.classList.remove('shake'); void stage.offsetWidth; stage.classList.add('shake');
 }
-function grade(small) { if (small >= 49.5) return ['g', 'Razor sharp']; if (small >= 48) return ['y', 'Nice cut']; if (small >= 45) return ['o', 'Bit wonky']; return ['r', 'Lopsided']; }
+function grade(small) { if (small >= 49) return ['g', 'Razor sharp']; if (small >= 47) return ['y', 'Nice cut']; if (small >= 43) return ['o', 'Bit wonky']; return ['r', 'Lopsided']; }
 const f1 = v => (Math.round(v * 10) / 10).toFixed(1);
 function showVerdict() {
   verdictShown = true; const small = Math.min(cut.p1, cut.p2), [c, label] = grade(small);

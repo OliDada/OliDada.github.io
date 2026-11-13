@@ -189,7 +189,7 @@ const ease = t => 1 - Math.pow(1 - Math.min(1, t), 3);
 
 /* ---------- judging ---------- */
 const exact = (a, b) => { const sa = Object.values(a).reduce((s, v) => s + v, 0), sb = Object.values(b).reduce((s, v) => s + v, 0); return R.set.every(k => (a[k] || 0) * sb === (b[k] || 0) * sa); };
-function grade(d, ex) { if (ex || d < 1) return ['g', 'Perfect!']; if (d < 4) return ['y', 'So close']; if (d < 10) return ['o', 'Nearly']; return ['r', 'Different colour']; }
+function grade(d, ex) { if (ex || d < 1) return ['g', 'Perfect!']; if (d < 3) return ['g', 'Spot on']; if (d < 7) return ['y', 'So close']; if (d < 15) return ['o', 'Nearly']; return ['r', 'Different colour']; }
 const matchPct = d => Math.max(0, Math.min(99, Math.round(100 - d * 3)));
 const pointsFor = (d, ex) => ex || d < 1 ? 100 : Math.max(0, Math.round(95 - d * 4));
 $('done').onclick = () => {
@@ -255,7 +255,7 @@ function frame(now) {
   // the reveal: the line between the halves melts away if you nailed it
   cx.restore();
   cx.beginPath(); cx.arc(ccx, ccy, rad, 0, 7); cx.lineWidth = 3; cx.strokeStyle = INK; cx.stroke();
-  const res = today.res[I], perfect = mode === 'done' && res && res.c === 'g';
+  const res = today.res[I], perfect = mode === 'done' && res && (res.ex || res.d < 1);
   const lineA = perfect ? Math.max(0, 1 - (now - reveal) / 700) : 1;
   if (lineA > 0) { cx.globalAlpha = lineA; cx.beginPath(); cx.moveTo(ccx, ccy - rad); cx.lineTo(ccx, ccy + rad); cx.lineWidth = 3; cx.stroke(); cx.globalAlpha = 1; }
   // shine
@@ -290,7 +290,7 @@ function frame(now) {
 const SQ = { g: '🟩', y: '🟨', o: '🟧', r: '🟥' };
 const total = res => res.reduce((s, r) => s + r.pts, 0);
 function streak() { let s = 0; for (let d = todayNo; d > 0; d--) { const x = store.days[d]; if (x && x.res && x.res.length === PER_DAY) s++; else if (d === todayNo) continue; else break; } return s; }
-function shareStr() { const p = today.res.filter(r => r.c === 'g').length; return `Mix #${DAY} ${total(today.res)}/${PER_DAY * 100}\n${today.res.map(r => SQ[r.c]).join('')}  ${p}/${PER_DAY} perfect\nolid.is/mix`; }
+function shareStr() { const p = today.res.filter(r => r.ex || r.d < 1).length; return `Mix #${DAY} ${total(today.res)}/${PER_DAY * 100}\n${today.res.map(r => SQ[r.c]).join('')}  ${p}/${PER_DAY} perfect\nolid.is/mix`; }
 function finish(fresh) {
   $('play').classList.add('hide'); $('end').classList.add('show');
   const s = document.documentElement.style; s.setProperty('--bg', '#F4EFE6'); s.setProperty('--accent', INK);

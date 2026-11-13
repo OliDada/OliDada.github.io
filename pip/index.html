@@ -958,16 +958,52 @@ void main() {
       }
       function select(el, label) { if (!el) return; cancelAnimationFrame(trackFrame); selOn = el; sel.hidden = false; sel.className = 'ct-sel'; selLab.textContent = label; track(); requestAnimationFrame(() => sel.classList.add('on')); }
       function unselect() { cancelAnimationFrame(trackFrame); selOn = null; sel.classList.remove('on'); setTimeout(() => { if (!sel.classList.contains('on')) { sel.hidden = true; selOn = null; } }, 350); }
-      const clean = entries => Array.isArray(entries) ? entries.filter(e => e && EDITS[e.id] && Number.isInteger(e.variant) && EDITS[e.id].variants[e.variant]).map(e => ({ id: e.id, variant: e.variant })) : [];
+      // ---- changes visitors ask for (written by Pip's model). Only these parts, only these properties, re-checked every load.
+      const PARTS = {
+        page: ['body', 'the whole page'], nav: ['.nav', 'the top bar'], version: ['#ver', 'the version number', 't'],
+        name: ['h1 .word', 'my name', 't'], kicker: ['#pipKicker', 'the label at the top', 't'], tagline: ['.lede span', 'the tagline', 't'], lede: ['.lede', 'the line under my name'],
+        stats: ['.stats', 'the stat cards', 'h'], stat1: ['.stat:nth-child(1) b', 'the first stat', 't'], stat2: ['.stat:nth-child(2) b', 'the second stat', 't'], stat3: ['.stat:nth-child(3) b', 'the third stat', 't'], stat4: ['.stat:nth-child(4) b', 'the fourth stat', 't'],
+        space: ['#planet', 'the black hole section', 'h'], spaceTitle: ['#planet h2', 'the space heading', 't'], spaceText: ['#planet .intro', 'the space text', 't'], blackhole: ['#planetCv', 'the black hole'], spaceButton: ['#newPlanet', 'the space button', 't'],
+        games: ['#games', 'the games section', 'h'], gamesTitle: ['#games h2', 'the games heading', 't'], gamesText: ['#games .intro', 'the games text', 't'], tabs: ['.tabs', 'the game tabs'],
+        backstage: ['#backstageAccess', 'the backstage section'], backstageTitle: ['#backstageTitle', 'the backstage heading', 't'],
+        remote: ['#remote', 'the remote section'], remoteTitle: ['#remote h2', 'the remote heading', 't'],
+        headings: ['h2', 'all the headings'], buttons: ['.btn.primary', 'the buttons'], cards: ['.stat', 'each stat card'], footer: ['.foot', 'the footer'], footerText: ['#notOli', 'the footer line', 't']
+      };
+      const PAGE_PROPS = new Set(['--bg', '--fg', '--soft', '--dim', '--lilac', '--pink', '--cyan', '--card', '--line', 'color', 'font-family', 'letter-spacing', 'font-size']);
+      const PROPS = new Set(['color', 'background', 'background-color', 'border', 'border-color', 'border-width', 'border-style', 'border-radius', 'border-top', 'border-bottom', 'box-shadow', 'text-shadow', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'line-height', 'text-transform', 'text-align', 'text-decoration', 'opacity', 'transform', 'filter', 'padding', 'margin', 'max-width', 'outline', 'display', '-webkit-text-fill-color']);
+      const okVal = v => { v = String(v == null ? '' : v).replace(/!important/gi, '').trim(); return v && v.length <= 160 && !/url\s*\(|expression|import|javascript|@|[;{}<>\\:]/i.test(v) && /^[\w\s#(),.%+\-'"\/]*$/.test(v) ? v : null; };
+      function vet(spec) {
+        if (!spec || typeof spec !== 'object') return null;
+        const p = PARTS[spec.part]; if (!p) return null;
+        const out = { part: spec.part };
+        if (typeof spec.text === 'string' && p[2] === 't') { const t = spec.text.replace(/\s+/g, ' ').trim().slice(0, 90); if (t) out.text = t; }
+        if (spec.css && typeof spec.css === 'object') {
+          const allow = spec.part === 'page' ? PAGE_PROPS : PROPS, css = {};
+          for (const [k, v] of Object.entries(spec.css).slice(0, 8)) {
+            const key = String(k).trim().toLowerCase(), val = okVal(v);
+            if (!allow.has(key) || val == null) continue;
+            if (key === 'display' && !(p[2] === 'h' && /^(none|block|flex|grid)$/.test(val))) continue;
+            css[key] = val;
+          }
+          if (Object.keys(css).length) out.css = css;
+        }
+        return out.text || out.css ? out : null;
+      }
+      const ruleOf = sp => sp.css ? `${PARTS[sp.part][0]} {\n${Object.entries(sp.css).map(([k, v]) => `  ${k}: ${v} !important;`).join('\n')}\n}` : '';
+      const codeOf = sp => [sp.text ? `document.querySelector(${JSON.stringify(PARTS[sp.part][0])})\n  .textContent = ${JSON.stringify(sp.text)};` : '', ruleOf(sp)].filter(Boolean).join('\n\n');
+      window.pipRoomParts = () => Object.entries(PARTS).map(([k, [sel, label, f]]) => { const el = $(sel), t = f === 't' && el ? ` (now: "${el.textContent.trim().slice(0, 50)}")` : ''; return `${k}: ${label}${f === 't' ? ', words or style' + t : ''}${f === 'h' ? ', can be hidden' : ''}`; }).join('\n');
+      const clean = entries => Array.isArray(entries) ? entries.map(e => e && e.id === 'custom' ? ((sp => sp ? { id: 'custom', spec: sp } : null)(vet(e.spec))) : e && EDITS[e.id] && Number.isInteger(e.variant) && EDITS[e.id].variants[e.variant] ? { id: e.id, variant: e.variant } : null).filter(Boolean) : [];
       const saved = get('pip-room-edits', []) || [];
       // Migrate the old one-use ID list. Store only validated variant IDs, never executable CSS.
       let current = Array.isArray(saved) ? [...new Set(saved)].filter(id => EDITS[id]).map(id => ({ id, variant: 0 })) : clean(saved.current);
       let history = Array.isArray(saved.history) ? saved.history.slice(-30).map(clean) : [];
       const originals = new Map(Object.values(EDITS).filter(e => e.variants[0].text).map(e => [e.at, $(e.at).textContent]));
+      for (const [sel, , f] of Object.values(PARTS)) if (f === 't' && $(sel) && !originals.has(sel)) originals.set(sel, $(sel).textContent);
       const persist = () => put('pip-room-edits', { version: 2, current, history });
       const apply = () => {
         originals.forEach((text, at) => { $(at).textContent = text; });
         live.textContent = current.map(e => {
+          if (e.id === 'custom') { const el = $(PARTS[e.spec.part][0]); if (e.spec.text && el) el.textContent = e.spec.text; return ruleOf(e.spec); }
           const def = EDITS[e.id], variant = def.variants[e.variant];
           if (variant.text) $(def.at).textContent = variant.text;
           return variant.css || '';
@@ -1018,7 +1054,39 @@ void main() {
         typing = false; story('code:done:' + id); done && done();
         return true;
       }
-      function undo(silent = false) { if (!history.length || typing) return false; const last = current[current.length - 1]; current = history.pop(); persist(); apply(); lastChange = 'Undid change to ' + (EDITS[last?.id]?.name || 'the page'); if (!silent) story('code:undo'); return true; }
+      function undo(silent = false) { if (!history.length || typing) return false; const last = current[current.length - 1]; current = history.pop(); persist(); apply(); lastChange = 'Undid change to ' + (last?.id === 'custom' ? PARTS[last.spec.part][1] : EDITS[last?.id]?.name || 'the page'); if (!silent) story('code:undo'); return true; }
+      // Changes asked for in chat: shown in the same code tab, one after another, then saved as one undo step.
+      async function editCustom(specs, done) {
+        typing = true; story('code:start:custom'); document.documentElement.classList.add('pip-editing');
+        const before = current.map(e => ({ ...e }));
+        for (const sp of specs) {
+          const label = PARTS[sp.part][1], target = $(sp.part === 'page' ? '.hero' : PARTS[sp.part][0]), src = codeOf(sp);
+          if (target && sp.css && sp.css.display === 'none' && !shown(target)) continue;
+          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          tab.hidden = false; tab.classList.remove('on'); state.textContent = 'editing'; state.className = 'ct-state'; code.innerHTML = '';
+          file.textContent = (sp.text ? 'pip-site.js' : 'pip-site.css') + ' · ' + label;
+          await sleep(450); if (shown(target)) select(target, 'Pip is editing ' + label);
+          requestAnimationFrame(() => tab.classList.add('on'));
+          await sleep(500);
+          for (let i = 1; i <= src.length; i++) { code.innerHTML = hl(src.slice(0, i)) + '<span class="caret"></span>'; code.scrollTop = code.scrollHeight; await sleep(src[i - 1] === '\n' ? 110 : 16 + Math.random() * 22); }
+          await sleep(300);
+          current = [...current.filter(e => !(e.id === 'custom' && e.spec.part === sp.part && !!e.spec.text === !!sp.text && !!e.spec.css === !!sp.css)), { id: 'custom', spec: sp }];
+          const customs = current.filter(e => e.id === 'custom'); if (customs.length > 25) current = current.filter(e => e !== customs[0]);
+          apply(); code.innerHTML = hl(src); state.textContent = 'saved ✓'; state.className = 'ct-state ok';
+          if (target) { target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash'); }
+          if (selOn) { sel.classList.add('ok'); selLab.textContent = 'Changed ' + label + ' ✓'; }
+          await sleep(1400); unselect();
+        }
+        history.push(before); history = history.slice(-30); persist();
+        lastLine = ''; lastChange = 'Changed ' + [...new Set(specs.map(sp => PARTS[sp.part][1]))].join(', ');
+        tab.classList.remove('on'); document.documentElement.classList.remove('pip-editing'); setTimeout(() => { if (!typing) tab.hidden = true; }, 400);
+        typing = false; story('code:done:custom'); done && done();
+      }
+      window.pipRoomCustom = (specs, done) => {
+        const ok = (Array.isArray(specs) ? specs : [specs]).map(vet).filter(Boolean).slice(0, 3);
+        if (!ok.length || typing || window.pipRoomGameBusy?.()) return 0;
+        editCustom(ok, done); return ok.length;
+      };
       window.pipRoomEdit = (id, done) => { if (typing || window.pipRoomGameBusy?.() || (id && !EDITS[id])) return false; edit(id, done); return true; };
       window.pipRoomBusy = () => typing;
       window.pipRoomUndo = undo;

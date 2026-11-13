@@ -105,7 +105,7 @@ function run() {
 /* ---------- stop + reveal ---------- */
 const tau = target => .25 + .06 * target;          // longer targets forgive a little more
 const pointsFor = (err, target) => Math.round(100 * Math.exp(-Math.abs(err) / tau(target)));
-function grade(pts) { if (pts >= 88) return ['g', 'Spot on']; if (pts >= 65) return ['y', 'Close']; if (pts >= 35) return ['o', 'Roughly']; return ['r', 'Way off']; }
+function grade(pts) { if (pts >= 80) return ['g', 'Spot on']; if (pts >= 55) return ['y', 'Close']; if (pts >= 25) return ['o', 'Roughly']; return ['r', 'Way off']; }
 function stop(now) {
   if (mode !== 'run') return; const t = (now - t0) / 1000; if (t < .4) return;      // ignore an accidental double tap
   mode = 'done'; cancelAnimationFrame(raf);

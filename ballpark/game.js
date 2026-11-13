@@ -154,7 +154,7 @@ addEventListener('keydown', e => {
 });
 
 /* ---------- lock + reveal ---------- */
-function grade(ratio) { if (ratio <= 1.1) return ['g', 'Spot on']; if (ratio <= 1.5) return ['y', 'Close']; if (ratio <= 3) return ['o', 'Roughly']; return ['r', 'Way off']; }
+function grade(ratio) { if (ratio <= 1.25) return ['g', 'Spot on']; if (ratio <= 2) return ['y', 'Close']; if (ratio <= 4) return ['o', 'Roughly']; return ['r', 'Way off']; }
 const pointsFor = ratio => Math.round(100 * Math.max(0, 1 - Math.log10(ratio)));
 function lock() {
   if (mode !== 'aim') return; audio(); mode = 'reveal';

@@ -83,7 +83,7 @@ function tap(i) {
   press(cells, i); today.taps.push(i); today.moves++; $('moves').textContent = today.moves;
   const els = $('grid').children; nbrs(i).forEach((j, k) => setTimeout(() => els[j].classList.toggle('on', !!cells[j]), k ? 70 : 0));
   blip(cells[i] ? 520 : 390, .07, .05); buzz(6);
-  if (cells.every(v => !v)) { today.done = true; today.res = [{ c: today.moves <= PAR ? 'g' : today.moves <= PAR + 3 ? 'y' : 'o' }]; setTimeout(() => finish(true), 800); }
+  if (cells.every(v => !v)) { today.done = true; today.res = [{ c: today.moves <= PAR + 1 ? 'g' : today.moves <= PAR + 4 ? 'y' : 'o' }]; setTimeout(() => finish(true), 800); }
   save();
 }
 $('reset').onclick = () => { if (today.done) return; audio(); cells = START.slice(); today.taps = []; save(); blip(300, .1, .05); render(); };   // starting over keeps your tap count

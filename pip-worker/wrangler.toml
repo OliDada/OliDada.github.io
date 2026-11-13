@@ -1,0 +1,13 @@
+# Cloudflare deploys this Worker (pip-brain) automatically when pip-worker/ changes on GitHub.
+# The Groq key is a secret set in the Cloudflare dashboard and is never in this repo.
+name = "pip-brain"
+main = "worker.js"
+compatibility_date = "2026-11-13"
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "VISITORS"
+id = "93961a24ae9547318612faab6edaf821"
+
+[observability]
+enabled = true

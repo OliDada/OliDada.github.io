@@ -182,7 +182,7 @@ addEventListener('keydown', e => {
 $('pinBtn').onclick = () => commit();
 
 /* ---------- the swing ---------- */
-function grade(off) { if (off <= .02) return ['g', 'Dead centre']; if (off <= .05) return ['y', 'Close']; if (off <= .1) return ['o', 'Wobbly']; return ['r', 'Off balance']; }
+function grade(off) { if (off <= .035) return ['g', 'Dead centre']; if (off <= .08) return ['y', 'Close']; if (off <= .15) return ['o', 'Wobbly']; return ['r', 'Off balance']; }
 const pointsFor = off => Math.round(100 * Math.max(0, 1 - off / .25));
 function commit() {
   if (mode !== 'aim' || !valid) return; audio(); mode = 'swing';
