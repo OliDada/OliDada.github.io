@@ -5,6 +5,7 @@
 const $ = id => document.getElementById(id);
 const LAUNCH = [2026, 10, 13];                  // Swap #1 = 13 Nov 2026 (month is 0-based)
 const PUZ = window.SWAP_PUZZLES, LEVEL = { y: 1, g: 2, b: 3, p: 4 };
+const TINT = { y: '#FFE08A', g: '#A8E6B4', b: '#A9C8FF', p: '#D6C4FF' }, SQ = { y: '🟨', g: '🟩', b: '🟦', p: '🟪' };
 
 /* ---------- day + seeded randomness ---------- */
 const localDay = d => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5;
@@ -53,7 +54,7 @@ $('dayNo').textContent = '#' + DAY;
 
 function solvedHTML(row) {
   const g = P.groups[groupOf(row)], lv = LEVEL[g[0]];
-  return `<div class="solved"><b>${g[1]} <span class="lvl" title="Difficulty ${lv} of 4">${[1, 2, 3, 4].map(k => `<i class="${k <= lv ? 'on' : ''}"></i>`).join('')}</span></b><span>${g.slice(2).join(' · ')}</span></div>`;
+  return `<div class="solved" style="--sc:${TINT[g[0]]}"><b>${g[1]} <span class="lvl" title="Difficulty ${lv} of 4">${[1, 2, 3, 4].map(k => `<i class="${k <= lv ? 'on' : ''}"></i>`).join('')}</span></b><span>${g.slice(2).join(' · ')}</span></div>`;
 }
 function render() {
   const order = [0, 1, 2, 3].sort((a, b) => locked[b] - locked[a]);   // fixed rows rise to the top
@@ -79,14 +80,14 @@ function tap(r, c) {
   if (busy || today.done) return; audio();
   if (!sel || sel[0] === r) { sel = sel && sel[0] === r && sel[1] === c ? null : [r, c]; blip(sel ? 620 : 420, .05, .05); return render(); }
   const [r0, c0] = sel, a = rows[r0][c0], b = rows[r][c], before = positions();
-  rows[r0][c0] = b; rows[r][c] = a; sel = null; today.swaps++;
+  rows[r0][c0] = b; rows[r][c] = a; sel = null; today.swaps++; (today.log = today.log || []).push(''); const at = today.log.length - 1;
   blip(520, .14, .05, 'sine', 0, 780); buzz(8);
   render(); slide(before, [a, b]);
   const fixed = newlySolved();
   if (fixed.length) {
     busy = true;
     setTimeout(() => {   // let the swap land, then the finished row snaps shut and the rest slide down
-      const b2 = positions(); fixed.forEach(k => locked[k] = true);
+      const b2 = positions(); fixed.forEach(k => { locked[k] = true; today.log[at] += P.groups[groupOf(rows[k])][0]; });
       today.res = locked.filter(Boolean).map(() => ({ c: 'g' })); render(); slide(b2, []); busy = false;
       [523, 659, 784].forEach((f, k) => blip(f + 60 * fixed.length, .18, .07, 'triangle', k * .06)); buzz([15, 30, 15]);
       if (locked.every(Boolean)) finishSoon(); save();
@@ -99,7 +100,11 @@ function finishSoon() { today.done = true; today.par = PAR; save(); setTimeout((
 /* ---------- end + stats ---------- */
 function verdict(s) { return s <= PAR ? 'Perfect!' : `Best: ${PAR}`; }
 function streak() { let s = 0; for (let d = todayNo; d > 0; d--) { const x = store.days[d]; if (x && x.done) s++; else if (d === todayNo) continue; else break; } return s; }
-function shareStr() { return `Swap #${DAY}: ${today.swaps} swaps (best ${PAR})\nolid.is/swap`; }
+// one square per swap: blank if it fixed nothing, else the colour of the hardest row it fixed
+function shareStr() {
+  const line = (today.log || []).map(l => l ? SQ[[...l].sort((x, y) => LEVEL[y] - LEVEL[x])[0]] : '⬜').join('');
+  return `Swap #${DAY} · ${today.swaps} swaps${today.swaps <= PAR ? ' (perfect!)' : ` (best ${PAR})`}\n${line}\nolid.is/swap`;
+}
 function finish(fresh) {
   $('play').classList.add('hide'); $('end').classList.add('show');
   $('endDay').textContent = '#' + DAY; $('total').innerHTML = `${today.swaps}<small> ${today.swaps === 1 ? 'swap' : 'swaps'}</small>`;
