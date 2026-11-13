@@ -410,7 +410,7 @@ body.terminal-player.is-playing:has(.player-area:not(.fullscreen)) { overflow: a
 }
 
 /* ---------- Daily page: every daily game in one compact grid; Slice gets the big spot ---------- */
-.daily-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: stretch; }
+.daily-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; align-items: stretch; }
 .dg-card { display: flex; flex-direction: column; overflow: hidden; text-decoration: none; color: var(--ink); transition: transform .12s ease, box-shadow .12s ease; }
 .dg-card:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--ink); }
 .dg-card:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
@@ -422,7 +422,7 @@ body.terminal-player.is-playing:has(.player-area:not(.fullscreen)) { overflow: a
 .dg-line { font-size: 14.5px; line-height: 1.35; opacity: .8; }
 .dg-play { flex: none; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--pink); border: 2px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); padding-left: 3px; }
 .dg-big .dg-play { width: 54px; height: 54px; }
-@media (max-width: 980px) { .daily-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dg-big { grid-column: 1 / -1; } .dg-big img { aspect-ratio: 16 / 8; } }
+@media (max-width: 980px) { .daily-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 720px) {
   .daily-grid { grid-template-columns: minmax(0, 1fr); gap: 18px; }
   .dg-big img { aspect-ratio: 16 / 10; }
