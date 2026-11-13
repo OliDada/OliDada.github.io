@@ -1,0 +1,317 @@
+{
+  "format": "olid-song",
+  "version": 1,
+  "title": "Low Tide",
+  "game": "stillwater",
+  "bpm": 76,
+  "stepsPerBeat": 4,
+  "swing": 0.1,
+  "volume": 0.9,
+  "loopFrom": 1,
+  "key": "D",
+  "scale": "dorian",
+  "fx": {
+    "delaySteps": 6,
+    "delayFeedback": 0.45
+  },
+  "instruments": {
+    "Chords": {
+      "type": "synth",
+      "wave": "triangle",
+      "volume": 0.11,
+      "pan": 0,
+      "attack": 1.2,
+      "decay": 1,
+      "sustain": 0.8,
+      "release": 2,
+      "filter": 0,
+      "resonance": 0,
+      "filterEnv": 0,
+      "unison": 2,
+      "spread": 10,
+      "vibrato": 0,
+      "vibratoRate": 5,
+      "detune": 0,
+      "octave": 0,
+      "reverb": 0.6,
+      "delay": 0.2,
+      "preset": "Glass Pad",
+      "role": "pad",
+      "color": "#4fd1c5"
+    },
+    "Melody": {
+      "type": "synth",
+      "wave": "triangle",
+      "volume": 0.3,
+      "pan": 0,
+      "attack": 0.001,
+      "decay": 0.5,
+      "sustain": 0,
+      "release": 0.6,
+      "filter": 5000,
+      "resonance": 0,
+      "filterEnv": 0,
+      "unison": 1,
+      "spread": 12,
+      "vibrato": 0,
+      "vibratoRate": 5,
+      "detune": 0,
+      "octave": 1,
+      "reverb": 0.45,
+      "delay": 0.3,
+      "preset": "Music Box",
+      "role": "keys",
+      "color": "#9b87ff"
+    },
+    "Echo": {
+      "type": "synth",
+      "wave": "sine",
+      "volume": 0.2,
+      "pan": 0,
+      "attack": 0.002,
+      "decay": 1.6,
+      "sustain": 0,
+      "release": 1.2,
+      "filter": 0,
+      "resonance": 0,
+      "filterEnv": 0,
+      "unison": 2,
+      "spread": 4,
+      "vibrato": 18,
+      "vibratoRate": 0.8,
+      "detune": 0,
+      "octave": 1,
+      "reverb": 0.55,
+      "delay": 0.3,
+      "preset": "Bell",
+      "role": "lead",
+      "color": "#e07bff"
+    },
+    "Bass": {
+      "type": "synth",
+      "wave": "sine",
+      "volume": 0.3,
+      "pan": 0,
+      "attack": 0.005,
+      "decay": 0.2,
+      "sustain": 0.9,
+      "release": 0.1,
+      "filter": 0,
+      "resonance": 0,
+      "filterEnv": 0,
+      "unison": 1,
+      "spread": 12,
+      "vibrato": 0,
+      "vibratoRate": 5,
+      "detune": 0,
+      "octave": -1,
+      "reverb": 0,
+      "delay": 0,
+      "preset": "Sub Bass",
+      "role": "bass",
+      "color": "#ffb547"
+    },
+    "Kick": {
+      "type": "drum",
+      "kind": "kick",
+      "volume": 0.3,
+      "pan": 0,
+      "pitch": 1,
+      "decay": 0.8,
+      "reverb": 0.15,
+      "delay": 0,
+      "preset": "Kick",
+      "role": "drum",
+      "kit": "soft",
+      "color": "#ff7aa8"
+    },
+    "Drip": {
+      "type": "drum",
+      "kind": "perc",
+      "volume": 0.4,
+      "pan": 0,
+      "pitch": 0.6,
+      "decay": 1,
+      "reverb": 0.4,
+      "delay": 0.4,
+      "preset": "Perc",
+      "role": "drum",
+      "kit": "soft",
+      "color": "#6fb6ff"
+    },
+    "Hi-hat": {
+      "type": "drum",
+      "kind": "hat",
+      "volume": 0.07,
+      "pan": 0,
+      "pitch": 1,
+      "decay": 1,
+      "reverb": 0.15,
+      "delay": 0,
+      "preset": "Hi-hat",
+      "role": "drum",
+      "kit": "soft",
+      "color": "#a3e05f"
+    }
+  },
+  "arrangement": ["drift", "ripple", "ripple", "bend", "ripple"],
+  "patterns": {
+    "drift": {
+      "steps": 64,
+      "chords": [0, 3, 0, 6],
+      "tracks": {
+        "Chords": [
+          [0, "D4", 16, 0.8],
+          [0, "F4", 16, 0.8],
+          [0, "A4", 16, 0.8],
+          [16, "D4", 16, 0.8],
+          [16, "G4", 16, 0.8],
+          [16, "B4", 16, 0.8],
+          [32, "D4", 16, 0.8],
+          [32, "F4", 16, 0.8],
+          [32, "A4", 16, 0.8],
+          [48, "C4", 16, 0.8],
+          [48, "E4", 16, 0.8],
+          [48, "G4", 16, 0.8]
+        ],
+        "Bass": [
+          [0, "D3", 4],
+          [12, "D3", 4],
+          [16, "G3", 4],
+          [28, "G3", 4],
+          [32, "D3", 4],
+          [44, "D3", 4],
+          [48, "C3", 4],
+          [60, "C3", 4]
+        ],
+        "Drip": [
+          [6],
+          [22],
+          [38],
+          [58]
+        ]
+      }
+    },
+    "ripple": {
+      "steps": 64,
+      "chords": [0, 3, 0, 6],
+      "tracks": {
+        "Chords": [
+          [0, "D4", 16, 0.8],
+          [0, "F4", 16, 0.8],
+          [0, "A4", 16, 0.8],
+          [16, "D4", 16, 0.8],
+          [16, "G4", 16, 0.8],
+          [16, "B4", 16, 0.8],
+          [32, "D4", 16, 0.8],
+          [32, "F4", 16, 0.8],
+          [32, "A4", 16, 0.8],
+          [48, "C4", 16, 0.8],
+          [48, "E4", 16, 0.8],
+          [48, "G4", 16, 0.8]
+        ],
+        "Bass": [
+          [0, "D3", 4],
+          [12, "D3", 4],
+          [16, "G3", 4],
+          [28, "G3", 4],
+          [32, "D3", 4],
+          [44, "D3", 4],
+          [48, "C3", 4],
+          [60, "C3", 4]
+        ],
+        "Drip": [
+          [6],
+          [22],
+          [38],
+          [58]
+        ],
+        "Hi-hat": [
+          [4, null, 1, 0.5],
+          [12, null, 1, 0.5],
+          [20, null, 1, 0.5],
+          [28, null, 1, 0.5],
+          [36, null, 1, 0.5],
+          [44, null, 1, 0.5],
+          [52, null, 1, 0.5],
+          [60, null, 1, 0.5]
+        ],
+        "Kick": [
+          [0],
+          [24],
+          [32],
+          [56]
+        ],
+        "Melody": [
+          [0, "A4", 4],
+          [4, "F4", 2],
+          [6, "E4", 2],
+          [8, "D4", 6],
+          [14, "E4", 2],
+          [16, "B4", 6],
+          [22, "A4", 2],
+          [24, "G4", 8],
+          [32, "F4", 4],
+          [36, "A4", 2],
+          [38, "D5", 6],
+          [44, "C5", 2],
+          [46, "A4", 2],
+          [48, "G4", 4],
+          [52, "E4", 4],
+          [56, "C4", 8]
+        ]
+      }
+    },
+    "bend": {
+      "steps": 64,
+      "chords": [2, 6, 3, 4],
+      "tracks": {
+        "Chords": [
+          [0, "C4", 16, 0.8],
+          [0, "F4", 16, 0.8],
+          [0, "A4", 16, 0.8],
+          [16, "C4", 16, 0.8],
+          [16, "E4", 16, 0.8],
+          [16, "G4", 16, 0.8],
+          [32, "B3", 16, 0.8],
+          [32, "D4", 16, 0.8],
+          [32, "G4", 16, 0.8],
+          [48, "C4", 16, 0.8],
+          [48, "E4", 16, 0.8],
+          [48, "A4", 16, 0.8]
+        ],
+        "Bass": [
+          [0, "F3", 4],
+          [16, "C3", 4],
+          [32, "G3", 4],
+          [48, "A3", 4]
+        ],
+        "Drip": [
+          [6],
+          [22],
+          [38],
+          [58]
+        ],
+        "Hi-hat": [
+          [4, null, 1, 0.5],
+          [12, null, 1, 0.5],
+          [20, null, 1, 0.5],
+          [28, null, 1, 0.5],
+          [36, null, 1, 0.5],
+          [44, null, 1, 0.5],
+          [52, null, 1, 0.5],
+          [60, null, 1, 0.5]
+        ],
+        "Echo": [
+          [0, "A4", 8],
+          [8, "C5", 8],
+          [16, "G4", 12],
+          [28, "E4", 4],
+          [32, "D4", 8],
+          [40, "B4", 8],
+          [48, "A4", 16]
+        ]
+      }
+    }
+  }
+}

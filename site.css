@@ -101,6 +101,13 @@ img { max-width: 100%; }
 .hero p:empty { display: none; }
 .hero p { margin: 8px 0 0; font-size: 21px; font-weight: 700; max-width: 640px; }
 .section-title { margin: 0 0 22px; font-size: 44px; line-height: 1; }
+.daily-games { display: flex; flex-direction: column; }
+.daily-card { display: grid; grid-template-columns: minmax(280px, .9fr) minmax(0, 1fr); overflow: hidden; max-width: 900px; }
+.daily-card > img { width: 100%; aspect-ratio: 16 / 9; height: auto; object-fit: cover; align-self: center; display: block; border-radius: 12px 0 0 12px; border-right: 2px solid var(--ink); background: #fff0d6; }
+.daily-card-body { display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: 28px; }
+.daily-card h3 { margin: 0; font-size: 40px; line-height: 1; }
+.daily-card p { margin: 0; font-size: 17px; line-height: 1.45; }
+.daily-card .btn { align-self: flex-start; }
 
 /* ---------- Cards ---------- */
 .feature {
@@ -220,6 +227,10 @@ body:has(.player-area.fullscreen) { overflow: hidden; }
   .feature .feature-img { min-height: 200px; max-height: 280px; border-radius: 12px 12px 0 0; border-bottom: 2px solid var(--ink); }
   .feature .feature-body { padding: 22px; }
   .feature h2 { font-size: 40px; }
+}
+@media (max-width: 520px) {
+  .daily-card { grid-template-columns: minmax(0, 1fr); }
+  .daily-card > img { width: 100%; min-height: 0; max-height: 240px; border-right: 0; border-bottom: 2px solid var(--ink); border-radius: 12px 12px 0 0; }
 }
 @media (max-width: 720px), (max-height: 520px) {
   body.is-playing { overflow: hidden; }

@@ -81,6 +81,28 @@
     "featured": true
   },
   {
+    "title": "Slice",
+    "description": "A new set of shapes every day. Cut each one exactly in half with a single swipe.",
+    "path": "/slice/index.html",
+    "source": "/slice/game.js",
+    "aspect": "fill",
+    "thumbnail": "data/thumbnails/slice-thumbnail.png",
+    "controls": [["Drag", "draw your cut"], ["Release", "slice (one cut per shape)"]],
+    "tags": ["game", "daily", "puzzle"],
+    "featured": true
+  },
+  {
+    "title": "Magnitude",
+    "description": "Estimate surprising quantities, then see how close your intuition was.",
+    "path": "/magnitude/index.html",
+    "source": "/magnitude/game.js",
+    "aspect": "1:1",
+    "thumbnail": "data/thumbnails/magnitude-thumbnail.svg",
+    "controls": [["Type", "enter your estimate"], ["Submit", "lock in your guess"]],
+    "tags": ["game", "daily", "estimation"],
+    "featured": false
+  },
+  {
     "title": "A Little Higher",
     "description": "Keep your balance as you climb from the treetops to outer space.",
     "path": "/balance-game/index.html",

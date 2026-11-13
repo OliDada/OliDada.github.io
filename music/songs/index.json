@@ -1,0 +1,11 @@
+{
+  "songs": [
+    { "file": "stillwater-low-tide.json", "title": "Low Tide", "game": "stillwater", "gameTitle": "Stillwater", "thumbnail": "/data/thumbnails/stillwater-thumbnail.png" },
+    { "file": "elsewhere-first-landfall.json", "title": "First Landfall", "game": "galaxy-explorer", "gameTitle": "Elsewhere", "thumbnail": "/data/thumbnails/elsewhere-thumbnail.png" },
+    { "file": "ever-after-village.json", "title": "Once Upon a Village", "game": "zelda-game", "gameTitle": "Ever After", "thumbnail": "/data/thumbnails/rpg-thumbnail.png" },
+    { "file": "neon-rush-night-drive.json", "title": "Night Drive", "game": "worm-hole", "gameTitle": "Neon Rush", "thumbnail": "/data/thumbnails/neon-rush-thumbnail.webp" },
+    { "file": "farm-frenzy-barnyard-dash.json", "title": "Barnyard Dash", "game": "farm-frenzy", "gameTitle": "Farm Frenzy", "thumbnail": "/data/thumbnails/farm-frenzy-thumbnail.png" },
+    { "file": "demo-harbor.json", "title": "Harbor Demo", "gameTitle": "Example" }
+  ],
+  "slots": []
+}

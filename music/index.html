@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio · olid.is</title>
+<meta name="description" content="Make music in your browser, remix the songs from the games on olid.is, or start from scratch.">
+<link rel="icon" href="/images/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="maker.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="home" href="/" title="Back to olid.is">←</a>
+    <div class="brand">Studio</div>
+    <input id="songTitle" class="title-input" spellcheck="false" aria-label="Song title">
+    <div class="transport">
+      <button class="play" data-play title="Play / stop (Space)"><span class="icon"></span></button>
+      <div class="seg" role="radiogroup" aria-label="What to play">
+        <button data-mode="pattern" title="Loop the pattern you're editing">Pattern</button>
+        <button data-mode="song" title="Play the whole arrangement">Song</button>
+      </div>
+      <label class="field small" title="Tempo">
+        <span>BPM</span><input id="bpm" type="number" min="40" max="240" step="1">
+      </label>
+      <label class="field small hide-narrow" title="Delays every other step for a shuffled feel">
+        <span>Swing</span><input id="swing" type="range" min="0" max="0.6" step="0.05">
+      </label>
+    </div>
+    <div class="spacer"></div>
+    <div class="actions">
+    <button class="icon-btn" data-undo title="Undo (Ctrl/Cmd+Z)">↶</button>
+    <button class="icon-btn" data-redo title="Redo (Shift+Ctrl/Cmd+Z)">↷</button>
+    <button id="openBtn" class="btn">Open</button>
+    <button class="btn primary" data-save title="Save to My songs (Ctrl/Cmd+S)">Save</button>
+    <div class="menu-wrap">
+      <button id="moreBtn" class="icon-btn" title="More" aria-haspopup="true">⋯</button>
+      <div id="moreMenu" class="menu" hidden>
+        <button data-action="new">New song…</button>
+        <button data-action="share">Copy share link</button>
+        <button data-action="useInGame">Use in a game…</button>
+        <hr>
+        <button data-action="download">Download .json</button>
+        <button data-action="import">Import .json…</button>
+        <button data-action="wav">Export .wav</button>
+        <hr>
+        <button data-action="help">Shortcuts &amp; tips</button>
+      </div>
+    </div>
+    <div class="seg ui-seg" aria-label="Editor"><button data-ui="easy" title="Simple, playful editor">Easy</button><button data-ui="pro">Pro</button></div>
+    </div>
+  </header>
+
+  <aside class="tracks panel">
+    <div class="panel-head">Tracks</div>
+    <div id="trackList" class="track-list"></div>
+    <div class="menu-wrap add-wrap">
+      <button id="addTrackBtn" class="btn ghost full">+ Add track</button>
+      <div id="addTrackMenu" class="menu presets-menu" hidden></div>
+    </div>
+  </aside>
+
+  <main class="editor panel">
+    <div class="editor-bar">
+      <input id="patternName" class="pattern-name" maxlength="12" spellcheck="false" aria-label="Pattern name">
+      <label class="field small"><span>Length</span>
+        <select id="patternSteps">
+          <option value="16">1 bar</option><option value="32">2 bars</option>
+          <option value="48">3 bars</option><option value="64">4 bars</option>
+        </select>
+      </label>
+      <span class="divider"></span>
+      <label class="field small"><span>Key</span><select id="songKey"></select></label>
+      <select id="songScale" aria-label="Scale"></select>
+      <button id="scaleOnly" class="toggle" title="Only show notes that fit the key">In key</button>
+      <span class="divider synth-only"></span>
+      <label class="field small synth-only" title="Length of new notes"><span>Note</span>
+        <select id="noteLen">
+          <option value="1">1/16</option><option value="2">1/8</option><option value="4">1/4</option>
+          <option value="8">1/2</option><option value="16">1 bar</option>
+        </select>
+      </label>
+      <div class="spacer"></div>
+      <button id="clearPattern" class="btn ghost small-btn" title="Remove this track's notes from the pattern">Clear</button>
+    </div>
+    <div id="roll" class="roll">
+      <div class="roll-inner">
+        <canvas id="keysCanvas" class="keys"></canvas>
+        <canvas id="gridCanvas" class="grid"></canvas>
+      </div>
+    </div>
+    <div id="editorHint" class="editor-hint"></div>
+  </main>
+
+  <aside class="inspector panel" id="inspector"></aside>
+
+  <section class="arrange panel">
+    <div class="arrange-head">
+      <div class="panel-head">Patterns</div>
+      <div id="patternBank" class="pattern-bank"></div>
+      <button id="newPattern" class="btn ghost small-btn" title="New empty pattern">+ New</button>
+      <button id="dupPattern" class="btn ghost small-btn" title="Copy this pattern">Duplicate</button>
+      <button id="delPattern" class="btn ghost small-btn danger" title="Delete this pattern">Delete</button>
+    </div>
+    <div class="arrange-head">
+      <div class="panel-head">Song</div>
+      <div id="timeline" class="timeline"></div>
+    </div>
+  </section>
+</div>
+
+<div id="easyApp" class="easy">
+  <header class="e-top">
+    <a class="home" href="/" title="Back to olid.is">←</a>
+    <button class="e-brand" id="eHome" title="Studio home">Studio</button>
+    <input id="eTitle" class="title-input" spellcheck="false" aria-label="Song title">
+    <div class="e-transport">
+      <button class="play big" data-play title="Play / stop (Space)"><span class="icon"></span></button>
+      <div class="seg" aria-label="What to play">
+        <button data-mode="pattern" title="Loop the part you're editing">This part</button>
+        <button data-mode="song" title="Play all the parts in order">Whole song</button>
+      </div>
+      <label class="field e-speed" title="How fast the song plays (beats per minute)">
+        <span>Speed</span><input id="eSpeed" type="range" min="50" max="180" step="1"><output id="eSpeedOut"></output>
+      </label>
+    </div>
+    <div class="spacer"></div>
+    <div class="actions">
+      <button class="icon-btn" data-undo title="Undo (Ctrl/Cmd+Z)">↶</button>
+      <button class="icon-btn" data-redo title="Redo">↷</button>
+      <button class="btn primary" data-save>Save</button>
+      <button id="eMoreBtn" class="icon-btn" data-pop title="More">⋯</button>
+      <div class="seg ui-seg" aria-label="Editor"><button data-ui="easy">Easy</button><button data-ui="pro" title="The full editor, for exact control">Pro</button></div>
+    </div>
+  </header>
+  <div class="e-band" id="eChips"></div>
+  <div class="e-stage" id="eStage"><canvas id="eGrid"></canvas><div id="eJam" class="e-jam" hidden></div><div id="eChordsView" class="e-cv" hidden></div></div>
+  <div class="e-pager" id="ePager" hidden></div>
+  <div class="e-tools">
+    <div class="e-main-tools">
+      <button id="eJamBtn" class="e-tool jam" title="Play pads along with the beat, and record what you play"></button>
+      <button id="eGen" class="e-tool hero"></button>
+      <button id="eBeat" class="e-tool" title="Try the next drum beat"></button>
+      <button id="eChords" class="e-tool" title="New chords for this part (rewrites the chords and bass)">New chords</button>
+      <button id="eVibe" class="e-tool cv-btn" title="How the song feels: mood, sounds, key, speed and its chords"></button>
+    </div>
+    <div class="spacer"></div>
+    <button id="eSafe" class="toggle" title="Only show the notes that always sound good together">Safe notes</button>
+    <button id="eUp" class="icon-btn" title="Show higher notes">▲</button>
+    <button id="eDown" class="icon-btn" title="Show lower notes">▼</button>
+    <button id="eClear" class="btn ghost small-btn">Clear…</button>
+  </div>
+  <div class="e-hint" id="eHint"></div>
+  <div class="e-parts" id="eParts"></div>
+</div>
+<div id="ePop" class="e-pop" hidden></div>
+
+<div id="landing" class="landing" hidden>
+  <div class="l-inner">
+    <button class="l-close" id="lClose" aria-label="Close">×</button>
+    <div class="l-hero">
+      <div class="l-title">Studio</div>
+      <p>Make music by clicking squares. Every note you can place fits the song, so it's hard to make it sound wrong.</p>
+    </div>
+    <div id="lContinue"></div>
+    <h3>Remix a game</h3>
+    <div class="l-grid" id="lGames"></div>
+    <h3>Start something new</h3>
+    <div class="l-grid" id="lStyles"></div>
+    <div id="lMine"></div>
+  </div>
+</div>
+
+<div id="modal" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <button class="modal-close" aria-label="Close">×</button>
+    <div id="modalBody"></div>
+  </div>
+</div>
+<div id="toast" class="toast" hidden></div>
+<input id="fileInput" type="file" accept=".json,application/json" hidden>
+
+<script type="module" src="easy.js"></script>
+</body>
+</html>

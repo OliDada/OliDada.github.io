@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Magnitude · Oli.is</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div class="logo">MAGNITUDE<i>.</i> <span id="dayLabel"></span></div>
+        <div class="mark">?</div>
+      </header>
+      <section id="play" class="play">
+        <div class="title-row">
+          <div>
+            <p class="eyebrow">Daily estimation game</p>
+            <h1 id="question"></h1>
+          </div>
+          <span id="dayCount" class="count"></span>
+        </div>
+        <p id="prompt" class="prompt"></p>
+        <form id="guessForm" class="guess-form">
+          <label for="guess">Your estimate <output id="guessValue" for="guess"></output></label>
+          <input id="guess" type="range" min="0" max="1000" value="500">
+          <div class="range-labels"><span id="minLabel"></span><span id="maxLabel"></span></div>
+          <button type="submit">Lock in this guess</button>
+        </form>
+        <div id="result" class="result" hidden>
+          <div class="answer-row">
+            <div><span class="result-label">The actual answer</span><strong id="actual"></strong></div>
+            <div id="grade" class="grade"></div>
+          </div>
+          <p id="distance" class="distance"></p>
+          <p id="explanation" class="explanation"></p>
+          <button id="next" class="next" type="button">Next estimate</button>
+        </div>
+      </section>
+      <section id="end" class="end" hidden>
+        <p class="eyebrow">Magnitude <span id="endDay"></span> · today's result</p>
+        <div id="total" class="total"></div>
+        <div id="resultDots" class="result-dots" aria-label="Today's results"></div>
+        <p id="summary" class="summary"></p>
+        <button id="share" class="next" type="button">Share result</button>
+        <p id="tomorrow" class="tomorrow"></p>
+      </section>
+    </main>
+    <script src="game.js"></script>
+  </body>
+</html>

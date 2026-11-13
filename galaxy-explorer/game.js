@@ -77,7 +77,6 @@ import { civilizationOf, colonistOf, arkPosition, civilizationsIn } from "./civi
 import { createPost } from "./post.js";
 import { quietHud } from "./hud-quiet.js";
 import { rememberPlace, placesPanel, setGoto, takeGoto } from "./places.js";
-import { patrolFor, createPatrol } from "./patrol.js";
 import { personaOf, talkTopics, bodyLine } from "./persona.mjs";
 
 // Surface flight uses coordinates relative to the current world; space travel is continuous.
@@ -631,21 +630,9 @@ function startAtFind(kind) {
     deepNear = findsNear(galactic, DETECT_LY + 0.25);
     sky.update(galactic, camera);
 }
-// A patrol ship of a spacefaring people meets you when you arrive (patrol.js); ?patrol forces one.
-let patrol = null;
-function setupPatrol() {
-    patrol?.dispose();
-    patrol = null;
-    if (offChart && !params.has("patrol")) return;
-    try {
-        const civ = patrolFor(system, currentStar.id, { force: params.has("patrol") });
-        if (civ) patrol = createPatrol(THREE, scene, civ, $("hud"), { starId: currentStar.id, name: system.name });
-    } catch (e) { console.warn("patrol", e); }
-}
 function start() {
     if (started) return;
     started = true;
-    setupPatrol();
     if (params.get("find")) setTimeout(() => startAtFind(params.get("find")), 50);
     $("hud").inert = false;
     $("intro").inert = true;
@@ -1983,7 +1970,6 @@ function arriveInSystem(star, offset) {
         clearSites();
         starMap.setHere(star, system);
         loadSurvey(null);
-        setupPatrol();
         if (course?.id === star.id) course = null;
     }
     nearStar.hide();
@@ -4335,12 +4321,6 @@ function frame(now) {
     if (!paused) {
         animationTime += dt;
         if (started) {
-            // A patrol ship meeting you (patrol.js), whatever you are doing.
-            if (patrol) {
-                const r = patrol.update(dt, { pos: shipPosition, fwd: shipForward, up: spaceUp }, mode === "space" && !jumpAnim);
-                if (r.hold && mode === "space") speed = damp(speed, 0, 1.2, dt); // asked to hold position
-                if (patrol.done) { patrol.dispose(); patrol = null; }
-            }
             if (mode === "deep") updateDeep(dt);
             else if (mode === "space") jumpAnim ? updateJump(dt) : updateSpace(dt);
             else if (mode === "transit") updateCruise(dt);

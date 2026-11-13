@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="icon" href="images/dolphin2.png" type="image/png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <meta name="apple-mobile-web-app-title" content="Oli.is">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#ffa500">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Baloo+2:wght@600;700;800&family=Bungee&family=Comic+Neue:wght@700&family=Nunito:wght@500;600;700;800&family=Pixelify+Sans:wght@500;700&display=swap" rel="stylesheet">
+    <link href="site.css" rel="stylesheet">
+    <link href="bit.css" rel="stylesheet">
+    <script src="script.js" defer></script>
+    <script src="site.js" defer></script>
+    <script src="bit.js" defer></script>
+    <title>Oli.is – Daily games</title>
+  </head>
+  <body>
+    <canvas id="three-canvas" class="three-canvas" aria-hidden="true"></canvas>
+    <div class="wrap">
+      <header class="site-header">
+        <a class="brand" href="/">
+          <img src="images/dolphin1.png" alt="">
+          <span>
+            <span class="brand-name disp">Oli.is</span>
+            <span class="brand-tag">Games and stuff</span>
+          </span>
+        </a>
+        <nav class="site-nav" aria-label="Main">
+          <a class="btn" href="/">Games</a>
+          <a class="btn" href="/jokes.html">Jokes</a>
+          <a class="btn" href="/daily.html" aria-current="page">Daily</a>
+          <button type="button" id="customiseBtn" class="btn btn-yellow" aria-expanded="false" aria-controls="customise">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 2-.8 2-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10.5" cy="7.5" r="1.2"/><circle cx="15" cy="7.5" r="1.2"/></svg>
+            <span class="btn-label">Customise</span>
+          </button>
+        </nav>
+      </header>
+
+      <main style="display:flex;flex-direction:column;gap:36px">
+        <section class="hero">
+          <h1 class="disp">Daily games</h1>
+          <p>Come back every day for a new challenge!</p>
+        </section>
+
+        <article class="feature stk" id="dailySlice" aria-labelledby="sliceTitle">
+          <img class="feature-img" src="data/thumbnails/slice-thumbnail.png" alt="Slice game screenshot">
+          <div class="feature-body">
+            <div class="tags">
+              <span class="chip c1">Daily</span>
+              <span class="chip c2">Puzzle</span>
+            </div>
+            <h2 id="sliceTitle" class="disp">Slice</h2>
+            <p>A new set of shapes every day. Cut each one exactly in half with a single swipe.</p>
+            <div class="actions">
+              <a class="btn btn-pink" href="/slice/index.html">
+                <span aria-hidden="true">▶</span> Play today's Slice
+              </a>
+            </div>
+            <p class="daily-note"><strong>Today's challenge:</strong> five shapes, one cut each. Your progress is saved on this device.</p>
+          </div>
+          <span class="badge disp" aria-hidden="true">Today!</span>
+        </article>
+
+        <section class="daily-games" aria-labelledby="moreDailyTitle">
+          <h2 id="moreDailyTitle" class="section-title disp">More daily games</h2>
+          <article class="daily-card stk" aria-labelledby="magnitudeTitle">
+            <img src="data/thumbnails/magnitude-thumbnail.svg" alt="Magnitude game screenshot">
+            <div class="daily-card-body">
+              <div class="tags">
+                <span class="chip c0">Daily</span>
+                <span class="chip c4">Estimation</span>
+              </div>
+              <h3 id="magnitudeTitle" class="disp">Magnitude</h3>
+              <p>Estimate surprising quantities, then see how close your intuition was.</p>
+              <a class="btn btn-yellow" href="/magnitude/index.html"><span aria-hidden="true">▶</span> Play Magnitude</a>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Song player test</title>
+<style>
+  body { font: 16px system-ui, sans-serif; background: #111; color: #eee; padding: 24px; }
+  button { font: inherit; padding: 8px 16px; margin-right: 8px; }
+  #grid { display: flex; gap: 3px; margin-top: 20px; flex-wrap: wrap; max-width: 640px; }
+  #grid span { width: 14px; height: 14px; background: #333; border-radius: 2px; }
+  #grid span.on { background: #9b7bff; }
+</style>
+</head>
+<body>
+<h1 id="title">Loading…</h1>
+<button id="play">Play</button>
+<button id="stop">Stop</button>
+<button id="ping">Preview lead note</button>
+<p id="pos"></p>
+<div id="grid"></div>
+<script type="module">
+import { createPlayer, loadSong } from "./player.js";
+
+const song = await loadSong("./songs/demo-harbor.json");
+const player = createPlayer({ volume: 0.8 });
+document.getElementById("title").textContent = song.title;
+
+const grid = document.getElementById("grid");
+for (let i = 0; i < 32; i++) grid.append(document.createElement("span"));
+
+player.onStep(({ pattern, step }) => {
+  document.getElementById("pos").textContent = `${pattern} · step ${step}`;
+  [...grid.children].forEach((el, i) => el.classList.toggle("on", i === step));
+});
+
+document.getElementById("play").onclick = () => player.play(song, { fadeIn: 0.5 });
+document.getElementById("stop").onclick = () => player.stop({ fadeOut: 1 });
+document.getElementById("ping").onclick = () => player.preview(song, "lead", "E5");
+</script>
+</body>
+</html>
