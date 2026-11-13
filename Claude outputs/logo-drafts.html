@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Logo drafts</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#1d1a2b;--cream:#fffaf0;--pink:#ff6fb1;--yellow:#ffe14d;--blue:#9be7ff;--green:#b8f28c;--lilac:#d5c2ff;--pip:#b58cff}
+*{box-sizing:border-box;margin:0}
+body{font-family:Nunito,system-ui,sans-serif;color:var(--ink);background:linear-gradient(160deg,#f59a45,#ffb25e);min-height:100vh;padding:28px 16px 60px}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:26px}
+h1{font-family:'Baloo 2',sans-serif;font-size:46px;line-height:1}
+.lead{font-size:17px;font-weight:600;max-width:640px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:22px}
+.card{background:var(--cream);border:2px solid var(--ink);border-radius:16px;box-shadow:4px 4px 0 var(--ink);padding:18px;display:flex;flex-direction:column;gap:12px}
+.mock{display:flex;align-items:center;gap:12px;background:linear-gradient(160deg,#f59a45,#ffb25e);border:2px solid var(--ink);border-radius:12px;padding:12px 14px;cursor:pointer;user-select:none}
+.mock svg{width:76px;height:70px;flex:none;transition:transform .25s cubic-bezier(.2,.9,.3,1.5)}
+.mock:active svg{transform:scale(.92) rotate(-4deg)}
+.mock .bn{font-family:'Baloo 2',sans-serif;font-size:30px;line-height:.9;font-weight:800}
+.mock .bt{font-size:13px;font-weight:800}
+.mock.pip .bt{color:#5b2bbf}
+.card h2{font-family:'Baloo 2',sans-serif;font-size:28px;line-height:1}
+.card p{font-size:14.5px;line-height:1.45}
+.states{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.st{display:flex;flex-direction:column;align-items:center;gap:4px;background:#fff;border:2px solid var(--ink);border-radius:10px;padding:8px 4px 6px;font-size:11.5px;font-weight:800}
+.st svg{width:70px;height:64px}
+.st.dark{background:#241d38;color:#e9e3ff}
+.story{font-size:13.5px;line-height:1.45;background:#f3eee2;border-radius:10px;padding:10px 12px}
+.story b{font-weight:800}
+.hint{font-size:12px;font-weight:800;opacity:.6}
+.glow{filter:drop-shadow(0 0 6px rgba(181,140,255,.9))}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Logo drafts</h1>
+  <p class="lead">Six characters that could replace the dolphin. Each has the three states Pip's story needs: <b>asleep</b> (how it normally looks), <b>awake</b> (after you click it enough) and <b>Pip's</b> (purple, once it gives up his address). Click a header to wake it up.</p>
+  <div class="grid" id="grid"></div>
+</div>
+
+<script>
+const INK = '#1d1a2b';
+// Each draft draws itself in one of three states: 'sleep' | 'awake' | 'pip'
+const S = (inner, glow) => `<svg viewBox="0 0 120 110" class="${glow ? 'glow' : ''}" stroke="${INK}" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">${inner}</svg>`;
+const eyes = (st, a, b, y, r = 6) => st === 'sleep'
+  ? `<path d="M${a - 7} ${y} q7 6 14 0" fill="none"/><path d="M${b - 7} ${y} q7 6 14 0" fill="none"/>`
+  : `<circle cx="${a}" cy="${y}" r="${r}" fill="${st === 'pip' ? '#f4ecff' : INK}" stroke="none"/><circle cx="${b}" cy="${y}" r="${r}" fill="${st === 'pip' ? '#f4ecff' : INK}" stroke="none"/>` +
+    (st === 'pip' ? `<circle cx="${a}" cy="${y}" r="${r * .45}" fill="${INK}" stroke="none"/><circle cx="${b}" cy="${y}" r="${r * .45}" fill="${INK}" stroke="none"/>` : `<circle cx="${a - 2}" cy="${y - 2}" r="${r * .35}" fill="#fff" stroke="none"/><circle cx="${b - 2}" cy="${y - 2}" r="${r * .35}" fill="#fff" stroke="none"/>`);
+const P = (col, st) => st === 'pip' ? '#b58cff' : col;
+
+const DRAFTS = [
+  { name: 'Blip', tag: 'a little blob creature with a sprout',
+    why: 'Soft and friendly, reads well tiny, and has an obvious "sleeping" look. Feels like a pet that lives on the site.',
+    story: '<b>Wake Blip:</b> it naps in the corner and wakes after a few pokes. Once it gives up Pip\'s address it turns purple and its sprout glows.',
+    draw: st => S(`
+      <path d="M60 24 C58 12 66 4 76 7 C73 15 68 20 60 24 Z" fill="${st === 'pip' ? '#d5c2ff' : '#7bd389'}"/>
+      <path d="M18 92 C12 58 30 24 60 24 C90 24 108 58 102 92 C100 101 20 101 18 92 Z" fill="${P('#9be7ff', st)}"/>
+      <path d="M32 50 C36 40 44 34 52 32" fill="none" stroke="#fff" stroke-width="5" opacity=".7"/>
+      ${eyes(st, 46, 74, 62)}
+      <ellipse cx="34" cy="74" rx="7" ry="4" fill="#ff9fc7" stroke="none" opacity=".8"/><ellipse cx="86" cy="74" rx="7" ry="4" fill="#ff9fc7" stroke="none" opacity=".8"/>
+      ${st === 'sleep' ? '<path d="M56 78 q4 3 8 0" fill="none"/>' : '<path d="M52 76 q8 9 16 0" fill="#fff"/>'}
+      <ellipse cx="42" cy="99" rx="11" ry="5" fill="${INK}"/><ellipse cx="78" cy="99" rx="11" ry="5" fill="${INK}"/>
+      ${st === 'sleep' ? '<text x="98" y="30" font-family="Baloo 2" font-size="18" font-weight="800" fill="' + INK + '" stroke="none">z</text>' : ''}`, st === 'pip') },
+
+  { name: 'Telly', tag: 'an old TV with antenna ears',
+    why: 'A games site living inside a TV makes sense, and a TV switching on is a perfect "waking up". The screen is where Pip could appear later.',
+    story: '<b>Wake Telly:</b> click it until the screen flickers on. When Pip takes over, the screen goes purple and shows his face. A natural home for him.',
+    draw: st => S(`
+      <path d="M50 34 L36 10" /><path d="M70 34 L86 12"/><circle cx="36" cy="10" r="5" fill="${P('#ffe14d', st)}"/><circle cx="86" cy="12" r="5" fill="${P('#ffe14d', st)}"/>
+      <rect x="14" y="32" width="92" height="66" rx="16" fill="${P('#ff6fb1', st)}"/>
+      <rect x="24" y="42" width="58" height="46" rx="12" fill="${st === 'sleep' ? '#3a3550' : st === 'pip' ? '#2a2140' : '#b8f28c'}"/>
+      ${st === 'sleep' ? '<path d="M36 50 L44 54" stroke="#fff" stroke-width="3" opacity=".35"/><text x="60" y="76" font-family="Baloo 2" font-size="16" font-weight="800" fill="#8a85a3" stroke="none">z</text>'
+        : st === 'pip' ? '<circle cx="53" cy="65" r="15" fill="#b58cff" stroke="none"/><circle cx="48" cy="62" r="2.6" fill="' + INK + '" stroke="none"/><circle cx="58" cy="62" r="2.6" fill="' + INK + '" stroke="none"/><path d="M48 70 q5 3 10 0" fill="none" stroke-width="2.5"/>'
+        : '<circle cx="44" cy="60" r="4.5" fill="' + INK + '" stroke="none"/><circle cx="62" cy="60" r="4.5" fill="' + INK + '" stroke="none"/><path d="M45 72 q8 8 16 0" fill="none" stroke-width="3.5"/>'}
+      <circle cx="94" cy="54" r="5" fill="${INK}"/><circle cx="94" cy="72" r="5" fill="${INK}"/>
+      <path d="M30 98 L26 106"/><path d="M90 98 L94 106"/>`, st === 'pip') },
+
+  { name: 'Bolt', tag: 'a small round robot',
+    why: 'Fits a site built by someone who codes, and makes Pip\'s "trapped AI" story feel right: a robot that is just a logo... until it isn\'t.',
+    story: '<b>Wake Bolt:</b> its antenna light blinks on after some clicks. Turning purple reads as Pip getting into its circuits.',
+    draw: st => S(`
+      <path d="M60 30 L60 14"/><circle cx="60" cy="11" r="6" fill="${st === 'sleep' ? '#c9c4d6' : st === 'pip' ? '#d5c2ff' : '#ff6fb1'}"/>
+      <rect x="10" y="50" width="10" height="22" rx="4" fill="${P('#ffe14d', st)}"/><rect x="100" y="50" width="10" height="22" rx="4" fill="${P('#ffe14d', st)}"/>
+      <rect x="18" y="30" width="84" height="64" rx="18" fill="${P('#ffe14d', st)}"/>
+      <rect x="30" y="42" width="60" height="38" rx="11" fill="${INK}"/>
+      ${st === 'sleep' ? '<path d="M40 61 h12 M68 61 h12" stroke="#8a85a3" stroke-width="4"/>'
+        : `<rect x="40" y="52" width="10" height="16" rx="5" fill="${st === 'pip' ? '#b58cff' : '#9be7ff'}" stroke="none"/><rect x="70" y="52" width="10" height="16" rx="5" fill="${st === 'pip' ? '#b58cff' : '#9be7ff'}" stroke="none"/>`}
+      <path d="M44 94 v8 M76 94 v8"/><rect x="34" y="100" width="20" height="6" rx="3" fill="${INK}"/><rect x="66" y="100" width="20" height="6" rx="3" fill="${INK}"/>`, st === 'pip') },
+
+  { name: 'Joy', tag: 'a game controller with a face',
+    why: 'Says "games" instantly, even at favicon size. Bold and simple, a good logo first and a character second.',
+    story: '<b>Wake Joy:</b> press its buttons (click it) until it lights up. Pip\'s version glows purple, with the buttons as his colours.',
+    draw: st => S(`
+      <path d="M26 44 C26 32 38 28 48 33 L72 33 C82 28 94 32 94 44 L104 80 C107 96 88 100 80 86 L74 76 L46 76 L40 86 C32 100 13 96 16 80 Z" fill="${P('#b8f28c', st)}"/>
+      <path d="M30 50 h14 M37 43 v14" stroke-width="6"/>
+      <circle cx="84" cy="46" r="5" fill="${st === 'pip' ? '#d5c2ff' : '#ff6fb1'}"/><circle cx="94" cy="56" r="5" fill="${st === 'pip' ? '#d5c2ff' : '#ffe14d'}"/>
+      ${eyes(st, 52, 68, 52, 4.5)}
+      ${st === 'sleep' ? '<path d="M56 64 q4 3 8 0" fill="none"/>' : '<path d="M53 61 q7 8 14 0" fill="#fff"/>'}`, st === 'pip') },
+
+  { name: 'Duck', tag: 'the rubber duck from Slice',
+    why: 'Ties the site and the daily games together, and everyone loves a rubber duck. Works as a mascot you could put everywhere.',
+    story: '<b>Wake the duck:</b> squeak it a few times (it squeaks when clicked). Pip\'s version is a purple duck, which is funny in itself.',
+    draw: st => S(`
+      <path d="M20 74 C20 96 44 104 70 102 C94 100 108 88 106 70 L108 50 C102 54 96 60 90 62 C82 60 72 60 62 62 C46 62 20 58 20 74 Z" fill="${P('#ffe14d', st)}"/>
+      <circle cx="46" cy="42" r="24" fill="${P('#ffe14d', st)}"/>
+      <path d="M24 40 C16 38 6 40 6 46 C6 52 16 54 26 50 Z" fill="${st === 'pip' ? '#ff9fc7' : '#ff8a2b'}"/>
+      ${st === 'sleep' ? '<path d="M38 38 q6 5 12 0" fill="none"/>' : `<circle cx="42" cy="36" r="5" fill="${st === 'pip' ? '#f4ecff' : INK}" stroke="none"/>` + (st === 'pip' ? `<circle cx="42" cy="36" r="2.2" fill="${INK}" stroke="none"/>` : '<circle cx="40.5" cy="34.5" r="1.7" fill="#fff" stroke="none"/>')}
+      <path d="M66 78 C76 72 90 74 94 82 C86 88 74 88 66 78 Z" fill="${st === 'pip' ? '#9a6be8' : '#f2c21c'}" stroke-width="3"/>`, st === 'pip') },
+
+  { name: 'Orbi', tag: 'a tiny planet with a ring',
+    why: 'Matches Elsewhere and the "games and stuff" universe feel. The ring makes the silhouette unique.',
+    story: '<b>Wake Orbi:</b> spin it (each click turns its ring) until it opens its eyes. Pip\'s version is a purple planet with a glowing ring.',
+    draw: st => S(`
+      <path d="M14 70 C2 82 30 86 60 76 C90 66 116 46 104 38" fill="none" stroke-width="7"/>
+      <circle cx="60" cy="56" r="34" fill="${P('#ffb3d1', st)}"/>
+      <path d="M34 42 C40 32 50 26 58 25" fill="none" stroke="#fff" stroke-width="5" opacity=".6"/>
+      <circle cx="78" cy="74" r="5" fill="none" stroke-width="3" opacity=".5"/>
+      ${eyes(st, 48, 70, 54, 5)}
+      ${st === 'sleep' ? '<path d="M56 66 q3 3 6 0" fill="none"/>' : '<path d="M53 64 q6 7 12 0" fill="#fff"/>'}
+      <path d="M14 70 C2 82 30 86 60 76 C68 73 76 70 84 66" fill="none" stroke="${st === 'pip' ? '#d5c2ff' : '#ffe14d'}" stroke-width="7"/>
+      <path d="M14 70 C2 82 30 86 60 76 C68 73 76 70 84 66" fill="none" stroke-width="2.5" stroke-dasharray="0" opacity=".9" transform="translate(0,4)"/>`, st === 'pip') }
+];
+
+const grid = document.getElementById('grid');
+DRAFTS.forEach((d, i) => {
+  const card = document.createElement('article'); card.className = 'card';
+  card.innerHTML = `
+    <div class="mock" data-i="${i}" data-st="sleep">${d.draw('sleep')}<div><div class="bn">Oli.is</div><div class="bt">Games and stuff</div></div></div>
+    <div class="hint">↑ click to poke it</div>
+    <h2>${d.name}</h2><p>${d.tag[0].toUpperCase() + d.tag.slice(1)}. ${d.why}</p>
+    <div class="states"><div class="st">${d.draw('sleep')}asleep</div><div class="st">${d.draw('awake')}awake</div><div class="st dark">${d.draw('pip')}Pip's</div></div>
+    <div class="story">${d.story}</div>`;
+  grid.appendChild(card);
+});
+grid.addEventListener('click', e => {
+  const m = e.target.closest('.mock'); if (!m) return;
+  const order = ['sleep', 'awake', 'pip'], next = order[(order.indexOf(m.dataset.st) + 1) % 3];
+  m.dataset.st = next; m.classList.toggle('pip', next === 'pip');
+  m.querySelector('svg').outerHTML = DRAFTS[+m.dataset.i].draw(next);
+  m.querySelector('.bt').textContent = next === 'pip' ? 'olid.is/pip' : 'Games and stuff';
+});
+</script>
+</body>
+</html>

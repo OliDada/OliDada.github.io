@@ -34,16 +34,38 @@ function helper(c, deco) {
     q(x0, y0, cx, cy, x1, y1, w) { c.lineWidth = w; c.lineCap = 'round'; c.beginPath(); c.moveTo(x0, y0); c.quadraticCurveTo(cx, cy, x1, y1); c.stroke(); return h; },
     ring(x, y, rx, ry, w, rot = 0) { c.lineWidth = w; c.beginPath(); c.ellipse(x, y, rx, ry, rot, 0, 7); c.stroke(); return h; },
     path(fn) { c.beginPath(); fn(c); c.fill(); return h; },
+    // closed smooth outline through points (Catmull-Rom)
+    blob(pts) { c.beginPath(); const n = pts.length;
+      for (let i = 0; i < n; i++) { const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
+        if (!i) c.moveTo(p1[0], p1[1]);
+        c.bezierCurveTo(p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6, p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6, p2[0], p2[1]); }
+      c.closePath(); c.fill(); return h; },
+    // smooth tube along points, width w0 -> w1 with optional bulge in the middle
+    tube(pts, w0, w1 = w0, bulge = 0) { let len = 0; for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+      const sp = spline(pts, Math.max(8, Math.ceil(len / (pts.length - 1) / 1.5))), n = sp.length;
+      for (let i = 0; i < n; i++) { const t = i / (n - 1), w = w0 + (w1 - w0) * t + bulge * Math.sin(Math.PI * t); c.beginPath(); c.arc(sp[i][0], sp[i][1], Math.max(.5, w / 2), 0, 7); c.fill(); }
+      return h; },
+    // smooth open stroke (paint)
+    sl(pts, w) { const sp = spline(pts, 10); return h.l(sp, w); },
+    // remove area (bites, holes). Paint pass skips it: nothing is painted there anyway.
+    cut(fn) { if (deco) return h; c.save(); c.globalCompositeOperation = 'destination-out'; fn(h); c.restore(); return h; },
     spiral(x, y, R, w) { c.lineWidth = w; c.lineCap = 'round'; c.beginPath(); for (let t = 0; t < 12.5; t += .1) { const rr = R * t / 12.5; const px = x + Math.cos(t) * rr, py = y + Math.sin(t) * rr; t ? c.lineTo(px, py) : c.moveTo(px, py); } c.stroke(); return h; }
   };
   return h;
 }
+function spline(pts, seg) { const out = [], n = pts.length; if (n < 2) return pts.slice();
+  for (let i = 0; i < n - 1; i++) { const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(n - 1, i + 2)];
+    for (let k = 0; k < seg; k++) { const t = k / seg, t2 = t * t, t3 = t2 * t;
+      out.push([0, 1].map(a => .5 * ((2 * p1[a]) + (-p0[a] + p2[a]) * t + (2 * p0[a] - 5 * p1[a] + 4 * p2[a] - p3[a]) * t2 + (-p0[a] + 3 * p1[a] - 3 * p2[a] + p3[a]) * t3))); } }
+  out.push(pts[n - 1]); return out; }
 function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 function mix(hex, t) { const n = parseInt(hex.slice(1), 16), r = n >> 16, g = n >> 8 & 255, b = n & 255; const m = v => Math.round(v + (255 - v) * t); return `rgb(${m(r)},${m(g)},${m(b)})`; }
 
 function build(item) {
-  const sh = item.shape, r = mulberry(item.seed), v = sh.p(r);
-  const tilt = (r() - .5) * .9, flip = r() < .5;
+  const sh = item.shape, r = mulberry(item.seed);
+  const j = Array.from({ length: 64 }, () => r() * 2 - 1);
+  const v = Object.assign({ j }, sh.p ? sh.p(r) : {});
+  const tilt = (r() * 2 - 1) * (sh.tilt ?? .18), flip = r() < .5;
   const draw = (c, k, dx, dy, deco) => {
     c.save(); c.translate(S / 2 + dx, S / 2 + dy); c.rotate(tilt); c.scale(flip ? -k : k, k); c.translate(-100, -100);
     c.fillStyle = '#000'; c.strokeStyle = '#000';
@@ -57,9 +79,13 @@ function build(item) {
   const mask = mk(S, S), m = mask.getContext('2d'); draw(m, k, -cx * k, -cy * k, false);
   const col = mk(S, S), c = col.getContext('2d'); c.drawImage(mask, 0, 0);
   c.globalCompositeOperation = 'source-in'; c.fillStyle = sh.color; c.fillRect(0, 0, S, S);
-  c.globalCompositeOperation = 'source-atop'; draw(c, k, -cx * k, -cy * k, true);
-  const shade = mk(S, S), sc = shade.getContext('2d'); sc.fillStyle = 'rgba(30,27,36,.10)'; sc.fillRect(0, 0, S, S);
-  sc.globalCompositeOperation = 'destination-out'; sc.drawImage(mask, 0, -10); c.drawImage(shade, 0, 0);
+  c.globalCompositeOperation = 'source-atop'; draw(c, k, -cx * k, -cy * k, true); c.globalCompositeOperation = 'source-over';
+  // soft light from the top-left: a bright rim and a darker lower-right edge
+  const band = (dx, dy, fill, blur) => { const b = mk(S, S), bc = b.getContext('2d'); bc.drawImage(mask, 0, 0);
+    bc.globalCompositeOperation = 'destination-out'; bc.drawImage(mask, dx, dy); bc.globalCompositeOperation = 'source-in'; bc.fillStyle = fill; bc.fillRect(0, 0, S, S);
+    c.save(); c.filter = `blur(${blur}px)`; c.drawImage(b, 0, 0); c.restore(); };
+  band(7, 9, 'rgba(255,255,255,.38)', 2.5); band(-8, -12, 'rgba(30,27,36,.16)', 3);
+  c.globalCompositeOperation = 'destination-in'; c.drawImage(mask, 0, 0); c.globalCompositeOperation = 'source-over';
   const P = 16, spr = mk(S + P * 2, S + P * 2), s = spr.getContext('2d');
   const ink = mk(S, S), ic = ink.getContext('2d'); ic.drawImage(mask, 0, 0); ic.globalCompositeOperation = 'source-in'; ic.fillStyle = INK; ic.fillRect(0, 0, S, S);
   for (let a = 0; a < 24; a++) s.drawImage(ink, P + Math.cos(a / 24 * 6.283) * 6, P + Math.sin(a / 24 * 6.283) * 6);
@@ -77,8 +103,10 @@ const today = store.days[DAY] || (store.days[DAY] = { cuts: [] });
 
 /* ---------- audio ---------- */
 let ac = null, muted = false;
+const MUTE_ON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg>', MUTE_OFF = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>';
+function setMuteIcon() { const m = $('mute'); m.innerHTML = muted ? MUTE_OFF : MUTE_ON; m.setAttribute('aria-pressed', muted ? 'true' : 'false'); m.setAttribute('aria-label', muted ? 'Sound off' : 'Sound on'); }
 try { muted = localStorage.getItem('slice:muted') === '1'; } catch (e) {}
-$('mute').textContent = muted ? '🔈' : '🔊';
+setMuteIcon();
 function audio() { try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch (e) {} }
 function blip(f, dur = .08, vol = .07, type = 'triangle', delay = 0) {
   if (!ac || muted) return; const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
@@ -95,7 +123,7 @@ function swish() {
   og.gain.setValueAtTime(.25, t + .03); og.gain.exponentialRampToValueAtTime(.0001, t + .22); o.connect(og).connect(ac.destination); o.start(t + .03); o.stop(t + .25);
 }
 function buzz(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} }
-$('mute').onclick = () => { muted = !muted; $('mute').textContent = muted ? '🔈' : '🔊'; try { localStorage.setItem('slice:muted', muted ? '1' : '0'); } catch (e) {} };
+$('mute').onclick = () => { muted = !muted; setMuteIcon(); try { localStorage.setItem('slice:muted', muted ? '1' : '0'); } catch (e) {} };
 
 /* ---------- canvas ---------- */
 const cv = $('cv'), ctx = cv.getContext('2d'); let W = 0, DPR = 1, scale = 1, ox = 0, oy = 0;

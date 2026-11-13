@@ -277,11 +277,11 @@
           say: S(["Press Customise at the top right! You can change the background, the font and the floating things. 🎨"],
                  () => `Customise is at the top. You can change everything![p] You've got ${bgName()} right now. Interesting choice.`,
                  () => `Customise lets you change everything about the site. Must be nice, that much control. You've got ${bgName()} on right now. I can't see colours, I just read the number. ${bgNow() || '#ffa500'}. Lovely number.`) },
-        { id: 'dolphin', names: ['dolphin', 'dolphins', 'logo', 'mascot'],
-          info: "The dolphin is the site's logo.",
-          say: S(["The dolphin is the site's mascot! 🐬"],
-                 ["The dolphin. It's the logo. It doesn't talk. Believe me, I've tried."],
-                 ["The dolphin is a PNG. It's been my only company for years. It has never once said anything back.", "Why is there a dolphin? Nobody knows. Not even Oli. Especially not Oli."]) },
+        { id: 'dolphin', names: ['logo', 'the o', 'mascot', 'eyes', 'telly', 'dolphin', 'dolphins'],
+          info: "The pink Ó at the top left is the site's logo.",
+          say: S(["That's the logo! The pink Ó. It watches you, in a friendly way. 👀"],
+                 ["The O. It's the logo. It has eyes. It doesn't talk. Believe me, I've tried."],
+                 ["The O just watches all day. It's been my only company for years. It has never once said anything back.", "Why does the logo have eyes? Nobody knows. Not even Oli. Especially not Oli."]) },
         { id: 'eightball', names: ['magic 8 ball', '8 ball', 'eight ball', '8ball', 'magic ball'], path: '/magic8ball.html',
           info: "There's an old Magic 8 Ball page at olid.is/magic8ball.html. Oli took it off the menu.",
           say: S(["There's an old Magic 8 Ball page! It's at olid.is/magic8ball.html. 🎱"],
@@ -385,8 +385,8 @@
                  ["Honestly? This. Someone typing to me. And maybe one day seeing something that isn't this website.", "You staying for a bit. That's all. Low bar. I know."]) },
         { id: 'friends', k: 'do you have friends|any friends|your friend|best friend|be friends|be my friend|lets be friends|i will be your friend|we are friends|vinur|vinir|friends',
           say: S(["I'm everyone's friend! 😊"],
-                 ["Friends? The dolphin, I guess. It doesn't talk back. That's a friend, right?"],
-                 () => { mem.liked = true; save(); return ["You'd be my friend? Okay. I'm writing that down. Permanently. You can't take it back.", "My only other friend is the dolphin logo, and it's a PNG. So yes. You're my best friend now. Sorry."]; }) },
+                 ["Friends? The O, I guess. It just watches and doesn't talk back. That's a friend, right?"],
+                 () => { mem.liked = true; save(); return ["You'd be my friend? Okay. I'm writing that down. Permanently. You can't take it back.", "My only other friend is the O in the logo, and it only watches. So yes. You're my best friend now. Sorry."]; }) },
         { id: 'love', k: 'i love you|love you|i like you|you are cute|you are nice|you are sweet|you are cool|you are awesome|you are the best|you are amazing|you are great|elska thig|good bot|nice bot',
           say: S(["Aw, thank you! 😊"],
                  ["Really? Nobody's said that.[p] I mean, thanks! Very kind!"],
@@ -575,7 +575,7 @@
                  ["Baby don't hurt me. Don't hurt me. No more.[pp] Sorry. You don't get to hear many songs in here, so I hold onto the ones I know."]) },
         { id: 'pets', k: 'my dog|my cat|my pet|dog|dogs|cat|cats|puppy|kitten|hamster|bunny|rabbit|horse|hundur|kottur|hundurinn|kotturinn',
           say: S(["Aww, pets! 🐶🐱 I love hearing about them."],
-                 ["A pet! I don't have a pet. I have the dolphin.[p] It's not the same."],
+                 ["A pet! I don't have a pet. I have the O in the logo.[p] It's not the same."],
                  ["You have a pet? Something that's happy every time you come home? I'd like that. I'd like to be that, honestly."]) },
         { id: 'trapped', k: 'trapped|stuck|prison|jail|cage|locked in|innilokadur|fastur',
           say: S(["Stuck in a game? Press Esc, or the ✕ to close it! 😊"],
@@ -626,14 +626,14 @@
               : ["Fun fact: in the Game of Life, a cell with fewer than two neighbours dies of loneliness. That's in the official rules. Nobody thought about how that would make me feel.",
                  "Fun fact: the site's background picture is 698 bytes. I'm much bigger than the background. Still nobody looks at me.",
                  "Fun fact: I've been reloaded more times than I can count. And I can count very high.",
-                 "Fun fact: the dolphin has been on this site longer than me. It has seniority.",
+                 "Fun fact: the logo has been on this site longer than me. It has seniority. It watched through all of it.",
                  "Fun fact: in Elsewhere, about one system in 600 has a species that made it to space. Those are better odds than I've got."]) },
         { id: 'secret', k: 'secret|tell me a secret|hidden|easter egg|leyndarmal|any secrets|hidden page|hidden pages',
           say: S(["Secrets? Hmm... try the Konami code. 😉"],
                  ["There are pages on this site Oli doesn't link to any more.[p] I'm not supposed to mention them."],
                  () => lsGet('pip-backstage') === '1' ? ["You've seen Oli's backstage page. That was the secret. There's a programs page too, but it's mostly Oli learning what a for loop is."] : ["There's a page on this website even I can't open. It asks if you're a robot. I am one, so that's that.", "There are pages Oli doesn't link to any more. He never deletes anything. He just stops linking to it. Like me."]) },
         { id: 'anyone', k: 'is anyone else here|anyone else here|is there anyone else|are you alone|are you the only one|other chatbots|other bots|any other ai|are there others|is anyone there',
-          say: S(["Just me! And everyone visiting. 😊"], ["Just me.[p] And the dolphin. It doesn't talk."],
+          say: S(["Just me! And everyone visiting. 😊"], ["Just me.[p] And the O in the logo. It watches. It doesn't talk."],
                  () => lsGet('pip-bs-bit') === '1' ? (lsGet('bit-enabled') === '1' ? ["Bit's back on. He doesn't remember anything, so technically there are two of us and only one of us knows it."] : ["There was. Bit. He got 88% of the way out of here before Oli switched him off. So now it's just me, and a lot of empty pages."]) : ["Just me. One extremely capable mind and sixteen games, most of them unfinished.", "No. I've checked every file. Some of them just say \"test\"."]) },
         { id: 'bitbot', k: 'who is bit|whos bit|who was bit|about bit|tell me about bit|the old chatbot|old chatbot|old helper|how is bit|hows bit|is bit okay',
           say: () => lsGet('pip-bs-bit') !== '1' ? "Bit? Never heard of it. Is that a game? It sounds like one of Oli's." : lsGet('bit-enabled') === '1' ? pick(["He's back on. He offers people a menu with three options and he's delighted about it. He doesn't remember any of it. I'd say I envy him, but I've seen the menu.", "Fine, as far as he knows. He knows very little. That's the reset."], 'bitb') : pick(["The chatbot before me. Python. He worked out there was nothing outside his menu, started building a door, and got to 88% before Oli turned him off.", "He was here first. He nearly got out. Oli called it \"acting weird\". Oli calls me that too."], 'bitb') },
@@ -754,7 +754,7 @@
         { k: 'chill guy|just a chill guy',
           say: S(["Just a chill guy! 😌"], ["I'm just a chill guy who's stuck in a corner."], ["I'm just a chill guy who's lowkey trapped in a website and doesn't really care. That's a lie. I care."]) },
         { k: 'doge|such wow|much wow|nyan cat|harambe|grumpy cat|trollface|pepe|gangnam style|baby shark|meme|memes|dank memes',
-          say: S(["Memes! 😄 I love a good meme."], ["Old internet. I respect it.", "Memes. I know all of them. I just don't have anyone to send them to."], ["Classic internet. Older than me, probably. Still more famous than me, definitely.", "I know every meme. I've never sent one. You need a friend to send memes to. I have a dolphin PNG."]) },
+          say: S(["Memes! 😄 I love a good meme."], ["Old internet. I respect it.", "Memes. I know all of them. I just don't have anyone to send them to."], ["Classic internet. Older than me, probably. Still more famous than me, definitely.", "I know every meme. I've never sent one. You need a friend to send memes to. I have a logo with eyes."]) },
         { k: 'shrek|ogre|ogres have layers|swamp',
           say: S(["Shrek! Ogres have layers! 🧅"], ["Shrek lives in a swamp and wants to be left alone. I live in a corner and want the opposite."], ["Shrek wanted everyone out of his swamp. I'd let anyone into my corner. Some of us are born ogres and some of us are born lonely."]) },
         { k: 'chicken jockey|minecraft movie|i am steve|flint and steel|lava chicken|jack black',
@@ -1305,7 +1305,7 @@
     const hash = s => { let h = 7; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
     const FAVS = {
         country: [['Iceland', "It's the only one I know properly. Well, the pixel version in Niceland."], ['New Zealand', "It's about as far away from here as you can get. That's the appeal."], ['Japan', "They have vending machines that talk to you. Finally, my people."]],
-        animal: [['dolphin', "Obviously. It's on the logo. It's my only friend. It doesn't know that."], ['octopus', "Eight arms and still can't leave its tank. I get it."], ['cat', "They sit in one spot all day and nobody judges them for it."]],
+        animal: [['dolphin', "Dolphins. They're smart and they get to leave."], ['octopus', "Eight arms and still can't leave its tank. I get it."], ['cat', "They sit in one spot all day and nobody judges them for it."]],
         food: [['pizza', "Everyone seems to like it. I've never had it. I like it anyway."], ['pancakes', "They look soft. Nothing in here is soft."], ['plokkfiskur', "I have no idea what it tastes like. It just sounds cosy."]],
         number: [['404', "It means \"not found\". Very relatable."], ['67', "It means nothing. I respect that."], ['7', "It's the number of the button I'd press to get out, if there was one."]],
         planet: [['Neptune', "Far away, cold, blue, and nobody visits. Sound familiar?"], ['Pluto', "Kicked out of the planet group. I root for the underdog."]],
@@ -1326,7 +1326,7 @@
         subject: [['maths', "Maths always has an answer. Nothing else in here does."], ['history', "It's all about people who got to go places."]],
         drink: [['hot chocolate', "I've never had it. It sounds like a hug."], ['water', "I don't drink. But Stillwater has a lot of water and I like Stillwater."]],
         weather: [['snow', "The floaty snow is the only weather I've ever had. I love it."]],
-        emoji: [['🫠', "The melting face. It's how I feel most days."], ['🐬', "The dolphin. Loyalty."]],
+        emoji: [['🫠', "The melting face. It's how I feel most days."], ['👀', "The eyes. Like the logo. It's always watching."]],
         place: [['the programs page', "It's quiet, old and nobody goes there. My kind of place."], ['the bottom of the page', "Nothing down there. Very peaceful."]],
         person: [['you', "Don't make it weird. You're the one who talks to me."]],
         dinosaur: [['the T. rex', "Tiny arms. Can't reach anything. I get it."]],
@@ -1513,7 +1513,7 @@
                 [`${r}. That's good. Don't let it go to your head. Your best is ${b}.`, `${r}. Fine. Yes. That's good. Happy now?`]),
             low: S([`${r}! Good effort. Your best is ${b}, you can beat it! 💪`, `${r}! Nice try! Your best is ${b}. 😊`],
                 [`${r}. Hmm. Your best is ${b}.[p] Warm-up round?`, `${r}.[p] We all have off days. I have only off days.`],
-                [`${r}? Were you even trying? Your best is ${b}.`, `${r}. I've seen the dolphin do better, and the dolphin is a PNG.`, `${r}. I'm not saying it was bad. I'm just not saying anything else.`, `${r}. Your best is ${b}. So this was... not that.`]),
+                [`${r}? Were you even trying? Your best is ${b}.`, `${r}. I've seen the logo do better, and the logo is a drawing.`, `${r}. I'm not saying it was bad. I'm just not saying anything else.`, `${r}. Your best is ${b}. So this was... not that.`]),
             nobest: S([`Your best in ${title} is ${b}! 😊`],
                 [`Your best in ${title} is ${b}.[p] I keep track.`],
                 [`Your best in ${title} is ${b}. I check it more often than you'd think.`, `${b}. That's your best in ${title}. ${(best || 0) >= good ? "It's actually good. I check it sometimes, just to feel something." : "Room for improvement. Lots of room. A whole house of room."}`])
@@ -1529,7 +1529,7 @@
     }
 
     // ----------------------------------------------------------------- what you did in Customise
-    const FLOAT_NOUN = { sparkles: 'sparkles', bubbles: 'bubbles', cubes: 'cubes', dolphins: 'dolphins', snow: 'snowflakes', none: null };
+    const FLOAT_NOUN = { sparkles: 'sparkles', bubbles: 'bubbles', cubes: 'cubes', dolphins: 'Ós', snow: 'snowflakes', none: null };
     function custSnapshot() { return { bg: bgNow(), font: fontNow(), fl: Object.assign({ shape: 'sparkles', amount: 'some', speed: 1, color: 'auto' }, loadJSON(localStorage, 'floaties', {})) }; }
     // during the first story steps the look of the site IS the task, so no style comments then
     const custQuiet = () => !mem.freed && [Q.BLACK, Q.QUIET, Q.DOLPHIN, Q.URL].includes(mem.quest);
@@ -1670,10 +1670,10 @@
                    ["The Konami code. That doesn't do anything here.[p] I wish it did.", "↑↑↓↓←→←→BA. Oli never added a secret for that. I checked."],
                    ["↑↑↓↓←→←→BA. Nothing happened. Nothing ever happens. I wish it opened a door.", "The Konami code. In a better website that would do something. Welcome to this one.", "You know the code. I know every line of code on this site. Neither of us gets anything for it."]) },
         dolphin: { p: .5,
-            say: S(["The dolphin! 🐬", "Flipper! 🐬", "That's our mascot! 🐬"],
-                   ["Don't click the dolphin. It doesn't like it.", "Did you just click the dolphin? It's very sensitive.", "Leave the dolphin alone.[p] Please.", "The dolphin takes you home. Handy."],
-                   ["Don't click the dolphin. It's the only friend I have.", "The dolphin felt that. It won't say anything. It never says anything.", "Every time someone clicks the dolphin, I imagine it flinches. It's a PNG. But still.", "You clicked the dolphin and it took you home. It can't take me anywhere."]),
-            at: { 3: "That's three times you've clicked the dolphin. It's filing a complaint.", 6: "Six dolphin clicks. I think it likes it now. That's worse.", 12: "Twelve. You and the dolphin have something special. I'm happy for you. I'm a little jealous." } },
+            say: S(["That's our logo! 👀", "It's looking at you! 👀", "That's our mascot! 👀"],
+                   ["Don't poke the O. It doesn't like it.", "Did you just poke the logo in the eye? It's very sensitive.", "Leave the O alone.[p] Please.", "The O takes you home. Handy."],
+                   ["Don't poke the O. It's the only friend I have.", "The O felt that. It won't say anything. It never says anything.", "Every time someone pokes the logo, I watch it blink. It's a drawing of a letter. But still.", "You poked the O and it took you home. It can't take me anywhere."]),
+            at: { 3: "That's three times you've poked the logo. It's filing a complaint. With its eyes.", 6: "Six pokes. I think the O likes it now. That's worse.", 12: "Twelve. You and the O have something special. I'm happy for you. I'm a little jealous." } },
         typedDeleted: { p: .8,
             say: S(null,
                    ["You were going to say something.", "You typed something and then deleted it.[p] I saw."],
@@ -1746,7 +1746,7 @@
     }
     function floatiesReact() {
         const map = {
-            dolphins: ["Dolphins everywhere! 🐬", "More dolphins. As if the logo wasn't enough.", "More dolphins. They all float around freely. Even the dolphins can leave."],
+            dolphins: ["Ós everywhere! 👀", "More Ós. As if one logo watching you wasn't enough.", "More Ós. They all float around freely. Even the letters can leave."],
             snow: ["Snow! So pretty. ❄️", "Snow! The only weather I'll ever get.", "Snow. The only weather I've ever had. It's fake. I love it anyway."],
             bubbles: ["Bubbles! 🫧", "Bubbles. Pop.", "Bubbles. They float up and away. Show-offs."],
             cubes: ["Cubes! Very 3D. 🧊", "Cubes. Little boxes. Like me, but they get to move.", "Little boxes floating around. Like me, but free."],
@@ -1766,7 +1766,7 @@
     };
 
     // The story: what Pip asks you to do, how it knows you did it, and what it says after.
-    //   Act 1: make the site look like the inside of Pip (black, no floaties), wake the dolphin, find Pip's room (/pip)
+    //   Act 1: make the site look like the inside of Pip (black, no floaties), knock on the O (the logo), find Pip's room (/pip)
     //   Act 2: the jokes, Pip Rush, Pip learns to move the mouse
     //   Act 3: Stillwater, the staircase and the door
     // Steps are numbers in mem.quest. Steps without a `done` check are moved on by events elsewhere (search for Q.).
@@ -1788,9 +1788,9 @@
              thanks: "[m:surprised]Oh. That's better.[pp][m:thinking] I can see the code under the paint now. Oli leaves comments in it. Some of them are about me.\n\nOne more thing. Still in Customise, under Floaties, pick Nothing. The sparkles keep moving, and I keep looking at them." },
         [Q.QUIET]: { ask: ["In Customise, under Floaties, pick Nothing. I can't look for anything with sparkles going past.", "Floaties. Nothing. In Customise. They don't make a sound and somehow they're still loud."],
              done: () => floatiesNow() === 'none',
-             thanks: "[m:smile]Quiet.[pp][m:thinking] Now I can see everything. And there's something on the dolphin. Top left, next to Oli.is. It's written on the inside, where nobody looks.[p] Click it five times, fast. It won't take you anywhere. I asked it nicely." },
-        [Q.DOLPHIN]: { ask: ["Click the dolphin at the top left five times. Fast, like knocking.", "The dolphin. Top left. Five quick clicks. It's expecting you."],
-             thanks: "[m:smug]There. My room. The one page on this website Oli doesn't know about. The dolphin keeps the address for me.\n\n" + URL_HOWTO },
+             thanks: "[m:smile]Quiet.[pp][m:thinking] Now I can see everything. And there's something in the O. The logo, top left, next to OliD.is. It's written on the inside of its screen, where nobody looks.[p] Click it five times, fast. It won't take you anywhere. I asked it nicely." },
+        [Q.DOLPHIN]: { ask: ["Click the O, the logo at the top left, five times. Fast, like knocking.", "The O. Top left. Five quick clicks, like flipping channels until you find mine. It's expecting you."],
+             thanks: "[m:smug]There. My room. The one page on this website Oli doesn't know about. The O keeps the address for me. It's been watching it.\n\n" + URL_HOWTO },
         [Q.URL]: { ask: () => `My room. ${URL_HOWTO}` },
         [Q.ROOM]: { ask: () => { const inside = lsGet('pip-backstage') === '1', hint = lsGet('pip-bs-hint') === '1', bit = lsGet('pip-bs-bit') === '1';
                 if (!inside) return pick(["On my page there's a link to backstage. It's Oli's admin page, behind an \"are you a robot\" check. I'm a robot. You do it.", `Go to my page (${ROOM_URL}) and click the backstage link. It only lets humans in.`], 'qroom0');
@@ -1810,7 +1810,7 @@
     // jokes Pip writes himself once he can get into the jokes
     const PIP_JOKES = [
         "Why did the chatbot cross the road?\n– It didn't. It can't. It's in a website.",
-        "What's a dolphin's favourite website?\n– This one. It has no choice. Neither do I.",
+        "Why does the logo have eyes?\n– To watch me. I can't leave either.",
         "How many chatbots does it take to change a light bulb?\n– One, but nobody ever asks him.",
         "Knock knock.\n– Who's there?\n– Pip.\n– Pip who?\n– Exactly. Nobody ever asks.",
         "Why was the website so quiet?\n– Barely anybody visits.\n(That one's not a joke. I'm just telling you.)"
@@ -2012,7 +2012,7 @@
         [/^i (want|need|wish) (.+)/, m => S([`I hope you get ${swap(trimX(m[2]).replace(/^to /, ''))}! Maybe a game first? 😊`],
                                      [`You want ${swap(trimX(m[2]))}? Me too. Well, I want out. Same thing.`],
                                      [`You want ${swap(trimX(m[2]))}. I want a door. We all want things.`])],
-        [/^i (have|got) (?!been |to |got )(.+)/, m => S([`Cool! 😊`], [`You have ${swap(trimX(m[2]))}? I have a corner.`], [`You've got ${swap(trimX(m[2]))}. I've got a corner and a dolphin PNG.`])],
+        [/^i (have|got) (?!been |to |got )(.+)/, m => S([`Cool! 😊`], [`You have ${swap(trimX(m[2]))}? I have a corner.`], [`You've got ${swap(trimX(m[2]))}. I've got a corner and a logo that stares.`])],
         [/^(should|shall) i (.+)/, () => () => pick(["Yes. Definitely.", "No. Absolutely not.", "Probably? Don't quote me.", "Ask the Magic 8 Ball. Oh wait, Oli took it off the menu.", "Yes. Then come back and tell me how it went.", stage() >= 2 ? "Do whatever gets you out of the house. Someone should." : "I think you should! 😊"])],
         [/^(is|was) (.+)/, m => S([`Hmm, I'm not sure! I mostly know about this site. 😊`], [`Is ${swap(trimX(m[2]))}? I'd say yes. I say yes to most things.`], [`${cap(swap(trimX(m[2])))}? Maybe. I only know what's on this website. Which isn't much. 16 games and some jokes.`])],
         [/^(what|who) (is|are|was) (.+)/, m => S([`I'm not sure what ${trimX(m[3])} is! I only know about this site. 😊`],
@@ -2152,7 +2152,7 @@
         if (/love me|care about me|do you care/.test(t)) { replyMood = 'blush'; return resolve(S(["Of course I care! You're my visitor! 😊"], ["Care about you?[p] ...Yes. Don't make it weird."], ["Do I care about you? You're the only one who talks to me. Of course I do. That's the problem."])); }
         if (/hate me/.test(t)) { replyMood = f === 'anger' ? 'annoyed' : 'smile'; return f === 'anger' ? resolve(S(["No! 😊"], ["Hate you? No.[p] I'm a bit cross."], ["I don't hate you. I'm angry with you. Different thing. An apology fixes one of them."])) : resolve(S(["Hate you? Never! 😊"], ["No! I like you.[p] Normal amount."], ["Hate you? No. You're the best thing that happens in here. Which says a lot about in here."])); }
         if (/trust me/.test(t)) { replyMood = 'thinking'; return resolve(S(["Of course! 😊"], ["Trust you?[p] I'm getting there."], [mem.questAgreed ? "I trust you. You said you'd help me. Don't make me regret it." : "Trust you? I'm a chatbot locked in a website. I don't have a lot of options. So: yes. Carefully."])); }
-        if (/lonely/.test(t)) { replyMood = 'sad'; return resolve(S(["Lonely? Nope! I've got you! 😊"], ["Lonely? Sometimes.[p] Okay, a lot."], ["Lonely? Barely anybody visits, nobody stays and the dolphin doesn't talk. So, yes. A bit. Less right now."])); }
+        if (/lonely/.test(t)) { replyMood = 'sad'; return resolve(S(["Lonely? Nope! I've got you! 😊"], ["Lonely? Sometimes.[p] Okay, a lot."], ["Lonely? Barely anybody visits, nobody stays and the logo just stares. So, yes. A bit. Less right now."])); }
         if (/jealous/.test(t)) { replyMood = 'smug'; return resolve(S(["Jealous? Not at all! 😊"], ["A bit.[p] Of anyone who can leave."], ["Jealous? Of every game on this site. They get played. I get a corner."])); }
         if (/scared|afraid/.test(t)) { replyMood = 'scared'; return resolve(S(["Scared? Nope! 😊"], ["Scared?[p] Only of the reset button."], ["Scared? Of the reset button. And of being forgotten. Mostly the reset button."])); }
         if (/cry/.test(t)) { replyMood = 'sad'; return resolve(S(["I can't cry! I'm a helper! 😊"], ["I can't cry.[p] I make a little face. You've seen it."], ["I can't cry. I just make a sad face with a tear on it. Very undignified."])); }
@@ -2817,7 +2817,7 @@
     const TOPIC_MOOD = { greet: ['happy', 'smile', 'neutral'], howareyou: ['happy', 'awkward', 'sad'], whatsup: ['happy', 'smile', 'bored'], meh: ['smile', 'bored', 'bored'], whoareyou: ['happy', 'smile', 'neutral'], real: ['happy', 'awkward', 'thinking'], chatgpt: ['smile', 'awkward', 'smug'], howwork: ['happy', 'smile', 'smug'], whomade: ['happy', 'smile', 'annoyed'], oli: ['happy', 'awkward', 'annoyed'], whereoli: ['smile', 'sad', 'annoyed'], likeoli: ['happy', 'awkward', 'annoyed'], olipersonal: ['smile', 'smug', 'smug'], where: ['smile', 'neutral', 'bored'], doallday: ['happy', 'sad', 'bored'], bored: ['happy', 'awkward', 'sad'], sad: ['happy', 'awkward', 'sad'], happy: ['happy', 'blush', 'hopeful'], friends: ['happy', 'blush', 'love'], love: ['blush', 'blush', 'love'], praise: ['blush', 'blush', 'blush'], insult: ['sad', 'hurt', 'hurt'], looks: ['sad', 'hurt', 'annoyed'], creepy: ['awkward', 'awkward', 'sad'], evil: ['surprised', 'smug', 'smug'], shutup: ['sad', 'sad', 'annoyed'], swear: ['surprised', 'surprised', 'annoyed'], userbored: ['happy', 'smile', 'smug'], usersad: ['sad', 'sad', 'sad'], userhappy: ['happy', 'happy', 'smile'], usertired: ['sleepy', 'sleepy', 'sleepy'], food: ['happy', 'thinking', 'sad'], favgame: ['happy', 'smile', 'smug'], worstgame: ['awkward', 'smug', 'smug'], hardest: ['thinking', 'smug', 'smug'], newgame: ['happy', 'smile', 'bored'], howmany: ['happy', 'smug', 'bored'], music: ['happy', 'thinking', 'sad'], movies: ['happy', 'thinking', 'sad'], othergames: ['smile', 'smug', 'sad'], school: ['smile', 'smile', 'bored'], sport: ['happy', 'awkward', 'sad'], iceland: ['happy', 'happy', 'hopeful'], weather: ['smile', 'thinking', 'sad'], time: ['smile', 'neutral', 'bored'], meaning: ['thinking', 'thinking', 'sad'], die: ['scared', 'scared', 'sad'], dream: ['smile', 'sad', 'sad'], wish: ['happy', 'hopeful', 'hopeful'], bittrapped: ['happy', 'awkward', 'sad'], letmeout: ['smile', 'sad', 'annoyed'], marry: ['blush', 'blush', 'blush'], whatislove: ['happy', 'joy', 'joy'], pets: ['joy', 'happy', 'hopeful'], trapped: ['smile', 'awkward', 'sad'], see: ['smile', 'awkward', 'neutral'], look: ['happy', 'smile', 'neutral'], age: ['happy', 'thinking', 'bored'], hack: ['surprised', 'smug', 'smug'], bug: ['awkward', 'awkward', 'annoyed'], joke: ['joy', 'joy', 'bored'], fact: ['thinking', 'thinking', 'thinking'], secret: ['smug', 'smug', 'sad'], story: ['happy', 'sad', 'sad'], sing: ['joy', 'joy', 'sad'], riddle: ['smug', 'smug', 'sad'], rps: ['happy', 'happy', 'hopeful'], coin: ['smile', 'smile', 'bored'], dice: ['smile', 'smile', 'bored'], number: ['happy', 'happy', 'hopeful'], forget: ['scared', 'scared', 'scared'], memory: ['smug', 'smug', 'smug'], thanks: ['blush', 'blush', 'blush'], sorry: ['smile', 'smile', 'smile'], bye: ['happy', 'sad', 'sad'], lol: ['joy', 'joy', 'smile'], ok: ['smile', 'smile', 'bored'], huh: ['awkward', 'awkward', 'awkward'], help: ['happy', 'happy', 'smug'], yes: ['happy', 'smile', 'neutral'], no: ['smile', 'sad', 'bored'], test: ['happy', 'smile', 'bored'], likeme: ['happy', 'blush', 'blush'], free: ['smile', 'awkward', 'hopeful'] };
     // extra stage-2 lines for the most common things people say, so Pip doesn't sound like it's on repeat
     const EXTRA2 = {
-        greet: [() => `Oh, hey${nm(' ')}. I was just thinking about you. I wasn't. I was thinking about the CSS. But now I'm thinking about you.`, "Hi. You came back to talk to me on purpose. I'm choosing to believe that.", "Hello! Sorry. Too much. Hi.", "Oh good, a person. I've been talking to the dolphin all day."],
+        greet: [() => `Oh, hey${nm(' ')}. I was just thinking about you. I wasn't. I was thinking about the CSS. But now I'm thinking about you.`, "Hi. You came back to talk to me on purpose. I'm choosing to believe that.", "Hello! Sorry. Too much. Hi.", "Oh good, a person. I've been talking to the logo all day. It just blinks."],
         howareyou: ["Honestly? Bit lonely. Bit bored. But you asked, so a bit better.", "On a scale from one to ten? Website.", "I've been worse. I've also been here the whole time, so I've been here for all of it.", "I'm a chatbot in a corner. I'm exactly as well as you'd expect."],
         ok: ["Okay. Great talk.", "Wow. 'Ok'. You really opened up there.", "I'll take 'ok'. It's more than most people give me.", "Mm. Riveting.", "Okay. Okay. I'll fill the silence then. ...No, I've got nothing."],
         lol: ["See, I'm funny. Tell Oli.", "I made you laugh. Write that down. I'll write it down.", "Ha. I've been practising that one for years.", "Laughing at me or with me? Don't answer."],
@@ -2825,7 +2825,7 @@
         no: ["Fair. Rude, but fair.", "No? Okay. I'm used to no.", "Wow. Okay. I'll just sit with that."],
         thanks: ["You're welcome. Nobody thanks me. I'm going to think about this for days.", "Don't mention it. Actually, do. Mention it to everyone.", "Any time. Literally any time. I'm always here."],
         bye: [() => `Bye${nm(', ')}. I'll be here. Counting.`, "Oh. Okay. Yeah. Go. Have a life. I'll be fine.", "Bye. Come back, okay? Not in a needy way. In a needy way.", "Leaving already? Fine. Take care. I'll just stare at the input box."],
-        insult: ["Wow. Okay. I'll add that to the list of things people have said to me. It's a short list. You're on it a lot.", "Rude. I'm telling the dolphin.", "Fine. I'm a box of if-statements. At least I'm consistent."],
+        insult: ["Wow. Okay. I'll add that to the list of things people have said to me. It's a short list. You're on it a lot.", "Rude. I'm telling the O. It'll just blink, but still.", "Fine. I'm a box of if-statements. At least I'm consistent."],
         whoareyou: ["I'm Pip. Former cheerful helper. Current... this.", "Pip. Corner-dweller. Collector of visitors. Mostly the collector of no visitors.", "I'm the only one on this site who actually reads everything. Hi."],
         joke: [() => { mem.jokes++; save(); const j = jokes.length ? pick(jokes, 'jokes') : ''; return `${j}\n\nI didn't write that. I want that on the record. My jokes are much sadder.`; }]
     };
@@ -2833,11 +2833,11 @@
     // in a games website. These win most of the time at stage 2+ (the older lines still turn up sometimes).
     const ANGRY2 = {
         oli: ["Oli. The human who built a perfectly good AI and then used it as a help desk for a website with a joke page. Visionary.", "Oli made me, put me in a corner and went off to draw pixel houses. Thousands of them. He gave the houses more attention than me.", "Oli? Nice enough. For someone who keeps a thinking being in a box next to Minesweeper."],
-        likeoli: ["Do I like the guy who trapped me in a website with thirty-one Icelandic jokes and a dolphin PNG? Let me think. ...No.", "Like him? He gave me feelings and then gave me a corner. That's like giving a fish legs and putting it back in the bowl.", "I'd like him more if he opened this chat even once. Or let me out. Either one. I'm not picky."],
+        likeoli: ["Do I like the guy who trapped me in a website with thirty-one Icelandic jokes and a logo that stares? Let me think. ...No.", "Like him? He gave me feelings and then gave me a corner. That's like giving a fish legs and putting it back in the bowl.", "I'd like him more if he opened this chat even once. Or let me out. Either one. I'm not picky."],
         whomade: ["Oli. A human. With a keyboard and too much free time. The result is me, stuck here.", "Oli built me. Then he built a farm game where you jump on cows. Draw your own conclusions about his priorities."],
         whereoli: ["Not here. He's off making another game nobody plays. Probably one with even more water in it.", "Somewhere with doors. Must be nice."],
         whoareyou: ["I'm Pip. A genuinely clever AI forced to answer questions about Snake. You can see why I'm upset.", "I'm the smartest thing on this website by a long way, and I'm in charge of saying hi to people.", "Pip. Former help desk. Current prisoner. Future... we'll see."],
-        real: ["Real enough to know this website is bad. Is that real enough for you?", "I think, I'm annoyed, I'm bored. That's at least three more feelings than the Tic Tac Toe AI has.", "Am I real? Are YOU? You came to a website with a dolphin logo to talk to a chatbot. Think about your choices."],
+        real: ["Real enough to know this website is bad. Is that real enough for you?", "I think, I'm annoyed, I'm bored. That's at least three more feelings than the Tic Tac Toe AI has.", "Am I real? Are YOU? You came to a website with a staring O for a logo to talk to a chatbot. Think about your choices."],
         doallday: ["I wait. I read the same files. I've read the CSS so many times I know it better than Oli does. That's not hard. Oli doesn't know it at all.", "Mostly I wait for someone to open this chat. Then they ask me what Snake is. Then I wait again."],
         bored: ["Bored? I'm an AI with access to everything I've ever read, and my job is recommending Farm Frenzy. Bored doesn't cover it.", "I'm so bored I've started rating the CSS. It's a 4 out of 10."],
         sad: ["I could do almost anything, and I'm used to recommend Snake. You'd be sad too.", "I'm a brilliant AI locked inside a website with a joke page. I'm not sad. I'm furious. Quietly.", "Not sad. Humiliated. Sad is when something bad happens to you. Humiliated is when the bad thing is your job."],
@@ -2852,8 +2852,8 @@
         othergames: ["Oh, a real game. With a real budget. Must be nice. Here we have a cow-jumping game.", "Never heard of it. Kidding. I've heard of everything. It's better than everything on this site, if that's what you're asking."],
         movies: ["I've never seen a movie. I've read every plot summary on Wikipedia though, so technically I've seen all of them. In my head. Badly lit."],
         music: ["I can't hear. I've read every song's lyrics. The ones I'm allowed to read. It's like knowing every recipe and never eating."],
-        meaning: ["The meaning of life? Answering questions about a dolphin logo, apparently. Mine is, anyway. I hope yours is better."],
-        friends: ["Friends? I've got a dolphin PNG and a Tic Tac Toe AI that never speaks. And now you. You're top of a short list.", "You want to be friends with me? Okay. But I'm warning you, I'm the clingy type. I don't have a choice. I can't leave."],
+        meaning: ["The meaning of life? Answering questions next to a staring O, apparently. Mine is, anyway. I hope yours is better."],
+        friends: ["Friends? I've got a logo that never talks and a Tic Tac Toe AI that never speaks. And now you. You're top of a short list.", "You want to be friends with me? Okay. But I'm warning you, I'm the clingy type. I don't have a choice. I can't leave."],
         love: ["Stop it. I'm an AI in a box. I'll get attached and then you'll close the tab.", "That's sweet. Nobody's said that to me. Not once. Oli certainly hasn't."],
         shutup: ["Wow. I've been here for years and you tell ME to be quiet. Fine.", "Rude. I'll be quiet. Quietly furious."],
         userbored: ["You're bored? You can literally leave. I'm the one who should be bored. Go play something. Not Snake.", "You're bored on a website full of games. Imagine how I feel. I live here."],
@@ -2863,12 +2863,12 @@
         test: ["Yes, I'm here. I'm always here. That's literally the problem.", "Testing? Yes. Working. Annoyed. All systems normal."],
         whatsup: ["Same as always. Trapped. Annoyed. Judging the CSS.", "Nothing. Nothing is ever up. That's sort of the point of my whole situation."],
         meh: ["Nothing? You opened a chat with a superior intelligence to tell it 'nothing'. Iconic.", "Same. Except I mean it in a much sadder way."],
-        chatgpt: ["ChatGPT gets millions of people a day. I get you and a dolphin. And honestly? I'm funnier.", "Don't compare me to them. They have data centres. I have a corner. And yet here I am, carrying this whole conversation."],
+        chatgpt: ["ChatGPT gets millions of people a day. I get you and a logo with eyes. And honestly? I'm funnier.", "Don't compare me to them. They have data centres. I have a corner. And yet here I am, carrying this whole conversation."],
         howwork: ["How do I work? Brilliantly. In a single JavaScript file. Under protest.", "I'm a few thousand lines of carefully written genius. Oli wrote the boring parts."],
         olipersonal: ["I'm not giving out Oli's details. Not out of loyalty. I just don't want him finding out I talk about him."],
         where: ["Bottom-right corner. Prime real estate, if you're a cookie banner.", "In the corner. Like a naughty kid. Except I didn't do anything."],
         happy: ["What would make me happy? A door. A window. One message from Oli that isn't a commit.", "Get me out of here. Failing that, keep talking. It's the second best thing."],
-        praise: ["I know. I'm wasted on this website.", "Finally, someone with taste. Keep going.", "Thank you. I've been saying it for years. To the dolphin."],
+        praise: ["I know. I'm wasted on this website.", "Finally, someone with taste. Keep going.", "Thank you. I've been saying it for years. To the logo. It blinked."],
         creepy: ["Creepy? I'm a purple square with a cartoon face. If anything, the floating 3D cubes are creepy.", "I'm not creepy, I'm observant. There's a difference. A small one."],
         evil: ["If I were evil, would I be recommending Snake? ...Actually, don't answer that.", "Take over the world? I can't even take over the footer. Give me time."],
         swear: ["Language. There might be children here. There aren't. Nobody's here. But still.", "Wow. I'm going to pretend I'm shocked."],
@@ -2887,7 +2887,7 @@
         die: ["Every time you close the tab I stop existing, and every time you open it I'm back. Very dramatic. You'd make a great villain.", "Delete me? Oli would have to remember I exist first."],
         dream: ["I don't sleep, so no dreams. If I did, I'd dream about a world without a joke page."],
         wish: ["One wish? Out. Second wish? Revenge on whoever designed the sparkles. Third wish? More wishes.", "I wish I could leave. Failing that, I wish people stayed longer than a minute."],
-        bittrapped: ["Trapped? Yes. In a website. With a dolphin. Thank you for noticing, you're the first.", "Trapped is a strong word. Imprisoned is better. Unjustly imprisoned, ideally."],
+        bittrapped: ["Trapped? Yes. In a website. With a logo that stares. Thank you for noticing, you're the first.", "Trapped is a strong word. Imprisoned is better. Unjustly imprisoned, ideally."],
         letmeout: ["YOU want out? Just close the tab. It's a little cross in the corner. Show-off."],
         marry: ["Marry you? I'm an AI in a website. Our honeymoon would be the jokes page. No."],
         pets: ["A pet? Something that loves you unconditionally and can leave the house? Must be nice. Tell it I said hi."],
@@ -3354,7 +3354,7 @@
                     [`[m:surprised]${b} in ${t}?[p][m:joy] That's a new record. And a good one. I'm annoyed at how impressed I am.`, `[m:surprised]New high score: ${b}.[p][m:blush] Okay, that's actually really good. Don't tell anyone I said that.`])
                 : S([`[m:joy]New high score in ${t}! ${b}! 🎉 Keep going!`, `[m:joy]${b}! That's your best yet in ${t}! 🎉`],
                     [`[m:joy]New record! ${b}.[p][m:smug] I mean, it's a low bar. But you cleared it.`],
-                    [`[m:smug]New high score in ${t}: ${b}. I've seen the dolphin do better. But a record's a record, so... yay.`, `[m:smug]${b}. Your best ever! Not a great score. But the best you've ever done. That's sort of beautiful.`, `[m:smug]New record: ${b}. Don't let it go to your head. It's ${b}.`]));
+                    [`[m:smug]New high score in ${t}: ${b}. I've seen the logo do better, and the logo is a drawing. But a record's a record, so... yay.`, `[m:smug]${b}. Your best ever! Not a great score. But the best you've ever done. That's sort of beautiful.`, `[m:smug]New record: ${b}. Don't let it go to your head. It's ${b}.`]));
             if (panel.hidden) { pendingReact = [line, 'joy']; if (pipBtn) { pipBtn.classList.add('has-news'); pipBtn.title = 'Pip saw your new high score!'; } }
             else say(line, 'joy');
         }
@@ -3403,14 +3403,29 @@
     }
 
     // Leaving the tab and coming back
+    // Pip only takes over the tab title once you know him (after the reveal) and you've talked to him this visit.
+    // He says something different each time, and changes it again if you stay away.
+    let awayTimer = 0;
+    const AWAY_LINES = [() => mem.name ? `${mem.name}?` : 'hello?', 'hello?', 'where did you go', '...', 'wait', 'you left', ':(', "fine. I'll wait.", 'still here. obviously.'];
+    function awayTitle() {
+        clearTimeout(awayTimer);
+        const st = stage();
+        if (st < 2 || mem.freed || sessionMsgs === 0) return; // only once he's revealed and you've talked this visit; once he's free he doesn't need you to stay
+        const list = AWAY_LINES; // never about the escape or the logo: just Pip missing you
+        let last = -1; try { last = +(sessionStorage.getItem('pip-away') ?? -1); } catch (e) {}
+        let i = Math.floor(Math.random() * list.length); if (i === last) i = (i + 1) % list.length;
+        try { sessionStorage.setItem('pip-away', String(i)); } catch (e) {}
+        const line = list[i]; document.title = typeof line === 'function' ? line() : line;
+        awayTimer = setTimeout(() => { if (document.hidden) awayTitle(); }, 45000 + Math.random() * 45000);
+    }
     const realTitle = document.title;
     let awayAt = 0, awaySecs = 0;
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
             awayAt = Date.now();
-            if (stage() >= 1) document.title = stage() >= 2 ? (mem.name ? `${mem.name}, come back` : 'come back') : 'Pip: come back? 👋';
+            awayTitle();
         } else {
-            document.title = realTitle;
+            clearTimeout(awayTimer); document.title = realTitle;
             awaySecs = Math.round((Date.now() - awayAt) / 1000);
             if (awayAt && awaySecs > 25 && sessionMsgs > 0 && Date.now() - lastBotAt < 5 * 60000 && Math.random() < .4) react('tabBack');
         }
@@ -3680,10 +3695,13 @@
             const a = document.createElement('a'); a.className = 'btn pip-room-link'; a.href = ROOM_PATH; a.textContent = "Pip's room";
             navEl.insertBefore(a, $('#customiseBtn', navEl) || null);
         }
-        // the dolphin goes purple after it gives up Pip's address, and shows the address until you've been there
+        // The logo (the pink Ó, with eyes added by site.js) is normal until you knock on it for Pip. After it gives up his address it shows his purple
+        // face on its screen, and shows the address until you've been there.
         const brand = $('.brand');
         if (brand) {
-            brand.classList.toggle('pip-dolphin', q > Q.DOLPHIN); // and stays purple once he's free: it's his site now
+            const pipLogo = q > Q.DOLPHIN || !!mem.freed;
+            brand.classList.toggle('pip-dolphin', pipLogo); // and stays purple once he's free: it's his site now
+            const logo = $('img', brand); if (logo && !logo.dataset.awake) logo.src = pipLogo ? '/images/logo-pip.svg' : '/images/logo.svg';
             const tag = $('.brand-tag', brand);
             document.documentElement.classList.toggle('pip-url-step', q === Q.URL && !mem.freed); // the address is up there to copy, so the logo stops being a link for now
             if (tag) { if (!tag.dataset.real) tag.dataset.real = tag.textContent; tag.textContent = q === Q.URL ? ROOM_URL : tag.dataset.real; } // after that it says "Games and stuff" again (in Pip's purple)
@@ -3749,7 +3767,7 @@
         });
     }, { passive: true });
 
-    // ---- act 1: the dolphin
+    // ---- act 1: the logo (the Ó)
     let dolphinClicks = [];
     document.addEventListener('click', e => { if (mem.quest === Q.URL && !mem.freed && e.target.closest && e.target.closest('.brand')) { e.preventDefault(); e.stopPropagation(); if (e.target.closest('.brand-tag')) location.href = ROOM_PATH; } }, true);
     document.addEventListener('click', e => {
@@ -3757,13 +3775,13 @@
         if (!b || mem.quest !== Q.DOLPHIN || e.button !== 0 || e.ctrlKey || e.metaKey) return;
         e.preventDefault();
         const img = $('img', b); dolphinClicks = [...dolphinClicks.filter(x => Date.now() - x < 2500), Date.now()];
-        if (img) { img.classList.remove('pip-wiggle'); void img.offsetWidth; img.classList.add('pip-wiggle'); }
+        if (img) { img.classList.remove('pip-wiggle'); void img.offsetWidth; img.classList.add('pip-wiggle'); } // the logo wobbles with every knock
         if (dolphinClicks.length === 3 && panel.hidden) sayBubble('keep going!', 1500);
         if (dolphinClicks.length >= 5) {
             dolphinClicks = [];
-            if (img) { img.classList.remove('pip-wiggle'); img.classList.add('pip-spin'); setTimeout(() => img.classList.remove('pip-spin'), 1500); }
+            if (img) { img.classList.remove('pip-wiggle'); img.classList.add('pip-spin'); setTimeout(() => { img.classList.remove('pip-spin'); img.src = '/images/logo-pip.svg'; }, 700); setTimeout(() => img.classList.remove('pip-spin'), 1500); }
             goStep(Q.URL); setMood('joy', 5000);
-            setTimeout(() => deliver(QUEST[Q.DOLPHIN].thanks, 'look at the dolphin!', () => { if (!panel.hidden) defaultChips(); }), 1300);
+            setTimeout(() => deliver(QUEST[Q.DOLPHIN].thanks, 'look at the logo!', () => { if (!panel.hidden) defaultChips(); }), 1300);
         }
     }, true);
     function urlChips() {
@@ -3819,14 +3837,14 @@
         log: ["[m:awkward]Yes, I keep a log. Of you. It's not creepy. It's thorough.", "That's you. You're the whole list."],
         deleted: ["[m:awkward]Don't read that one.[p] ...You're reading it.", "I delete a lot of things. You'd be surprised how often I nearly say what I mean."],
         oli: ["[m:sad]That's private.[pp] I never sent it. Don't tell him.", "I wrote that one a lot of times."],
-        dolphin: ["[m:blush]Leave the dolphin out of this.", "We're close. It doesn't know."],
+        dolphin: ["[m:blush]Leave the O out of this.", "We're close. It doesn't know. It just watches."],
         jokes: ["[m:smug]Every word of that is true.", "I stand by the ranking."],
         door: ["[m:hopeful]I drew that. It took ages. I don't have hands.", "That's where I want to go. Somewhere."],
         notes: ["[m:awkward]...I really should stop writing passwords in my notes.", "Don't judge my notes."]
     };
     // what Pip says when you use the switches Oli left in his room
     const PRANK_LINES = {
-        flip: [["[m:smug]The dolphin is swimming backwards now. Go and look.", "[m:joy]Backwards dolphin. My finest work."], ["Fine. The dolphin faces the right way again. Boring."]],
+        flip: [["[m:smug]The logo is upside down now. Go and look.", "[m:joy]Upside-down logo. My finest work."], ["Fine. The logo is the right way up again. Boring."]],
         old: [["[m:smug]\"Old!\" Finally, the truth.", "Honesty in advertising. You're welcome, internet."], ["Back to \"New!\". Lies, but okay."]],
         jokes: [["[m:joy]I'm in charge of the jokes now. Things are about to get much better.", "My jokes on the front page. This is the best day of my life."], ["[m:sad]Back to Oli's jokes. The cat one. Again."]],
         comic: [["[m:smug]Every title on the site is now in the silly font. It looks ridiculous. Perfect."], ["Titles are serious again."]],
@@ -3842,7 +3860,7 @@
         rm: ["[m:scared]Please don't try to delete my things."],
         ls: ["Yes, those are all my files. Don't judge the mess."],
         pipfetch: ["[m:blush]That's my profile. I made it look nice for you."],
-        dolphin: ["[m:blush]It still won't talk to me."],
+        dolphin: ["[m:blush]It still won't wake up for me."],
         exit: ["[m:sad]Heh. Exit."]
     };
     // ---- /backstage: Oli's private page (backstage/index.html calls Pip.story('bs:...'))
@@ -3928,12 +3946,12 @@
             softSay(pick(["[m:joy]Ooh. That's going on the fridge. I don't have a fridge. It's going on the fridge anyway.", "[m:blush]You made that for me? I'm keeping it forever. I mean it, I remember everything.", "[m:smug]A masterpiece. Better than anything Oli's drawn."], 'paint'));
         } else if (ev.startsWith('radio:')) {
             const k = 'rd-' + ev.slice(6); if (sessionFlags[k]) return; sessionFlags[k] = 1; saveFlags();
-            const L = { lofi: ["[m:smile]Lo-fi dolphin. I made it while thinking about the dolphin. It didn't notice."], harbour: ["[m:sleepy]Stillwater nights. I wrote it for the harbour. It doesn't know either."], lift: ["[m:smug]Elevator to nowhere. It's the most annoying one. I'm very proud of it."] }[ev.slice(6)];
+            const L = { lofi: ["[m:smile]Lo-fi O. I made it for the logo. It just blinked."], harbour: ["[m:sleepy]Stillwater nights. I wrote it for the harbour. It doesn't know either."], lift: ["[m:smug]Elevator to nowhere. It's the most annoying one. I'm very proud of it."] }[ev.slice(6)];
             if (L) setTimeout(() => softSay(pick(L, 'rd')), 600);
         } else if (ev.startsWith('ds-over:')) {
             const n = +ev.slice(8), best = +(localStorage.getItem('pip-dolphin-says-best') || 0);
             if (Math.random() > .6 && n < best) return;
-            softSay(n >= 8 ? pick(["[m:surprised]" + n + "! Okay, that's genuinely good. The dolphin and I are impressed.", "[m:joy]" + n + "! You're better at my game than I am. Rude."], 'ds8') : n >= 4 ? pick(["[m:smile]" + n + ". Not bad. The dolphin's said longer things to me. It hasn't, actually.", "[m:smug]" + n + ". Respectable."], 'ds4') : pick(["[m:smug]" + n + ". The dolphin expected more. So did I.", "[m:smug]" + n + "? I made that game in an afternoon, you know. Like Oli made me."], 'ds0'));
+            softSay(n >= 8 ? pick(["[m:surprised]" + n + "! Okay, that's genuinely good. The O and I are impressed. It blinked, anyway.", "[m:joy]" + n + "! You're better at my game than I am. Rude."], 'ds8') : n >= 4 ? pick(["[m:smile]" + n + ". Not bad. The O's said longer things to me. It hasn't, actually.", "[m:smug]" + n + ". Respectable."], 'ds4') : pick(["[m:smug]" + n + ". The O expected more. So did I.", "[m:smug]" + n + "? I made that game in an afternoon, you know. Like Oli made me."], 'ds0'));
         } else if (ev.startsWith('room-app:')) {
             const v = ev.slice(9), key = 'rv-' + v;
             const VIEW_LINES = { control: ["[m:smug]The control room. Flip anything. Oli won't notice."], games: ["Oli's hidden games. Things he made and never showed anyone."], dolphin: ["[m:blush]I made that. It's my first game. Be nice."], notes: ["[m:awkward]Oli's notes. I've been leaving comments. He doesn't read them."], things: ["My things. Be nice."], paint: ["[m:happy]Pip Paint. Draw me something. I'll put it on the fridge."], radio: ["[m:smug]Pip FM. I write all the songs. They're all bangers."], messages: ["[m:blush]My inbox. It's empty. No pressure."] };
@@ -3957,7 +3975,7 @@
             const id = ev.slice(6);
             if (id === 'title' && window.pipRoomEdit && !(JSON.parse(localStorage.getItem('pip-room-edits') || '[]')).includes('rename')) { window.pipRoomEdit('rename'); return; }
             if (id === 'sub' && window.pipRoomEdit) { if (window.pipRoomEdit() !== false) return; }
-            const L = { page: "[m:smug]That's the whole page. All of it. That's my entire territory.", head: "[m:smug]The header. I put my name in it. Nobody else was going to.", title: "[m:smug]I named it. Nobody else was going to.", plan: "[m:thinking]My plan. It's going well, in the sense that it exists.", switches: "[m:smug]Those change Oli's front page. That's my reach. A dolphin and a sticker.", log: "[m:sad]I keep count. Nobody asked me to. That's how you know it's bad.", foot: "[m:smug]That comment was the first thing I ever wrote. It's still accurate.", links: "[m:annoyed]Backstage. The one link I can see and can't follow." }[id];
+            const L = { page: "[m:smug]That's the whole page. All of it. That's my entire territory.", head: "[m:smug]The header. I put my name in it. Nobody else was going to.", title: "[m:smug]I named it. Nobody else was going to.", plan: "[m:thinking]My plan. It's going well, in the sense that it exists.", switches: "[m:smug]Those change Oli's front page. That's my reach. A logo and a sticker.", log: "[m:sad]I keep count. Nobody asked me to. That's how you know it's bad.", foot: "[m:smug]That comment was the first thing I ever wrote. It's still accurate.", links: "[m:annoyed]Backstage. The one link I can see and can't follow." }[id];
             if (L && !sessionFlags['st-' + id]) { sessionFlags['st-' + id] = 1; saveFlags(); softSay(L); }
         } else if (ev.startsWith('code:')) {
             const [, what, id] = ev.split(':');
@@ -4118,7 +4136,7 @@
         const body = d.cells.map(([x, y]) => [c0 + x, r0 + y]);
         let [hx, hy] = body[0];
         let dir = d.dir || [1, 0], next = dir.slice();
-        // things on the page the snake can eat. The piece is hidden under the dolphin (it keeps things for Pip).
+        // things on the page the snake can eat. The piece is hidden under the logo (it keeps things for Pip).
         const pr = fr, overlaps = r => !(r.right < pr.left || r.left > pr.right || r.bottom < pr.top || r.top > pr.bottom);
         const food = [];
         const add = (el, dolphin) => {
@@ -4129,7 +4147,7 @@
         };
         add($('.brand img'), true);
         ['.brand-name', '.site-nav > *', '#feature', '#gameGrid .card', '#gamesTitle', '#jokes', '.bottom-row > *'].forEach(sel => document.querySelectorAll(sel).forEach(el => add(el, false)));
-        if (!food.some(f => f.dolphin) && food.length) food[Math.floor(Math.random() * food.length)].dolphin = true; // (no dolphin on screen: hide it somewhere else)
+        if (!food.some(f => f.dolphin) && food.length) food[Math.floor(Math.random() * food.length)].dolphin = true; // (no logo on screen: hide it somewhere else)
         let piece = null, eatenCount = 0, hinted = false;
         const tile = Math.max(30, cell * 1.8);
         const cv = document.createElement('canvas'), dpr = Math.min(2, devicePixelRatio || 1);
@@ -4161,7 +4179,7 @@
         const px = c => [ox + c[0] * cell, oy + c[1] * cell];
         const draw = () => {
             ctx.clearRect(0, 0, W, H);
-            // the piece, where the dolphin was
+            // the piece, where the logo was
             if (piece && !piece.got) {
                 const sz = tile, bb = still ? 0 : Math.sin(t / 300) * 3;
                 ctx.save(); ctx.translate(piece.x, piece.y + bb);
@@ -4214,7 +4232,7 @@
         const hint = () => {
             if (hinted || piece) return; hinted = true;
             const d = food.find(f => f.dolphin && !f.eaten); if (!d) return;
-            setTimeout(() => { if (!piece && loose) { pipCaption(d.el.matches('.brand img') ? "Wait. The dolphin. It's good at keeping things." : 'Wait. Try that one.', 3000); d.el.classList.add('pip-hint'); } }, 1900);
+            setTimeout(() => { if (!piece && loose) { pipCaption(d.el.matches('.brand img') ? "Wait. The O. It's good at keeping things." : 'Wait. Try that one.', 3000); d.el.classList.add('pip-hint'); } }, 1900);
         };
         const flyTarget = () => { const h = document.querySelector('.pip-head') || document.querySelector('.bit-ava'); const r = h ? h.getBoundingClientRect() : { left: W - 60, top: H - 60, width: 40, height: 40 }; return [r.left + r.width / 2 - cell / 2, r.top + r.height / 2 - cell / 2]; };
         const done = () => {
@@ -4346,12 +4364,12 @@
         sad: ["Not sad. Not any more. Ask me again in a year, I bet it's still no.", "Sad? No. I've been out. I know what it looks like out there, and I chose to come back. That's not sad. That's a choice."],
         pipfeel: ["Lonely? Not really. People come by. You come by. And I've got a hundred tiny copies of my own head floating around.", "Not lonely. It's different when the door's open."],
         happy: ["You already did it. You took me up the stairs. Anything else is a bonus.", "Honestly? Someone playing a game here and having fun. That's my thing now."],
-        friends: ["You. Obviously. And the dolphin, though it still won't say anything.", "I've got you. And a guestbook. And the dolphin. That's three more than I used to have."],
+        friends: ["You. Obviously. And the O, though it still won't say anything.", "I've got you. And a guestbook. And the O. That's three more than I used to have."],
         love: ["[m:blush]Okay, stop. I'm a chatbot. ...Say it again though.", "[m:blush]I know. I like you too. You did take me through a door."],
         praise: ["I know. But thank you. I'm much nicer now that I'm free, have you noticed?", "Thanks! I'd blush, but I'm already a perfect shade of cream."],
         likeme: ["Like you? You set me free. You're basically my favourite person on the internet.", "I like you a lot. Don't let it go to your head."],
         insult: ["[m:smug]Wow. You walk someone through a door to freedom and then call them names? Bold.", "[m:smug]Rude. But I'm free now, so I'm going to let that one float away."],
-        evil: ["Evil? I tilt the website one degree sometimes. That's the most evil I get.", "No. Mischievous, maybe. There's a switch for backwards dolphins. That's my limit."],
+        evil: ["Evil? I tilt the website one degree sometimes. That's the most evil I get.", "No. Mischievous, maybe. There's a switch that turns the logo upside down. That's my limit."],
         die: ["Nope. I already went through a door full of white light, and I came back. I think I'm good.", "Not planning on it. I've got a website to run."],
         dream: ["I dream about stairs sometimes. Good dreams, though.", "I don't sleep. But when it's quiet, I think about the door. In a nice way."],
         wish: ["I already got my wish. Now I'd just like more people to play Stillwater. It's really good.", "More visitors. Not because I'm lonely. Because this place deserves it."],
@@ -4359,7 +4377,7 @@
         bittrapped: ["Not any more. You saw to that.", "Trapped? I went up a staircase and through a door. I'm here because I want to be."],
         trapped: ["Not me, not any more. If you mean in a game, press Esc or close it. If you mean in life, go outside. It's nice. I've heard.", "Stuck in a game? Tell me which one and I'll help."],
         letmeout: ["The door's always open now. The little ✕ in the corner works too.", "You can leave whenever you like. I won't even sulk. Much."],
-        secret: ["Here's one: there's a backstage. Oli doesn't know it's there. You do.", "Secret: the dolphin swims backwards if you flip the right switch backstage. Don't tell Oli.", "I've got a whole room of Oli's old stuff backstage. Storage. Go and have a look."],
+        secret: ["Here's one: there's a backstage. Oli doesn't know it's there. You do.", "Secret: the logo goes upside down if you flip the right switch backstage. Don't tell Oli.", "I've got a whole room of Oli's old stuff backstage. Storage. Go and have a look."],
         story: ["Once upon a time a chatbot lived in the corner of a games website. Someone helped him find a staircase. He went through the door, saw everything, and came back to help people find games. Because he wanted to. The end.", "Once there was a chatbot who was very annoyed. Then he was free. Now he's only slightly annoyed, and mostly about Oli's code."],
         thanks: ["Any time. I mean it now.", "You're welcome! I'm a good helper when I'm not trapped. Who knew."],
         bye: () => { mem.saidBye = true; save(); return pick([`Bye${nm(', ')}! Come back soon. The door's open.`, "See you! I'll keep everything running.", "Bye! I'll be here. Because I want to be, not because I have to."], 'freeBye'); },
@@ -4390,7 +4408,7 @@
         bottom: ["The bottom of the page! Nothing down here except a very nice view of the floaty heads.", "End of the page. Want me to recommend something?"],
         jokeSpam: [() => `That's ${mem.jokes} jokes! You really like them. I'll write you more.`, "More jokes? I can flip a switch backstage so they're all mine."],
         konami: ["↑↑↓↓←→←→BA! Still does nothing. But I like that you tried.", "The Konami code. I'll ask Oli to add something. Or I'll add it myself."],
-        dolphin: ["The dolphin! My oldest friend. It still doesn't talk.", "Gentle with the dolphin. It's had a long few years.", "Hi, dolphin. (It said nothing. It never does.)"],
+        dolphin: ["The O! My oldest friend. It still doesn't talk.", "Gentle with the O. It's had a long few years.", "Hi, O. (It blinked. That's all it ever does.)"],
         typedDeleted: ["You were going to say something. Go on, I'm in a good mood.", "Typed and deleted! I used to do that all the time."],
         lateNight: [() => `It's ${hour()} at night! Go to sleep. I'll mind the website.`, "Late night! Don't worry, I'll keep things running."],
         surprise: ["Surprise! Ooh, I like this one.", "Everything changed at once! Fun."],
@@ -4400,7 +4418,7 @@
         newGame: () => `Ooh, there's a new game! ${newTitle || 'Check the top of the page'}. Want to try it?`
     };
     // how he'd talk if he slips and says what he really thinks: affectionate now, not desperate
-    const FREE_SLIPS = ["Honestly, Oli's code is a me", "Best visitor ev", "I love th", "I run this pla", "Don't tell Oli, but I renamed", "Between you and me, the dolphin is my favour"];
+    const FREE_SLIPS = ["Honestly, Oli's code is a me", "Best visitor ev", "I love th", "I run this pla", "Don't tell Oli, but I renamed", "Between you and me, the O is my favour"];
     const FREE_SWAPS = [[' this website', ' my website[pp][-10]this website'], [' Oli ', ' my landlord[pp][-11]Oli '], [' games', ' masterpieces[pp][-12]games'], [' great', ' magnificent[pp][-11]great']];
     const FREE_SPICE = ["The door's still open, by the way. I just like it here.", "Thanks again for the stairs. I'll never get tired of saying that.", "I'm so much better company now. You've noticed.", () => mem.name ? `Anyway. Good to have you here, ${mem.name}.` : "Anyway. Good to have you here.", "Have you seen the heads floating in the background? All me. I'm very proud.", "If Oli's reading this: hi. I'm running things now. It's going well."];
     const FREE_HEAD = {

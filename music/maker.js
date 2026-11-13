@@ -5,6 +5,7 @@ import {
     createPlayer, normalizeSong, serializeSong, renderSong, midiToNote,
     getGameSongOverride, setGameSong, DRUM_KINDS, withDefaults,
 } from "./player.js";
+import { encodeShare, decodeShare } from "./share.js";
 import { PRESETS, findPreset, TEMPLATES, songFromTemplate, TRACK_COLORS, KEYS, SCALES, inScale } from "./presets.js";
 
 const $ = (sel) => document.querySelector(sel);
@@ -18,7 +19,7 @@ const STORE = { draft: "olid-music:draft", songs: "olid-music:mysongs", prefs: "
 const player = createPlayer({ volume: 0.8 });
 
 // Easy mode (easy.js) plugs in here.
-export const hooks = { render: null, onStep: null, firstVisit: null };
+export const hooks = { render: null, onStep: null, firstVisit: null, boot: null };
 
 export const state = {
     ui: "easy",
@@ -1187,25 +1188,6 @@ async function exportWav() {
     }
 }
 
-const b64url = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-const fromB64url = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
-
-async function streamBytes(bytes, stream) {
-    return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
-}
-
-async function encodeShare(json) {
-    const bytes = new TextEncoder().encode(json);
-    if ("CompressionStream" in window) return "z" + b64url(await streamBytes(bytes, new CompressionStream("deflate-raw")));
-    return "j" + b64url(bytes);
-}
-
-async function decodeShare(code) {
-    const bytes = fromB64url(code.slice(1));
-    const raw = code[0] === "z" ? await streamBytes(bytes, new DecompressionStream("deflate-raw")) : bytes;
-    return new TextDecoder().decode(raw);
-}
-
 async function shareLink() {
     const json = JSON.stringify(JSON.parse(serializeSong(song())));
     const url = `${location.origin}${location.pathname}#s=${await encodeShare(json)}`;
@@ -1524,6 +1506,7 @@ export async function start() {
     document.body.classList.add(state.ui === "pro" ? "ui-pro" : "ui-easy");
     document.body.classList.toggle("pro-allowed", proAllowed);
 
+    if (hooks.boot && (await hooks.boot())) return;
     if (location.hash.startsWith("#s=")) {
         try {
             const s = normalizeSong(JSON.parse(await decodeShare(location.hash.slice(3))));

@@ -1,3 +1,4 @@
+var PLAYER_STAMP = Date.now().toString(36); // see addEmbedParam
 // Use relative path so pages in subfolders can resolve the background image
 const originalBackground = "images/1.jpg";
 // Once Pip (the chatbot, bit.js) has been set free, he runs the place: the site's own look is his.
@@ -293,9 +294,9 @@ async function playFromAnchor(anchor) {
                 // prefer the directory if that file exists as an entry point
             } catch (e) {}
             if (embedPath !== path) console.info('Adjusted embed path from', path, 'to', embedPath);
-            frame.src = addEmbedParam(embedPath);
+            loadGameFrame(frame, addEmbedParam(embedPath));
         } catch (e) {
-            frame.src = addEmbedParam(path);
+            loadGameFrame(frame, addEmbedParam(path));
         }
 
         // focus iframe so keyboard works immediately (added)
@@ -460,15 +461,21 @@ function showPlayerControls(controls) {
 }
 
 // Add ?embed=1 to a URL safely (handles relative paths)
+// The in-page player adds a "_" stamp (new each time the site is opened) to the game's address, so the
+// browser fetches the current version of the game's page instead of a stale saved copy.
+// (Saved copies of iframe pages can hang around for days on a simple local server.)
+function loadGameFrame(frame, url) { frame.src = url; }
+
 function addEmbedParam(path) {
     try {
         const url = new URL(path, window.location.origin);
         url.searchParams.set('embed', '1');
+        url.searchParams.set('_', PLAYER_STAMP);
         return url.href;
     } catch (e) {
         // fallback: append naive
-        if (path.includes('?')) return path + '&embed=1';
-        return path + '?embed=1';
+        if (path.includes('?')) return path + '&embed=1&_=' + PLAYER_STAMP;
+        return path + '?embed=1&_=' + PLAYER_STAMP;
     }
 }
 
@@ -755,7 +762,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const frame = document.getElementById('playerFrameMain');
         if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
         if (player) { player.style.display = 'none'; player.setAttribute('aria-hidden', 'true'); player.classList.remove('fullscreen'); }
-        if (frame) frame.src = 'about:blank';
+        if (frame) { frame.__loadToken = (frame.__loadToken || 0) + 1; frame.src = 'about:blank'; }
         showPlayerControls(null);
         document.body.classList.remove('is-playing', 'snake-small', 'terminal-player');
         try {
@@ -985,5 +992,44 @@ function setFsLabel(on) {
     // CSS fullscreen fallback toggles a class rather than firing fullscreenchange
     document.addEventListener('click', e => {
         if (e.target.closest && e.target.closest('#toggleFullscreen')) setTimeout(refit, 50);
+    });
+})();
+
+
+// The Music button next to Controls: games that use /music/game-music.js announce themselves with postMessage.
+(function wireMusicButton() {
+    const btn = document.getElementById('toggleMusic');
+    const menu = document.getElementById('musicMenu');
+    const frame = document.getElementById('playerFrameMain');
+    if (!btn || !menu || !frame) return;
+    let state = null;
+    const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const render = () => {
+        btn.hidden = !state;
+        if (!state) { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); return; }
+        btn.classList.toggle('off', !state.on);
+        btn.title = state.on ? 'Music is on' : 'Music is off';
+        menu.innerHTML = `<div class="mm-song"><small>Now playing</small><b>${esc(state.title)}</b></div>
+            <button class="btn small mm-toggle" type="button">${state.on ? 'Turn music off' : 'Turn music on'}</button>
+            <a class="btn small mm-studio" href="/music/?game=${encodeURIComponent(state.slot)}" target="_blank" rel="noopener">Change the music &#8599;</a>`;
+        menu.querySelector('.mm-toggle').onclick = () => {
+            frame.contentWindow && frame.contentWindow.postMessage({ type: 'olid-music:toggle' }, location.origin);
+            try { if (typeof focusIframeAndCanvas === 'function') focusIframeAndCanvas(frame); } catch (e) {}
+        };
+    };
+    window.addEventListener('message', (e) => {
+        if (e.source !== frame.contentWindow || e.origin !== location.origin || !e.data || e.data.type !== 'olid-music') return;
+        state = { slot: String(e.data.slot), title: String(e.data.title || ''), on: !!e.data.on };
+        render();
+    });
+    // a new game (or closing the player) clears it until that game announces its music
+    new MutationObserver(() => { state = null; render(); }).observe(frame, { attributes: true, attributeFilter: ['src'] });
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        menu.hidden = !menu.hidden;
+        btn.setAttribute('aria-expanded', String(!menu.hidden));
+    });
+    document.addEventListener('click', (e) => {
+        if (!menu.hidden && !e.target.closest('.music-wrap')) { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
     });
 })();

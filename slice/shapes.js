@@ -1,480 +1,631 @@
 // Slice shape library.
-// Every shape is drawn in a ~200x200 box and is deliberately NOT mirror-symmetric,
-// so there is no obvious axis to cut along.
-// draw(h, v)  -> solid silhouette (anything drawn here counts as area)
-// deco(h, v)  -> paint-only details, clipped to the silhouette (never changes area)
-// p(r)        -> per-day proportions; r() is the seeded random 0..1
-// Daily variety = which shapes + proportions + tilt + mirror flip.
+// Things that are naturally irregular: animals and objects seen from the side, food with a bite
+// taken out, plants, tools. Nothing is bent out of shape just to make it hard.
+//
+// draw(h, v)  solid silhouette; everything drawn here counts as area. h.cut() removes area.
+// deco(h, v)  paint only, clipped to the silhouette; never changes the area.
+// p(r)        optional per-appearance proportions (r() = seeded 0..1). v.j holds 64 jitter values in -1..1.
+// tilt        max rotation in radians (default 0.18). Every appearance is also randomly mirrored.
+//
+// Helpers: e(x,y,rx,ry,rot) o(x,y,r) rr(x,y,w,h,r) p(pts) blob(pts) tube(pts,w0,w1,bulge)
+//          l(pts,w) sl(pts,w) q(x0,y0,cx,cy,x1,y1,w) ring(x,y,rx,ry,w) path(fn) cut(fn) col(color)
 
 const INK = '#1E1B24';
 const rnd = (r, a, b) => a + r() * (b - a);
+const J = (v, i, a) => v.j[i % 64] * a;
+function tone(hex, t) { // t<0 darker, t>0 lighter
+  const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = n >> 8 & 255, b = n & 255;
+  const f = x => Math.round(t < 0 ? x * (1 + t) : x + (255 - x) * t); return `rgb(${f(r)},${f(g)},${f(b)})`;
+}
+const eye = (h, x, y, s = 4.5) => h.col(INK).o(x, y, s).col('#fff').o(x - s * .3, y - s * .35, s * .32);
 
 window.SLICE_SHAPES = [
-  {
-    id: 'duck', name: 'Rubber duck', color: '#FFD23F',
-    p: r => ({ head: rnd(r, 26, 36), body: rnd(r, 60, 74), tail: rnd(r, 20, 34) }),
-    draw(h, v) {
-      h.e(108, 132, v.body, 40).o(72, 80, v.head).e(72 - v.head - 6, 86, 18, 8, -0.15)
-       .p([[108 + v.body - 14, 116], [108 + v.body + v.tail * .8, 116 - v.tail], [108 + v.body + 4, 140]]);
-    },
-    deco(h, v) {
-      h.col('#FF8A2B').e(72 - v.head - 6, 86, 18, 8, -0.15);
-      h.col(INK).o(66, 72, 5);
-      h.col('rgba(30,27,36,.3)').q(96, 122, 124, 152, 154, 122, 4);
-    }
+/* ================= animals ================= */
+{ id: 'duck', name: 'Rubber duck', color: '#FFD23F',
+  // classic bath duck: a big round head sunk into a round, chubby body, with a small tail flicked up
+  p: r => ({ head: rnd(r, 43, 46), tail: rnd(r, 0, 5) }),
+  draw(h, v) {
+    h.blob([[36, 140], [44, 170], [80, 192], [132, 194], [170, 180], [186, 154], [188, 128 - v.tail], [182, 114 - v.tail], [170, 120], [152, 130], [124, 128], [96, 120], [60, 120]])
+     .o(84, 82, v.head)
+     .blob([[46, 84], [26, 78], [8, 82], [6, 94], [20, 102], [42, 102], [52, 96]]);
   },
-  {
-    id: 'mug', name: 'Mug', color: '#5B8CFF',
-    p: r => ({ w: rnd(r, 84, 110), hgt: rnd(r, 100, 130), hr: rnd(r, 28, 42) }),
-    draw(h, v) {
-      h.ring(40 + v.w, 108, v.hr, v.hr * .9, 15).rr(40, 168 - v.hgt, v.w, v.hgt, [6, 6, 22, 22]);
-    },
-    deco(h, v) {
-      h.col('rgba(255,255,255,.85)').rr(52, 182 - v.hgt, 10, v.hgt * .6, 5);
-      h.col('rgba(30,27,36,.22)').rr(40, 168 - v.hgt, v.w, 10, 0);
-    }
+  deco(h, v) {
+    h.col('#FF8A2B').blob([[46, 84], [26, 78], [8, 82], [6, 94], [20, 102], [42, 102], [52, 96]]);
+    h.col('#D9661E').sl([[10, 93], [26, 94], [46, 92]], 2.5);
+    h.col(tone('#FFD23F', -.13)).blob([[110, 150], [138, 140], [166, 144], [160, 162], [134, 172], [114, 166]]);
+    h.col(tone('#FFD23F', -.2)).sl([[128, 158], [146, 154], [158, 157]], 2.5);
+    h.col('rgba(255,140,100,.35)').o(66, 102, 9);
+    eye(h, 76, 70, 7);
+  } },
+{ id: 'whale', name: 'Whale', color: '#4F7FD9',
+  draw(h, v) {
+    h.blob([[16, 112], [34, 80], [96, 70], [150, 86], [174, 106], [160, 120], [106, 142], [46, 142]])
+     .blob([[164, 108], [190, 80 + J(v, 1, 6)], [198, 86], [186, 106], [198, 124], [190, 132]])
+     .blob([[70, 126], [96, 132], [82, 156]]);
   },
-  {
-    id: 'teapot', name: 'Teapot', color: '#2FB3A3',
-    p: r => ({ spout: rnd(r, 34, 52), handle: rnd(r, 20, 30), lid: rnd(r, 20, 30) }),
-    draw(h, v) {
-      h.e(100, 124, 58, 44).e(100, 82, v.lid, 9).o(100, 70, 8)
-       .p([[146, 128], [146, 104], [150 + v.spout, 72], [158 + v.spout, 76], [160, 136]])
-       .ring(46, 120, v.handle, v.handle * 1.25, 11);
-    },
-    deco(h, v) {
-      h.col('rgba(255,255,255,.6)').q(70, 108, 82, 96, 100, 96, 6);
-      h.col('rgba(30,27,36,.25)').rr(40, 120, 120, 6, 3);
-    }
+  deco(h, v) {
+    h.col('#DCE8FA').blob([[22, 122], [70, 130], [130, 128], [166, 114], [150, 142], [60, 150]]);
+    h.col('rgba(30,27,36,.18)'); for (let i = 0; i < 4; i++) h.sl([[40 + i * 16, 132 + i], [70 + i * 16, 136], [100 + i * 14, 134 - i]], 2.5);
+    eye(h, 46, 106, 4);
+  } },
+{ id: 'fish', name: 'Fish', color: '#FF8A5B',
+  p: r => ({ fin: rnd(r, 18, 30), belly: rnd(r, 0, 14) }),
+  draw(h, v) {
+    h.blob([[22, 102], [58, 72], [108, 68], [150, 92], [150, 110], [110, 134 + v.belly], [58, 132]])
+     .blob([[144, 100], [186, 68], [176, 101], [188, 136]])
+     .blob([[76, 74], [100, 72 - v.fin], [128, 80]]).blob([[84, 116], [104, 124], [86, 138]]);
   },
-  {
-    id: 'boot', name: 'Boot', color: '#B5733E',
-    p: r => ({ shaft: rnd(r, 90, 130), toe: rnd(r, 60, 90), heel: rnd(r, 10, 18) }),
-    draw(h, v) {
-      h.rr(60, 160 - v.shaft, 56, v.shaft + 10, [10, 10, 0, 0])
-       .path(c => { c.moveTo(60, 150); c.lineTo(116, 140); c.quadraticCurveTo(116 + v.toe, 140, 116 + v.toe, 168); c.lineTo(116 + v.toe, 178); c.lineTo(60, 178); })
-       .rr(56, 176, 34, v.heel, 3);
-    },
-    deco(h, v) {
-      h.col('rgba(30,27,36,.35)');
-      for (let i = 0; i < 4; i++) h.l([[72, 170 - v.shaft + 22 + i * 18], [104, 164 - v.shaft + 22 + i * 18]], 4);
-      h.col('rgba(30,27,36,.28)').rr(56, 170, 140, 8, 0);
-    }
+  deco(h, v) {
+    h.col(tone('#FF8A5B', -.15)).blob([[148, 100], [184, 72], [175, 101], [186, 132]]);
+    h.col('rgba(30,27,36,.28)').sl([[66, 82], [74, 102], [66, 124]], 3.5);
+    h.col('rgba(255,255,255,.35)'); [[96, 96], [116, 92], [110, 112], [128, 106]].forEach(([x, y]) => h.sl([[x - 6, y - 6], [x, y], [x - 6, y + 6]], 3));
+    eye(h, 46, 96, 5);
+  } },
+{ id: 'robin', name: 'Robin', color: '#8A6E5A',
+  draw(h, v) {
+    h.blob([[54, 104], [90, 82], [132, 88], [150, 112], [130, 142], [88, 146], [58, 128]]).o(146, 84, 24)
+     .p([[166, 78], [188, 86], [166, 92]]).blob([[62, 110], [14, 96], [18, 112], [62, 128]])
+     .l([[94, 144], [88, 174]], 4).l([[110, 144], [114, 174]], 4);
   },
-  {
-    id: 'snail', name: 'Snail', color: '#F08AB4',
-    p: r => ({ shell: rnd(r, 40, 52), body: rnd(r, 140, 175), ant: rnd(r, 22, 34) }),
-    draw(h, v) {
-      h.rr(20, 140, v.body, 28, 14).o(80, 140 - v.shell + 6, v.shell)
-       .l([[20 + v.body - 18, 146], [20 + v.body - 6, 146 - v.ant]], 5)
-       .l([[20 + v.body - 8, 148], [20 + v.body + 8, 148 - v.ant * .8]], 5);
-    },
-    deco(h, v) {
-      h.col('#C2D96A').rr(20, 140, v.body, 28, 14);
-      const cx = 80, cy = 146 - v.shell;
-      h.col('rgba(30,27,36,.4)').spiral(cx, cy, v.shell * .8, 5);
-    }
+  deco(h, v) {
+    h.col('#F27A4A').blob([[120, 96], [150, 100], [152, 126], [124, 142], [104, 126]]);
+    h.col(tone('#8A6E5A', -.2)).blob([[66, 104], [100, 96], [118, 112], [88, 124]]);
+    h.col('#F2B33D').p([[166, 78], [188, 86], [166, 92]]); eye(h, 152, 78, 4);
+  } },
+{ id: 'cat', name: 'Cat', color: '#8C8A99',
+  draw(h, v) {
+    h.blob([[66, 186], [60, 142], [74, 104], [112, 96], [142, 124], [150, 164], [146, 186]]).o(88, 74, 30)
+     .p([[62, 62], [64, 30], [84, 50]]).p([[96, 46], [114, 32], [114, 64]])
+     .tube([[146, 182], [180, 174], [186, 140], [172, 112]], 13, 9);
   },
-  {
-    id: 'key', name: 'Key', color: '#F2B33D',
-    p: r => ({ bow: rnd(r, 24, 34), len: rnd(r, 90, 120), teeth: Math.floor(rnd(r, 2, 4.99)) }),
-    draw(h, v) {
-      h.ring(50, 100, v.bow, v.bow, 16).rr(48 + v.bow, 92, v.len, 16, 4);
-      const end = 48 + v.bow + v.len;
-      for (let i = 0; i < v.teeth; i++) h.rr(end - 14 - i * 16, 104, 10, 14 + (i % 2) * 8, 2);
-    },
-    deco(h, v) { h.col('rgba(255,255,255,.6)').l([[48 + v.bow + 6, 96], [48 + v.bow + v.len - 10, 96]], 3); }
+  deco(h, v) {
+    h.col('#F4A5B8').p([[67, 56], [68, 40], [78, 50]]);
+    h.col(tone('#8C8A99', -.18)); [[118, 112], [130, 128], [136, 146]].forEach(([x, y]) => h.sl([[x, y], [x + 12, y + 4]], 5));
+    h.col('rgba(255,255,255,.3)').blob([[80, 120], [100, 116], [104, 170], [78, 176]]);
+    eye(h, 78, 70, 4); eye(h, 98, 70, 4); h.col('#F4A5B8').p([[84, 80], [92, 80], [88, 85]]);
+  } },
+{ id: 'dog', name: 'Dog', color: '#D9A066',
+  p: r => ({ tail: rnd(r, 20, 34) }),
+  draw(h, v) {
+    h.blob([[64, 96], [120, 92], [154, 104], [150, 128], [110, 134], [66, 128]]).o(52, 76, 25)
+     .blob([[36, 74], [10, 82], [8, 94], [36, 98]]).blob([[60, 58], [74, 64], [72, 98], [60, 94]])
+     .rr(66, 118, 15, 52, 7).rr(86, 122, 15, 48, 7).rr(122, 122, 15, 48, 7).rr(140, 118, 15, 52, 7)
+     .tube([[150, 104], [164, 90], [166, 104 - v.tail]], 9, 6);
   },
-  {
-    id: 'cat', name: 'Cat', color: '#8C8A99',
-    p: r => ({ head: rnd(r, 26, 34), tail: rnd(r, 50, 75), body: rnd(r, 44, 54) }),
-    draw(h, v) {
-      h.e(100, 130, v.body, 52).o(84, 70, v.head)
-       .p([[60, 58], [62, 28], [80, 46]]).p([[92, 44], [108, 28], [110, 58]])
-       .q(140, 168, 140 + v.tail * .9, 160, 150 + v.tail * .6, 90, 13);
-    },
-    deco(h, v) {
-      h.col(INK).o(74, 66, 4).o(94, 66, 4);
-      h.col('#F08AB4').p([[80, 76], [88, 76], [84, 81]]);
-      h.col('rgba(255,255,255,.25)').e(90, 140, 22, 34);
-    }
+  deco(h, v) {
+    h.col(tone('#D9A066', -.3)).blob([[60, 58], [74, 64], [72, 98], [60, 94]]);
+    h.col('#FFF0DC').blob([[84, 116], [130, 116], [124, 132], [88, 132]]);
+    h.col(INK).o(10, 86, 5); eye(h, 44, 70, 4);
+  } },
+{ id: 'rabbit', name: 'Rabbit', color: '#E6DED1',
+  draw(h, v) {
+    h.blob([[58, 182], [62, 140], [92, 114], [142, 122], [168, 158], [160, 184]]).o(72, 98, 26)
+     .tube([[66, 80], [60, 50], [64, 22]], 15, 11).tube([[80, 80], [92, 52], [104, 30]], 14, 10)
+     .o(166, 150, 13).e(84, 184, 26, 8);
   },
-  {
-    id: 'bird', name: 'Bird', color: '#E8603A',
-    p: r => ({ head: rnd(r, 22, 30), tail: rnd(r, 34, 54), beak: rnd(r, 14, 24) }),
-    draw(h, v) {
-      h.e(96, 112, 56, 40, -0.15).o(144, 76, v.head)
-       .p([[144 + v.head - 4, 72], [144 + v.head + v.beak, 80], [144 + v.head - 4, 86]])
-       .p([[48, 104], [48 - v.tail, 84 + v.tail * .2], [44 - v.tail * .9, 108], [52, 126]])
-       .l([[90, 148], [84, 176]], 4).l([[108, 148], [110, 176]], 4);
-    },
-    deco(h, v) {
-      h.col('#F2B33D').p([[144 + v.head - 4, 72], [144 + v.head + v.beak, 80], [144 + v.head - 4, 86]]);
-      h.col(INK).o(150, 70, 4.5);
-      h.col('rgba(30,27,36,.25)').e(84, 108, 34, 18, -0.3);
-      h.col('#FFE2C8').e(120, 120, 24, 22, 0);
-    }
+  deco(h, v) { h.col('#F4A5B8').tube([[63, 72], [60, 50], [64, 30]], 6, 4); eye(h, 62, 92, 4); h.col('#fff').o(166, 150, 11); } },
+{ id: 'elephant', name: 'Elephant', color: '#A3A8B8',
+  draw(h, v) {
+    h.blob([[72, 86], [112, 66], [160, 70], [190, 100], [188, 140], [160, 156], [100, 158], [70, 140]])
+     .o(62, 90, 34)
+     .blob([[66, 56], [100, 50], [114, 80], [106, 118], [82, 124], [70, 96]])
+     .tube([[40, 96], [28, 126], [30, 156], [42, 170], [54, 166]], 22, 11)
+     .rr(78, 138, 24, 50, [4, 4, 10, 10]).rr(104, 144, 22, 44, [4, 4, 10, 10]).rr(146, 144, 22, 44, [4, 4, 10, 10]).rr(166, 136, 24, 52, [4, 4, 10, 10])
+     .tube([[188, 106], [196, 128], [194, 142]], 5, 3).e(194, 144, 4, 6);
   },
-  {
-    id: 'cactus', name: 'Cactus', color: '#4FAF5A',
-    p: r => ({ a1: rnd(r, 70, 110), a2: rnd(r, 40, 80), l1: rnd(r, 26, 40), l2: rnd(r, 32, 52), hgt: rnd(r, 120, 150) }),
-    draw(h, v) {
-      h.rr(84, 172 - v.hgt, 34, v.hgt, 17)
-       .l([[90, v.a1], [90 - v.l1, v.a1], [90 - v.l1, v.a1 - 30]], 20)
-       .l([[112, v.a2], [112 + v.l2, v.a2], [112 + v.l2, v.a2 - 26]], 20)
-       .p([[64, 162], [138, 162], [130, 196], [72, 196]]);
-    },
-    deco(h, v) {
-      h.col('#D9773A').p([[64, 162], [138, 162], [130, 196], [72, 196]]);
-      h.col('rgba(30,27,36,.3)').rr(64, 162, 74, 8, 0);
-      h.col('rgba(255,255,255,.35)').l([[96, 180 - v.hgt], [96, 150]], 3);
-    }
+  deco(h, v) {
+    h.col(tone('#A3A8B8', -.16)).blob([[66, 56], [100, 50], [114, 80], [106, 118], [82, 124], [70, 96]]);
+    h.col('#E8B9C4').blob([[78, 66], [98, 62], [104, 84], [98, 108], [84, 110], [80, 90]]);
+    h.col(tone('#A3A8B8', -.16)).rr(104, 144, 22, 44, [4, 4, 10, 10]).rr(146, 144, 22, 44, [4, 4, 10, 10]);
+    h.col('#FFF8EC').tube([[46, 116], [36, 126], [24, 124]], 8, 4);
+    h.col('rgba(30,27,36,.28)'); [[30, 130], [28, 142], [30, 154]].forEach(([x, y]) => h.l([[x - 4, y], [x + 8, y - 2]], 2));
+    h.col('#F4F1EA'); [[84, 186], [94, 186], [172, 186], [182, 186]].forEach(([x, y]) => h.e(x, y, 4, 2.5));
+    eye(h, 50, 82, 4.5);
+  } },
+{ id: 'dino', name: 'Dinosaur', color: '#6CC27A',
+  p: r => ({ neck: rnd(r, -10, 10) }),
+  draw(h, v) {
+    h.blob([[70, 120], [110, 94], [152, 102], [172, 128], [140, 152], [82, 148]])
+     .tube([[86, 116], [66, 80 + v.neck], [52, 40 + v.neck]], 24, 15).e(46, 36 + v.neck, 19, 12, -0.2)
+     .tube([[160, 130], [186, 150], [200, 172]], 18, 3)
+     .rr(82, 138, 17, 44, 7).rr(102, 142, 17, 40, 7).rr(126, 142, 17, 40, 7).rr(144, 138, 17, 44, 7);
   },
-  {
-    id: 'whale', name: 'Whale', color: '#4F7FD9',
-    p: r => ({ len: rnd(r, 120, 150), tail: rnd(r, 26, 38), fin: rnd(r, 18, 28) }),
-    draw(h, v) {
-      const x0 = 20, x1 = 20 + v.len;
-      h.path(c => { c.moveTo(x0, 110); c.bezierCurveTo(x0, 60, x1 - 30, 70, x1, 104); c.lineTo(x1 + 6, 118); c.bezierCurveTo(x1 - 30, 150, x0, 150, x0, 110); })
-       .p([[x1 - 4, 110], [x1 + v.tail, 110 - v.tail * .9], [x1 + v.tail * .55, 112], [x1 + v.tail, 112 + v.tail * .8]])
-       .e(70, 138, v.fin, 8, 0.5);
-    },
-    deco(h, v) {
-      h.col('#CFE0FA').path(c => { c.moveTo(24, 120); c.bezierCurveTo(50, 146, 110, 146, 20 + v.len, 116); c.lineTo(20 + v.len, 140); c.lineTo(20, 140); });
-      h.col(INK).o(46, 104, 4);
-    }
+  deco(h, v) {
+    h.col(tone('#6CC27A', -.15)); [[100, 104], [120, 98], [140, 104]].forEach(([x, y]) => h.o(x, y + 8, 7));
+    eye(h, 40, 32 + v.neck, 3.5);
+  } },
+{ id: 'snail', name: 'Snail', color: '#F08AB4',
+  p: r => ({ shell: rnd(r, 42, 52) }),
+  draw(h, v) {
+    h.tube([[24, 172], [100, 176], [170, 168], [184, 148]], 20, 24).tube([[180, 160], [186, 128]], 22, 20)
+     .l([[180, 130], [172, 102]], 4).l([[190, 130], [196, 104]], 4).o(100, 172 - v.shell, v.shell);
   },
-  {
-    id: 'lamp', name: 'Desk lamp', color: '#F25C54',
-    p: r => ({ a: rnd(r, 50, 80), b: rnd(r, 50, 75), ang: rnd(r, .5, 1.0) }),
-    draw(h, v) {
-      const j = [70 + v.a * .45, 172 - v.a], t = [j[0] + v.b * Math.cos(-v.ang + .1) , j[1] + v.b * Math.sin(-v.ang + 1.3) * .4];
-      h.rr(30, 172, 80, 14, 7).l([[70, 172], j, t], 9).o(j[0], j[1], 8)
-       .path(c => { c.save(); c.translate(t[0], t[1]); c.rotate(.5); c.moveTo(-12, -6); c.lineTo(12, -6); c.lineTo(32, 34); c.lineTo(-32, 34); c.closePath(); c.restore(); });
-    },
-    deco(h, v) { h.col('rgba(30,27,36,.3)').rr(30, 180, 80, 6, 0); }
+  deco(h, v) {
+    h.col('#C9D97A').tube([[24, 172], [100, 176], [170, 168], [184, 148]], 20, 24).tube([[180, 160], [186, 128]], 22, 20);
+    h.col(tone('#F08AB4', -.25)).spiral(100, 172 - v.shell, v.shell * .78, 5); eye(h, 186, 138, 3.5);
+  } },
+{ id: 'turtle', name: 'Turtle', color: '#6BAF5B',
+  draw(h, v) {
+    h.blob([[40, 140], [56, 98], [104, 78], [152, 96], [172, 140]])
+     .blob([[162, 118], [190, 108], [200, 120], [188, 134], [164, 138]])
+     .e(70, 146, 16, 10, .3).e(146, 146, 16, 10, -.3).p([[40, 132], [20, 142], [42, 144]]);
   },
-  {
-    id: 'pear', name: 'Pear', color: '#B7D84B',
-    p: r => ({ bot: rnd(r, 44, 54), top: rnd(r, 24, 32), lean: rnd(r, -16, -4), leaf: rnd(r, 16, 26) }),
-    draw(h, v) {
-      h.o(100, 140, v.bot).o(100 + v.lean, 86, v.top)
-       .path(c => { c.moveTo(100 - v.bot, 140); c.lineTo(100 + v.lean - v.top, 86); c.lineTo(100 + v.lean + v.top, 86); c.lineTo(100 + v.bot, 140); })
-       .l([[100 + v.lean, 62], [96 + v.lean, 40]], 6).e(110 + v.lean + v.leaf * .3, 46, v.leaf, 8, -0.5);
-    },
-    deco(h, v) {
-      h.col('#7A4A1E').l([[100 + v.lean, 62], [96 + v.lean, 40]], 6);
-      h.col('#4FAF5A').e(110 + v.lean + v.leaf * .3, 46, v.leaf, 8, -0.5);
-      h.col('rgba(255,255,255,.5)').e(80, 130, 8, 18, .3);
-    }
+  deco(h, v) {
+    h.col('#C9D97A').blob([[162, 118], [190, 108], [200, 120], [188, 134], [164, 138]]).e(70, 146, 16, 10, .3).e(146, 146, 16, 10, -.3);
+    h.col(tone('#6BAF5B', -.25)).rr(30, 132, 150, 10, 4);
+    h.col(tone('#6BAF5B', -.18)); [[74, 112], [106, 98], [138, 112], [104, 124]].forEach(([x, y]) => h.blob([[x - 14, y], [x - 6, y - 10], [x + 8, y - 10], [x + 14, y], [x + 6, y + 10], [x - 8, y + 10]]));
+    eye(h, 186, 116, 3);
+  } },
+{ id: 'fox', name: 'Fox', color: '#E8763A',
+  draw(h, v) {
+    h.blob([[62, 110], [112, 98], [148, 110], [142, 134], [84, 138]])
+     .blob([[30, 98], [52, 80], [68, 94], [62, 114], [34, 110]]).p([[32, 96], [4, 104], [32, 110]]).p([[48, 84], [56, 58], [66, 88]])
+     .tube([[142, 118], [172, 114], [196, 92]], 24, 16, 6)
+     .rr(72, 126, 11, 46, 5).rr(88, 128, 11, 44, 5).rr(124, 128, 11, 44, 5).rr(136, 126, 11, 46, 5);
   },
-  {
-    id: 'pan', name: 'Frying pan', color: '#3A3F4B',
-    p: r => ({ r: rnd(r, 44, 60), handle: rnd(r, 70, 100) }),
-    draw(h, v) { h.o(70, 100, v.r).rr(70 + v.r - 6, 92, v.handle, 16, 8); },
-    deco(h, v) {
-      h.col('#5A6070').o(70, 100, v.r - 8);
-      h.col('#B5733E').rr(70 + v.r + 20, 92, v.handle - 26, 16, 8);
-      h.col('rgba(255,255,255,.25)').q(44, 80, 52, 66, 70, 62, 5);
-    }
+  deco(h, v) {
+    h.col('#FFF4E6').tube([[184, 102], [196, 92]], 20, 14).blob([[8, 104], [34, 104], [52, 112], [34, 116]]);
+    h.col(INK).rr(70, 160, 70, 14, 0).o(6, 104, 3.5); eye(h, 44, 94, 3.5);
+  } },
+{ id: 'seal', name: 'Seal', color: '#8E9AAF',
+  draw(h, v) {
+    h.blob([[22, 146], [34, 116], [62, 104], [110, 116], [152, 134], [182, 130], [198, 142], [182, 156], [100, 160], [40, 160]])
+     .o(48, 102, 26).blob([[86, 146], [110, 150], [96, 168]]);
   },
-  {
-    id: 'hammer', name: 'Hammer', color: '#9AA3B2',
-    p: r => ({ head: rnd(r, 70, 96), handle: rnd(r, 110, 140), claw: rnd(r, 20, 30) }),
-    draw(h, v) {
-      h.rr(60, 30, v.head, 30, 4)
-       .p([[60, 32], [60 - v.claw, 22], [60 - v.claw * .6, 46], [60, 56]])
-       .rr(60 + v.head * .45, 56, 18, v.handle, 6);
-    },
-    deco(h, v) { h.col('#B5733E').rr(60 + v.head * .45, 64, 18, v.handle - 8, 6); h.col('rgba(255,255,255,.5)').rr(64, 34, v.head - 8, 5, 2); }
+  deco(h, v) {
+    h.col(tone('#8E9AAF', .35)).blob([[30, 150], [80, 144], [140, 148], [100, 160], [40, 160]]);
+    h.col(INK).o(24, 104, 4); h.col('rgba(30,27,36,.4)').l([[26, 110], [10, 106]], 1.5).l([[26, 112], [10, 116]], 1.5); eye(h, 42, 94, 4);
+  } },
+{ id: 'penguin', name: 'Penguin', color: '#2B2F3A', tilt: .1,
+  draw(h, v) {
+    h.blob([[78, 190], [62, 140], [70, 84], [98, 54], [124, 64], [134, 118], [130, 170], [112, 190]])
+     .p([[122, 72], [148, 80], [122, 86]]).e(90, 192, 18, 6).e(118, 192, 16, 6);
   },
-  {
-    id: 'sock', name: 'Sock', color: '#E8603A',
-    p: r => ({ leg: rnd(r, 90, 120), foot: rnd(r, 60, 90), w: rnd(r, 40, 50) }),
-    draw(h, v) {
-      h.l([[80, 30], [80, 30 + v.leg], [80 + v.foot, 30 + v.leg + 18]], v.w);
-    },
-    deco(h, v) {
-      h.col('#FFFFFF');
-      for (let i = 0; i < 3; i++) h.rr(40, 30 + i * 14, 80, 6, 0);
-      h.col('#FFD23F').o(80 + v.foot + v.w * .25, 30 + v.leg + 18, v.w * .6);
-    }
+  deco(h, v) {
+    h.col('#FFFFFF').blob([[104, 96], [126, 88], [134, 130], [126, 176], [104, 184], [96, 140]]);
+    h.col('#F2B33D').p([[122, 72], [148, 80], [122, 86]]).e(90, 192, 18, 6).e(118, 192, 16, 6);
+    h.col(tone('#2B2F3A', .15)).blob([[72, 110], [92, 112], [96, 160], [80, 150]]); h.col('#fff').o(110, 72, 5); h.col(INK).o(111, 72, 2.5);
+  } },
+{ id: 'pig', name: 'Pig', color: '#F4A5B8',
+  draw(h, v) {
+    h.blob([[46, 104], [110, 90], [160, 100], [172, 130], [140, 152], [62, 150], [40, 128]]).e(30, 118, 12, 14)
+     .p([[56, 92], [64, 70], [78, 92]]).rr(62, 140, 15, 30, 5).rr(84, 142, 15, 28, 5).rr(124, 142, 15, 28, 5).rr(146, 140, 15, 30, 5);
   },
-  {
-    id: 'dino', name: 'Dinosaur', color: '#6CC27A',
-    p: r => ({ neck: rnd(r, 50, 75), tail: rnd(r, 50, 70), body: rnd(r, 46, 58) }),
-    draw(h, v) {
-      h.e(110, 128, v.body, 32)
-       .q(80, 116, 60, 90, 60, 116 - v.neck - 20, 18).e(52, 116 - v.neck - 24, 18, 11, -0.2)
-       .q(150, 120, 160 + v.tail * .4, 140, 150 + v.tail, 150, 13)
-       .rr(80, 140, 16, 40, 6).rr(100, 144, 16, 36, 6).rr(124, 144, 16, 36, 6).rr(140, 140, 16, 40, 6);
-    },
-    deco(h, v) { h.col(INK).o(46, 116 - v.neck - 27, 3.5); h.col('rgba(255,255,255,.3)').e(110, 116, 30, 10); }
+  deco(h, v) {
+    h.col(tone('#F4A5B8', -.15)).e(30, 118, 12, 14); h.col(tone('#F4A5B8', -.4)).e(26, 114, 2, 4).e(33, 114, 2, 4);
+    h.col(tone('#F4A5B8', -.3)).spiral(172, 112, 10, 3); eye(h, 54, 108, 3.5);
+  } },
+{ id: 'hen', name: 'Hen', color: '#F4F1EA',
+  draw(h, v) {
+    h.blob([[48, 112], [100, 104], [146, 92], [176, 66], [172, 112], [142, 152], [82, 156], [50, 138]]).o(62, 84, 23)
+     .blob([[52, 64], [58, 52], [66, 60], [72, 52], [78, 64]]).p([[40, 82], [24, 88], [40, 92]])
+     .l([[96, 152], [90, 182]], 4).l([[116, 152], [120, 182]], 4);
   },
-  {
-    id: 'elephant', name: 'Elephant', color: '#A3A8B8',
-    p: r => ({ head: rnd(r, 28, 34), trunk: rnd(r, 40, 60), ear: rnd(r, 18, 26) }),
-    draw(h, v) {
-      h.e(116, 112, 58, 40).o(58, 94, v.head)
-       .q(34, 104, 22, 130, 30, 104 + v.trunk, 14)
-       .rr(76, 130, 22, 50, 6).rr(104, 136, 22, 44, 6).rr(140, 136, 22, 44, 6).rr(156, 128, 20, 52, 6)
-       .l([[172, 104], [184, 128]], 4);
-    },
-    deco(h, v) {
-      h.col('rgba(30,27,36,.18)').e(76, 96, v.ear, v.ear * 1.3, .2);
-      h.col(INK).o(48, 88, 3.5);
-      h.col('#FFFFFF').q(40, 112, 30, 118, 26, 112, 5);
-    }
+  deco(h, v) {
+    h.col('#E8443A').blob([[52, 64], [58, 52], [66, 60], [72, 52], [78, 64]]).e(44, 100, 5, 8);
+    h.col('#F2B33D').p([[40, 82], [24, 88], [40, 92]]);
+    h.col(tone('#F4F1EA', -.12)).blob([[96, 112], [136, 104], [148, 124], [110, 134]]); eye(h, 56, 80, 3.5);
+  } },
+{ id: 'sheep', name: 'Sheep', color: '#F4F1EA',
+  draw(h, v) {
+    [[70, 100, 26], [100, 90, 28], [132, 98, 26], [150, 122, 24], [120, 132, 28], [84, 130, 26], [62, 120, 22]].forEach(([x, y, r], i) => h.o(x + J(v, i, 3), y + J(v, i + 9, 3), r));
+    h.e(42, 104, 18, 24, -.4).rr(74, 140, 11, 40, 4).rr(92, 144, 11, 36, 4).rr(124, 144, 11, 36, 4).rr(140, 140, 11, 40, 4);
   },
-  {
-    id: 'sailboat', name: 'Sailboat', color: '#F4F1EA',
-    p: r => ({ sail: rnd(r, 50, 70), jib: rnd(r, 26, 40), mast: rnd(r, 100, 120), hull: rnd(r, 140, 170) }),
-    draw(h, v) {
-      const x0 = 100 - v.hull / 2, x1 = 100 + v.hull / 2;
-      h.p([[x0, 140], [x1, 140], [x1 - 22, 170], [x0 + 10, 170]])
-       .rr(96, 140 - v.mast, 6, v.mast, 2)
-       .p([[104, 144 - v.mast], [104, 132], [104 + v.sail, 132]])
-       .p([[94, 150 - v.mast * .8], [94, 132], [94 - v.jib, 132]])
-       .p([[99, 140 - v.mast], [120, 132 - v.mast], [99, 124 - v.mast]]);
-    },
-    deco(h, v) {
-      const x0 = 100 - v.hull / 2, x1 = 100 + v.hull / 2;
-      h.col('#E8603A').p([[x0, 140], [x1, 140], [x1 - 22, 170], [x0 + 10, 170]]);
-      h.col('#5B8CFF').p([[99, 140 - v.mast], [120, 132 - v.mast], [99, 124 - v.mast]]);
-      h.col('rgba(30,27,36,.6)').rr(96, 140 - v.mast, 6, v.mast, 2);
-    }
+  deco(h, v) { h.col('#3A3F4B').e(42, 104, 18, 24, -.4).rr(60, 160, 100, 30, 0); eye(h, 36, 98, 3); } },
+{ id: 'mouse', name: 'Mouse', color: '#B6B0A8',
+  draw(h, v) {
+    h.blob([[24, 146], [56, 110], [110, 106], [150, 130], [150, 152], [40, 154]]).o(70, 104, 20)
+     .tube([[148, 146], [178, 152], [194, 128], [186, 106]], 6, 2);
   },
-  {
-    id: 'house', name: 'House', color: '#F2B33D',
-    p: r => ({ w: rnd(r, 90, 120), shed: rnd(r, 30, 55), chim: rnd(r, .15, .7), roof: rnd(r, 40, 56) }),
-    draw(h, v) {
-      const x0 = 30, x1 = 30 + v.w;
-      h.rr(x0, 100, v.w, 80, 0).p([[x0 - 10, 102], [x0 + v.w / 2, 102 - v.roof], [x1 + 10, 102]])
-       .rr(x0 + v.w * v.chim, 102 - v.roof * .9, 16, 40, 0)
-       .rr(x1, 130, v.shed, 50, 0).p([[x1, 132], [x1, 118], [x1 + v.shed + 6, 132]]);
-    },
-    deco(h, v) {
-      const x0 = 30;
-      h.col('#D9433B').p([[x0 - 10, 102], [x0 + v.w / 2, 102 - v.roof], [x0 + v.w + 10, 102]]);
-      h.col('#7A4A1E').rr(x0 + v.w * .55, 136, 22, 44, [8, 8, 0, 0]);
-      h.col('#CDE6F4').rr(x0 + 14, 116, 24, 22, 3);
-      h.col('rgba(30,27,36,.25)').rr(x0 + v.w, 130, v.shed, 6, 0);
-    }
+  deco(h, v) { h.col('#F4A5B8').o(70, 104, 12).o(24, 146, 4); eye(h, 46, 130, 3.5); } },
+{ id: 'frog', name: 'Frog', color: '#7CC24E',
+  draw(h, v) {
+    h.blob([[48, 160], [56, 116], [96, 96], [148, 116], [162, 158], [110, 166]]).o(84, 98, 18)
+     .blob([[118, 128], [168, 136], [176, 166], [120, 168]]).blob([[56, 150], [44, 170], [70, 170]]);
   },
-  {
-    id: 'tree', name: 'Tree', color: '#4FAF5A',
-    p: r => ({ blobs: Array.from({ length: 4 }, () => [rnd(r, 50, 150), rnd(r, 40, 100), rnd(r, 22, 38)]), lean: rnd(r, -18, 18) }),
-    draw(h, v) {
-      h.p([[92, 186], [114, 186], [104 + v.lean, 100], [96 + v.lean, 100]]);
-      v.blobs.forEach(([x, y, r]) => h.o(x, y, r));
-      h.o(100 + v.lean * .5, 80, 34);
-    },
-    deco(h, v) {
-      h.col('#8A5A2B').p([[92, 186], [114, 186], [104 + v.lean, 120], [96 + v.lean, 120]]);
-      h.col('rgba(255,255,255,.18)');
-      v.blobs.forEach(([x, y, r]) => h.o(x - r * .3, y - r * .3, r * .4));
-    }
+  deco(h, v) {
+    h.col('#E4F2B8').blob([[50, 154], [70, 130], [96, 140], [92, 166], [56, 166]]);
+    h.col(tone('#7CC24E', -.2)).o(126, 120, 5).o(140, 132, 4);
+    h.col('#fff').o(84, 96, 10); h.col(INK).o(82, 96, 5); h.col('rgba(30,27,36,.5)').sl([[50, 128], [70, 136], [86, 132]], 2.5);
+  } },
+{ id: 'shark', name: 'Shark', color: '#7F93A8',
+  draw(h, v) {
+    h.blob([[8, 112], [56, 92], [140, 96], [178, 106], [140, 120], [56, 126]])
+     .blob([[88, 96], [112, 56], [124, 98]]).blob([[166, 106], [196, 72], [186, 108], [198, 136]]).blob([[78, 118], [100, 124], [76, 146]]);
   },
-  {
-    id: 'cloud', name: 'Cloud', color: '#FFFFFF',
-    p: r => ({ blobs: Array.from({ length: 5 }, (_, i) => [30 + i * 34 + rnd(r, -8, 8), rnd(r, 84, 116), rnd(r, 20, 40)]) }),
-    draw(h, v) { v.blobs.forEach(([x, y, r]) => h.o(x, y, r)); h.rr(30, 100, 136, 26, 13); },
-    deco(h, v) { h.col('#DDE6F2').rr(10, 116, 180, 40, 0); }
+  deco(h, v) {
+    h.col('#F4F1EA').blob([[12, 114], [60, 112], [130, 112], [160, 112], [130, 122], [56, 126]]);
+    h.col('rgba(30,27,36,.35)'); for (let i = 0; i < 3; i++) h.sl([[54 + i * 7, 98], [52 + i * 7, 112]], 2.5);
+    eye(h, 32, 104, 3);
+  } },
+{ id: 'hedgehog', name: 'Hedgehog', color: '#8A5A2B',
+  draw(h, v) {
+    const pts = []; for (let i = 0; i <= 22; i++) { const a = Math.PI + i / 22 * Math.PI, rr = i % 2 ? 62 : 76 + J(v, i, 5); pts.push([110 + Math.cos(a) * rr * 1.1, 140 + Math.sin(a) * rr]); }
+    h.p([...pts, [176, 156], [44, 156]]).blob([[52, 130], [30, 140], [14, 152], [30, 160], [60, 160]]).rr(60, 152, 12, 22, 5).rr(140, 152, 12, 22, 5);
   },
-  {
-    id: 'icecream', name: 'Ice cream', color: '#F7A8C4',
-    p: r => ({ s1: rnd(r, 26, 34), s2: rnd(r, 20, 28), off: rnd(r, 8, 20), drip: rnd(r, 12, 26) }),
-    draw(h, v) {
-      h.p([[70, 110], [130, 110], [100, 192]]).o(100, 100, v.s1).o(100 + v.off, 100 - v.s1 - v.s2 + 12, v.s2)
-       .rr(76, 104, 10, v.drip + 10, 5);
-    },
-    deco(h, v) {
-      h.col('#E0A84A').p([[70, 112], [130, 112], [100, 192]]);
-      h.col('rgba(30,27,36,.25)').l([[78, 124], [110, 170]], 3).l([[100, 120], [118, 150]], 3).l([[122, 124], [92, 170]], 3);
-      h.col('#C9F0E0').o(100 + v.off, 100 - v.s1 - v.s2 + 12, v.s2);
-      h.col('#F7A8C4').rr(76, 108, 10, v.drip + 6, 5);
-    }
+  deco(h, v) { h.col('#E8C9A0').blob([[52, 128], [30, 140], [14, 152], [30, 162], [64, 162]]); h.col(INK).o(15, 151, 4); eye(h, 36, 140, 3); } },
+{ id: 'squirrel', name: 'Squirrel', color: '#C2703A',
+  draw(h, v) {
+    h.tube([[96, 176], [150, 168], [176, 120], [164, 70], [132, 56], [118, 80]], 30, 18, 8)
+     .blob([[70, 180], [64, 140], [84, 108], [108, 118], [114, 178]]).o(80, 94, 22).p([[80, 76], [86, 52], [94, 76]]);
   },
-  {
-    id: 'chair', name: 'Chair', color: '#B5733E',
-    p: r => ({ back: rnd(r, 70, 100), seat: rnd(r, 60, 80), leg: rnd(r, 50, 70) }),
-    draw(h, v) {
-      const y = 180 - v.leg;
-      h.rr(56, y - v.back, 14, v.back + 4, 4).rr(56, y, v.seat + 14, 14, 3)
-       .rr(58, y + 10, 10, v.leg, 2).rr(56 + v.seat, y + 10, 10, v.leg, 2)
-       .rr(70, y - v.back + 10, 8, 10, 2).rr(70, y - v.back * .5, 8, 10, 2);
-    },
-    deco(h, v) { h.col('rgba(255,255,255,.3)').rr(60, 180 - v.leg - v.back + 6, 4, v.back - 10, 2); }
+  deco(h, v) {
+    h.col(tone('#C2703A', .2)).tube([[150, 160], [170, 120], [160, 80]], 10, 6);
+    h.col('#F4E1C6').blob([[66, 170], [70, 130], [90, 130], [92, 172]]); eye(h, 70, 88, 3.5);
+  } },
+{ id: 'crocodile', name: 'Crocodile', color: '#5E9E4A',
+  draw(h, v) {
+    h.blob([[6, 116], [60, 104], [120, 100], [196, 116], [120, 126], [60, 128]]).o(66, 102, 12)
+     .rr(80, 120, 14, 22, 5).rr(140, 118, 14, 22, 5);
   },
-  {
-    id: 'dog', name: 'Dog', color: '#D9A066',
-    p: r => ({ head: rnd(r, 22, 28), tail: rnd(r, 22, 34), legs: rnd(r, 30, 42), snout: rnd(r, 14, 22) }),
-    draw(h, v) {
-      h.e(100, 112, 52, 28).o(46, 78, v.head).e(46 - v.head - v.snout * .4, 86, v.snout, 11)
-       .e(56, 70, 10, 22, .4)
-       .rr(60, 120, 14, v.legs + 10, 6).rr(80, 124, 14, v.legs + 6, 6).rr(120, 124, 14, v.legs + 6, 6).rr(138, 120, 14, v.legs + 10, 6)
-       .q(148, 100, 160, 90, 156 + v.tail * .4, 100 - v.tail, 8);
-    },
-    deco(h, v) {
-      h.col('#8A5A2B').e(56, 70, 10, 22, .4);
-      h.col(INK).o(42, 72, 3.5).o(46 - v.head - v.snout * 1.3, 84, 5);
-      h.col('rgba(255,255,255,.3)').e(100, 120, 34, 10);
-    }
+  deco(h, v) {
+    h.col(tone('#5E9E4A', -.2)); for (let i = 0; i < 7; i++) h.p([[90 + i * 14, 104 - (i > 4 ? 2 : 0)], [96 + i * 14, 94], [102 + i * 14, 104]]);
+    h.col('#fff'); for (let i = 0; i < 4; i++) h.p([[14 + i * 9, 117], [18 + i * 9, 123], [22 + i * 9, 117]]); eye(h, 66, 98, 3);
+  } },
+
+/* ================= food ================= */
+{ id: 'apple', name: 'Bitten apple', color: '#E8443A',
+  p: r => ({ b: rnd(r, -10, 10) }),
+  draw(h, v) {
+    h.blob([[100, 62], [140, 50], [176, 80], [178, 140], [140, 184], [100, 172], [60, 184], [24, 140], [26, 80], [62, 50]])
+     .tube([[100, 64], [106, 30]], 7, 6).blob([[110, 40], [140, 24], [150, 34], [124, 48]])
+     .cut(h => h.o(182, 110 + v.b, 22).o(176, 138 + v.b, 18).o(184, 86 + v.b, 14));
   },
-  {
-    id: 'note', name: 'Music note', color: '#9B6BFF',
-    p: r => ({ stem: rnd(r, 110, 140), flag: rnd(r, 40, 60), head: rnd(r, 24, 30) }),
-    draw(h, v) {
-      h.e(70, 168, v.head, v.head * .7, -0.45).rr(70 + v.head - 9, 168 - v.stem, 10, v.stem, 3)
-       .q(70 + v.head - 4, 168 - v.stem + 4, 70 + v.head + v.flag, 168 - v.stem + 30, 70 + v.head + v.flag * .7, 168 - v.stem + 70, 13);
-    },
-    deco(h, v) { h.col('rgba(255,255,255,.4)').e(62, 162, 8, 4, -0.45); }
+  deco(h, v) {
+    h.col('#FFF1D6').o(182, 110 + v.b, 30).o(176, 138 + v.b, 26).o(184, 86 + v.b, 22);
+    h.col('#7A4A1E').tube([[100, 64], [106, 30]], 7, 6); h.col('#5DAA4B').blob([[110, 40], [140, 24], [150, 34], [124, 48]]);
+    h.col('rgba(255,255,255,.5)').e(56, 96, 9, 18, .4);
+  } },
+{ id: 'pear', name: 'Pear', color: '#B7D84B',
+  draw(h, v) {
+    h.blob([[98, 40], [116, 58], [120, 92], [152, 128], [150, 170], [112, 192], [64, 182], [50, 142], [76, 98], [84, 60]])
+     .tube([[100, 44], [96, 18]], 6, 5).blob([[102, 26], [126, 16], [132, 26], [112, 34]]);
   },
-  {
-    id: 'wateringcan', name: 'Watering can', color: '#4FA8D8',
-    p: r => ({ spout: rnd(r, 44, 64), w: rnd(r, 80, 100), handle: rnd(r, 22, 32) }),
-    draw(h, v) {
-      h.rr(50, 90, v.w, 86, 10)
-       .p([[50 + v.w - 4, 150], [50 + v.w - 4, 130], [50 + v.w + v.spout, 80], [50 + v.w + v.spout + 8, 88]])
-       .e(50 + v.w + v.spout + 6, 82, 12, 7, -0.7)
-       .ring(50 + 4, 112, v.handle, v.handle * 1.1, 10);
-    },
-    deco(h, v) { h.col('rgba(255,255,255,.45)').rr(60, 100, 8, 60, 4); h.col('rgba(30,27,36,.2)').rr(50, 90, v.w, 8, 0); }
+  deco(h, v) {
+    h.col('#7A4A1E').tube([[100, 44], [96, 18]], 6, 5); h.col('#5DAA4B').blob([[102, 26], [126, 16], [132, 26], [112, 34]]);
+    h.col(tone('#B7D84B', -.12)); [[118, 150], [90, 170], [130, 120]].forEach(([x, y]) => h.o(x, y, 2));
+    h.col('rgba(255,255,255,.45)').e(74, 140, 8, 18, .3);
+  } },
+{ id: 'banana', name: 'Banana', color: '#FFD23F', tilt: .4,
+  draw(h, v) { h.tube([[20, 70], [50, 130], [110, 156], [170, 132], [190, 104]], 10, 8, 30); },
+  deco(h, v) {
+    h.col('#6B4A1E').tube([[18, 66], [26, 82]], 9, 9).o(190, 104, 5);
+    h.col(tone('#FFD23F', -.12)).sl([[40, 110], [80, 146], [130, 150], [176, 124]], 4);
+  } },
+{ id: 'cheese', name: 'Cheese', color: '#FFCC4D',
+  draw(h, v) {
+    h.p([[14, 146], [186, 96], [190, 160], [14, 162]])
+     .cut(h => { [[60, 150, 12], [110, 138, 9], [150, 128, 14], [90, 156, 7], [40, 158, 6], [168, 150, 8]].forEach(([x, y, r], i) => h.o(x + J(v, i, 5), y + J(v, i + 7, 3), r * (1 + J(v, i + 20, .25)))); });
   },
-  {
-    id: 'car', name: 'Car', color: '#E8443A',
-    p: r => ({ cab: rnd(r, 60, 84), cabx: rnd(r, 30, 60), hood: rnd(r, 30, 42) }),
-    draw(h, v) {
-      h.rr(10, 104, 180, 44, [16, 22, 12, 12])
-       .p([[v.cabx, 106], [v.cabx + 14, 106 - v.hood], [v.cabx + 14 + v.cab, 106 - v.hood], [v.cabx + 34 + v.cab, 106]])
-       .o(52, 150, 20).o(150, 150, 20);
-    },
-    deco(h, v) {
-      h.col('#CDE6F4').p([[v.cabx + 10, 104], [v.cabx + 20, 112 - v.hood], [v.cabx + 10 + v.cab, 112 - v.hood], [v.cabx + 26 + v.cab, 104]]);
-      h.col(INK).o(52, 150, 20).o(150, 150, 20);
-      h.col('#9AA3B2').o(52, 150, 9).o(150, 150, 9);
-      h.col('#FFD23F').rr(176, 114, 12, 8, 3);
-    }
+  deco(h, v) { h.col(tone('#FFCC4D', -.12)).p([[14, 158], [190, 156], [190, 164], [14, 164]]); h.col(tone('#FFCC4D', .3)).p([[14, 146], [186, 96], [188, 104], [16, 150]]); } },
+{ id: 'pizza', name: 'Pizza slice', color: '#F6C453', tilt: .3,
+  draw(h, v) {
+    h.path(c => { c.moveTo(100, 192); c.lineTo(30, 46); c.quadraticCurveTo(100, 20, 170, 46); c.closePath(); })
+     .cut(h => h.o(64, 128, 18).o(54, 108, 14));
   },
-  {
-    id: 'sneaker', name: 'Sneaker', color: '#FFFFFF',
-    p: r => ({ heel: rnd(r, 60, 80), toe: rnd(r, 30, 42), len: rnd(r, 150, 175) }),
-    draw(h, v) {
-      h.rr(14, 156, v.len, 22, 10)
-       .path(c => { c.moveTo(18, 160); c.lineTo(18, 160 - v.heel); c.lineTo(60, 160 - v.heel + 6); c.quadraticCurveTo(80, 130, 120, 128); c.quadraticCurveTo(14 + v.len, 128, 14 + v.len, 160 - v.toe * .2); c.lineTo(14 + v.len, 162); });
-    },
-    deco(h, v) {
-      h.col('#E8603A').rr(14, 156, v.len, 22, 10);
-      h.col('#5B8CFF').path(c => { c.moveTo(40, 150); c.quadraticCurveTo(90, 120, 130, 150); c.quadraticCurveTo(90, 136, 40, 156); });
-      h.col('rgba(30,27,36,.35)'); for (let i = 0; i < 3; i++) h.l([[66 + i * 14, 140 - i * 4], [76 + i * 14, 150 - i * 4]], 3);
-    }
+  deco(h, v) {
+    h.col('#C8792B').path(c => { c.moveTo(24, 50); c.quadraticCurveTo(100, 14, 176, 50); c.lineTo(170, 64); c.quadraticCurveTo(100, 36, 30, 64); c.closePath(); });
+    h.col('#D9433B'); [[96, 80], [124, 70], [112, 116], [90, 150], [70, 82]].forEach(([x, y]) => h.o(x, y, 10));
+    h.col('#5DAA4B'); [[136, 96], [104, 100], [80, 110]].forEach(([x, y]) => h.e(x, y, 5, 2.5, .6));
+  } },
+{ id: 'donut', name: 'Donut', color: '#E0A84A', tilt: 3.1,
+  draw(h, v) { h.o(100, 100, 72).cut(h => h.o(100, 100, 24).o(172, 92, 22).o(164, 118, 18)); },
+  deco(h, v) {
+    h.col('#F7A8C4').blob(Array.from({ length: 14 }, (_, i) => { const a = i / 14 * 6.283, r = 62 + (i % 2 ? -6 : 4) + J(v, i, 3); return [100 + Math.cos(a) * r, 100 + Math.sin(a) * r]; }));
+    const cols = ['#FFFFFF', '#5B8CFF', '#FFD23F', '#7CC24E'];
+    for (let i = 0; i < 22; i++) { const a = i / 22 * 6.283 + J(v, i, .2), r = 44 + J(v, i + 30, 10); h.col(cols[i % 4]).e(100 + Math.cos(a) * r, 100 + Math.sin(a) * r, 5, 2, a * 2); }
+  } },
+{ id: 'cookie', name: 'Cookie', color: '#D9A066',
+  draw(h, v) {
+    h.blob(Array.from({ length: 16 }, (_, i) => { const a = i / 16 * 6.283, r = 72 + J(v, i, 4); return [100 + Math.cos(a) * r, 100 + Math.sin(a) * r]; }))
+     .cut(h => h.o(30, 52, 22).o(24, 76, 16).o(44, 36, 16));
   },
-  {
-    id: 'mitten', name: 'Mitten', color: '#D9433B',
-    p: r => ({ w: rnd(r, 40, 50), thumb: rnd(r, 14, 20), ta: rnd(r, -.7, -.3) }),
-    draw(h, v) { h.e(104, 96, v.w, 62).e(104 - v.w + 4, 108, v.thumb, 30, v.ta).rr(104 - v.w + 6, 150, v.w * 2 - 12, 34, 6); },
-    deco(h, v) {
-      h.col('#FFFFFF').rr(104 - v.w + 6, 150, v.w * 2 - 12, 34, 6);
-      h.col('rgba(30,27,36,.18)'); for (let i = 0; i < 4; i++) h.rr(104 - v.w + 6, 154 + i * 8, v.w * 2 - 12, 3, 0);
-      h.col('#FFFFFF').o(110, 80, 6).o(96, 104, 4).o(120, 116, 5);
-    }
+  deco(h, v) {
+    h.col(tone('#D9A066', -.12)).o(100, 100, 60);
+    h.col('#5A3A1E'); [[70, 64], [112, 52], [146, 80], [94, 98], [132, 120], [64, 118], [100, 146], [140, 154], [52, 90], [80, 168]].forEach(([x, y], i) => {
+      const cx = x + J(v, i, 8), cy = y + J(v, i + 11, 8); h.blob([[cx - 6, cy - 4], [cx + 3, cy - 7], [cx + 8, cy + 2], [cx, cy + 7], [cx - 7, cy + 4]]); });
+  } },
+{ id: 'carrot', name: 'Carrot', color: '#F28A3D', tilt: .35,
+  draw(h, v) {
+    h.tube([[30, 182], [80, 136], [132, 76]], 6, 40).tube([[132, 78], [150, 40], [148, 14]], 10, 5).tube([[134, 80], [172, 46], [190, 34]], 10, 5).tube([[130, 78], [118, 40], [104, 26]], 9, 5);
   },
-  {
-    id: 'axe', name: 'Axe', color: '#9AA3B2',
-    p: r => ({ handle: rnd(r, 140, 170), blade: rnd(r, 40, 56) }),
-    draw(h, v) {
-      h.q(70, 190, 86, 110, 110, 190 - v.handle, 13)
-       .path(c => { c.moveTo(100, 40); c.lineTo(126, 36); c.quadraticCurveTo(126 + v.blade, 30, 120 + v.blade, 74); c.quadraticCurveTo(140, 60, 118, 70); c.lineTo(104, 64); });
-    },
-    deco(h, v) { h.col('#B5733E').q(70, 190, 86, 110, 106, 70, 13); h.col('rgba(255,255,255,.6)').q(126 + v.blade * .6, 38, 128 + v.blade * .8, 52, 116 + v.blade, 66, 4); }
+  deco(h, v) {
+    h.col('#5DAA4B').tube([[132, 78], [150, 40], [148, 14]], 10, 5).tube([[134, 80], [172, 46], [190, 34]], 10, 5).tube([[130, 78], [118, 40], [104, 26]], 9, 5);
+    h.col(tone('#F28A3D', -.18)); [[70, 150, 10], [92, 122, 14], [110, 104, 12], [58, 162, 8]].forEach(([x, y, l]) => h.l([[x, y], [x + l * .7, y + l * .7]], 3));
+  } },
+{ id: 'eggplant', name: 'Eggplant', color: '#6E3D8A',
+  draw(h, v) {
+    h.blob([[60, 54], [92, 62], [148, 112], [172, 164], [134, 190], [84, 156], [58, 100]]).tube([[64, 58], [52, 30]], 9, 7);
   },
-  {
-    id: 'spray', name: 'Spray bottle', color: '#2FB3A3',
-    p: r => ({ body: rnd(r, 90, 110), nozzle: rnd(r, 26, 40), trig: rnd(r, 20, 30) }),
-    draw(h, v) {
-      h.rr(70, 180 - v.body, 60, v.body, 12).rr(88, 168 - v.body, 24, 16, 2)
-       .p([[78, 168 - v.body], [126, 168 - v.body], [126, 140 - v.body], [72 - v.nozzle, 138 - v.body], [72 - v.nozzle, 150 - v.body], [78, 152 - v.body]])
-       .q(84, 164 - v.body, 76, 172 - v.body + v.trig, 70, 176 - v.body + v.trig, 8);
-    },
-    deco(h, v) {
-      h.col('#F4F1EA').p([[78, 168 - v.body], [126, 168 - v.body], [126, 140 - v.body], [72 - v.nozzle, 138 - v.body], [72 - v.nozzle, 150 - v.body], [78, 152 - v.body]]);
-      h.col('rgba(255,255,255,.5)').rr(80, 196 - v.body, 8, v.body - 40, 4);
-      h.col('#FFFFFF').rr(78, 220 - v.body, 44, 30, 4);
-    }
+  deco(h, v) {
+    h.col('#5DAA4B').blob([[44, 52], [70, 44], [96, 66], [82, 80], [70, 70], [56, 82], [50, 66]]).tube([[64, 58], [52, 30]], 9, 7);
+    h.col('rgba(255,255,255,.35)').sl([[90, 90], [124, 128], [140, 160]], 6);
+  } },
+{ id: 'chili', name: 'Chili pepper', color: '#E8443A', tilt: .4,
+  draw(h, v) { h.tube([[40, 60], [86, 84], [140, 130], [172, 184]], 30, 4, 4).tube([[42, 62], [26, 40], [32, 20]], 8, 6).e(44, 60, 18, 14, .4); },
+  deco(h, v) { h.col('#5DAA4B').tube([[42, 62], [26, 40], [32, 20]], 8, 6).e(44, 60, 18, 14, .4); h.col('rgba(255,255,255,.4)').sl([[70, 70], [110, 96], [140, 130]], 5); } },
+{ id: 'avocado', name: 'Avocado', color: '#3F6B2E',
+  draw(h, v) { h.blob([[96, 26], [124, 40], [138, 86], [164, 130], [156, 176], [108, 196], [56, 180], [44, 132], [72, 86], [74, 44]]); },
+  deco(h, v) {
+    h.col('#D8E89A').blob([[97, 36], [118, 48], [128, 90], [152, 132], [146, 170], [108, 186], [64, 172], [54, 134], [80, 90], [82, 50]]);
+    h.col('#F2E9B0').o(104, 140, 36); h.col('#8A5A2B').o(104, 140, 28); h.col('rgba(255,255,255,.35)').e(94, 130, 7, 10, .4);
+  } },
+{ id: 'drumstick', name: 'Drumstick', color: '#C8792B', tilt: .4,
+  draw(h, v) {
+    h.blob([[56, 36], [118, 34], [150, 76], [134, 124], [104, 140], [62, 116], [38, 72]])
+     .tube([[110, 124], [150, 164]], 18, 14).o(162, 172, 11).o(150, 182, 11);
   },
-  {
-    id: 'snake', name: 'Snake', color: '#7CC24E',
-    p: r => ({ amp: rnd(r, 22, 34), waves: rnd(r, 1.2, 1.8), head: rnd(r, 14, 18) }),
-    draw(h, v) {
-      const pts = []; for (let i = 0; i <= 30; i++) { const t = i / 30; pts.push([20 + t * 150, 100 + Math.sin(t * Math.PI * 2 * v.waves) * v.amp]); }
-      h.l(pts, 20); const end = pts[pts.length - 1]; h.e(end[0] + 10, end[1], v.head + 8, v.head, 0);
-    },
-    deco(h, v) {
-      const pts = []; for (let i = 0; i <= 30; i++) { const t = i / 30; pts.push([20 + t * 150, 100 + Math.sin(t * Math.PI * 2 * v.waves) * v.amp]); }
-      h.col('#F2D35B'); for (let i = 2; i < 28; i += 4) h.o(pts[i][0], pts[i][1], 4);
-      const end = pts[pts.length - 1]; h.col(INK).o(end[0] + 16, end[1] - 5, 3);
-    }
+  deco(h, v) {
+    h.col('#FFF4E6').tube([[118, 134], [150, 164]], 18, 14).o(162, 172, 11).o(150, 182, 11);
+    h.col(tone('#C8792B', -.2)).o(80, 90, 4).o(104, 70, 3).o(116, 100, 4); h.col('rgba(255,255,255,.35)').e(70, 64, 14, 8, -.5);
+  } },
+{ id: 'broccoli', name: 'Broccoli', color: '#4E9F3D',
+  draw(h, v) {
+    h.tube([[96, 186], [100, 140], [108, 110]], 30, 22).tube([[100, 140], [70, 110]], 14, 10).tube([[104, 144], [140, 112]], 14, 10);
+    [[70, 90, 30], [104, 70, 36], [142, 88, 30], [88, 108, 24], [124, 110, 24], [52, 112, 18], [160, 112, 18]].forEach(([x, y, r], i) => h.o(x + J(v, i, 4), y + J(v, i + 9, 4), r));
   },
-  {
-    id: 'rabbit', name: 'Rabbit', color: '#E6DED1',
-    p: r => ({ ear: rnd(r, 40, 56), body: rnd(r, 46, 56), ea: rnd(r, .1, .5) }),
-    draw(h, v) {
-      h.e(110, 140, v.body, 40).o(60, 110, 26).o(110 + v.body - 2, 150, 12)
-       .e(62, 110 - v.ear, 9, v.ear * .8, -v.ea).e(76, 110 - v.ear + 6, 9, v.ear * .75, v.ea * .6)
-       .e(60, 172, 22, 8);
-    },
-    deco(h, v) {
-      h.col('#F7A8C4').e(62, 110 - v.ear, 4, v.ear * .55, -v.ea);
-      h.col(INK).o(50, 104, 3.5);
-      h.col('#FFFFFF').o(110 + v.body - 2, 150, 10);
-    }
+  deco(h, v) {
+    h.col('#BFD98A').tube([[96, 186], [100, 140], [108, 112]], 30, 22).tube([[100, 140], [72, 112]], 14, 10).tube([[104, 144], [138, 114]], 14, 10);
+    h.col(tone('#4E9F3D', -.18)); for (let i = 0; i < 16; i++) h.o(60 + (i * 29) % 100, 66 + (i * 17) % 50, 4);
+  } },
+{ id: 'mushrooms', name: 'Mushrooms', color: '#D9533B',
+  p: r => ({ s: rnd(r, .5, .7) }),
+  draw(h, v) {
+    h.rr(64, 96, 30, 90, 12).path(c => { c.moveTo(20, 104); c.quadraticCurveTo(26, 34, 80, 32); c.quadraticCurveTo(136, 34, 140, 104); c.closePath(); });
+    const s = v.s, x = 150, y = 186;
+    h.rr(x - 12 * s * 1.6, y - 80 * s, 22 * s * 1.6, 80 * s, 8).path(c => { c.moveTo(x - 50 * s, y - 70 * s); c.quadraticCurveTo(x - 44 * s, y - 130 * s, x, y - 132 * s); c.quadraticCurveTo(x + 44 * s, y - 130 * s, x + 50 * s, y - 70 * s); c.closePath(); });
   },
-  {
-    id: 'guitar', name: 'Guitar', color: '#F4A93B',
-    p: r => ({ lower: rnd(r, 38, 46), upper: rnd(r, 26, 32), neck: rnd(r, 60, 80), cut: rnd(r, 12, 18) }),
-    draw(h, v) {
-      // electric-style body: offset horns break the symmetry
-      h.o(100, 150, v.lower).o(92, 110, v.upper).e(118, 96, 10, v.cut + 8, .4)
-       .rr(93, 110 - v.upper - v.neck, 14, v.neck + 20, 2).p([[90, 110 - v.upper - v.neck], [112, 110 - v.upper - v.neck], [118, 80 - v.upper - v.neck], [94, 86 - v.upper - v.neck]]);
-    },
-    deco(h, v) {
-      h.col('#7A4A1E').rr(93, 110 - v.upper - v.neck, 14, v.neck + 30, 2);
-      h.col('#FFFFFF').rr(84, 132, 32, 8, 3).rr(84, 150, 32, 8, 3);
-      h.col('#F4F1EA').path(c => { c.moveTo(110, 140); c.quadraticCurveTo(140, 150, 128, 176); c.quadraticCurveTo(116, 170, 110, 160); });
-    }
+  deco(h, v) {
+    h.col('#FFF3E6').rr(64, 96, 30, 90, 12).rr(150 - 12 * v.s * 1.6, 186 - 76 * v.s, 22 * v.s * 1.6, 76 * v.s, 8);
+    h.col('#FFF3E6'); [[50, 70, 9], [86, 52, 12], [116, 78, 7], [150, 186 - 104 * v.s, 6]].forEach(([x, y, r]) => h.o(x, y, r));
+  } },
+{ id: 'watermelon', name: 'Watermelon', color: '#E8504A', tilt: .3,
+  draw(h, v) {
+    h.path(c => { c.moveTo(14, 80); c.lineTo(186, 80); c.arc(100, 80, 86, 0, Math.PI); c.closePath(); })
+     .cut(h => h.o(130, 78, 18).o(152, 76, 14));
   },
-  {
-    id: 'pipe', name: 'Pipe', color: '#8A5A2B',
-    p: r => ({ bowl: rnd(r, 48, 60), stem: rnd(r, 70, 100), lift: rnd(r, 10, 30) }),
-    draw(h, v) {
-      h.rr(40, 70, v.bowl, 70, [4, 4, 24, 24]).q(40 + v.bowl - 6, 124, 90 + v.stem * .4, 128, 40 + v.bowl + v.stem, 110 - v.lift, 12);
-    },
-    deco(h, v) { h.col('#3A3F4B').rr(44, 70, v.bowl - 8, 10, 3); h.col(INK).q(40 + v.bowl + v.stem * .7, 116 - v.lift * .5, 40 + v.bowl + v.stem * .85, 112 - v.lift, 40 + v.bowl + v.stem, 110 - v.lift, 12); }
+  deco(h, v) {
+    h.col('#4E9F3D').path(c => { c.moveTo(14, 80); c.arc(100, 80, 86, Math.PI, 0, true); c.arc(100, 80, 74, 0, Math.PI); c.closePath(); });
+    h.col('#F4F1EA').path(c => { c.moveTo(26, 80); c.arc(100, 80, 74, Math.PI, 0, true); c.arc(100, 80, 66, 0, Math.PI); c.closePath(); });
+    h.col(INK); [[60, 100], [90, 118], [120, 104], [100, 96], [140, 96], [74, 120]].forEach(([x, y]) => h.e(x, y, 3, 5, .3));
+  } },
+{ id: 'icecream', name: 'Ice cream', color: '#F7A8C4', tilt: .2,
+  p: r => ({ off: rnd(r, 6, 14) }),
+  draw(h, v) {
+    h.p([[66, 106], [134, 106], [100, 194]])
+     .blob([[62, 108], [64, 84], [90, 70], [124, 74], [140, 100], [138, 112], [110, 110], [90, 120], [80, 112]])
+     .blob([[78 + v.off, 76], [82 + v.off, 52], [104 + v.off, 40], [128 + v.off, 52], [130 + v.off, 76]]);
   },
-  {
-    id: 'mushroom', name: 'Mushroom', color: '#F25C54',
-    p: r => ({ cap: rnd(r, 50, 72), tilt: rnd(r, .15, .35), stem: rnd(r, 50, 70), bend: rnd(r, 10, 26) }),
-    draw(h, v) {
-      h.q(100, 180, 100 + v.bend, 180 - v.stem * .6, 96, 180 - v.stem, 26)
-       .path(c => { c.save(); c.translate(96, 186 - v.stem); c.rotate(v.tilt); c.ellipse(0, 0, v.cap, v.cap * .75, 0, Math.PI, 0); c.closePath(); c.restore(); });
-    },
-    deco(h, v) {
-      h.col('#FFF3E6').q(100, 180, 100 + v.bend, 180 - v.stem * .6, 96, 180 - v.stem, 26);
-      h.col('#FFF3E6').path(c => { c.save(); c.translate(96, 186 - v.stem); c.rotate(v.tilt); [[-.4, -.4, .16], [.15, -.6, .2], [.5, -.25, .13], [-.15, -.15, .1]].forEach(([x, y, r]) => { c.moveTo(x * v.cap + r * v.cap, y * v.cap); c.arc(x * v.cap, y * v.cap, r * v.cap, 0, 7); }); c.restore(); });
-    }
+  deco(h, v) {
+    h.col('#E0A84A').p([[66, 110], [134, 110], [100, 194]]);
+    h.col('rgba(30,27,36,.2)').l([[76, 122], [108, 170]], 3).l([[96, 116], [118, 150]], 3).l([[124, 122], [92, 170]], 3);
+    h.col('#BDE8D2').blob([[78 + v.off, 76], [82 + v.off, 52], [104 + v.off, 40], [128 + v.off, 52], [130 + v.off, 76]]);
+    h.col('#F7A8C4').blob([[62, 108], [64, 84], [90, 70], [124, 74], [140, 100], [138, 112], [110, 110], [90, 120], [80, 112]]);
+  } },
+
+/* ================= things ================= */
+{ id: 'mug', name: 'Mug', color: '#5B8CFF',
+  p: r => ({ w: rnd(r, 84, 104), hgt: rnd(r, 104, 128) }),
+  draw(h, v) { h.ring(36 + v.w, 110, 30, 30, 15).rr(36, 168 - v.hgt, v.w, v.hgt, [6, 6, 22, 22]); },
+  deco(h, v) { h.col(tone('#5B8CFF', -.25)).rr(36, 168 - v.hgt, v.w, 10, 4); h.col('rgba(255,255,255,.75)').rr(48, 184 - v.hgt, 9, v.hgt * .55, 5); } },
+{ id: 'teapot', name: 'Teapot', color: '#2FB3A3',
+  draw(h, v) {
+    h.blob([[46, 130], [58, 96], [100, 84], [142, 96], [156, 130], [140, 166], [100, 172], [60, 166]])
+     .e(100, 84, 26, 9).o(100, 70, 8).tube([[146, 136], [168, 112], [190, 88]], 18, 9).ring(46, 126, 20, 26, 11);
   },
-  {
-    id: 'fish', name: 'Fish', color: '#FF8A5B',
-    p: r => ({ body: rnd(r, 52, 66), fin: rnd(r, 20, 34), tail: rnd(r, 30, 46), belly: rnd(r, 8, 18) }),
-    draw(h, v) {
-      h.path(c => { c.moveTo(30, 104); c.bezierCurveTo(50, 50, 130, 56, 150, 100); c.bezierCurveTo(130, 140 + v.belly, 50, 150, 30, 104); })
-       .p([[144, 100], [150 + v.tail, 66], [140 + v.tail, 104], [156 + v.tail * .8, 132]])
-       .path(c => { c.moveTo(66, 70); c.quadraticCurveTo(90, 60 - v.fin, 120, 70); });
-    },
-    deco(h, v) {
-      h.col(INK).o(52, 96, 5);
-      h.col('rgba(30,27,36,.3)').q(68, 82, 78, 104, 68, 124, 4);
-      h.col('rgba(255,255,255,.35)').q(90, 90, 110, 84, 130, 94, 4);
-    }
-  }
+  deco(h, v) { h.col(tone('#2FB3A3', -.22)).e(100, 84, 26, 9).o(100, 70, 8).rr(46, 128, 112, 7, 3); h.col('#FFF4E6'); [[78, 146], [100, 150], [122, 146]].forEach(([x, y]) => h.o(x, y, 6)); } },
+{ id: 'wateringcan', name: 'Watering can', color: '#4FA8D8',
+  draw(h, v) {
+    h.rr(48, 88, 90, 88, 12).tube([[132, 150], [164, 108], [186, 78]], 16, 8).e(188, 76, 14, 7, -0.8)
+     .path(c => { c.lineWidth = 11; c.beginPath(); c.moveTo(56, 94); c.quadraticCurveTo(70, 40, 128, 70); c.stroke(); c.beginPath(); });
+  },
+  deco(h, v) { h.col(tone('#4FA8D8', -.25)).rr(48, 88, 90, 9, 4).e(188, 76, 14, 7, -0.8); h.col('rgba(255,255,255,.55)').rr(58, 100, 8, 60, 4); } },
+{ id: 'kettle', name: 'Kettle', color: '#E8603A',
+  draw(h, v) {
+    h.blob([[52, 176], [56, 112], [86, 86], [128, 86], [156, 112], [160, 176]]).tube([[150, 150], [174, 122], [192, 104]], 18, 10)
+     .path(c => { c.lineWidth = 12; c.lineCap = 'round'; c.beginPath(); c.moveTo(72, 100); c.quadraticCurveTo(106, 30, 140, 100); c.stroke(); c.beginPath(); }).o(106, 82, 8);
+  },
+  deco(h, v) { h.col(INK).path(c => { c.lineWidth = 12; c.lineCap = 'round'; c.beginPath(); c.moveTo(80, 82); c.quadraticCurveTo(106, 30, 132, 82); c.stroke(); c.beginPath(); }); h.col(tone('#E8603A', -.25)).rr(50, 166, 112, 10, 4); h.col('rgba(255,255,255,.5)').e(78, 132, 8, 22, .1); } },
+{ id: 'boot', name: 'Boot', color: '#B5733E',
+  p: r => ({ shaft: rnd(r, 96, 124), toe: rnd(r, 64, 84) }),
+  draw(h, v) {
+    h.rr(60, 160 - v.shaft, 56, v.shaft + 10, [10, 10, 0, 0])
+     .path(c => { c.moveTo(60, 150); c.lineTo(116, 138); c.quadraticCurveTo(116 + v.toe, 138, 116 + v.toe, 166); c.lineTo(116 + v.toe, 178); c.lineTo(60, 178); }).rr(56, 176, 36, 14, 3);
+  },
+  deco(h, v) { h.col(tone('#B5733E', -.25)); for (let i = 0; i < 4; i++) h.l([[72, 182 - v.shaft + i * 18], [104, 176 - v.shaft + i * 18]], 4); h.col(tone('#B5733E', -.4)).rr(54, 172, 160, 20, 0); } },
+{ id: 'sneaker', name: 'Sneaker', color: '#F4F1EA',
+  draw(h, v) {
+    h.rr(14, 154, 172, 24, 10).path(c => { c.moveTo(18, 160); c.lineTo(20, 92); c.quadraticCurveTo(44, 84, 62, 96); c.quadraticCurveTo(84, 126, 124, 126); c.quadraticCurveTo(184, 126, 186, 160); });
+  },
+  deco(h, v) {
+    h.col('#E8603A').rr(14, 154, 172, 24, 10); h.col('#5B8CFF').path(c => { c.moveTo(40, 150); c.quadraticCurveTo(90, 118, 136, 148); c.quadraticCurveTo(90, 134, 40, 156); });
+    h.col('rgba(30,27,36,.4)'); for (let i = 0; i < 3; i++) h.l([[70 + i * 14, 112 + i * 6], [80 + i * 14, 120 + i * 6]], 3);
+  } },
+{ id: 'sock', name: 'Sock', color: '#5B8CFF',
+  p: r => ({ leg: rnd(r, 90, 116), foot: rnd(r, 60, 84) }),
+  draw(h, v) { h.l([[80, 30], [80, 30 + v.leg], [80 + v.foot, 30 + v.leg + 16]], 46); },
+  deco(h, v) {
+    h.col('#FFFFFF'); for (let i = 0; i < 3; i++) h.rr(40, 18 + i * 14, 80, 6, 0);
+    h.col('#FFD23F').o(80 + v.foot + 12, 30 + v.leg + 16, 26).o(70, 30 + v.leg + 6, 24);
+  } },
+{ id: 'mitten', name: 'Mitten', color: '#D9433B',
+  draw(h, v) { h.e(106, 92, 46, 62).e(60, 106, 16, 30, -.5).rr(66, 146, 80, 38, 8); },
+  deco(h, v) { h.col('#FFFFFF').rr(66, 146, 80, 38, 8); h.col('rgba(30,27,36,.15)'); for (let i = 0; i < 4; i++) h.rr(66, 152 + i * 8, 80, 3, 0); h.col('#fff').o(112, 76, 6).o(96, 102, 4).o(124, 112, 5); } },
+{ id: 'key', name: 'Key', color: '#F2B33D',
+  p: r => ({ len: rnd(r, 90, 116) }),
+  draw(h, v) {
+    h.ring(48, 100, 28, 28, 18).rr(74, 92, v.len, 16, 4);
+    const end = 74 + v.len; [[0, 22], [16, 14], [30, 20]].forEach(([dx, hh]) => h.rr(end - 14 - dx, 104, 10, hh, 2));
+  },
+  deco(h, v) { h.col('rgba(255,255,255,.55)').l([[80, 96], [70 + v.len, 96]], 3); h.col(tone('#F2B33D', -.2)).ring(48, 100, 28, 28, 4); } },
+{ id: 'wrench', name: 'Wrench', color: '#9AA3B2', tilt: .5,
+  draw(h, v) {
+    h.tube([[46, 168], [150, 60]], 22, 20).o(158, 50, 30).o(40, 174, 20)
+     .cut(h => { h.o(40, 174, 9); h.path(c => { c.save(); c.translate(166, 42); c.rotate(-.8); c.rect(-11, -40, 22, 40); c.restore(); }); });
+  },
+  deco(h, v) { h.col('rgba(255,255,255,.5)').l([[56, 152], [138, 70]], 4); h.col('rgba(30,27,36,.2)').l([[70, 148], [140, 78]], 3); } },
+{ id: 'hammer', name: 'Hammer', color: '#9AA3B2',
+  draw(h, v) { h.rr(64, 30, 90, 30, 4).blob([[66, 32], [30, 16], [40, 40], [66, 56]]).rr(102, 56, 18, 134, 6); },
+  deco(h, v) { h.col('#B5733E').rr(102, 64, 18, 126, 6); h.col(INK).rr(102, 150, 18, 40, 6); h.col('rgba(255,255,255,.5)').rr(70, 34, 78, 5, 2); } },
+{ id: 'axe', name: 'Axe', color: '#9AA3B2',
+  draw(h, v) {
+    h.tube([[76, 192], [86, 120], [104, 40]], 13, 11)
+     .path(c => { c.moveTo(98, 38); c.lineTo(126, 34); c.quadraticCurveTo(176, 26, 170, 76); c.quadraticCurveTo(144, 62, 118, 70); c.lineTo(100, 64); });
+  },
+  deco(h, v) { h.col('#B5733E').tube([[76, 192], [86, 120], [102, 62]], 13, 11); h.col('rgba(255,255,255,.6)').sl([[150, 34], [166, 50], [166, 70]], 4); } },
+{ id: 'saw', name: 'Saw', color: '#C9CED6', tilt: .3,
+  draw(h, v) {
+    h.p([[60, 80], [192, 106], [192, 126], [60, 132]]);
+    for (let i = 0; i < 13; i++) h.p([[64 + i * 10, 131 - i * .3], [69 + i * 10, 140 - i * .3], [74 + i * 10, 130 - i * .3]]);
+    h.blob([[10, 72], [64, 70], [72, 140], [20, 150]]).cut(h => h.e(38, 108, 12, 22, .1));
+  },
+  deco(h, v) { h.col('#D9433B').blob([[10, 72], [64, 70], [72, 140], [20, 150]]); h.col('rgba(255,255,255,.6)').l([[74, 88], [186, 110]], 3); h.col(INK).o(66, 92, 3).o(66, 122, 3); } },
+{ id: 'hairdryer', name: 'Hair dryer', color: '#F7A8C4',
+  draw(h, v) {
+    h.rr(40, 60, 110, 56, 26).rr(140, 72, 50, 32, 6).tube([[78, 110], [70, 150], [62, 190]], 30, 24);
+  },
+  deco(h, v) { h.col(tone('#F7A8C4', -.2)).o(66, 88, 18).rr(176, 72, 14, 32, 4); h.col('#fff').rr(60, 140, 14, 8, 3); h.col('rgba(255,255,255,.5)').rr(90, 66, 44, 8, 4); } },
+{ id: 'iron', name: 'Iron', color: '#5B8CFF',
+  draw(h, v) {
+    h.path(c => { c.moveTo(20, 156); c.quadraticCurveTo(40, 100, 110, 96); c.lineTo(184, 96); c.lineTo(188, 156); c.closePath(); })
+     .path(c => { c.lineWidth = 16; c.lineCap = 'round'; c.beginPath(); c.moveTo(90, 98); c.quadraticCurveTo(110, 40, 172, 50); c.lineTo(176, 98); c.stroke(); c.beginPath(); });
+  },
+  deco(h, v) { h.col('#C9CED6').rr(14, 148, 178, 10, 3); h.col('#F4F1EA').path(c => { c.lineWidth = 16; c.lineCap = 'round'; c.beginPath(); c.moveTo(100, 76); c.quadraticCurveTo(116, 46, 168, 52); c.stroke(); c.beginPath(); }); h.col('#E8443A').o(140, 120, 6); } },
+{ id: 'pan', name: 'Frying pan', color: '#3A3F4B',
+  p: r => ({ r: rnd(r, 48, 58), handle: rnd(r, 74, 96) }),
+  draw(h, v) { h.o(70, 100, v.r).rr(70 + v.r - 6, 92, v.handle, 16, 8); },
+  deco(h, v) { h.col('#5A6070').o(70, 100, v.r - 8); h.col('#B5733E').rr(70 + v.r + 20, 92, v.handle - 26, 16, 8); h.col('rgba(255,255,255,.25)').sl([[40, 84], [52, 68], [70, 62]], 5); } },
+{ id: 'lamp', name: 'Desk lamp', color: '#F2B33D',
+  draw(h, v) {
+    h.e(70, 182, 46, 11).tube([[70, 180], [92, 112]], 10, 10).o(92, 112, 10).tube([[92, 112], [138, 70]], 10, 10).o(138, 70, 10)
+     .path(c => { c.save(); c.translate(140, 72); c.rotate(.7); c.moveTo(-10, -8); c.lineTo(14, -8); c.lineTo(38, 36); c.quadraticCurveTo(0, 50, -38, 36); c.closePath(); c.restore(); });
+  },
+  deco(h, v) { h.col(INK).o(92, 112, 5).o(138, 70, 5); h.col('rgba(255,255,255,.45)').e(70, 178, 30, 4); } },
+{ id: 'car', name: 'Car', color: '#E8443A',
+  draw(h, v) {
+    h.rr(10, 102, 180, 46, [16, 24, 12, 12]).blob([[44, 106], [64, 70], [124, 66], [150, 104]]).o(52, 150, 20).o(150, 150, 20);
+  },
+  deco(h, v) {
+    h.col('#CDE6F4').blob([[56, 102], [70, 78], [96, 76], [96, 102]]).blob([[104, 102], [104, 76], [122, 76], [140, 102]]);
+    h.col(INK).o(52, 150, 20).o(150, 150, 20); h.col('#C9CED6').o(52, 150, 9).o(150, 150, 9); h.col('#FFD23F').rr(176, 112, 12, 8, 3); h.col('#fff').rr(10, 114, 8, 8, 2);
+  } },
+{ id: 'tractor', name: 'Tractor', color: '#4E9F3D',
+  draw(h, v) {
+    h.rr(30, 96, 110, 48, 8).rr(90, 46, 54, 56, 6).o(122, 150, 38).o(42, 160, 22).rr(50, 70, 8, 30, 2);
+  },
+  deco(h, v) {
+    h.col('#CDE6F4').rr(100, 56, 34, 34, 4); h.col(INK).o(122, 150, 38).o(42, 160, 22); h.col('#F2B33D').o(122, 150, 18).o(42, 160, 10);
+    h.col(tone('#4E9F3D', -.25)).rr(30, 96, 60, 6, 0);
+  } },
+{ id: 'plane', name: 'Airplane', color: '#F4F1EA', tilt: .3,
+  draw(h, v) {
+    h.blob([[10, 110], [30, 96], [160, 96], [190, 104], [160, 118], [30, 120]]).p([[150, 98], [178, 56], [190, 56], [178, 102]])
+     .blob([[70, 112], [116, 112], [92, 148], [80, 148]]);
+  },
+  deco(h, v) {
+    h.col('#5B8CFF').p([[150, 98], [178, 56], [190, 56], [178, 102]]).rr(20, 112, 160, 6, 3);
+    h.col('#CDE6F4').blob([[14, 106], [26, 98], [34, 106]]); h.col('#8FA6C0'); for (let i = 0; i < 9; i++) h.o(48 + i * 12, 104, 3);
+  } },
+{ id: 'submarine', name: 'Submarine', color: '#F2B33D',
+  draw(h, v) {
+    h.rr(20, 96, 150, 56, 28).rr(84, 66, 40, 34, 8).l([[110, 66], [110, 40], [124, 40]], 5)
+     .blob([[166, 114], [190, 100], [192, 148], [166, 134]]);
+  },
+  deco(h, v) { h.col('#CDE6F4'); [[54, 124], [86, 124], [118, 124]].forEach(([x, y]) => h.o(x, y, 9)); h.col(tone('#F2B33D', -.25)).blob([[166, 114], [190, 100], [192, 148], [166, 134]]); } },
+{ id: 'sailboat', name: 'Sailboat', color: '#F4F1EA',
+  p: r => ({ sail: rnd(r, 54, 70), mast: rnd(r, 100, 118) }),
+  draw(h, v) {
+    h.p([[20, 140], [182, 140], [160, 172], [40, 172]]).rr(96, 140 - v.mast, 6, v.mast, 2)
+     .p([[104, 146 - v.mast], [104, 132], [104 + v.sail, 132]]).p([[94, 150 - v.mast * .8], [94, 132], [94 - v.sail * .5, 132]]);
+  },
+  deco(h, v) { h.col('#E8603A').p([[20, 140], [182, 140], [160, 172], [40, 172]]); h.col('#fff').rr(30, 150, 140, 5, 2); h.col(tone('#F4F1EA', -.4)).rr(96, 140 - v.mast, 6, v.mast, 2); } },
+{ id: 'house', name: 'House', color: '#F2B33D',
+  p: r => ({ w: rnd(r, 90, 116), shed: rnd(r, 34, 54), chim: rnd(r, .15, .65) }),
+  draw(h, v) {
+    const x0 = 30, x1 = 30 + v.w;
+    h.rr(x0, 100, v.w, 80, 0).p([[x0 - 10, 102], [x0 + v.w / 2, 52], [x1 + 10, 102]]).rr(x0 + v.w * v.chim, 56, 16, 40, 0)
+     .rr(x1, 130, v.shed, 50, 0).p([[x1, 132], [x1, 116], [x1 + v.shed + 6, 132]]);
+  },
+  deco(h, v) {
+    const x0 = 30;
+    h.col('#D9433B').p([[x0 - 10, 102], [x0 + v.w / 2, 52], [x0 + v.w + 10, 102]]).p([[x0 + v.w, 132], [x0 + v.w, 116], [x0 + v.w + v.shed + 6, 132]]);
+    h.col('#7A4A1E').rr(x0 + v.w * .56, 136, 22, 44, [8, 8, 0, 0]); h.col('#CDE6F4').rr(x0 + 14, 116, 24, 22, 3); h.col(tone('#F2B33D', -.2)).rr(x0 + v.w + 6, 146, v.shed - 12, 34, 2);
+  } },
+{ id: 'armchair', name: 'Armchair', color: '#9B6BFF',
+  draw(h, v) {
+    h.blob([[40, 150], [36, 60], [56, 40], [76, 52], [80, 120]]).rr(60, 116, 110, 36, 12).rr(110, 100, 66, 22, 10)
+     .rr(56, 150, 10, 30, 3).rr(160, 150, 10, 30, 3);
+  },
+  deco(h, v) { h.col(tone('#9B6BFF', -.2)).rr(110, 100, 66, 22, 10); h.col(tone('#9B6BFF', .2)).rr(70, 118, 90, 10, 5); h.col('#7A4A1E').rr(56, 150, 10, 30, 3).rr(160, 150, 10, 30, 3); } },
+{ id: 'pipe', name: 'Pipe', color: '#8A5A2B',
+  draw(h, v) { h.rr(40, 70, 52, 66, [4, 4, 26, 26]).tube([[84, 124], [130, 124], [170, 104], [190, 100]], 14, 9); },
+  deco(h, v) { h.col('#3A3F4B').rr(44, 70, 44, 10, 3); h.col(INK).tube([[160, 108], [190, 100]], 14, 9); h.col('rgba(255,255,255,.3)').rr(48, 86, 8, 36, 4); } },
+{ id: 'note', name: 'Music note', color: '#9B6BFF',
+  draw(h, v) { h.e(70, 168, 28, 20, -0.45).rr(88, 40, 11, 128, 3).tube([[93, 44], [130, 66], [140, 92], [126, 120]], 14, 8); },
+  deco(h, v) { h.col('rgba(255,255,255,.45)').e(62, 162, 9, 4, -0.45); } },
+{ id: 'umbrella', name: 'Umbrella', color: '#E8443A', tilt: .3,
+  draw(h, v) {
+    h.path(c => { c.moveTo(14, 100); c.quadraticCurveTo(20, 24, 100, 22); c.quadraticCurveTo(180, 24, 186, 100); for (let i = 3; i >= 0; i--) c.quadraticCurveTo(14 + i * 43 + 21, 86, 14 + i * 43, 100); });
+    h.l([[100, 96], [100, 168]], 6).path(c => { c.lineWidth = 7; c.lineCap = 'round'; c.beginPath(); c.moveTo(100, 166); c.quadraticCurveTo(100, 188, 82, 188); c.quadraticCurveTo(70, 188, 70, 174); c.stroke(); c.beginPath(); });
+  },
+  deco(h, v) { h.col(tone('#E8443A', -.2)).path(c => { c.moveTo(100, 22); c.quadraticCurveTo(70, 50, 57, 96); c.lineTo(80, 92); c.quadraticCurveTo(86, 50, 100, 22); }); h.col(INK).l([[100, 96], [100, 168]], 6); } },
+
+/* ================= nature ================= */
+{ id: 'cactus', name: 'Cactus', color: '#4FAF5A', tilt: .1,
+  p: r => ({ a1: rnd(r, 74, 104), a2: rnd(r, 44, 74), l1: rnd(r, 26, 38), l2: rnd(r, 30, 46) }),
+  draw(h, v) {
+    h.rr(84, 28, 34, 140, 17).l([[90, v.a1], [90 - v.l1, v.a1], [90 - v.l1, v.a1 - 30]], 20).l([[112, v.a2], [112 + v.l2, v.a2], [112 + v.l2, v.a2 - 24]], 20)
+     .p([[64, 160], [138, 160], [130, 196], [72, 196]]);
+  },
+  deco(h, v) { h.col('#D9773A').p([[64, 160], [138, 160], [130, 196], [72, 196]]); h.col(tone('#D9773A', -.25)).rr(64, 160, 74, 8, 0); h.col(tone('#4FAF5A', -.2)).l([[101, 40], [101, 156]], 3); h.col('#F7A8C4').o(101, 30, 7); } },
+{ id: 'tree', name: 'Tree', color: '#4FAF5A',
+  p: r => ({ blobs: Array.from({ length: 4 }, () => [rnd(r, 54, 146), rnd(r, 44, 96), rnd(r, 24, 36)]), lean: rnd(r, -14, 14) }),
+  draw(h, v) { h.p([[90, 188], [114, 188], [104 + v.lean, 96], [96 + v.lean, 96]]); v.blobs.forEach(([x, y, r]) => h.o(x, y, r)); h.o(100 + v.lean * .5, 76, 34); },
+  deco(h, v) { h.col('#8A5A2B').p([[90, 188], [114, 188], [104 + v.lean, 118], [96 + v.lean, 118]]); h.col(tone('#4FAF5A', .2)); v.blobs.forEach(([x, y, r]) => h.o(x - r * .3, y - r * .3, r * .35)); } },
+{ id: 'cloud', name: 'Cloud', color: '#FFFFFF',
+  p: r => ({ b: Array.from({ length: 5 }, (_, i) => [34 + i * 32 + rnd(r, -6, 6), rnd(r, 86, 108), rnd(r, 22, 36)]) }),
+  draw(h, v) { v.b.forEach(([x, y, r]) => h.o(x, y, r)); h.rr(28, 100, 144, 28, 14); },
+  deco(h, v) { h.col('#E2EAF5').rr(10, 116, 180, 40, 0); } },
+{ id: 'leaf', name: 'Oak leaf', color: '#D98E2B', tilt: .5,
+  draw(h, v) {
+    const pts = []; for (let i = 0; i < 14; i++) { const t = i / 13, y = 30 + t * 130, w = Math.sin(Math.PI * Math.min(1, t * 1.1)) * 46 * (i % 2 ? .62 : 1) + J(v, i, 4); pts.push([100 + w, y]); }
+    const left = []; for (let i = 13; i >= 0; i--) { const t = i / 13, y = 30 + t * 130 + 5, w = Math.sin(Math.PI * Math.min(1, t * 1.1)) * 46 * (i % 2 ? 1 : .62) + J(v, i + 20, 4); left.push([100 - w, y]); }
+    h.blob([...pts, ...left]).tube([[100, 158], [104, 188]], 6, 4);
+  },
+  deco(h, v) { h.col(tone('#D98E2B', -.3)).l([[100, 32], [100, 188]], 3); for (let i = 0; i < 4; i++) h.l([[100, 60 + i * 26], [126, 46 + i * 26]], 2).l([[100, 70 + i * 26], [74, 56 + i * 26]], 2); } },
+{ id: 'feather', name: 'Feather', color: '#5BB7C8', tilt: .5,
+  draw(h, v) { h.blob([[70, 170], [56, 120], [76, 60], [130, 18], [140, 50], [124, 110], [90, 160]]).tube([[74, 166], [56, 196]], 5, 3); },
+  deco(h, v) {
+    h.col(tone('#5BB7C8', -.3)).sl([[56, 196], [90, 140], [118, 80], [134, 24]], 3);
+    h.col(tone('#5BB7C8', .3)); for (let i = 0; i < 5; i++) h.l([[96 - i * 8, 130 - i * 22], [70 - i * 4, 124 - i * 26]], 2);
+    h.col('#F2B33D').blob([[106, 60], [126, 30], [134, 40], [122, 66]]);
+  } },
+{ id: 'flame', name: 'Flame', color: '#F28A3D', tilt: .15,
+  draw(h, v) { h.blob([[100, 190], [52, 160], [50, 110], [74, 80], [72, 110], [90, 60], [104, 18], [120, 70], [140, 50], [150, 110], [146, 160]]); },
+  deco(h, v) { h.col('#FFD23F').blob([[100, 184], [72, 160], [76, 128], [96, 110], [104, 80], [118, 120], [128, 150], [124, 176]]); h.col('#FFF4C2').e(100, 164, 14, 18); } },
+{ id: 'footprint', name: 'Footprint', color: '#8A6E5A', tilt: .4,
+  draw(h, v) {
+    h.blob([[80, 196], [62, 160], [66, 110], [78, 76], [106, 72], [122, 100], [118, 150], [110, 196]]);
+    [[74, 50, 13], [96, 40, 11], [114, 46, 9], [128, 58, 8], [136, 74, 7]].forEach(([x, y, r]) => h.o(x, y, r));
+  },
+  deco(h, v) { h.col(tone('#8A6E5A', .2)).e(92, 110, 12, 22); } },
+{ id: 'island', name: 'Island', color: '#F2D38A',
+  draw(h, v) {
+    h.blob([[10, 170], [40, 146], [100, 136], [160, 148], [192, 172]]).tube([[110, 146], [100, 100], [80, 58]], 12, 8);
+    [[[80, 58], [40, 50], [24, 70]], [[80, 58], [64, 30], [40, 22]], [[80, 58], [104, 26], [126, 28]], [[80, 58], [120, 50], [140, 74]]].forEach(f => h.tube(f, 16, 4));
+  },
+  deco(h, v) {
+    h.col('#8A5A2B').tube([[110, 146], [100, 100], [80, 58]], 12, 8); h.col('#4FAF5A');
+    [[[80, 58], [40, 50], [24, 70]], [[80, 58], [64, 30], [40, 22]], [[80, 58], [104, 26], [126, 28]], [[80, 58], [120, 50], [140, 74]]].forEach(f => h.tube(f, 16, 4));
+    h.col('#7A4A1E').o(84, 66, 6).o(92, 62, 5);
+  } },
+{ id: 'bolt', name: 'Lightning bolt', color: '#FFD23F', tilt: .25,
+  draw(h, v) { h.p([[110, 10], [52, 108], [94, 108], [72, 192], [148, 82], [104, 82], [130, 10]]); },
+  deco(h, v) { h.col(tone('#FFD23F', .4)).p([[112, 18], [62, 102], [70, 102], [118, 18]]); } },
+{ id: 'bubble', name: 'Speech bubble', color: '#FFFFFF', tilt: .15,
+  draw(h, v) { h.rr(20, 40, 160, 100, 30).p([[56, 130], [40, 180], [96, 136]]); },
+  deco(h, v) { h.col('#C9CED6').o(68, 90, 9).o(100, 90, 9).o(132, 90, 9); } },
+{ id: 'puzzle', name: 'Puzzle piece', color: '#5BB7C8', tilt: .4,
+  draw(h, v) { h.rr(40, 50, 110, 110, 6).o(95, 44, 20).o(156, 105, 20).cut(h => h.o(95, 162, 20).o(36, 105, 18)); },
+  deco(h, v) { h.col('rgba(255,255,255,.3)').rr(48, 58, 30, 8, 4); } },
 ];

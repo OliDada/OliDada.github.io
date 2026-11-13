@@ -7,7 +7,8 @@ import {
     patternColor, mySongs, confirmDiscard, openSongDialog, openUseInGameDialog, shareLink, exportWav, esc, ago,
     openHelp, openModal, closeModal, store, setMode, togglePlay,
 } from "./maker.js";
-import { normalizeSong, withDefaults, DRUM_KINDS } from "./player.js";
+import { normalizeSong, serializeSong, withDefaults, DRUM_KINDS, getGameSongOverride, setGameSong } from "./player.js";
+import { encodeShare, decodeShare } from "./share.js";
 import {
     PRESETS, findPreset, KEYS, SCALES, MOODS, STYLES, KITS, kitDrum, BEATS, PROGRESSIONS, safeDegrees, degreeOf,
     isSafe, degreeToMidi, remapNote, chordPcs, roleOf, ROLE_NAMES, inScale, TRACK_COLORS,
@@ -345,6 +346,7 @@ function render() {
     renderJam();
     renderChordsView();
     draw();
+    renderViews();
 }
 
 function renderTools() {
@@ -476,6 +478,7 @@ const closePop = () => (pop.hidden = true);
 document.addEventListener("pointerdown", (e) => {
     if (pop.hidden || e.target.closest("#ePop, [data-pop]")) return;
     if (e.target === canvas && chordHit(e)) return; // the chord strip opens its own picker
+    if (e.target.id === "eDraw" && es.dlayout && e.offsetY < es.dlayout.top) return;
     closePop();
 });
 
@@ -1219,6 +1222,7 @@ function toggleChordsView() {
     if (es.cv.on) {
         es.cv.on = false;
         es.chordOpen = undefined;
+        es.jam.on = es.view === "jam";
         renderChordsView();
         render();
     } else openChordsView(journeySeg);
@@ -1328,7 +1332,7 @@ function popAll(track) {
 }
 
 function draw() {
-    if (state.ui !== "easy" || !state.song || es.jam?.on || es.cv?.on) return;
+    if (state.ui !== "easy" || !state.song || es.jam?.on || es.cv?.on || es.view !== "grid") return;
     const L = es.drag ? es.layout : (es.layout = computeLayout());
     const dpr = devicePixelRatio || 1;
     if (canvas.width !== Math.round(L.width * dpr) || canvas.height !== Math.round(L.height * dpr)) {
@@ -1887,8 +1891,6 @@ function jamPads(track) {
 
 function renderJam() {
     const box = $("#eJam");
-    $("#eJamBtn").innerHTML = es.jam.on ? "▦ Back to grid" : "♪ Jam";
-    $("#eJamBtn").classList.toggle("on", es.jam.on);
     document.body.classList.toggle("jamming", es.jam.on);
     if (!es.jam.on) { box.hidden = true; canvas.hidden = !!es.cv?.on; return; }
     box.hidden = false;
@@ -2068,6 +2070,496 @@ window.addEventListener("keyup", (e) => {
     else if (di >= 0 && drumTracks()[di]) padUp(`d:${drumTracks()[di]}`);
 }, true);
 
+// ---------- Draw: make a song without a grid ----------
+// Draw a line for the selected band member: left to right is time, up is higher. The line snaps to
+// notes that fit the song. Chords are picked by feeling along the top; drums come from the Beat.
+
+const VIEW_PREF = store.get(EASY_PREFS, {}).view;
+es.view = ["draw", "grid", "jam"].includes(VIEW_PREF) ? VIEW_PREF : "draw";
+es.jam.on = es.view === "jam";
+es.draw = { tool: "draw", rhythm: store.get(EASY_PREFS, {}).rhythm ?? "bouncy", stroke: null, lastPitch: null };
+const RHYTHMS = [
+    { id: "smooth", name: "Smooth", tip: "Long, flowing notes" },
+    { id: "bouncy", name: "Bouncy", tip: "A note every half-beat" },
+    { id: "busy", name: "Busy", tip: "Quick notes" },
+];
+const drawCanvas = $("#eDraw");
+
+function saveEasyPrefs() {
+    store.set(EASY_PREFS, { safe: es.safe, view: es.view, rhythm: es.draw.rhythm });
+}
+
+function setView(v) {
+    if (v === es.view && !es.cv.on) return;
+    if (es.cv.on) { es.cv.on = false; es.chordOpen = undefined; }
+    if (es.jam.rec && v !== "jam") toggleRecord();
+    es.view = v;
+    es.jam.on = v === "jam";
+    saveEasyPrefs();
+    closePop();
+    render();
+}
+
+function renderViews() {
+    const draw = es.view === "draw" && !es.cv.on;
+    const grid = es.view === "grid" && !es.cv.on && !es.jam.on;
+    document.body.classList.toggle("view-draw", es.view === "draw");
+    document.body.classList.toggle("view-grid", es.view === "grid");
+    document.body.classList.toggle("view-jam", es.view === "jam");
+    document.querySelectorAll("#eViewSeg [data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === es.view && !es.cv.on));
+    $("#eDrawView").hidden = !draw;
+    canvas.hidden = !grid;
+    if (!grid) $("#ePager").hidden = true;
+    if (draw) renderDrawBar();
+    requestDrawView();
+}
+
+function renderDrawBar() {
+    const t = melodyTrack();
+    const isPad = t && role(t) === "pad";
+    $("#eDrawBar").innerHTML = `
+        <div class="seg"><button data-tool="draw" class="${es.draw.tool === "draw" ? "on" : ""}">✎ Draw</button><button data-tool="erase" class="${es.draw.tool === "erase" ? "on" : ""}">⌫ Erase</button></div>
+        <div class="seg" title="How the line turns into notes">${RHYTHMS.map((r) => `<button data-rhythm="${r.id}" class="${es.draw.rhythm === r.id ? "on" : ""}" title="${r.tip}">${r.name}</button>`).join("")}</div>
+        <div class="spacer"></div>
+        <span class="d-who" style="--c:${t ? inst(t).color : "#8d8ca3"}"><i></i>${t ? `Drawing for <b>${esc(t)}</b>` : "Add a band member to draw"}${isPad ? " · its notes follow the chords" : ""}</span>
+        <button class="btn ghost small-btn" id="dClear">Clear</button>`;
+    $("#eDrawBar").querySelectorAll("[data-tool]").forEach((b) => (b.onclick = () => { es.draw.tool = b.dataset.tool; renderDrawBar(); }));
+    $("#eDrawBar").querySelectorAll("[data-rhythm]").forEach((b) => (b.onclick = () => { es.draw.rhythm = b.dataset.rhythm; saveEasyPrefs(); renderDrawBar(); }));
+    $("#dClear").onclick = () => {
+        if (!t || !(pattern().tracks[t] ?? []).length) return;
+        edit(() => { pattern().tracks[t] = []; });
+    };
+}
+
+// ----- layout -----
+function drawLayout() {
+    const host = $("#eDrawView");
+    const W = drawCanvas.clientWidth || host.clientWidth;
+    const H = drawCanvas.clientHeight || 300;
+    const p = pattern();
+    const t = melodyTrack();
+    const rows = t ? melodyRows(t) : [];
+    const top = 34, bottom = 26, padL = 14, padR = 14;
+    const laneH = Math.max(60, H - top - bottom);
+    return {
+        W, H, p, t, rows, top, bottom, padL, padR, laneH, steps: p.steps,
+        stepW: (W - padL - padR) / p.steps,
+        rowH: rows.length ? laneH / rows.length : laneH,
+    };
+}
+const dx = (L, step) => L.padL + step * L.stepW;
+function dy(L, midi) {
+    if (!L.rows.length) return L.top + L.laneH / 2;
+    let idx = L.rows.indexOf(midi);
+    if (idx < 0) {
+        // nearest row (rows run high → low)
+        let best = 0, dist = Infinity;
+        L.rows.forEach((m, i) => { if (Math.abs(m - midi) < dist) { dist = Math.abs(m - midi); best = i; } });
+        idx = best;
+    }
+    return L.top + (idx + 0.5) * L.rowH;
+}
+const pitchAtY = (L, y) => L.rows[clamp(Math.floor((y - L.top) / L.rowH), 0, L.rows.length - 1)];
+const stepAtX = (L, x) => clamp((x - L.padL) / L.stepW, 0, L.steps - 0.001);
+
+// ----- drawing the view -----
+let drawViewQueued = false;
+function requestDrawView() {
+    if (drawViewQueued || es.view !== "draw" || es.cv.on) return;
+    drawViewQueued = true;
+    requestAnimationFrame(() => { drawViewQueued = false; paintDrawView(); });
+}
+
+function noteLine(c, L, notes, color, width, alpha, glowStep = -1) {
+    const sorted = [...notes].filter((n) => n.note !== null).sort((a, b) => a.step - b.step);
+    c.lineCap = "round";
+    c.lineJoin = "round";
+    c.strokeStyle = color;
+    c.globalAlpha = alpha;
+    c.lineWidth = width;
+    // connected runs: notes that touch are joined by a smooth curve
+    let run = [];
+    const flush = () => {
+        if (!run.length) return;
+        c.beginPath();
+        run.forEach((n, i) => {
+            const x0 = dx(L, n.step) + 3, x1 = dx(L, n.step + n.length) - 3, y = dy(L, n.note);
+            if (i === 0) c.moveTo(x0, y);
+            else {
+                const prev = run[i - 1];
+                const px = dx(L, prev.step + prev.length) - 3, py = dy(L, prev.note);
+                const mid = (px + x0) / 2;
+                c.bezierCurveTo(mid, py, mid, y, x0 + 1, y);
+            }
+            c.lineTo(Math.max(x0 + 0.5, x1), y);
+        });
+        c.stroke();
+        run = [];
+    };
+    sorted.forEach((n, i) => {
+        const prev = sorted[i - 1];
+        if (prev && n.step > prev.step + prev.length) flush();
+        run.push(n);
+    });
+    flush();
+    // the note that's playing glows
+    if (glowStep >= 0) {
+        for (const n of sorted) {
+            if (glowStep < n.step || glowStep >= n.step + n.length) continue;
+            c.globalAlpha = 1;
+            c.shadowColor = color;
+            c.shadowBlur = 16;
+            c.beginPath();
+            c.arc(dx(L, glowStep + 0.5), dy(L, n.note), width * 0.9, 0, Math.PI * 2);
+            c.fillStyle = "#fff";
+            c.fill();
+            c.shadowBlur = 0;
+        }
+    }
+    c.globalAlpha = 1;
+}
+
+function paintDrawView() {
+    if (es.view !== "draw" || es.cv.on || !state.song) return;
+    const dpr = devicePixelRatio || 1;
+    const host = $("#eDrawView");
+    const W = Math.round(drawCanvas.clientWidth), H = Math.round(drawCanvas.clientHeight);
+    if (!W || !H) return;
+    if (drawCanvas.width !== W * dpr || drawCanvas.height !== H * dpr) { drawCanvas.width = W * dpr; drawCanvas.height = H * dpr; }
+    const c = drawCanvas.getContext("2d");
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const L = drawLayout();
+    es.dlayout = L;
+    const s = song();
+    const p = L.p;
+    const pos = player.position();
+    const playing = pos && pos.pattern === state.selPattern;
+    const playStep = playing ? pos.step : -1;
+
+    // background: a soft glow, no grid
+    const bg = c.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, "#17172a");
+    bg.addColorStop(1, "#111118");
+    c.fillStyle = bg;
+    c.fillRect(0, 0, W, H);
+
+    // bars: very faint dividers so you know where you are in the loop
+    for (let st = 0; st <= L.steps; st += s.stepsPerBeat * 4) {
+        c.fillStyle = "rgba(255,255,255,0.05)";
+        c.fillRect(Math.round(dx(L, st)), L.top, 1, L.laneH);
+    }
+    // home notes: dotted lines, so the "home" of the key is easy to find
+    const root = KEYS.indexOf(s.key);
+    c.setLineDash([2, 6]);
+    c.strokeStyle = "rgba(111,182,255,0.28)";
+    c.lineWidth = 1;
+    L.rows.forEach((m) => {
+        if (mod(m - root, 12) !== 0) return;
+        const y = dy(L, m);
+        c.beginPath(); c.moveTo(L.padL, y); c.lineTo(W - L.padR, y); c.stroke();
+        c.fillStyle = "rgba(111,182,255,0.55)";
+        c.font = "700 9px Nunito, sans-serif";
+        c.fillText("home note", W - L.padR - 52, y - 4);
+    });
+    c.setLineDash([]);
+
+    // chord row along the top
+    const chords = displayChords(p);
+    const n = chordCount(p);
+    const seg = L.steps / n;
+    for (let i = 0; i < n; i++) {
+        const x0 = dx(L, i * seg) + 2, x1 = dx(L, (i + 1) * seg) - 2;
+        const d = chords?.[i];
+        const f = d === undefined ? null : feeling(d);
+        const active = playStep >= i * seg && playStep < (i + 1) * seg;
+        c.globalAlpha = active ? 0.45 : 0.2;
+        c.fillStyle = f?.tint ?? "#8d8ca3";
+        rr(c, x0, 6, x1 - x0, 22, 11);
+        c.globalAlpha = 1;
+        c.font = "800 12px Nunito, sans-serif";
+        c.fillStyle = "#ecebf5";
+        const name = d === undefined ? "Chord" : chordName(d, colorAt(p, i));
+        c.fillText(name, x0 + 10, 21);
+        if (f && x1 - x0 > 90) {
+            c.font = "700 11px Nunito, sans-serif";
+            c.fillStyle = f.tint;
+            c.fillText(f.word, x0 + 16 + c.measureText(name).width + 4, 21);
+        }
+        c.fillStyle = "rgba(236,235,245,0.5)";
+        c.font = "800 11px Nunito, sans-serif";
+        c.fillText("▾", x1 - 16, 21);
+    }
+
+    // other band members, faint, then the selected one on top
+    for (const t of melodicTracks()) {
+        if (t === L.t || role(t) === "pad") continue;
+        noteLine(c, L, p.tracks[t] ?? [], inst(t).color, 3, 0.25);
+    }
+    if (L.t) noteLine(c, L, p.tracks[L.t] ?? [], inst(L.t).color, 7, 1, playing ? Math.floor(playStep) : -1);
+
+    // the stroke being drawn
+    const st = es.draw.stroke;
+    if (st && st.pts.length > 1) {
+        c.strokeStyle = st.erase ? "rgba(255,107,125,0.7)" : "rgba(255,255,255,0.55)";
+        c.lineWidth = st.erase ? 14 : 2;
+        c.lineCap = "round";
+        c.beginPath();
+        st.pts.forEach((pt, i) => (i ? c.lineTo(pt.x, pt.y) : c.moveTo(pt.x, pt.y)));
+        c.stroke();
+    }
+
+    // drums: a row of dots along the bottom that pulse with the beat
+    const by = H - L.bottom / 2 - 2;
+    const hits = new Array(L.steps).fill(0);
+    for (const d of drumTracks()) for (const h of p.tracks[d] ?? []) if (h.step < L.steps && audible(d)) hits[h.step] += h.velocity;
+    for (let i = 0; i < L.steps; i++) {
+        const x = dx(L, i + 0.5);
+        const lit = playing && Math.floor(playStep) === i;
+        const r = hits[i] ? 2 + Math.min(3, hits[i] * 1.4) : 1.2;
+        c.fillStyle = lit ? "#fff" : hits[i] ? "rgba(255,143,179,0.75)" : "rgba(255,255,255,0.12)";
+        c.beginPath(); c.arc(x, by, lit && hits[i] ? r + 2 : r, 0, Math.PI * 2); c.fill();
+    }
+
+    // playhead
+    if (playing) {
+        const x = dx(L, playStep);
+        const grad = c.createLinearGradient(x - 18, 0, x + 2, 0);
+        grad.addColorStop(0, "rgba(185,170,255,0)");
+        grad.addColorStop(1, "rgba(185,170,255,0.22)");
+        c.fillStyle = grad;
+        c.fillRect(x - 18, L.top, 20, L.laneH);
+        c.fillStyle = "rgba(236,233,255,0.8)";
+        c.fillRect(x, L.top, 1.5, L.laneH);
+    }
+
+    // first-time hint
+    if (L.t && !(p.tracks[L.t] ?? []).length && !st) {
+        c.textAlign = "center";
+        c.fillStyle = "rgba(236,235,245,0.75)";
+        c.font = "800 18px Nunito, sans-serif";
+        c.fillText(role(L.t) === "pad" ? `${L.t} plays the chords along the top` : `Draw a line to give ${L.t} a melody`, W / 2, L.top + L.laneH / 2 - 8);
+        c.font = "600 13px Nunito, sans-serif";
+        c.fillStyle = "rgba(141,140,163,0.9)";
+        c.fillText(role(L.t) === "pad" ? "Tap a chord name to change how it feels" : "Higher on the screen means higher notes. Lift your pen for a pause.", W / 2, L.top + L.laneH / 2 + 16);
+        c.textAlign = "left";
+    }
+    if (playing) requestDrawView();
+}
+
+// ----- turning a stroke into notes -----
+function strokeToNotes(L, pts) {
+    const res = es.draw.rhythm === "busy" ? 1 : 2;
+    // y at each slot: walk the stroke's segments; later parts of the stroke win (drawing back over redraws)
+    const ys = new Map();
+    for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        const lo = Math.min(a.x, b.x), hi = Math.max(a.x, b.x);
+        const s0 = Math.ceil(stepAtX(L, lo) / res - 0.5), s1 = Math.floor(stepAtX(L, hi) / res - 0.5);
+        for (let k = s0; k <= s1; k++) {
+            const cx = dx(L, (k + 0.5) * res);
+            const t = hi - lo < 0.01 ? 0 : (cx - a.x) / (b.x - a.x);
+            ys.set(k, a.y + (b.y - a.y) * clamp(t, 0, 1));
+        }
+    }
+    if (pts.length === 1) ys.set(Math.floor(stepAtX(L, pts[0].x) / res), pts[0].y);
+    const slots = [...ys.keys()].filter((k) => k * res < L.steps).sort((a, b) => a - b);
+    const out = [];
+    for (const k of slots) {
+        const note = pitchAtY(L, ys.get(k));
+        const prev = out[out.length - 1];
+        if (es.draw.rhythm === "smooth" && prev && prev.note === note && prev.step + prev.length === k * res) prev.length += res;
+        else out.push({ step: k * res, note, length: res, velocity: 1 });
+    }
+    return { notes: out, from: slots.length ? slots[0] * res : 0, to: slots.length ? (slots[slots.length - 1] + 1) * res : 0 };
+}
+
+function strokeRange(L, pts) {
+    const xs = pts.map((p) => p.x);
+    return { from: Math.floor(stepAtX(L, Math.min(...xs))), to: Math.ceil(stepAtX(L, Math.max(...xs))) };
+}
+
+function applyStroke() {
+    const st = es.draw.stroke;
+    const L = es.dlayout;
+    if (!st || !L?.t) return;
+    const base = st.before;
+    if (st.erase) {
+        const { from, to } = strokeRange(L, st.pts);
+        pattern().tracks[L.t] = base.filter((n) => n.step + n.length <= from || n.step >= to).map((n) => ({ ...n }));
+        return;
+    }
+    const { notes, from, to } = strokeToNotes(L, st.pts);
+    const kept = base.filter((n) => n.step + n.length <= from || n.step >= to).map((n) => ({ ...n }));
+    // trim a kept note that would run into the new line
+    for (const n of kept) if (n.step < from && n.step + n.length > from) n.length = from - n.step;
+    pattern().tracks[L.t] = [...kept, ...notes];
+}
+
+function chordMenuAt(seg, clientX, clientY) {
+    const anchor = { getBoundingClientRect: () => ({ left: clientX - 20, right: clientX + 20, top: clientY - 8, bottom: clientY + 8, width: 40, height: 16 }) };
+    const p = pattern();
+    const cur = displayChords(p)?.[seg];
+    const ladder = chordChoices().sort((a, b) => feeling(a).tension - feeling(b).tension);
+    openPop(anchor, `<div class="pop-title">Chord ${seg + 1}: how should it feel?</div>
+        <div class="d-chords">${ladder.map((d) => {
+            const f = feeling(d);
+            return `<button data-deg="${d}" class="${d === cur ? "on" : ""}" style="--t:${f.tint}"><b>${esc(chordName(d))}</b><span>${esc(f.word)}</span><small>${esc(f.line)}</small></button>`;
+        }).join("")}</div>
+        <div class="d-chords-foot"><span>calm at the top, tense at the bottom</span><button class="btn ghost small-btn" id="dMore">More in Chords &amp; mood</button></div>`);
+    pop.querySelectorAll("[data-deg]").forEach((b) => (b.onclick = () => {
+        const d = Number(b.dataset.deg);
+        hearChord(d);
+        if (d !== displayChords(pattern())?.[seg] || colorAt(pattern(), seg)) setChord(seg, d);
+        pop.querySelectorAll("[data-deg]").forEach((x) => x.classList.toggle("on", x === b));
+    }));
+    $("#dMore").onclick = () => openChordsView(seg);
+}
+
+drawCanvas.addEventListener("pointerdown", (e) => {
+    const L = es.dlayout;
+    if (!L) return;
+    const r = drawCanvas.getBoundingClientRect();
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    if (y < L.top) {
+        const seg = Math.floor(stepAtX(L, x) / (L.steps / chordCount(pattern())));
+        chordMenuAt(clamp(seg, 0, chordCount(pattern()) - 1), e.clientX, r.top + L.top);
+        return;
+    }
+    if (!L.t || role(L.t) === "pad" || y > L.top + L.laneH) return;
+    e.preventDefault();
+    drawCanvas.setPointerCapture(e.pointerId);
+    pushHistory();
+    es.draw.stroke = { pts: [{ x, y }], erase: es.draw.tool === "erase" || e.button === 2, before: (pattern().tracks[L.t] ?? []).map((n) => ({ ...n })) };
+    es.draw.lastPitch = null;
+    applyStroke();
+    hearPen(L, y);
+    requestDrawView();
+});
+drawCanvas.addEventListener("pointermove", (e) => {
+    const st = es.draw.stroke;
+    const L = es.dlayout;
+    if (!st || !L) return;
+    const r = drawCanvas.getBoundingClientRect();
+    const x = clamp(e.clientX - r.left, L.padL, L.W - L.padR), y = clamp(e.clientY - r.top, L.top, L.top + L.laneH - 1);
+    st.pts.push({ x, y });
+    applyStroke();
+    hearPen(L, y);
+    requestDrawView();
+});
+function endStroke() {
+    if (!es.draw.stroke) return;
+    es.draw.stroke = null;
+    markChanged();
+    renderParts();
+    renderBand();
+    requestDrawView();
+}
+drawCanvas.addEventListener("pointerup", endStroke);
+drawCanvas.addEventListener("pointercancel", endStroke);
+drawCanvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+// You hear the note under your pen as it changes.
+function hearPen(L, y) {
+    if (es.draw.stroke?.erase) return;
+    const m = pitchAtY(L, y);
+    if (m === es.draw.lastPitch) return;
+    es.draw.lastPitch = m;
+    player.preview(song(), L.t, m, 2, 0.85);
+    sing(L.t, { note: m }, 0.2);
+}
+
+new ResizeObserver(() => requestDrawView()).observe(drawCanvas);
+
+// ---------- Game mode: changing the music of one of the site's games ----------
+// Opened from a game's ♪ button (/music/?game=<slot>). The song you make here plays in that game.
+
+es.game = null; // { slot }
+
+async function slotDefault(slot) {
+    return normalizeSong(await (await fetch(`songs/${slot.default}`)).json());
+}
+
+async function openGame(slot, { shared } = {}) {
+    let s = shared ?? getGameSongOverride(slot.id);
+    if (!s) s = await slotDefault(slot);
+    player.stop();
+    setSong(s, { dirty: !!shared });
+    es.center = {};
+    es.game = { slot };
+    const mel = melodyTrack();
+    if (mel) state.selTrack = mel;
+    window.history.replaceState(null, "", `${location.pathname}?game=${encodeURIComponent(slot.id)}`);
+    hideLanding();
+    renderGameBar();
+    renderAll();
+    toast(shared ? "Someone sent you this song. Change it, or play the game with it" : `This is the music in ${slot.gameTitle}. Press play, then change anything`);
+}
+
+function leaveGame() {
+    if (!es.game) return;
+    es.game = null;
+    window.history.replaceState(null, "", location.pathname);
+    renderGameBar();
+}
+
+function renderGameBar() {
+    const bar = $("#eGameBar");
+    document.body.classList.toggle("in-game", !!es.game);
+    if (!es.game) { bar.hidden = true; bar.innerHTML = ""; return; }
+    const { slot } = es.game;
+    const mine = !!getGameSongOverride(slot.id);
+    bar.hidden = false;
+    bar.innerHTML = `
+      <span class="g-art" style="${slot.thumbnail ? `--img:url('${esc(slot.thumbnail)}')` : ""}"></span>
+      <span class="g-txt"><small>Music for</small><b>${esc(slot.gameTitle)}</b></span>
+      <span class="g-grow"></span>
+      ${mine ? `<button class="btn ghost small-btn" id="gReset" title="Go back to the game's original music">Original</button>` : ""}
+      <button class="btn ghost small-btn" id="gShare" title="Copy a link: friends play the game with your music">Share</button>
+      <button class="btn primary g-play" id="gPlay">▶ Play ${esc(slot.gameTitle)} with it</button>
+      <button class="g-x" id="gLeave" title="Stop making music for this game" aria-label="Close">×</button>`;
+    $("#gPlay").onclick = () => {
+        if (!setGameSong(slot.id, song())) { toast("Couldn't save, browser storage is blocked"); return; }
+        state.dirty = false;
+        player.stop();
+        location.href = slot.path;
+    };
+    $("#gShare").onclick = async () => {
+        const code = await encodeShare(JSON.stringify(JSON.parse(serializeSong(song()))));
+        const url = new URL(slot.path, location.href);
+        url.searchParams.set("music", code);
+        try {
+            await navigator.clipboard.writeText(url.href);
+            toast(`Link copied. Whoever opens it plays ${slot.gameTitle} with your music`);
+        } catch {
+            openModal(`<h2>Share your music</h2><p>Whoever opens this link plays ${esc(slot.gameTitle)} with your music.</p><input class="insp-name" style="width:100%" readonly>`);
+            const input = document.querySelector("#modalBody input");
+            input.value = url.href;
+            input.select();
+        }
+    };
+    $("#gReset") && ($("#gReset").onclick = async () => {
+        setGameSong(slot.id, null);
+        player.stop();
+        setSong(await slotDefault(slot));
+        renderGameBar();
+        renderAll();
+        toast(`${slot.gameTitle} plays its original music again`);
+    });
+    $("#gLeave").onclick = leaveGame;
+}
+
+hooks.boot = async () => {
+    const params = new URLSearchParams(location.search);
+    const id = params.get("game");
+    if (!id) return false;
+    const m = await manifest();
+    const slot = m.slots.find((x) => x.id === id);
+    if (!slot) return false;
+    let shared;
+    try { if (params.get("music")) shared = normalizeSong(JSON.parse(await decodeShare(params.get("music")))); } catch { /* ignore */ }
+    try { await openGame(slot, { shared }); return true; } catch { return false; }
+};
+
 // ---------- Landing ----------
 
 const STYLE_START = {
@@ -2108,6 +2600,7 @@ function starterSong(style) {
 
 async function startFresh(style) {
     if (!(await confirmDiscard())) return;
+    leaveGame();
     player.stop();
     const { song: s, fill } = starterSong(style);
     setSong(s, { dirty: true });
@@ -2145,12 +2638,15 @@ async function showLanding() {
     $("#lContinue").innerHTML = hasWork
         ? `<button class="l-continue"><span>Keep going</span><b>${esc(draft.title || "Untitled")}</b></button>` : "";
     $("#lContinue").querySelector("button")?.addEventListener("click", hideLanding);
-    $("#lGames").innerHTML = m.songs.map((s, i) => `
+    $("#lGames").innerHTML = m.slots.map((s, i) => `
         <button class="l-card game" data-i="${i}" style="${s.thumbnail ? `--img:url('${esc(s.thumbnail)}')` : ""}">
           <span class="l-card-art${s.thumbnail ? " img" : ""}"></span>
-          <span class="l-card-text"><b>${esc(s.title)}</b><small>${esc(s.gameTitle || "Example")}</small></span>
-        </button>`).join("") || `<div class="list-empty">Game songs will show up here.</div>`;
-    $("#lGames").querySelectorAll("[data-i]").forEach((b) => (b.onclick = () => remix(m.songs[Number(b.dataset.i)])));
+          <span class="l-card-text"><b>${esc(s.gameTitle)}</b><small>${getGameSongOverride(s.id) ? "Playing your music" : "Change its music"}</small></span>
+        </button>`).join("") || `<div class="list-empty">Games will show up here.</div>`;
+    $("#lGames").querySelectorAll("[data-i]").forEach((b) => (b.onclick = async () => {
+        if (!(await confirmDiscard())) return;
+        openGame(m.slots[Number(b.dataset.i)]).catch((err) => toast("Couldn't open that: " + err.message));
+    }));
     $("#lStyles").innerHTML = STYLES.map((s) => `
         <button class="l-card style s-${s.id}" data-s="${s.id}"><span class="l-card-art"></span>
           <span class="l-card-text"><b>${esc(s.name)}</b><small>${esc({ chip: "Retro game bleeps", lofi: "Slow and cosy", dreamy: "Bells and soft pads", synth: "80s neon", fairy: "Flutes and strings" }[s.id])}</small></span></button>`).join("");
@@ -2159,6 +2655,7 @@ async function showLanding() {
     $("#lMine").querySelectorAll("[data-id]").forEach((b) => (b.onclick = async () => {
         const id = b.dataset.id;
         if (id !== state.fileId && !(await confirmDiscard())) return;
+        leaveGame();
         setSong(normalizeSong(JSON.parse(mySongs()[id].json)), { fileId: id });
         hideLanding();
     }));
@@ -2186,13 +2683,12 @@ function wire() {
     speed.addEventListener("change", markChanged);
 
     $("#eGen").onclick = () => { const t = melodyTrack(); if (t) generateFor(t); if (es.jam.on) renderJam(); };
-    $("#eJamBtn").onclick = toggleJam;
+    document.querySelectorAll("#eViewSeg [data-view]").forEach((b) => (b.onclick = () => setView(b.dataset.view)));
     $("#eBeat").onclick = () => {
         es.beat = (es.beat + 1) % BEATS.length;
         applyBeat(BEATS[es.beat]);
         if (!player.playing) toast(`Beat: ${BEATS[es.beat].name}. Press play to hear it`);
     };
-    $("#eChords").onclick = newChords;
     $("#eVibe").onclick = toggleChordsView;
     $("#eSafe").onclick = () => {
         es.safe = !es.safe;
@@ -2235,6 +2731,7 @@ hooks.onStep = (info) => {
     if (state.ui !== "easy") return;
     bandStep(info);
     jamStep(info);
+    if (es.view === "draw") requestDrawView();
     if (es.cv.on) {
         const p = pattern();
         const playing = info && info.pattern === state.selPattern ? Math.floor(info.step / (p.steps / chordCount(p))) : -1;

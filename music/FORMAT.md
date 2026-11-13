@@ -84,13 +84,23 @@ The order patterns play in. Reusing a name repeats that pattern.
 
 ## Using it in a game
 
+The easy way is one line in the game's page. It plays the song (starting on the first click or key press), and plays a friend's version when the page is opened from a share link (`?music=…`):
+
+```html
+<script type="module" src="/music/game-music.js" data-slot="stillwater" data-song="/music/songs/stillwater-undertow.json"></script>
+```
+
+When the game is played on olid.is, the site's **Music** button (next to Controls and Fullscreen) turns the music on and off and links to the Studio; it only shows for games that include this line. Option: `data-follow="#soundBtn"` starts and stops the music with the game's own sound button instead. The slot also needs an entry in `songs/index.json` (below), with `path` set to the game's page.
+
+To control the music from the game's own code instead:
+
 Games ask for a **slot**, so visitors can swap in their own song from the Studio (Studio menu → "Use in a game…"):
 
 ```js
 import { createPlayer, loadGameSong } from "/music/player.js";
 
 const music = createPlayer({ volume: 0.6 });
-const song = await loadGameSong("stillwater/run", "/music/songs/stillwater-run.json");
+const song = await loadGameSong("stillwater/run", "/music/songs/stillwater-undertow.json");
 
 // First play must happen inside a click or key handler (browser autoplay rules).
 startButton.addEventListener("click", () => music.play(song));
@@ -106,8 +116,8 @@ To make a song or slot show up in the Studio, add it to `songs/index.json`:
 
 ```json
 {
-  "songs": [{ "file": "stillwater-run.json", "title": "Stillwater Run", "gameTitle": "Stillwater" }],
-  "slots": [{ "id": "stillwater/run", "gameTitle": "Stillwater", "label": "Running music", "default": "stillwater-run.json" }]
+  "songs": [{ "file": "stillwater-undertow.json", "title": "Stillwater Run", "gameTitle": "Stillwater" }],
+  "slots": [{ "id": "stillwater", "gameTitle": "Stillwater", "label": "Music", "default": "stillwater-undertow.json", "path": "/stillwater/index.html", "thumbnail": "/data/thumbnails/stillwater-thumbnail.png" }]
 }
 ```
 

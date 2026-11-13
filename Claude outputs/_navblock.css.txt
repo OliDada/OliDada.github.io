@@ -1,0 +1,34 @@
+
+/* ---------- Phone header: Games / Jokes / Daily become one compact segmented control ---------- */
+@media (max-width: 600px) {
+  .site-header { gap: 10px; }
+  .brand img { width: 42px; }
+  .brand-name { font-size: 24px; }
+  .site-nav { gap: 0; flex: none; }
+  .site-nav a.btn {
+    min-height: 34px; padding: 6px 11px; font-size: 13.5px;
+    border-radius: 0; box-shadow: none; transform: none;
+  }
+  .site-nav a.btn + a.btn { margin-left: -2px; }
+  .site-nav a.btn:first-of-type { border-radius: 999px 0 0 999px; padding-left: 13px; }
+  .site-nav a.btn:nth-of-type(3) { border-radius: 0 999px 999px 0; padding-right: 13px; }
+  /* Pip's room (appears once found) sits apart from the tabs as a small glowing round button */
+  .site-nav a.btn.pip-room-link, .site-nav a.btn + a.btn.pip-room-link { margin-left: 8px; width: 34px; padding: 0; font-size: 0; border-radius: 999px; box-shadow: 2px 2px 0 var(--ink); }
+  .site-nav a.btn.pip-room-link::before { margin: 0; width: 10px; height: 10px; }
+  .site-nav a.btn[aria-current="page"] { background: var(--ink); color: var(--cream); transform: none; box-shadow: none; }
+  .site-nav a.btn:hover, .site-nav a.btn:active { transform: none; box-shadow: none; }
+  .site-nav #customiseBtn { margin-left: 8px; min-height: 34px; width: 34px; padding: 0; box-shadow: 2px 2px 0 var(--ink); }
+  .site-nav #customiseBtn svg { width: 18px; height: 18px; }
+}
+@media (max-width: 400px) {
+  .brand-name { display: none; }
+}
+@media (max-width: 360px) {
+  .site-nav a.btn { padding: 6px 8px; font-size: 12.5px; }
+  .site-nav a.btn:first-of-type { padding-left: 10px; }
+  .site-nav a.btn:nth-of-type(3) { padding-right: 10px; }
+  .site-nav #customiseBtn, .site-nav a.btn.pip-room-link { margin-left: 6px; }
+}
+@media (max-width: 460px) {
+  .site-header:has(.pip-room-link) .brand-name { display: none; }
+}

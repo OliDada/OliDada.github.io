@@ -113,6 +113,7 @@
 </div>
 
 <div id="easyApp" class="easy">
+  <div id="eGameBar" class="e-gamebar" hidden></div>
   <header class="e-top">
     <a class="home" href="/" title="Back to olid.is">←</a>
     <button class="e-brand" id="eHome" title="Studio home">Studio</button>
@@ -137,14 +138,17 @@
     </div>
   </header>
   <div class="e-band" id="eChips"></div>
-  <div class="e-stage" id="eStage"><canvas id="eGrid"></canvas><div id="eJam" class="e-jam" hidden></div><div id="eChordsView" class="e-cv" hidden></div></div>
+  <div class="e-stage" id="eStage"><canvas id="eGrid"></canvas><div id="eDrawView" class="e-draw" hidden><div class="d-bar" id="eDrawBar"></div><canvas id="eDraw"></canvas></div><div id="eJam" class="e-jam" hidden></div><div id="eChordsView" class="e-cv" hidden></div></div>
   <div class="e-pager" id="ePager" hidden></div>
   <div class="e-tools">
     <div class="e-main-tools">
-      <button id="eJamBtn" class="e-tool jam" title="Play pads along with the beat, and record what you play"></button>
+      <div class="seg view-seg" id="eViewSeg" aria-label="How to make the song">
+        <button data-view="draw" title="Draw lines to make melodies">✎ Draw</button>
+        <button data-view="grid" title="Place notes on a grid">▦ Grid</button>
+        <button data-view="jam" title="Play pads along with the beat and record">♪ Jam</button>
+      </div>
       <button id="eGen" class="e-tool hero"></button>
       <button id="eBeat" class="e-tool" title="Try the next drum beat"></button>
-      <button id="eChords" class="e-tool" title="New chords for this part (rewrites the chords and bass)">New chords</button>
       <button id="eVibe" class="e-tool cv-btn" title="How the song feels: mood, sounds, key, speed and its chords"></button>
     </div>
     <div class="spacer"></div>
@@ -163,10 +167,11 @@
     <button class="l-close" id="lClose" aria-label="Close">×</button>
     <div class="l-hero">
       <div class="l-title">Studio</div>
-      <p>Make music by clicking squares. Every note you can place fits the song, so it's hard to make it sound wrong.</p>
+      <p>Change the music in the games on this site, or make your own. Everything you play fits the song, so it's hard to sound wrong.</p>
     </div>
     <div id="lContinue"></div>
-    <h3>Remix a game</h3>
+    <h3>Change the music in a game</h3>
+    <p class="l-note">Make it your own, then play the game with your music.</p>
     <div class="l-grid" id="lGames"></div>
     <h3>Start something new</h3>
     <div class="l-grid" id="lStyles"></div>

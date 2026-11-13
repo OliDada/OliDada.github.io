@@ -217,10 +217,10 @@ body.is-playing .bit { z-index: 10001; }
 .bit-clear span::before { content: '↑ '; }
 
 /* ===================== Pip's story ===================== */
-/* the dolphin, once it has given up Pip's address */
+/* the logo (the Ó), once it has given up Pip's address: it turns purple (logo-pip.svg), with a purple glow */
 .brand img.pip-wiggle { animation: pipWiggle .35s ease; }
 .brand img.pip-spin { animation: pipSpin 1.2s cubic-bezier(.3,1.4,.5,1); }
-.brand.pip-dolphin img { filter: hue-rotate(55deg) saturate(1.6) drop-shadow(0 0 8px rgba(181,140,255,.7)); }
+.brand.pip-dolphin img { filter: drop-shadow(0 0 8px rgba(181,140,255,.7)); }
 .brand.pip-dolphin .brand-tag { color: #8b5cf6; font-weight: 800; }
 @keyframes pipWiggle { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-14deg) scale(1.08); } 75% { transform: rotate(12deg) scale(1.08); } }
 @keyframes pipSpin { from { transform: rotate(0) scale(1); } 60% { transform: rotate(680deg) scale(1.35); } to { transform: rotate(720deg) scale(1); } }
@@ -262,7 +262,7 @@ body.pip-nocursor, body.pip-nocursor * { cursor: none !important; }
 html[style*="--page-ink: #fff8e7"] .brand.pip-dolphin .brand-tag { color: #d4bcff; }
 
 /* ===================== the switches in Pip's room (/pip) ===================== */
-html.pip-p-flip .brand img { transform: scaleX(-1); }
+html.pip-p-flip .brand img { transform: rotate(180deg); }
 html.pip-p-comic .disp, html.pip-p-comic h1, html.pip-p-comic h2 { font-family: 'Comic Neue', 'Comic Sans MS', 'Chalkboard SE', cursive !important; }
 html.pip-p-tilt body:not(.is-playing) > .wrap { rotate: 1deg; transform-origin: 50% 0; }
 html.pip-p-cursor, html.pip-p-cursor * { cursor: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2228%22%20height%3D%2228%22%20viewBox%3D%220%200%2032%2032%22%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%2211%22%20fill%3D%22%23fffaf0%22%20stroke%3D%22%231d1a2b%22%20stroke-width%3D%222%22/%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2214%22%20r%3D%222%22%20fill%3D%22%231d1a2b%22/%3E%3Ccircle%20cx%3D%2220%22%20cy%3D%2214%22%20r%3D%222%22%20fill%3D%22%231d1a2b%22/%3E%3Cpath%20d%3D%22M11%2019%20Q16%2024%2021%2019%22%20stroke%3D%22%231d1a2b%22%20stroke-width%3D%222%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E") 14 14, auto !important; }

@@ -204,7 +204,7 @@
             // things Pip says on the way down
             if (f > 0.03) once('steer', phone() ? 'Drag to steer!' : 'Left and right to steer!', 2000);
             if (f > 0.1) once('dirt', "It's mostly dirt down here.", 1800);
-            for (const fo of fossils) if (!fo.said && Math.abs(fo.y - by) < 120) { fo.said = true; const L = { snake: 'Is that the first snake?', jar: "Oli's old jokes. Buried. Good.", dolphin: 'There are dolphins down here too. They get everywhere.', disk: 'A floppy disk. How old is this website?', code: "Oli's old code. Even worse than the new code.", snake2: 'Another snake. This is where they go.' }[fo.kind]; if (!line) say(L, 1800); }
+            for (const fo of fossils) if (!fo.said && Math.abs(fo.y - by) < 120) { fo.said = true; const L = { snake: 'Is that the first snake?', jar: "Oli's old jokes. Buried. Good.", dolphin: "The old dolphin logo. Oli buried it when the Ó moved in.", disk: 'A floppy disk. How old is this website?', code: "Oli's old code. Even worse than the new code.", snake2: 'Another snake. This is where they go.' }[fo.kind]; if (!line) say(L, 1800); }
             if (by > split[0] - 520) once('split', 'It splits. Left? No. Right. Definitely right.', 2000);
             if (by > split[0] - 100) once('split2', "...I'm guessing.", 1200);
             if (f > 0.8) once('fast', "This is faster than I'd like.", 1500);

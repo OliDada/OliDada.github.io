@@ -9,7 +9,7 @@
     // once Pip is free, a few of his heads are the standard floaties
     try { if (JSON.parse(localStorage.getItem('bit-memory') || '{}').freed) Object.assign(FLOATIE_DEFAULTS, { shape: 'pips', amount: 'few' }); } catch (e) {}
     const SWATCHES = ['#ffa500', '#38b6ff', '#ff5436', '#7ed957', '#ffc8dd', '#b58cff', '#1e1645'];
-    const ALL_SHAPES = [['sparkles', 'Sparkles'], ['bubbles', 'Bubbles'], ['cubes', 'Cubes'], ['dolphins', 'Dolphins'], ['snow', 'Snow'], ['pips', 'Pips'], ['none', 'Nothing']];
+    const ALL_SHAPES = [['sparkles', 'Sparkles'], ['bubbles', 'Bubbles'], ['cubes', 'Cubes'], ['dolphins', 'Ós'], ['snow', 'Snow'], ['pips', 'Pips'], ['none', 'Nothing']];
     // Pip's own things (his heads as floaties, his colour as the site's original look) only exist once he's free
     const pipFree = () => (typeof window.pipIsFree === 'function' ? window.pipIsFree() : false);
     const shapes = () => ALL_SHAPES.filter(([k]) => k !== 'pips' || pipFree());
@@ -263,6 +263,7 @@
         if (!featureEl && !gridEl && !shelfEl) return;
         let projects = [];
         try { projects = await (await fetch('data/projects.json')).json(); } catch (e) { console.warn('Could not load projects.json', e); }
+        projects = projects.filter(p => !p.daily); // daily games live on /daily.html (the home page links there instead)
         const featured = projects.filter(p => p.featured);
         const others = projects.filter(p => !p.featured);
         const top = featured[0];
@@ -281,6 +282,10 @@
                     </div>
                 </div>
                 <span class="badge disp" aria-hidden="true">New!</span>`;
+        }
+        if (featureEl && top && !featureEl.dataset.wholeCard) { // clicking anywhere on the featured card plays it
+            featureEl.dataset.wholeCard = '1';
+            featureEl.addEventListener('click', (e) => { if (e.target.closest('a, button')) return; const a = featureEl.querySelector('.play-link'); if (a) a.click(); });
         }
         if (gridEl) gridEl.innerHTML = featured.slice(1).map(cardHtml).join('');
         if (shelfEl) shelfEl.innerHTML = others.map(p => `
@@ -392,4 +397,35 @@
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
     else start();
+})();
+
+// The logo (the Ó) comes alive in the header: two eyes appear in the hole, follow the mouse and blink.
+// They sit on top of the logo image, so everything that already uses `.brand img` keeps working.
+(() => {
+    const img = document.querySelector('.brand img'); if (!img) return;
+    const brand = img.closest('.brand'); if (getComputedStyle(brand).position === 'static') brand.style.position = 'relative';
+    const eyes = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    eyes.setAttribute('viewBox', '-10 -10 20 20'); eyes.setAttribute('class', 'brand-eyes'); eyes.setAttribute('aria-hidden', 'true');
+    eyes.innerHTML = '<g class="be-look"><g class="be-blink"><ellipse cx="-3.6" cy="0" rx="2.4" ry="3.1"/><ellipse cx="3.6" cy="0" rx="2.4" ry="3.1"/></g><circle class="be-shine" cx="-4.4" cy="-1.3" r=".9"/><circle class="be-shine" cx="2.8" cy="-1.3" r=".9"/></g>';
+    brand.appendChild(eyes);
+    const look = eyes.querySelector('.be-look');
+    let mx = innerWidth / 2, my = 0;
+    addEventListener('pointermove', e => { mx = e.clientX; my = e.clientY; }, { passive: true });
+    (function place() {
+        const src = img.getAttribute('src') || '', on = /logo(-pip)?\.svg/.test(src) && img.offsetWidth > 0;
+        eyes.style.display = on ? '' : 'none';
+        if (on) {
+            const br = brand.getBoundingClientRect(), ir = img.getBoundingClientRect(), w = img.offsetWidth, h = img.offsetHeight;
+            const t = getComputedStyle(img).transform, m = new DOMMatrix(t === 'none' ? undefined : t);
+            const dy = h * .13; // the hole is 13% below the middle of logo.svg
+            const cx = ir.left + ir.width / 2 + m.c * dy - br.left, cy = ir.top + ir.height / 2 + m.d * dy - br.top, size = w * .26;
+            eyes.style.width = eyes.style.height = size + 'px'; eyes.style.left = (cx - size / 2) + 'px'; eyes.style.top = (cy - size / 2) + 'px';
+            eyes.style.transform = `rotate(${Math.atan2(m.b, m.a)}rad)`;
+            const ex = br.left + cx, ey = br.top + cy, a = Math.atan2(my - ey, mx - ex), d = Math.min(1, Math.hypot(mx - ex, my - ey) / 300);
+            look.setAttribute('transform', `translate(${(Math.cos(a) * 2.6 * d).toFixed(2)} ${(Math.sin(a) * 2.6 * d).toFixed(2)})`);
+            eyes.classList.toggle('pip', /logo-pip/.test(src));
+        }
+        requestAnimationFrame(place);
+    })();
+    (function blink() { setTimeout(() => { eyes.classList.add('blink'); setTimeout(() => eyes.classList.remove('blink'), 130); if (Math.random() < .2) setTimeout(() => { eyes.classList.add('blink'); setTimeout(() => eyes.classList.remove('blink'), 120); }, 260); blink(); }, 2600 + Math.random() * 4200); })();
 })();

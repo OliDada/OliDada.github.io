@@ -268,7 +268,7 @@ function build() {
       c.getContext('2d').drawImage(img, (128 - w) / 2, (128 - h) / 2, w, h);
       tex.needsUpdate = true;
     };
-    img.src = '/images/dolphin1.png';
+    img.src = '/images/logo.svg';
     mat = new THREE.PointsMaterial({ size: 15, map: tex, transparent: true, alphaTest: 0.2, color: 0xffffff, depthWrite: false });
   } else if (shape === 'bubbles') {
     mat = new THREE.PointsMaterial({ size: 7, map: makeTexture('bubble'), transparent: true, depthWrite: false, color: col, opacity: 0.85 });
@@ -285,7 +285,7 @@ function build() {
 function recolor() {
   if (!objects) return;
   const mat = objects.obj.material;
-  if (objects.kind === 'dolphins' || objects.kind === 'pips') return; // dolphins and Pips keep their own colours
+  if (objects.kind === 'dolphins' || objects.kind === 'pips') return; // Tellies and Pips keep their own colours
   mat.color = floatieColor();
   mat.needsUpdate = true;
 }
