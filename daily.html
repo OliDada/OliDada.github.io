@@ -113,6 +113,42 @@
               <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
             </span>
           </a>
+          <a class="dg-card stk" style="--g:#A8E6B4" aria-label="Flood. Flood the board in as few moves as you can." href="/flood/index.html" data-key="flood:v1" data-field="res" data-launch="13" data-rounds="1" data-kind="par" data-unit="moves">
+            <img src="data/thumbnails/flood-thumbnail.png" alt="">
+            <span class="dg-body">
+              <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
+            </span>
+          </a>
+          <a class="dg-card stk" style="--g:#FFC9A8" aria-label="Flip. Flip tiles to clear the board." href="/flip/index.html" data-key="flip:v1" data-field="res" data-launch="13" data-rounds="1" data-kind="par" data-unit="taps">
+            <img src="data/thumbnails/flip-thumbnail.png" alt="">
+            <span class="dg-body">
+              <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
+            </span>
+          </a>
+          <a class="dg-card stk" style="--g:#B9CCFF" aria-label="Spike. A year of Wikipedia views. Name the page from its graph." href="/spike/index.html" data-key="spike:v1" data-field="res" data-launch="13" data-rounds="3">
+            <img src="data/thumbnails/spike-thumbnail.png" alt="">
+            <span class="dg-body">
+              <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
+            </span>
+          </a>
+          <a class="dg-card stk" style="--g:#FFB3A0" aria-label="Peek. Poke holes in the cover. Name the picture in as few peeks as you can." href="/peek/index.html" data-key="peek:v1" data-field="res" data-launch="13" data-rounds="3">
+            <img src="data/thumbnails/peek-thumbnail.png" alt="">
+            <span class="dg-body">
+              <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
+            </span>
+          </a>
+          <a class="dg-card stk" style="--g:#FF9CC8" aria-label="Twins. Split each shape into two identical pieces." href="/twins/index.html" data-key="twins:v1" data-field="res" data-launch="13" data-rounds="3" data-kind="time">
+            <img src="data/thumbnails/twins-thumbnail.png" alt="">
+            <span class="dg-body">
+              <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
+            </span>
+          </a>
+          <a class="dg-card stk" style="--g:#FFE3A3" aria-label="Time Capsule. The most-read Wikipedia pages from a mystery day. Guess when." href="/capsule/index.html" data-key="capsule:v1" data-field="res" data-launch="13" data-rounds="3">
+            <img src="data/thumbnails/capsule-thumbnail.png" alt="">
+            <span class="dg-body">
+              <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
+            </span>
+          </a>
         </section>
       </main>
     </div>
@@ -128,7 +164,7 @@
           try { no = day - Date.UTC(2026, 10, +c.dataset.launch) / 864e5 + 1; days = (JSON.parse(localStorage.getItem(c.dataset.key)) || {}).days || {}; } catch (e) {}
           const get = d => (days[d] || {})[field] || [];
           const last = t => t[t.length - 1] || [];
-          // Rank is one puzzle with two tries; the others are five rounds
+          // Rank is one puzzle with two tries; the others have data-rounds rounds (five unless the card says)
           const finished = r => rank ? r.length >= 2 || (r.length > 0 && last(r).every(Boolean)) : r.filter(Boolean).length >= rounds;
           const res = get(no), n = res.filter(Boolean).length, fin = finished(res);
           const marks = rank ? last(res).map(ok => ok ? 'g' : 'r') : res.map(r => r && r.c || '');
@@ -136,9 +172,11 @@
           let score = '';
           if (fin) {
             if (rank) score = `${last(res).every(Boolean) ? res.length : 'X'}/2 tries`;
+            else if (c.dataset.kind === 'par') { const d = days[no] || {}; score = `${d.moves} ${c.dataset.unit}${d.moves <= d.par ? ' · par' : ''}`; }
+            else if (c.dataset.kind === 'time') { const sec = Math.floor(res.reduce((t, r) => t + (r.c === 'r' ? 0 : r.ms), 0) / 1000), shown = res.filter(r => r.c === 'r').length; score = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0') + (shown ? ` · ${rounds - shown}/${rounds}` : ''); }
             else if (swap) { const sw = (days[no] || {}).swaps || 0; score = `${sw} ${sw === 1 ? 'swap' : 'swaps'}`; }
             else if (field === 'cuts') score = (Math.round(res.reduce((a, r) => a + (100 - 2 * (50 - r.small)), 0) / res.length * 10) / 10).toFixed(1) + '%';
-            else score = `${res.reduce((a, r) => a + (r.pts || 0), 0)}/500`;
+            else score = `${res.reduce((a, r) => a + (r.pts || 0), 0)}/${rounds * 100}`;
           }
           c.querySelector('.dg-sq').innerHTML = Array.from({ length: rounds }, (_, i) => `<i class="${marks[i] || ''}"></i>`).join('');
           const btn = c.querySelector('.dg-btn'), fire = streak > 1 ? ` · ${streak}-day streak` : '';

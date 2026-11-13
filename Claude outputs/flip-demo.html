@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Flip (demo)</title>
+<style>
+:root{--bg:#FFF0D6;--ink:#1E1B24;--muted:#857F75;--card:#FFFBF5;--on:#F06449}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:Rubik,system-ui,-apple-system,sans-serif;display:flex;justify-content:center;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.app{width:100%;max-width:440px;padding:16px 16px 28px;display:flex;flex-direction:column;gap:14px}
+header{display:flex;justify-content:space-between;align-items:baseline}
+.logo{font-weight:900;font-size:30px;letter-spacing:-.03em}.logo i{font-style:normal;color:var(--on)}
+.tag{font-weight:700;font-size:13px;color:var(--muted)}
+.rule{font-weight:600;font-size:15px}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;perspective:600px}
+.t{aspect-ratio:1;position:relative;cursor:pointer;transform-style:preserve-3d;transition:transform .38s cubic-bezier(.3,1.4,.5,1)}
+.t.on{transform:rotateY(180deg)}
+.t i{position:absolute;inset:0;border-radius:14px;border:2.5px solid var(--ink);backface-visibility:hidden;box-shadow:0 4px 0 var(--ink)}
+.t i.a{background:var(--card)}
+.t i.b{background:var(--on);transform:rotateY(180deg)}
+.t i.b::after{content:"";position:absolute;inset:28%;border-radius:50%;background:rgba(255,255,255,.35)}
+.bar{display:flex;gap:10px}
+.m{flex:1;text-align:center;background:var(--card);border:2.5px solid var(--ink);border-radius:16px;padding:8px;line-height:1.1}
+.m span{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.m b{font-weight:900;font-size:22px}
+.win{font-weight:800;font-size:17px;text-align:center;min-height:22px}
+.btns{display:flex;gap:8px}
+.btn{flex:1;border:2.5px solid var(--ink);background:var(--ink);color:#fff;font:900 17px system-ui;padding:14px;border-radius:16px;cursor:pointer;box-shadow:0 4px 0 rgba(30,27,36,.35)}
+.btn.ghost{background:var(--card);color:var(--ink);box-shadow:0 4px 0 var(--ink)}
+.note{font-size:12.5px;color:var(--muted);text-align:center;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="app">
+  <header><div class="logo">FLIP<i>.</i></div><div class="tag">quick demo</div></header>
+  <p class="rule">Tapping a tile flips it and its neighbours. Turn every tile back to cream in as few taps as you can.</p>
+  <div class="grid" id="grid"></div>
+  <div class="bar"><div class="m"><span>Taps</span><b id="taps">0</b></div><div class="m"><span>Par</span><b id="par">–</b></div></div>
+  <div class="win" id="win"></div>
+  <div class="btns"><button class="btn ghost" id="reset">Start over</button><button class="btn" id="new">New board</button></div>
+  <div class="note">Demo: a random board each time. Par is the true minimum, worked out exactly. The real game would be one board a day, getting bigger through the week.</div>
+</div>
+<script>
+(() => {
+const N = 5, $ = id => document.getElementById(id);
+let start, cells, taps, par, ac;
+function audio() { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); ac.resume(); } catch (e) {} }
+function blip(f, d = .08, v = .05, delay = 0) { if (!ac) return; const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain(); o.type = 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .005); g.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(g).connect(ac.destination); o.start(t); o.stop(t + d + .02); }
+const nbrs = i => { const x = i % N, y = i / N | 0; return [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [x + dx, y + dy]).filter(([a, b]) => a >= 0 && b >= 0 && a < N && b < N).map(([a, b]) => b * N + a); };
+// exact minimum taps: solve the flips over GF(2), then try every combination of the free variables
+function minTaps(board) {
+  const M = N * N, rows = [];
+  for (let i = 0; i < M; i++) { const r = new Array(M + 1).fill(0); for (const j of nbrs(i)) r[j] = 1; r[M] = board[i]; rows.push(r); }
+  const piv = []; let r = 0;
+  for (let c = 0; c < M && r < M; c++) {
+    let p = rows.findIndex((row, k) => k >= r && row[c]); if (p < 0) continue;
+    [rows[r], rows[p]] = [rows[p], rows[r]];
+    for (let k = 0; k < M; k++) if (k !== r && rows[k][c]) for (let j = c; j <= M; j++) rows[k][j] ^= rows[r][j];
+    piv.push(c); r++;
+  }
+  const free = []; for (let c = 0; c < M; c++) if (!piv.includes(c)) free.push(c);
+  let best = Infinity;
+  for (let mask = 0; mask < 1 << free.length; mask++) {
+    const x = new Array(M).fill(0); free.forEach((c, k) => x[c] = mask >> k & 1);
+    piv.forEach((c, k) => { let v = rows[k][M]; for (const f of free) if (rows[k][f]) v ^= x[f]; x[c] = v; });
+    best = Math.min(best, x.reduce((a, b) => a + b, 0));
+  }
+  return best;
+}
+function press(b, i) { for (const j of nbrs(i)) b[j] ^= 1; }
+function build() {
+  // make a board by tapping random tiles on a clean one, so it's always solvable
+  start = new Array(N * N).fill(0); const k = 5 + Math.floor(Math.random() * 4);
+  for (let n = 0; n < k; n++) press(start, Math.floor(Math.random() * N * N));
+  if (start.every(v => !v)) return build();
+  par = minTaps(start); $('par').textContent = par; reset();
+}
+function reset() { cells = start.slice(); taps = 0; $('taps').textContent = 0; $('win').textContent = ''; render(); }
+function render() {
+  $('grid').innerHTML = cells.map((v, i) => `<div class="t ${v ? 'on' : ''}" data-i="${i}"><i class="a"></i><i class="b"></i></div>`).join('');
+  $('grid').querySelectorAll('.t').forEach(el => el.onclick = () => tap(+el.dataset.i));
+}
+function tap(i) {
+  audio(); if (cells.every(v => !v)) return;
+  press(cells, i); taps++; $('taps').textContent = taps;
+  // flip the tiles in place (no re-render) so the 3D flip animates, centre first then neighbours
+  const els = $('grid').children; nbrs(i).forEach((j, k) => setTimeout(() => els[j].classList.toggle('on', !!cells[j]), k ? 60 : 0));
+  blip(cells[i] ? 520 : 390, .07, .05);
+  if (cells.every(v => !v)) setTimeout(() => { $('win').textContent = taps <= par ? 'Perfect! The fewest taps possible.' : `Cleared in ${taps}. Par is ${par}.`; [523, 659, 784, 1047].forEach((f, j) => blip(f, .2, .06, j * .07)); }, 450);
+}
+$('reset').onclick = () => { audio(); reset(); };
+$('new').onclick = () => { audio(); build(); };
+build();
+})();
+</script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 // No backend: the date picks the pages; the graphs come from tools/build-data.js.
 (() => {
 const INK = '#1E1B24', $ = id => document.getElementById(id);
-const PER_DAY = 3, LAUNCH = [2026, 10, 12];       // same numbering as the other daily games (month is 0-based)
+const PER_DAY = 3, LAUNCH = [2026, 10, 13];       // same numbering as the other daily games (month is 0-based)
 const POINTS = [100, 70, 45, 25];                  // by number of clues shown when you get it
 const YEAR = window.SPIKE_YEAR, DATA = window.SPIKE_DATA.map(([title, name, cat, aka, b64, peak, max, total]) => {
   const bin = atob(b64), v = Array.from(bin, c => c.charCodeAt(0) / 255);
@@ -169,10 +169,12 @@ function frame(now) {
 }
 
 /* ---------- end + stats ---------- */
-const SQ = { g: '🟩', y: '🟨', o: '🟧', r: '🟥' };
 const total = res => res.reduce((s, r) => s + r.pts, 0);
 function streak() { let s = 0; for (let d = todayNo; d > 0; d--) { const x = store.days[d]; if (x && x.res && x.res.length === PER_DAY) s++; else if (d === todayNo) continue; else break; } return s; }
-function shareStr() { return `Spike #${DAY} ${total(today.res)}/${PER_DAY * 100}\n${today.res.map(r => SQ[r.c]).join('')}\nolid.is/spike`; }
+function shareStr() {
+  const lines = today.res.map(r => !r.ok ? 'missed' : r.clues === 0 ? 'graph only' : r.clues + (r.clues === 1 ? ' clue' : ' clues'));
+  return `Spike #${DAY} ${total(today.res)}/${PER_DAY * 100}\n${lines.join('\n')}\nolid.is/spike`;
+}
 function spark(d) { const c = document.createElement('canvas'); c.width = 144; c.height = 80; const g = c.getContext('2d'); g.lineWidth = 2.5; g.lineJoin = 'round'; plot(g, d.v, 144, 80, { l: 2, r: 2, t: 6, b: 6 }, 1, INK, 'rgba(30,27,36,.08)'); return c; }
 function finish(fresh) {
   $('play').classList.add('hide'); $('end').classList.add('show');

@@ -153,6 +153,18 @@
     "featured": false
   },
   {
+    "title": "Twins",
+    "daily": true,
+    "description": "Three shapes a day. Split each one into two identical pieces.",
+    "path": "/twins/index.html",
+    "source": "/twins/game.js",
+    "aspect": "fill",
+    "thumbnail": "data/thumbnails/twins-thumbnail.png",
+    "controls": [["Tap / drag", "paint squares"], ["Enter", "start, next level"]],
+    "tags": ["game", "daily", "logic"],
+    "featured": false
+  },
+  {
     "title": "A Little Higher",
     "description": "Keep your balance as you climb from the treetops to outer space.",
     "path": "/balance-game/index.html",

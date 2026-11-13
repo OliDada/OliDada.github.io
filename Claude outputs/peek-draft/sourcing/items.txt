@@ -1,0 +1,301 @@
+# name | aliases (comma) | search query (optional)
+apple | | red apple fruit
+banana | bananas |
+orange | | orange fruit citrus
+lemon | lemons |
+lime | limes | lime fruit
+strawberry | strawberries |
+pineapple | |
+watermelon | | watermelon slice
+grapes | grape, bunch of grapes |
+cherry | cherries | cherries fruit
+pear | | pear fruit
+peach | | peach fruit
+kiwi | kiwi fruit, kiwifruit | kiwifruit
+coconut | | coconut fruit
+avocado | | avocado halved
+pomegranate | |
+blueberry | blueberries |
+raspberry | raspberries |
+mango | | mango fruit
+fig | figs | fig fruit
+carrot | carrots |
+broccoli | |
+tomato | tomatoes | tomato vegetable
+potato | potatoes |
+onion | onions | onion bulb vegetable
+garlic | garlic bulb | garlic bulb
+cucumber | | cucumber vegetable
+corn | corn on the cob, maize, sweetcorn | corn on the cob
+pumpkin | |
+mushroom | mushrooms | button mushroom
+bell pepper | pepper, capsicum | bell pepper capsicum
+chili pepper | chili, chilli, hot pepper | red chili peppers
+cabbage | |
+cauliflower | |
+lettuce | | lettuce head
+eggplant | aubergine |
+peas | pea, pea pod | pea pods
+asparagus | |
+artichoke | | globe artichoke
+beetroot | beet | beetroot
+egg | eggs | chicken eggs
+bread | loaf, loaf of bread | loaf of bread
+croissant | |
+pretzel | | soft pretzel
+doughnut | donut | doughnut
+pizza | | pizza
+hamburger | burger | hamburger
+hot dog | | hot dog sausage bun
+sushi | | sushi
+pasta | spaghetti | spaghetti pasta
+cheese | | cheese wheel
+chocolate | chocolate bar | chocolate bar
+cookie | biscuit | chocolate chip cookie
+cake | | cake slice
+ice cream | ice cream cone | ice cream cone
+popcorn | |
+honey | honeycomb | honeycomb honey
+waffle | waffles | waffle
+pancake | pancakes | pancakes stack
+coffee | cup of coffee | cup of coffee
+tea | cup of tea, teacup | cup of tea
+peanut | peanuts | peanuts shell
+walnut | walnuts | walnuts
+rice | | rice grains
+salt | | salt crystals
+sugar cube | sugar | sugar cubes
+cup | mug | coffee mug
+teapot | |
+kettle | | electric kettle
+fork | | fork cutlery
+spoon | | spoon
+knife | kitchen knife | kitchen knife
+chopsticks | | chopsticks
+plate | | dinner plate
+bowl | | bowl ceramic
+frying pan | pan, skillet | frying pan
+saucepan | pot | saucepan
+whisk | | whisk kitchen
+rolling pin | | rolling pin
+grater | cheese grater | cheese grater
+toaster | |
+microwave | microwave oven | microwave oven
+refrigerator | fridge | refrigerator
+blender | |
+wine glass | glass | wine glass
+bottle | glass bottle | glass bottle
+corkscrew | |
+can opener | tin opener | can opener
+cutting board | chopping board | cutting board
+scissors | |
+pencil | pencils | pencil
+pen | ballpoint pen | ballpoint pen
+eraser | rubber | eraser
+ruler | | ruler measuring
+paper clip | paperclip | paper clip
+stapler | |
+notebook | | notebook spiral
+book | books | book
+envelope | | envelope
+stamp | postage stamp | postage stamp
+calculator | |
+globe | | globe geography
+map | | paper map
+crayons | crayon | crayons
+paintbrush | brush | paint brush
+paint | paint palette | paint palette
+key | keys | key lock
+lock | padlock | padlock
+light bulb | bulb, lightbulb | light bulb
+candle | |
+clock | wall clock | wall clock
+watch | wristwatch | wristwatch
+alarm clock | | alarm clock
+hourglass | sand timer | hourglass
+umbrella | |
+mirror | | mirror
+lamp | | table lamp
+chair | | wooden chair
+sofa | couch | sofa
+bed | | bed
+pillow | cushion | pillow
+blanket | | blanket
+bathtub | bath | bathtub
+toilet | | toilet
+toothbrush | | toothbrush
+toothpaste | | toothpaste tube
+soap | | bar of soap
+towel | towels | towels
+comb | | comb hair
+hairbrush | | hairbrush
+sponge | | sponge
+broom | | broom
+bucket | pail | bucket
+vacuum cleaner | hoover | vacuum cleaner
+iron | clothes iron | clothes iron
+washing machine | | washing machine
+clothespin | clothes peg, peg | clothespin
+hanger | coat hanger | coat hanger
+door | | wooden door
+window | | window
+stairs | staircase | staircase
+brick | bricks | brick wall
+fence | | wooden fence
+mailbox | letterbox, postbox | mailbox
+doormat | | doormat
+plant pot | flowerpot | flower pot plant
+watering can | | watering can
+shovel | spade | shovel
+rake | | garden rake
+wheelbarrow | | wheelbarrow
+hose | garden hose | garden hose
+hammer | |
+screwdriver | | screwdriver
+wrench | spanner | wrench tool
+saw | handsaw | hand saw
+pliers | | pliers tool
+nail | nails | nails hardware
+screw | screws | screws hardware
+drill | power drill | power drill
+tape measure | measuring tape | tape measure
+ladder | | ladder
+rope | | rope
+chain | | metal chain
+bolt | nut and bolt | nut and bolt
+paint roller | | paint roller
+shoe | shoes, sneaker, trainer | sneaker shoe
+boot | boots | leather boots
+sock | socks | socks
+hat | | hat
+cap | baseball cap | baseball cap
+glove | gloves | gloves
+scarf | | scarf knitted
+sunglasses | | sunglasses
+glasses | spectacles, eyeglasses | eyeglasses
+tie | necktie | necktie
+belt | | leather belt
+button | buttons | sewing buttons
+zipper | zip | zipper
+t-shirt | tshirt, shirt | t-shirt
+jeans | denim | jeans
+dress | | dress
+backpack | rucksack | backpack
+handbag | purse, bag | handbag
+wallet | | leather wallet
+ring | | gold ring
+necklace | | necklace
+suitcase | luggage | suitcase
+needle and thread | needle, thread | sewing needle thread
+yarn | wool, ball of yarn | ball of yarn
+phone | smartphone, mobile phone | smartphone
+laptop | computer | laptop
+keyboard | computer keyboard | computer keyboard
+computer mouse | mouse | computer mouse
+headphones | | headphones
+camera | | camera
+television | tv | television set
+remote control | remote | remote control
+battery | batteries | AA batteries
+plug | power plug | electrical plug
+radio | | radio
+guitar | | acoustic guitar
+piano | | piano keys
+violin | | violin
+drum | drums | drum kit
+trumpet | | trumpet
+flute | | flute
+harmonica | | harmonica
+accordion | | accordion
+football | soccer ball | soccer ball
+basketball | | basketball ball
+tennis ball | | tennis ball
+tennis racket | racket, racquet | tennis racket
+baseball | | baseball ball
+golf ball | | golf ball
+bicycle | bike | bicycle
+skateboard | | skateboard
+dice | die | dice
+playing cards | cards | playing cards
+chess | chess pieces, chessboard | chess pieces
+puzzle | jigsaw puzzle, jigsaw | jigsaw puzzle
+kite | | kite flying
+balloon | balloons | balloons
+teddy bear | | teddy bear
+rubber duck | | rubber duck
+car | | car
+bus | | bus
+train | | train
+airplane | aeroplane, plane | airplane
+boat | | boat
+sailboat | | sailboat
+tractor | | tractor
+helicopter | | helicopter
+truck | lorry | truck
+motorcycle | motorbike | motorcycle
+tyre | tire, wheel | car tyre
+traffic light | traffic lights | traffic light
+anchor | | anchor
+tent | | tent camping
+compass | | compass navigation
+dog | | dog
+cat | | cat
+horse | | horse
+cow | | cow
+pig | | pig
+sheep | | sheep
+chicken | hen | chicken hen
+duck | | duck
+rabbit | bunny | rabbit
+mouse (animal) | rat | mouse rodent
+owl | | owl
+parrot | | parrot
+penguin | | penguin
+frog | | frog
+turtle | tortoise | tortoise
+snail | | snail
+butterfly | | butterfly
+bee | honeybee | honeybee
+ladybird | ladybug | ladybird
+spider | | spider
+fish | goldfish | goldfish
+crab | | crab
+starfish | sea star | starfish
+jellyfish | | jellyfish
+elephant | | elephant
+giraffe | | giraffe
+zebra | | zebra
+lion | | lion
+tiger | | tiger
+bear | | brown bear
+fox | | red fox
+hedgehog | | hedgehog
+squirrel | | squirrel
+deer | | deer
+camel | | camel
+crocodile | alligator | crocodile
+snake | | snake
+flamingo | | flamingo
+peacock | | peacock
+octopus | | octopus
+shell | seashell | seashell
+feather | feathers | feather
+leaf | leaves | green leaf
+pine cone | pinecone | pine cone
+acorn | acorns | acorn
+sunflower | | sunflower
+rose | | rose flower
+tulip | | tulip
+daisy | | daisy flower
+cactus | | cactus
+tree | | tree
+moss | | moss
+rock | stone, pebble | pebbles
+sand | | sand beach
+snowflake | snow | snowflake macro
+icicle | icicles | icicles
+rainbow | | rainbow
+moon | | full moon
+volcano | | volcano
+waterfall | | waterfall
+wood | log, firewood | firewood logs

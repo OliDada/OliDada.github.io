@@ -5,7 +5,7 @@ const INK = '#1E1B24', $ = id => document.getElementById(id);
 const PER_DAY = 3, MAX_PEEKS = 12;
 const LAUNCH = [2026, 10, 12];                 // same numbering as the other daily games (month is 0-based)
 const HOLE = [.085, .072, .062];               // hole radius (share of the card) per round: it gets harder
-const POOL = window.PEEK_POOL;
+const POOL = window.PEEK_POOL;                 // [photo file, [accepted names], credit index]
 const PALETTE = [
   { bg: '#FFE9E3', accent: '#F06449', back: '#FFF4D6' },
   { bg: '#E3ECFF', accent: '#3D6BFF', back: '#E9F8EE' },
@@ -23,7 +23,7 @@ function shuffle(arr, r) { const a = arr.slice(); for (let i = a.length - 1; i >
 function picturesForDay(day) {
   const perCycle = Math.floor(POOL.length / PER_DAY), cycle = Math.floor((day - 1) / perCycle), slot = (day - 1) % perCycle;
   const order = shuffle(POOL.map((_, i) => i), mulberry(cycle * 4231 + 77)), r = mulberry(day * 3571 + 11);
-  return order.slice(slot * PER_DAY, slot * PER_DAY + PER_DAY).map(i => ({ file: POOL[i][0], names: POOL[i][1], rot: (r() - .5) * .5, scale: .95 + r() * .25, dx: (r() - .5) * .08, dy: (r() - .5) * .08 }));
+  return order.slice(slot * PER_DAY, slot * PER_DAY + PER_DAY).map(i => ({ file: POOL[i][0], names: POOL[i][1] }));
 }
 const NAMES = [...new Set(POOL.flatMap(p => p[1]))].sort();
 const article = n => /^[aeiou]/.test(n) ? 'an' : 'a';
@@ -54,12 +54,12 @@ $('mute').onclick = () => { muted = !muted; setMuteIcon(); try { localStorage.se
 
 /* ---------- pictures ---------- */
 const imgs = {};
-function img(file) { if (!imgs[file]) { const im = new Image(); im.src = `img/${file}.svg`; imgs[file] = im; } return imgs[file]; }
-// Draw a round's picture (with its background) into a square of size n.
+function img(file) { if (!imgs[file]) { const im = new Image(); im.src = `img/${file}.jpg`; imgs[file] = im; } return imgs[file]; }
+// Draw a round's photo into a square of size n.
 function paintPicture(g, P, n, back) {
   g.fillStyle = back; g.fillRect(0, 0, n, n);
   const im = img(P.file); if (!im.complete || !im.naturalWidth) return false;
-  g.save(); g.translate(n * (.5 + P.dx), n * (.5 + P.dy)); g.rotate(P.rot); const s = n * P.scale; g.drawImage(im, -s / 2, -s / 2, s, s); g.restore();
+  g.drawImage(im, 0, 0, n, n);
   return true;
 }
 
@@ -191,7 +191,6 @@ function frame(now) {
 }
 
 /* ---------- end + stats ---------- */
-const SQ = { g: '🟩', y: '🟨', o: '🟧', r: '🟥' };
 const total = res => res.reduce((s, r) => s + r.pts, 0);
 function streak() { let s = 0; for (let d = todayNo; d > 0; d--) { const x = store.days[d]; if (x && x.res && x.res.length === PER_DAY) s++; else if (d === todayNo) continue; else break; } return s; }
 function shareStr() {

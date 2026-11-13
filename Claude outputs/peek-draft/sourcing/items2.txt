@@ -1,0 +1,204 @@
+kiwi | kiwi fruit, kiwifruit | Kiwifruit
+coconut |  | Coconuts
+broccoli |  | Broccoli
+onion | onions | Onions
+pumpkin |  | Pumpkins
+cabbage |  | Cabbages
+asparagus |  | Asparagus (food)
+artichoke |  | Artichokes
+beetroot | beet | Beetroots
+croissant |  | Croissants
+pretzel |  | Pretzels
+hot dog |  | Hot dogs
+cake |  | Cakes
+ice cream | ice cream cone | Ice cream cones
+popcorn |  | Popcorn
+walnut | walnuts | Walnuts
+rice |  | Cooked rice
+cup | mug | Cups
+teapot |  | Teapots
+spoon |  | Spoons
+plate |  | Plates (dishes)
+bowl |  | Bowls
+frying pan | pan, skillet | Frying pans
+saucepan | pot | Saucepans
+toaster |  | Toasters
+microwave | microwave oven | Microwave ovens
+blender |  | Blenders
+wine glass | glass | Wine glasses
+cutting board | chopping board | Cutting boards
+ruler |  | Rulers
+paper clip | paperclip | Paper clips
+book | books | Books
+globe |  | Terrestrial globes
+crayons | crayon | Crayons
+light bulb | bulb, lightbulb | Incandescent light bulbs
+hourglass | sand timer | Hourglasses
+chair |  | Chairs
+sofa | couch | Sofas
+bed |  | Beds
+pillow | cushion | Pillows
+blanket |  | Blankets
+bathtub | bath | Bathtubs
+toilet |  | Flush toilets
+toothpaste |  | Toothpaste
+towel | towels | Towels
+hairbrush |  | Hairbrushes
+sponge |  | Kitchen sponges
+broom |  | Brooms
+bucket | pail | Buckets
+vacuum cleaner | hoover | Vacuum cleaners
+washing machine |  | Washing machines
+door |  | Doors
+fence |  | Fences
+doormat |  | Doormats
+shovel | spade | Shovels
+rake |  | Rakes
+hose | garden hose | Garden hoses
+hammer |  | Hammers
+screwdriver |  | Screwdrivers
+wrench | spanner | Wrenches
+saw | handsaw | Hand saws
+pliers |  | Pliers
+nail | nails | Nails (fasteners)
+screw | screws | Screws
+tape measure | measuring tape | Tape measures
+ladder |  | Ladders
+rope |  | Ropes
+chain |  | Chains
+bolt | nut and bolt | Nuts and bolts
+paint roller |  | Paint rollers
+shoe | shoes, sneaker, trainer | Sneakers
+boot | boots | Boots
+sock | socks | Socks
+hat |  | Hats
+cap | baseball cap | Baseball caps
+glove | gloves | Gloves
+scarf |  | Scarves
+sunglasses |  | Sunglasses
+glasses | spectacles, eyeglasses | Eyeglasses
+tie | necktie | Neckties
+belt |  | Belts (clothing)
+button | buttons | Buttons
+zipper | zip | Zippers
+t-shirt | tshirt, shirt | T-shirts
+jeans | denim | Jeans
+backpack | rucksack | Backpacks
+handbag | purse, bag | Handbags
+wallet |  | Wallets
+ring |  | Rings (jewellery)
+necklace |  | Necklaces
+suitcase | luggage | Suitcases
+needle and thread | needle, thread | Sewing needles
+yarn | wool, ball of yarn | Yarn
+phone | smartphone, mobile phone | Smartphones
+laptop | computer | Laptops
+keyboard | computer keyboard | Computer keyboards
+computer mouse | mouse | Computer mice
+headphones |  | Headphones
+camera |  | Digital cameras
+television | tv | Television sets
+remote control | remote | Remote controls
+battery | batteries | AA batteries
+plug | power plug | AC power plugs
+radio |  | Radio receivers
+guitar |  | Acoustic guitars
+piano |  | Pianos
+violin |  | Violins
+drum | drums | Drum kits
+trumpet |  | Trumpets
+flute |  | Western concert flutes
+harmonica |  | Harmonicas
+accordion |  | Accordions
+football | soccer ball | Association football balls
+basketball |  | Basketballs (balls)
+tennis ball |  | Tennis balls
+tennis racket | racket, racquet | Tennis rackets
+baseball |  | Baseballs (balls)
+golf ball |  | Golf balls
+bicycle | bike | Bicycles
+skateboard |  | Skateboards
+dice | die | Dice
+playing cards | cards | Playing cards
+chess | chess pieces, chessboard | Chess pieces
+puzzle | jigsaw puzzle, jigsaw | Jigsaw puzzles
+kite |  | Kites
+balloon | balloons | Toy balloons
+teddy bear |  | Teddy bears
+rubber duck |  | Rubber ducks
+car |  | Automobiles
+bus |  | Buses
+train |  | Trains
+airplane | aeroplane, plane | Airliners
+boat |  | Rowing boats
+sailboat |  | Sailboats
+tractor |  | Tractors
+helicopter |  | Helicopters
+truck | lorry | Trucks
+motorcycle | motorbike | Motorcycles
+tyre | tire, wheel | Tires
+traffic light | traffic lights | Traffic lights
+anchor |  | Anchors
+tent |  | Tents
+compass |  | Magnetic compasses
+dog |  | Dogs
+cat |  | Felis catus
+horse |  | Equus ferus caballus
+cow |  | Cattle
+pig |  | Sus scrofa domesticus
+sheep |  | Ovis aries
+chicken | hen | Gallus gallus domesticus
+duck |  | Anas platyrhynchos
+rabbit | bunny | Oryctolagus cuniculus
+mouse (animal) | rat | Mus musculus
+owl |  | Strigiformes
+parrot |  | Psittaciformes
+penguin |  | Spheniscidae
+frog |  | Anura
+turtle | tortoise | Testudines
+snail |  | Helix pomatia
+butterfly |  | Butterflies
+bee | honeybee | Apis mellifera
+ladybird | ladybug | Coccinellidae
+spider |  | Araneae
+fish | goldfish | Carassius auratus
+crab |  | Brachyura
+starfish | sea star | Asteroidea
+jellyfish |  | Scyphozoa
+elephant |  | Elephantidae
+giraffe |  | Giraffa camelopardalis
+zebra |  | Equus quagga
+lion |  | Panthera leo
+tiger |  | Panthera tigris
+bear |  | Ursus arctos
+fox |  | Vulpes vulpes
+hedgehog |  | Erinaceus europaeus
+squirrel |  | Sciurus vulgaris
+deer |  | Cervus elaphus
+camel |  | Camelus dromedarius
+crocodile | alligator | Crocodylidae
+snake |  | Serpentes
+flamingo |  | Phoenicopterus roseus
+peacock |  | Pavo cristatus
+octopus |  | Octopus vulgaris
+shell | seashell | Seashells
+feather | feathers | Feathers
+leaf | leaves | Leaves
+pine cone | pinecone | Pine cones
+acorn | acorns | Acorns
+sunflower |  | Helianthus annuus
+rose |  | Roses
+tulip |  | Tulips
+daisy |  | Bellis perennis
+cactus |  | Cactaceae
+tree |  | Trees
+moss |  | Bryophyta
+rock | stone, pebble | Pebbles
+sand |  | Sand
+snowflake | snow | Snowflakes
+icicle | icicles | Icicles
+rainbow |  | Rainbows
+moon |  | Full moon
+volcano |  | Volcanoes
+waterfall |  | Waterfalls
+wood | log, firewood | Firewood

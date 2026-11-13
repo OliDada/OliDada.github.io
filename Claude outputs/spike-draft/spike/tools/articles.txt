@@ -44,7 +44,6 @@ Winter solstice|Winter solstice|Something in the sky
 Equinox|Equinox|Something in the sky
 Perseids|Perseids|Something in the sky|perseid meteor shower
 Supermoon|Supermoon|Something in the sky
-Harvest moon|Harvest moon|Something in the sky
 Aurora|Northern lights|Something in the sky|aurora|aurora borealis
 Advent calendar|Advent calendar|A tradition
 Santa Claus|Santa Claus|A character|santa|father christmas
@@ -62,7 +61,7 @@ Ice cream|Ice cream|A food
 Sunscreen|Sunscreen|A product|sun cream|suncream
 Heat wave|Heatwave|Weather|heat wave
 Snow|Snow|Weather
-Hay fever|Hay fever|A health thing|allergic rhinitis
+Allergic rhinitis|Hay fever|A health thing|allergic rhinitis
 Influenza|Flu|A health thing|influenza
 Common cold|Common cold|A health thing|cold
 Oktoberfest|Oktoberfest|A festival
@@ -96,8 +95,7 @@ Movember|Movember|A month
 Dry January|Dry January|A month
 Veganuary|Veganuary|A month
 National Novel Writing Month|NaNoWriMo|A month|nanowrimo
-Back to school|Back to school|A season
-Hurricane|Hurricane|Weather
+Tropical cyclone|Hurricane|Weather|tropical cyclone|typhoon|cyclone
 Tornado|Tornado|Weather
 Monsoon|Monsoon|Weather
 Wildfire|Wildfire|Weather|forest fire|bushfire
@@ -119,7 +117,7 @@ Hocus Pocus (1993 film)|Hocus Pocus|A film|hocus pocus
 The Nightmare Before Christmas|The Nightmare Before Christmas|A film
 Love Actually|Love Actually|A film
 Elf (film)|Elf|A film|elf
-The Grinch|The Grinch|A character|grinch
+Grinch|The Grinch|A character|grinch
 A Christmas Carol|A Christmas Carol|A book
 Rudolph the Red-Nosed Reindeer|Rudolph|A character|rudolph the red-nosed reindeer
 Turkey (bird)|Turkey|An animal|turkey
@@ -127,7 +125,7 @@ Easter Bunny|Easter Bunny|A character
 Tooth fairy|Tooth fairy|A character
 Cupid|Cupid|A character
 Leprechaun|Leprechaun|A character
-Witch|Witch|A character
+Witchcraft|Witch|A character|witchcraft
 Zombie|Zombie|A character
 Vampire|Vampire|A character
 Ghost|Ghost|A character

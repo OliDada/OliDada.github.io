@@ -1,0 +1,545 @@
+{
+ "apple": {
+  "item": {
+   "name": "apple",
+   "alt": [],
+   "q": "red apple fruit"
+  },
+  "c": [
+   {
+    "title": "File:Tomato plant 2026 G2.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Tomato_plant_2026_G2.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Tomato_plant_2026_G2.jpg/960px-Tomato_plant_2026_G2.jpg",
+    "w": 4000,
+    "h": 5800,
+    "artist": "George Chernilevsky",
+    "licence": "CC BY 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by/4.0",
+    "file": "cand/apple_0.jpg"
+   },
+   {
+    "title": "File:Bangladeshi Tomato.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Bangladeshi_Tomato.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Bangladeshi_Tomato.jpg/960px-Bangladeshi_Tomato.jpg",
+    "w": 6720,
+    "h": 4480,
+    "artist": "Jubair Bin Iqbal",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/apple_1.jpg"
+   },
+   {
+    "title": "File:Organic home-grown tomatoes - unripe to ripe.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Organic_home-grown_tomatoes_-_unripe_to_ripe.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Organic_home-grown_tomatoes_-_unripe_to_ripe.jpg/960px-Organic_home-grown_tomatoes_-_unripe_to_ripe.jpg",
+    "w": 3130,
+    "h": 3130,
+    "artist": "Michal Klajban",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/apple_2.jpg"
+   },
+   {
+    "title": "File:Apples in basket 2018 G1.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Apples_in_basket_2018_G1.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/Apples_in_basket_2018_G1.jpg/960px-Apples_in_basket_2018_G1.jpg",
+    "w": 4600,
+    "h": 4000,
+    "artist": "George Chernilevsky",
+    "licence": "Public domain",
+    "licence_url": "",
+    "file": "cand/apple_3.jpg"
+   }
+  ]
+ },
+ "banana": {
+  "item": {
+   "name": "banana",
+   "alt": [
+    "bananas"
+   ],
+   "q": "banana"
+  },
+  "c": [
+   {
+    "title": "File:Cavendish banana from Maracaibo.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Cavendish_banana_from_Maracaibo.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/Cavendish_banana_from_Maracaibo.jpg/960px-Cavendish_banana_from_Maracaibo.jpg",
+    "w": 3620,
+    "h": 2527,
+    "artist": "Wilfredor",
+    "licence": "CC BY-SA 3.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+    "file": "cand/banana_0.jpg"
+   },
+   {
+    "title": "File:Banana-Sitia-Crete.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Banana-Sitia-Crete.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/78/Banana-Sitia-Crete.jpg/960px-Banana-Sitia-Crete.jpg",
+    "w": 4096,
+    "h": 3072,
+    "artist": "Petro Stelte",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/banana_1.jpg"
+   },
+   {
+    "title": "File:Bananas on black background 02.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Bananas_on_black_background_02.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/98/Bananas_on_black_background_02.jpg/960px-Bananas_on_black_background_02.jpg",
+    "w": 4890,
+    "h": 3122,
+    "artist": "Krzysztof Golik",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/banana_2.jpg"
+   },
+   {
+    "title": "File:Green raw bananas.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Green_raw_bananas.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/24/Green_raw_bananas.jpg/960px-Green_raw_bananas.jpg",
+    "w": 4624,
+    "h": 3468,
+    "artist": "Vitaium",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/banana_3.jpg"
+   }
+  ]
+ },
+ "orange": {
+  "item": {
+   "name": "orange",
+   "alt": [],
+   "q": "orange fruit citrus"
+  },
+  "c": [
+   {
+    "title": "File:Mandarin Oranges (Citrus Reticulata).jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Mandarin_Oranges_(Citrus_Reticulata).jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/Mandarin_Oranges_%28Citrus_Reticulata%29.jpg/960px-Mandarin_Oranges_%28Citrus_Reticulata%29.jpg",
+    "w": 2986,
+    "h": 1991,
+    "artist": "Joe Ravi",
+    "licence": "CC BY-SA 3.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+    "file": "cand/orange_0.jpg"
+   },
+   {
+    "title": "File:Orange-Fruit-Pieces.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Orange-Fruit-Pieces.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/Orange-Fruit-Pieces.jpg/960px-Orange-Fruit-Pieces.jpg",
+    "w": 3520,
+    "h": 2260,
+    "artist": "Evan-Amos",
+    "licence": "CC BY-SA 3.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+    "file": "cand/orange_1.jpg"
+   },
+   {
+    "title": "File:Open refrigerator with food at night.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Open_refrigerator_with_food_at_night.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/Open_refrigerator_with_food_at_night.jpg/960px-Open_refrigerator_with_food_at_night.jpg",
+    "w": 3465,
+    "h": 4598,
+    "artist": "W.carter",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/orange_2.jpg"
+   },
+   {
+    "title": "File:Blood orange slice.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Blood_orange_slice.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2c/Blood_orange_slice.jpg/960px-Blood_orange_slice.jpg",
+    "w": 3376,
+    "h": 1760,
+    "artist": "Rhododendrites",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/orange_3.jpg"
+   }
+  ]
+ },
+ "lemon": {
+  "item": {
+   "name": "lemon",
+   "alt": [
+    "lemons"
+   ],
+   "q": "lemon"
+  },
+  "c": [
+   {
+    "title": "File:Lemon - whole and split.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Lemon_-_whole_and_split.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f7/Lemon_-_whole_and_split.jpg/960px-Lemon_-_whole_and_split.jpg",
+    "w": 6000,
+    "h": 4000,
+    "artist": "Ivar Leidus",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/lemon_0.jpg"
+   },
+   {
+    "title": "File:Lemon tree full of Lemons, Burj Bhalaike.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Lemon_tree_full_of_Lemons,_Burj_Bhalaike.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8d/Lemon_tree_full_of_Lemons%2C_Burj_Bhalaike.jpg/960px-Lemon_tree_full_of_Lemons%2C_Burj_Bhalaike.jpg",
+    "w": 2995,
+    "h": 3743,
+    "artist": "Kuldeepburjbhalaike",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/lemon_1.jpg"
+   },
+   {
+    "title": "File:Five Lemons on lemon tree, Burj Bhalaike.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Five_Lemons_on_lemon_tree,_Burj_Bhalaike.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Five_Lemons_on_lemon_tree%2C_Burj_Bhalaike.jpg/960px-Five_Lemons_on_lemon_tree%2C_Burj_Bhalaike.jpg",
+    "w": 2448,
+    "h": 3264,
+    "artist": "Kuldeepburjbhalaike",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/lemon_2.jpg"
+   },
+   {
+    "title": "File:Unripe fruits of Citrus limon.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Unripe_fruits_of_Citrus_limon.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Unripe_fruits_of_Citrus_limon.jpg/960px-Unripe_fruits_of_Citrus_limon.jpg",
+    "w": 4644,
+    "h": 5260,
+    "artist": "Commonists",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/lemon_3.jpg"
+   }
+  ]
+ },
+ "lime": {
+  "item": {
+   "name": "lime",
+   "alt": [
+    "limes"
+   ],
+   "q": "lime fruit"
+  },
+  "c": [
+   {
+    "title": "File:Lemon and lime.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Lemon_and_lime.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/Lemon_and_lime.jpg/960px-Lemon_and_lime.jpg",
+    "w": 4442,
+    "h": 2526,
+    "artist": "Rhododendrites",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/lime_0.jpg"
+   },
+   {
+    "title": "File:Two limes.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Two_limes.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Two_limes.jpg/960px-Two_limes.jpg",
+    "w": 4500,
+    "h": 2885,
+    "artist": "Rhododendrites",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/lime_1.jpg"
+   },
+   {
+    "title": "File:Lime-Whole-Split.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Lime-Whole-Split.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Lime-Whole-Split.jpg/960px-Lime-Whole-Split.jpg",
+    "w": 3080,
+    "h": 1480,
+    "artist": "Evan-Amos",
+    "licence": "CC0",
+    "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "file": "cand/lime_2.jpg"
+   },
+   {
+    "title": "File:Limetten - Stadtmarkt Augsburg Juni 2015-8622.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Limetten_-_Stadtmarkt_Augsburg_Juni_2015-8622.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Limetten_-_Stadtmarkt_Augsburg_Juni_2015-8622.jpg/960px-Limetten_-_Stadtmarkt_Augsburg_Juni_2015-8622.jpg",
+    "w": 5472,
+    "h": 3648,
+    "artist": "Hubertl",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/lime_3.jpg"
+   }
+  ]
+ },
+ "strawberry": {
+  "item": {
+   "name": "strawberry",
+   "alt": [
+    "strawberries"
+   ],
+   "q": "strawberry"
+  },
+  "c": [
+   {
+    "title": "File:Garden strawberry (Fragaria \u00d7 ananassa) single2.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Garden_strawberry_(Fragaria_%C3%97_ananassa)_single2.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Garden_strawberry_%28Fragaria_%C3%97_ananassa%29_single2.jpg/960px-Garden_strawberry_%28Fragaria_%C3%97_ananassa%29_single2.jpg",
+    "w": 8256,
+    "h": 5504,
+    "artist": "Ivar Leidus",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/strawberry_0.jpg"
+   },
+   {
+    "title": "File:2020. Herbarium. Fragaria vesca. img-010.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:2020._Herbarium._Fragaria_vesca._img-010.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/2020._Herbarium._Fragaria_vesca._img-010.jpg/960px-2020._Herbarium._Fragaria_vesca._img-010.jpg",
+    "w": 2736,
+    "h": 2220,
+    "artist": "Dmitry Makeev",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/strawberry_1.jpg"
+   },
+   {
+    "title": "File:2020. Herbarium. Fragaria vesca. img-006.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:2020._Herbarium._Fragaria_vesca._img-006.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6a/2020._Herbarium._Fragaria_vesca._img-006.jpg/960px-2020._Herbarium._Fragaria_vesca._img-006.jpg",
+    "w": 4528,
+    "h": 3507,
+    "artist": "Dmitry Makeev",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/strawberry_2.jpg"
+   },
+   {
+    "title": "File:2020. Herbarium. Fragaria vesca. img-008.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:2020._Herbarium._Fragaria_vesca._img-008.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/2020._Herbarium._Fragaria_vesca._img-008.jpg/960px-2020._Herbarium._Fragaria_vesca._img-008.jpg",
+    "w": 3907,
+    "h": 3109,
+    "artist": "Dmitry Makeev",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/strawberry_3.jpg"
+   }
+  ]
+ },
+ "pineapple": {
+  "item": {
+   "name": "pineapple",
+   "alt": [],
+   "q": "pineapple"
+  },
+  "c": [
+   {
+    "title": "File:AnanasComosusOnPlant.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:AnanasComosusOnPlant.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/75/AnanasComosusOnPlant.jpg/960px-AnanasComosusOnPlant.jpg",
+    "w": 3900,
+    "h": 2596,
+    "artist": "Markus Leupold-L\u00f6wenthal",
+    "licence": "CC BY-SA 3.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+    "file": "cand/pineapple_0.jpg"
+   },
+   {
+    "title": "File:20260317 Ananas comosus.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:20260317_Ananas_comosus.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/24/20260317_Ananas_comosus.jpg/960px-20260317_Ananas_comosus.jpg",
+    "w": 3934,
+    "h": 3147,
+    "artist": "Flocci Nivis",
+    "licence": "CC BY 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by/4.0",
+    "file": "cand/pineapple_1.jpg"
+   },
+   {
+    "title": "File:Ananas comosus, Dole Pineapple Plantation, Oahu, Hawaii, USA2.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Ananas_comosus,_Dole_Pineapple_Plantation,_Oahu,_Hawaii,_USA2.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Ananas_comosus%2C_Dole_Pineapple_Plantation%2C_Oahu%2C_Hawaii%2C_USA2.jpg/960px-Ananas_comosus%2C_Dole_Pineapple_Plantation%2C_Oahu%2C_Hawaii%2C_USA2.jpg",
+    "w": 3888,
+    "h": 2592,
+    "artist": "Diego Delso",
+    "licence": "CC BY-SA 3.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+    "file": "cand/pineapple_2.jpg"
+   },
+   {
+    "title": "File:Pi\u00f1a (Ananas comosus), Parque Nacional de Lokobe, Nosy Be, Madagascar, 2025-09-21, DD 39.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Pi%C3%B1a_(Ananas_comosus),_Parque_Nacional_de_Lokobe,_Nosy_Be,_Madagascar,_2025-09-21,_DD_39.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/Pi%C3%B1a_%28Ananas_comosus%29%2C_Parque_Nacional_de_Lokobe%2C_Nosy_Be%2C_Madagascar%2C_2025-09-21%2C_DD_39.jpg/960px-Pi%C3%B1a_%28Ananas_comosus%29%2C_Parque_Nacional_de_Lokobe%2C_Nosy_Be%2C_Madagascar%2C_2025-09-21%2C_DD_39.jpg",
+    "w": 4989,
+    "h": 7483,
+    "artist": "Diego Delso",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/pineapple_3.jpg"
+   }
+  ]
+ },
+ "watermelon": {
+  "item": {
+   "name": "watermelon",
+   "alt": [],
+   "q": "watermelon slice"
+  },
+  "c": [
+   {
+    "title": "File:Watermelon slice, May 2024.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Watermelon_slice,_May_2024.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/Watermelon_slice%2C_May_2024.jpg/960px-Watermelon_slice%2C_May_2024.jpg",
+    "w": 4080,
+    "h": 3072,
+    "artist": "Ralff Nestor Nacor",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/watermelon_0.jpg"
+   },
+   {
+    "title": "File:World's Largest Watermelon Slice, Green River, Utah.png",
+    "page": "https://commons.wikimedia.org/wiki/File:World%27s_Largest_Watermelon_Slice,_Green_River,_Utah.png",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/World%27s_Largest_Watermelon_Slice%2C_Green_River%2C_Utah.png/960px-World%27s_Largest_Watermelon_Slice%2C_Green_River%2C_Utah.png",
+    "w": 2808,
+    "h": 3744,
+    "artist": "Jonathan Deamer",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/watermelon_1.jpg"
+   },
+   {
+    "title": "File:Slice of Watermelon from Wilson Farm, Lexington MA.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Slice_of_Watermelon_from_Wilson_Farm,_Lexington_MA.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Slice_of_Watermelon_from_Wilson_Farm%2C_Lexington_MA.jpg/960px-Slice_of_Watermelon_from_Wilson_Farm%2C_Lexington_MA.jpg",
+    "w": 3072,
+    "h": 2304,
+    "artist": "John Phelan",
+    "licence": "CC BY-SA 3.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+    "file": "cand/watermelon_2.jpg"
+   },
+   {
+    "title": "File:Watermelon slice.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Watermelon_slice.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/Watermelon_slice.jpg/960px-Watermelon_slice.jpg",
+    "w": 3060,
+    "h": 4080,
+    "artist": "Mishra12krati",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/watermelon_3.jpg"
+   }
+  ]
+ },
+ "grapes": {
+  "item": {
+   "name": "grapes",
+   "alt": [
+    "grape",
+    "bunch of grapes"
+   ],
+   "q": "grapes"
+  },
+  "c": [
+   {
+    "title": "File:Grapes, Dry Creek Valley-7705.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Grapes,_Dry_Creek_Valley-7705.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d9/Grapes%2C_Dry_Creek_Valley-7705.jpg/960px-Grapes%2C_Dry_Creek_Valley-7705.jpg",
+    "w": 3663,
+    "h": 4579,
+    "artist": "Frank Schulenburg",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/grapes_0.jpg"
+   },
+   {
+    "title": "File:Javier shows part of the grape harvest in his Lysekil vineyard 1 - cropped.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Javier_shows_part_of_the_grape_harvest_in_his_Lysekil_vineyard_1_-_cropped.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/Javier_shows_part_of_the_grape_harvest_in_his_Lysekil_vineyard_1_-_cropped.jpg/960px-Javier_shows_part_of_the_grape_harvest_in_his_Lysekil_vineyard_1_-_cropped.jpg",
+    "w": 3948,
+    "h": 2534,
+    "artist": "W.carter",
+    "licence": "CC0",
+    "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "file": "cand/grapes_1.jpg"
+   },
+   {
+    "title": "File:Grapes in Iran 01.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Grapes_in_Iran_01.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/22/Grapes_in_Iran_01.jpg/960px-Grapes_in_Iran_01.jpg",
+    "w": 4128,
+    "h": 3096,
+    "artist": "Yann Forget",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/grapes_2.jpg"
+   },
+   {
+    "title": "File:Pinot Grigio-20201027-RM-114053.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Pinot_Grigio-20201027-RM-114053.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/Pinot_Grigio-20201027-RM-114053.jpg/960px-Pinot_Grigio-20201027-RM-114053.jpg",
+    "w": 3886,
+    "h": 5182,
+    "artist": "Ermell",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/grapes_3.jpg"
+   }
+  ]
+ },
+ "cherry": {
+  "item": {
+   "name": "cherry",
+   "alt": [
+    "cherries"
+   ],
+   "q": "cherries fruit"
+  },
+  "c": [
+   {
+    "title": "File:Cherry Stella444.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Cherry_Stella444.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bb/Cherry_Stella444.jpg/960px-Cherry_Stella444.jpg",
+    "w": 1200,
+    "h": 1200,
+    "artist": "Benjamint444, edited by Fir0002",
+    "licence": "CC BY-SA 3.0",
+    "licence_url": "http://creativecommons.org/licenses/by-sa/3.0/",
+    "file": "cand/cherry_0.jpg"
+   },
+   {
+    "title": "File:Kirschholzbrett -- 2021 -- 7656.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Kirschholzbrett_--_2021_--_7656.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/73/Kirschholzbrett_--_2021_--_7656.jpg/960px-Kirschholzbrett_--_2021_--_7656.jpg",
+    "w": 6720,
+    "h": 4480,
+    "artist": "Dietmar Rabich",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/cherry_1.jpg"
+   },
+   {
+    "title": "File:Sweet cherries in basket 2018 G1.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Sweet_cherries_in_basket_2018_G1.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Sweet_cherries_in_basket_2018_G1.jpg/960px-Sweet_cherries_in_basket_2018_G1.jpg",
+    "w": 4100,
+    "h": 3850,
+    "artist": "George Chernilevsky",
+    "licence": "Public domain",
+    "licence_url": "",
+    "file": "cand/cherry_2.jpg"
+   },
+   {
+    "title": "File:D\u00fclmen, Hausd\u00fclmen, Baumwurzel -- 2021 -- 7057.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:D%C3%BClmen,_Hausd%C3%BClmen,_Baumwurzel_--_2021_--_7057.jpg",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/aa/D%C3%BClmen%2C_Hausd%C3%BClmen%2C_Baumwurzel_--_2021_--_7057.jpg/960px-D%C3%BClmen%2C_Hausd%C3%BClmen%2C_Baumwurzel_--_2021_--_7057.jpg",
+    "w": 5669,
+    "h": 4252,
+    "artist": "Dietmar Rabich",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "file": "cand/cherry_3.jpg"
+   }
+  ]
+ }
+}

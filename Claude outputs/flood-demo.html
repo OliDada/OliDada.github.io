@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Flood (demo)</title>
+<style>
+:root{--bg:#E6F4EA;--ink:#1E1B24;--muted:#857F75;--card:#FFFBF5}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:Rubik,system-ui,-apple-system,sans-serif;display:flex;justify-content:center;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.app{width:100%;max-width:440px;padding:16px 16px 28px;display:flex;flex-direction:column;gap:14px}
+header{display:flex;justify-content:space-between;align-items:baseline}
+.logo{font-weight:900;font-size:30px;letter-spacing:-.03em}.logo i{font-style:normal;color:#2FA05A}
+.tag{font-weight:700;font-size:13px;color:var(--muted)}
+.rule{font-weight:600;font-size:15px}
+.stage{position:relative;aspect-ratio:1;border:2.5px solid var(--ink);border-radius:20px;box-shadow:0 5px 0 var(--ink);overflow:hidden;background:var(--card)}
+canvas{width:100%;height:100%;display:block}
+.pal{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.pal button{aspect-ratio:1;border-radius:50%;border:2.5px solid var(--ink);box-shadow:0 4px 0 var(--ink);cursor:pointer;transition:transform .08s}
+.pal button:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
+.pal button.cur{opacity:.35;pointer-events:none}
+.bar{display:flex;gap:10px}
+.m{flex:1;text-align:center;background:var(--card);border:2.5px solid var(--ink);border-radius:16px;padding:8px;line-height:1.1}
+.m span{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.m b{font-weight:900;font-size:22px}
+.win{font-weight:800;font-size:17px;text-align:center;min-height:22px}
+.btn{border:2.5px solid var(--ink);background:var(--ink);color:#fff;font:900 18px system-ui;padding:14px;border-radius:16px;cursor:pointer;box-shadow:0 4px 0 rgba(30,27,36,.35)}
+.note{font-size:12.5px;color:var(--muted);text-align:center;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="app">
+  <header><div class="logo">FLOOD<i>.</i></div><div class="tag">quick demo</div></header>
+  <p class="rule">Pick colours to flood the board from the top-left corner. Fill it all in as few moves as you can.</p>
+  <div class="stage"><canvas id="cv"></canvas></div>
+  <div class="pal" id="pal"></div>
+  <div class="bar"><div class="m"><span>Moves</span><b id="moves">0</b></div><div class="m"><span>Par</span><b id="par">–</b></div></div>
+  <div class="win" id="win"></div>
+  <button class="btn" id="new">New board</button>
+  <div class="note">Demo: a random board each time. Par is the best our solver found. The real game would be one board a day, the same for everyone.</div>
+</div>
+<script>
+(() => {
+const N = 12, COLORS = ['#F06449', '#FFC93C', '#2FA05A', '#3D6BFF', '#8B5CF6', '#FF7AA8'], INK = '#1E1B24';
+const cv = document.getElementById('cv'), cx = cv.getContext('2d');
+let grid, moves, par, owned, anim = [], ac;
+function audio() { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); ac.resume(); } catch (e) {} }
+function blip(f, d = .08, v = .05, delay = 0) { if (!ac) return; const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain(); o.type = 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .005); g.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(g).connect(ac.destination); o.start(t); o.stop(t + d + .02); }
+// cells connected to the corner through the corner's colour, with their distance (for the ripple)
+function region(g) { const c = g[0], seen = new Map([[0, 0]]), q = [0]; while (q.length) { const i = q.shift(), x = i % N, y = i / N | 0; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy, j = ny * N + nx; if (nx < 0 || ny < 0 || nx >= N || ny >= N || seen.has(j) || g[j] !== c) continue; seen.set(j, seen.get(i) + 1); q.push(j); } } return seen; }
+function apply(g, c) { const r = region(g), h = g.slice(); for (const i of r.keys()) h[i] = c; return h; }
+// par: greedy with two-move lookahead (counting how many cells the region would cover)
+function solve(g) {
+  let n = 0; while (region(g).size < N * N && n < 60) {
+    let best = -1, bc = 0;
+    for (let a = 0; a < COLORS.length; a++) { if (a === g[0]) continue; const g1 = apply(g, a); let s = region(g1).size;
+      if (s < N * N) for (let b = 0; b < COLORS.length; b++) if (b !== a) s = Math.max(s, region(apply(g1, b)).size * .999);
+      if (s > best) { best = s; bc = a; } }
+    g = apply(g, bc); n++;
+  } return n;
+}
+function build() {
+  grid = Array.from({ length: N * N }, () => Math.floor(Math.random() * COLORS.length));
+  moves = 0; par = solve(grid.slice()); owned = region(grid); anim = [];
+  document.getElementById('par').textContent = par; document.getElementById('moves').textContent = 0; document.getElementById('win').textContent = '';
+  renderPal();
+}
+function renderPal() { const p = document.getElementById('pal'); p.innerHTML = COLORS.map((c, k) => `<button style="background:${c}" class="${k === grid[0] ? 'cur' : ''}" data-k="${k}" aria-label="Colour ${k + 1}"></button>`).join(''); p.querySelectorAll('button').forEach(b => b.onclick = () => pick(+b.dataset.k)); }
+function pick(k) {
+  audio(); if (k === grid[0] || owned.size === N * N) return;
+  const from = grid.slice(); grid = apply(grid, k); moves++;
+  const r = region(grid), t0 = performance.now();
+  for (const [i, d] of r) if (from[i] !== k) anim[i] = { from: from[i], t: t0 + d * 18 };
+  const gained = r.size - owned.size; owned = r;
+  blip(300 + Math.min(700, gained * 12), .12, .06);
+  document.getElementById('moves').textContent = moves; renderPal();
+  if (r.size === N * N) { const w = moves <= par ? (moves < par ? 'Under par! Beat our solver.' : 'On par. Perfect!') : `Done in ${moves}. Par is ${par}.`; setTimeout(() => { document.getElementById('win').textContent = w; [523, 659, 784, 1047].forEach((f, j) => blip(f, .2, .06, j * .07)); }, 500); }
+}
+function frame(now) {
+  requestAnimationFrame(frame);
+  const W = cv.getBoundingClientRect().width, D = Math.min(3, devicePixelRatio || 1); if (cv.width !== Math.round(W * D)) { cv.width = cv.height = Math.round(W * D); }
+  cx.setTransform(D, 0, 0, D, 0, 0); const s = W / N;
+  for (let i = 0; i < N * N; i++) {
+    const x = i % N, y = i / N | 0, a = anim[i]; let col = COLORS[grid[i]], sc = 1;
+    if (a) { const p = (now - a.t) / 160; if (p < 0) col = COLORS[a.from]; else if (p < 1) sc = .7 + .3 * p + Math.sin(p * Math.PI) * .12; else anim[i] = null; }
+    cx.fillStyle = col; const m = s * (1 - sc) / 2; cx.fillRect(x * s + m - .5, y * s + m - .5, s * sc + 1, s * sc + 1);
+  }
+  // a soft outline around your flooded area
+  cx.strokeStyle = 'rgba(30,27,36,.55)'; cx.lineWidth = 2.5; cx.beginPath();
+  for (const i of owned.keys()) { const x = i % N, y = i / N | 0;
+    if (!owned.has(i - N) || y === 0) { cx.moveTo(x * s, y * s); cx.lineTo(x * s + s, y * s); }
+    if (y === N - 1 || !owned.has(i + N)) { cx.moveTo(x * s, y * s + s); cx.lineTo(x * s + s, y * s + s); }
+    if (x === 0 || !owned.has(i - 1)) { cx.moveTo(x * s, y * s); cx.lineTo(x * s, y * s + s); }
+    if (x === N - 1 || !owned.has(i + 1)) { cx.moveTo(x * s + s, y * s); cx.lineTo(x * s + s, y * s + s); } }
+  if (owned.size < N * N) cx.stroke();
+}
+document.getElementById('new').onclick = () => { audio(); build(); };
+build(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

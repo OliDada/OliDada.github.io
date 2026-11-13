@@ -1,0 +1,135 @@
+# Wikipedia title | name shown | category clue | other accepted names
+ChatGPT|ChatGPT|An AI chatbot|chat gpt
+TikTok|TikTok|An app|tik tok
+Pokémon Go|Pokémon Go|A mobile game|pokemon go
+Wordle|Wordle|A word game
+Among Us|Among Us|A video game
+Fortnite|Fortnite|A video game
+Minecraft|Minecraft|A video game
+Fall Guys|Fall Guys|A video game
+Elden Ring|Elden Ring|A video game
+Animal Crossing: New Horizons|Animal Crossing: New Horizons|A video game|animal crossing
+Baldur's Gate 3|Baldur's Gate 3|A video game|baldurs gate 3|baldur's gate
+Cyberpunk 2077|Cyberpunk 2077|A video game|cyberpunk
+Red Dead Redemption 2|Red Dead Redemption 2|A video game|red dead redemption
+Palworld|Palworld|A video game
+Hollow Knight: Silksong|Hollow Knight: Silksong|A video game|silksong
+Grand Theft Auto VI|GTA 6|A video game|grand theft auto vi|gta vi|gta 6
+The Legend of Zelda: Tears of the Kingdom|Zelda: Tears of the Kingdom|A video game|tears of the kingdom|zelda tears of the kingdom
+Flappy Bird|Flappy Bird|A mobile game
+Nintendo Switch|Nintendo Switch|A games console|switch
+PlayStation 5|PlayStation 5|A games console|ps5
+Steam Deck|Steam Deck|A games console
+Bitcoin|Bitcoin|A cryptocurrency
+Dogecoin|Dogecoin|A cryptocurrency
+Non-fungible token|NFT|A crypto thing|nft|nfts|non-fungible token
+Metaverse|Metaverse|A tech buzzword
+Clubhouse (app)|Clubhouse|An app
+Threads (social network)|Threads|An app
+Zoom Video Communications|Zoom|An app|zoom video communications
+Snapchat|Snapchat|An app
+Vine (service)|Vine|An app
+BeReal|BeReal|An app|be real
+Duolingo|Duolingo|An app
+Tesla Cybertruck|Cybertruck|A vehicle|tesla cybertruck
+Apple Vision Pro|Apple Vision Pro|A gadget|vision pro
+Fidget spinner|Fidget spinner|A toy craze
+Labubu|Labubu|A toy craze
+Stable Diffusion|Stable Diffusion|An AI tool
+Midjourney|Midjourney|An AI tool
+DALL-E|DALL-E|An AI tool|dalle|dall e
+DeepSeek|DeepSeek|An AI company|deep seek
+OpenAI|OpenAI|A tech company|open ai
+Deepfake|Deepfake|A tech buzzword|deepfakes
+Starlink|Starlink|A satellite network
+SpaceX Starship|Starship|A rocket|spacex starship
+James Webb Space Telescope|James Webb Space Telescope|A space telescope|jwst|james webb
+Ingenuity (helicopter)|Ingenuity|A Mars helicopter|ingenuity helicopter
+ʻOumuamua|ʻOumuamua|Something in space|oumuamua
+Game of Thrones|Game of Thrones|A TV series|got
+Stranger Things|Stranger Things|A TV series
+Squid Game|Squid Game|A TV series
+Tiger King|Tiger King|A TV series
+The Mandalorian|The Mandalorian|A TV series|mandalorian
+Wednesday (TV series)|Wednesday|A TV series
+The Last of Us (TV series)|The Last of Us|A TV series|last of us
+Succession (TV series)|Succession|A TV series
+The Bear (TV series)|The Bear|A TV series
+Ted Lasso|Ted Lasso|A TV series
+Bridgerton|Bridgerton|A TV series
+The Queen's Gambit (miniseries)|The Queen's Gambit|A TV series|queens gambit|the queens gambit
+Chernobyl (miniseries)|Chernobyl|A TV series|chernobyl miniseries
+Breaking Bad|Breaking Bad|A TV series
+The Office (American TV series)|The Office|A TV series|office
+Westworld (TV series)|Westworld|A TV series
+Severance (TV series)|Severance|A TV series
+Shōgun (2024 TV series)|Shōgun|A TV series|shogun
+Adolescence (TV series)|Adolescence|A TV series
+Baby Reindeer|Baby Reindeer|A TV series
+Avengers: Endgame|Avengers: Endgame|A film|endgame
+Black Panther (film)|Black Panther|A film
+Barbie (film)|Barbie|A film
+Oppenheimer (film)|Oppenheimer|A film
+Joker (2019 film)|Joker|A film
+Frozen II|Frozen II|A film|frozen 2
+Top Gun: Maverick|Top Gun: Maverick|A film|top gun maverick
+Everything Everywhere All at Once|Everything Everywhere All at Once|A film
+Parasite (2019 film)|Parasite|A film
+La La Land (film)|La La Land|A film
+Get Out|Get Out|A film
+Encanto|Encanto|A film
+Spider-Man: No Way Home|Spider-Man: No Way Home|A film|no way home|spiderman no way home
+Star Wars: The Force Awakens|Star Wars: The Force Awakens|A film|the force awakens|force awakens
+Dune (2021 film)|Dune|A film
+Bohemian Rhapsody (film)|Bohemian Rhapsody|A film
+Avatar: The Way of Water|Avatar: The Way of Water|A film|the way of water|avatar 2
+Inside Out 2|Inside Out 2|A film
+Wicked (2024 film)|Wicked|A film
+KPop Demon Hunters|KPop Demon Hunters|A film|k-pop demon hunters|kpop demon hunters
+Hamilton (musical)|Hamilton|A musical
+Despacito|Despacito|A song
+Old Town Road|Old Town Road|A song
+Shape of You|Shape of You|A song
+Blinding Lights|Blinding Lights|A song
+Running Up That Hill|Running Up That Hill|A song
+Baby Shark|Baby Shark|A song
+Flowers (Miley Cyrus song)|Flowers|A song
+Bohemian Rhapsody|Bohemian Rhapsody (the song)|A song
+Brat (album)|Brat|An album
+The Eras Tour|The Eras Tour|A concert tour|eras tour
+Pokémon|Pokémon|A franchise|pokemon
+Harry Potter|Harry Potter|A franchise
+Mannequin Challenge|Mannequin Challenge|A viral craze
+Dab (dance)|The dab|A dance craze|dab|dabbing
+Dalgona coffee|Dalgona coffee|A food craze
+Sourdough|Sourdough|A food craze
+Cottagecore|Cottagecore|A trend
+Skibidi Toilet|Skibidi Toilet|A meme|skibidi
+Rickrolling|Rickrolling|A meme|rickroll
+Doge (meme)|Doge|A meme
+Harambe|Harambe|A meme
+The dress|The dress|A meme|dress
+Rizz|Rizz|A slang word
+Fyre Festival|Fyre Festival|A failed festival
+Theranos|Theranos|A company
+FTX|FTX|A company
+GameStop short squeeze|GameStop short squeeze|A stock market event|gamestop
+Silicon Valley Bank|Silicon Valley Bank|A bank|svb
+2021 Suez Canal obstruction|Ever Given|A ship stuck in a canal|ever given|suez canal obstruction
+Pluto|Pluto|A dwarf planet
+Black hole|Black hole|Something in space
+Gravitational wave|Gravitational waves|A physics discovery|gravitational wave
+Solar eclipse of August 21, 2017|Great American Eclipse 2017|An eclipse|great american eclipse|2017 eclipse
+Brexit|Brexit|A big news story
+Rubik's Cube|Rubik's Cube|A puzzle|rubiks cube
+Chess|Chess|A board game
+Pickleball|Pickleball|A sport
+Padel|Padel|A sport
+Lego|Lego|A toy
+Super Mario Bros. Wonder|Super Mario Bros. Wonder|A video game|mario wonder
+The Super Mario Bros. Movie|The Super Mario Bros. Movie|A film|super mario movie|mario movie
+Netflix|Netflix|A streaming service
+Disney+|Disney+|A streaming service|disney plus
+Twitch (service)|Twitch|A streaming service
+Club Penguin|Club Penguin|An online game
+Roblox|Roblox|A game platform
