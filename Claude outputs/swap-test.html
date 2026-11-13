@@ -25,7 +25,7 @@ header{display:flex;justify-content:space-between;align-items:baseline}
 .row.locked b{display:block;font-weight:900;font-size:15px;text-transform:uppercase;letter-spacing:.04em}
 .row.locked span{font-size:13.5px;font-weight:600}
 @keyframes pop{0%{transform:scale(.94)}100%{transform:none}}
-.w{height:62px;border-radius:12px;border:2.5px solid var(--ink);background:var(--card);box-shadow:0 3px 0 var(--ink);display:grid;place-items:center;font:800 clamp(10.5px,3.1vw,14px) system-ui;text-transform:uppercase;letter-spacing:.01em;cursor:pointer;padding:2px;text-align:center;word-break:break-word;transition:transform .12s,background .12s}
+.w{position:relative;height:62px;border-radius:12px;border:2.5px solid var(--ink);background:var(--card);box-shadow:0 3px 0 var(--ink);display:grid;place-items:center;font:800 clamp(10.5px,3.1vw,14px) system-ui;text-transform:uppercase;letter-spacing:.01em;cursor:pointer;padding:2px;text-align:center;word-break:break-word;transition:transform .12s,background .12s}
 .w.sel{background:var(--ink);color:#fff;transform:translateY(-3px)}
 .stat{display:flex;justify-content:space-between;font-weight:700;font-size:15px}
 .stat b{font-weight:900}
@@ -149,8 +149,25 @@ function tap(r, c) {
   if (!sel) { sel = [r, c]; return render(); }
   if (sel[0] === r && sel[1] === c) { sel = null; return render(); }
   if (sel[0] === r) { sel = [r, c]; return render(); }            // same row: just change the selection
-  const [r0, c0] = sel; [rows[r0][c0], rows[r][c]] = [rows[r][c], rows[r0][c0]]; sel = null; swaps++;
-  check(); render();
+  const [r0, c0] = sel, a = rows[r0][c0], b = rows[r][c];
+  // FLIP: remember where every tile is, swap, re-render, then slide each tile from its old spot to its new one
+  const before = {}; document.querySelectorAll('.w').forEach(el => before[el.textContent] = el.getBoundingClientRect());
+  rows[r0][c0] = b; rows[r][c] = a; sel = null; swaps++;
+  const wasLocked = locked.slice(); check();
+  const settle = () => { render(); slide(before, [a, b]); };
+  // let the swap play out before a finished row snaps shut
+  if (locked.some((l, k) => l && !wasLocked[k])) { locked = wasLocked; render(); slide(before, [a, b]); setTimeout(() => { check(); settle2(); }, 380); }
+  else settle();
+}
+function settle2() { const before = {}; document.querySelectorAll('.w').forEach(el => before[el.textContent] = el.getBoundingClientRect()); render(); slide(before, []); }
+function slide(before, lifted) {
+  document.querySelectorAll('.w').forEach(el => {
+    const o = before[el.textContent]; if (!o) return; const n = el.getBoundingClientRect(), dx = o.left - n.left, dy = o.top - n.top;
+    if (!dx && !dy) return;
+    const up = lifted.includes(el.textContent);
+    el.animate([{ transform: `translate(${dx}px,${dy}px)`, zIndex: up ? 2 : 1 }, ...(up ? [{ transform: `translate(${dx / 2}px,${dy / 2 - 14}px) scale(1.08)`, zIndex: 2, offset: .5 }] : []), { transform: 'none', zIndex: up ? 2 : 1 }],
+      { duration: up ? 340 : 260, easing: 'cubic-bezier(.3,.8,.3,1)' });
+  });
 }
 function pick() { $('pick').innerHTML = P.map((_, i) => `<button class="${i === N ? 'on' : ''} ${solved[i] != null ? 'done' : ''}" onclick="load(${i})">${i + 1}</button>`).join(''); }
 $('reset').onclick = () => load(N);

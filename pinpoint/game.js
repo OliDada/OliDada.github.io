@@ -237,11 +237,23 @@ function tick() {
   if (DAY === todayNo && s === 0) location.reload();
 }
 setInterval(() => { if ($('end').classList.contains('show')) tick(); }, 1000);
+// Old-school copy for browsers without the async clipboard (plain http, older Safari, in-app browsers).
+function copyFallback(txt) {
+  const ta = document.createElement('textarea'); ta.value = txt; ta.setAttribute('readonly', '');
+  ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px'; document.body.appendChild(ta);
+  ta.focus(); ta.select(); ta.setSelectionRange(0, txt.length);
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+  ta.remove(); return ok;
+}
 $('share').onclick = async () => {
-  const txt = shareStr();
-  try { if (navigator.share && matchMedia('(pointer:coarse)').matches) { await navigator.share({ text: txt }); return; } await navigator.clipboard.writeText(txt); $('share').textContent = 'Copied!'; }
-  catch (e) { $('share').textContent = 'Couldn’t copy'; }
-  setTimeout(() => $('share').textContent = 'Share result', 1400);
+  const txt = shareStr(), btn = $('share');
+  const say = t => { btn.textContent = t; clearTimeout(btn._t); btn._t = setTimeout(() => btn.textContent = 'Share result', 1400); };
+  if (navigator.share && matchMedia('(pointer:coarse)').matches) {
+    try { await navigator.share({ text: txt }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }      // closing the share sheet isn't a failure
+  }
+  try { await navigator.clipboard.writeText(txt); return say('Copied!'); } catch (e) {}
+  say(copyFallback(txt) ? 'Copied!' : 'Couldn’t copy');
 };
 
 /* ---------- drawing ---------- */
