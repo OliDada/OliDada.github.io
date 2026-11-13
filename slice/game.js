@@ -202,7 +202,7 @@ const acc = cuts => cuts.reduce((a, r) => a + (100 - 2 * (50 - r.small)), 0) / c
 function streak() {
   let s = 0; for (let d = todayNo; d > 0; d--) { const x = store.days[d]; if (x && x.cuts.length === PER_DAY) s++; else if (d === todayNo) continue; else break; } return s;
 }
-function shareStr() { return `Slice #${DAY} 🔪 ${f1(acc(today.cuts))}%\n${today.cuts.map(r => SQ[r.c]).join('')}\nolid.is/slice`; }
+function shareStr() { return `Slice #${DAY} ${f1(acc(today.cuts))}%\n${today.cuts.map(r => SQ[r.c]).join('')}\nolid.is/slice`; }
 function showEnd(fresh) {
   $('play').classList.add('hide'); $('end').classList.add('show'); document.documentElement.style.setProperty('--bg', '#F4EFE6');
   $('endDay').textContent = '#' + DAY; $('total').innerHTML = f1(acc(today.cuts)) + '<small>%</small>';

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<title>Rank</title>
+<link rel="icon" href="/images/logo-favicon.png?v=3" type="image/png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=3">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="hl"><a class="back" href="/daily.html" target="_top" aria-label="Back to daily games"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></a><div class="logo">RANK<i>.</i> <span id="dayNo"></span></div></div>
+    <div class="hr"><div class="dots" id="dots"></div><button class="mute" id="mute" aria-label="Sound on"></button></div>
+  </header>
+
+  <div id="play" class="col">
+    <div class="qcard">
+      <div class="qtext">
+        <div class="qtop"><span id="kind"></span><span id="count"></span></div>
+        <h1 id="question"></h1>
+      </div>
+    </div>
+
+    <div class="board">
+      <div class="end-label" id="top"></div>
+      <ol class="list" id="list"></ol>
+      <div class="end-label" id="bottom"></div>
+    </div>
+
+    <button class="btn" id="lock">Lock it in</button>
+
+    <div class="result" id="result">
+      <div class="vrow"><div class="pill" id="pill"></div><div class="vtxt" id="vtxt"></div></div>
+      <button class="btn" id="next">See results</button>
+    </div>
+  </div>
+
+  <div class="end" id="end">
+    <div class="sub">Rank <span id="endDay"></span> · <span id="endPrompt"></span></div>
+    <div class="big" id="total"></div>
+    <div class="rcard" id="rcard"></div>
+    <button class="btn" id="share">Share result</button>
+    <div class="stats" id="stats"></div>
+    <div class="countdown">Next set in <b id="countdown"></b></div>
+  </div>
+</div>
+<script src="data.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

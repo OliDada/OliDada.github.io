@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Swap (test puzzles)</title>
+<style>
+:root{--bg:#F4EFE6;--ink:#1E1B24;--muted:#857F75;--card:#FFFBF5;--y:#FFD66B;--g:#9FDC8C;--b:#A9C4FF;--p:#D8B4FF}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:Rubik,system-ui,-apple-system,sans-serif;display:flex;justify-content:center;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.app{width:100%;max-width:480px;padding:16px 14px 32px;display:flex;flex-direction:column;gap:14px}
+header{display:flex;justify-content:space-between;align-items:baseline}
+.logo{font-weight:900;font-size:30px;letter-spacing:-.03em}
+.logo i{font-style:normal;color:#8B5CF6}
+.tag{font-weight:700;font-size:13px;color:var(--muted)}
+.pick{display:flex;flex-wrap:wrap;gap:6px}
+.pick button{width:36px;height:36px;border-radius:50%;border:2.5px solid var(--ink);background:var(--card);font:900 14px system-ui;cursor:pointer;box-shadow:0 2px 0 var(--ink)}
+.pick button.on{background:var(--ink);color:#fff}
+.pick button.done{background:var(--g)}
+.rule{font-size:14.5px;font-weight:600;line-height:1.4}
+.rule small{display:block;color:var(--muted);font-weight:500;font-size:13px;margin-top:2px}
+.board{display:flex;flex-direction:column;gap:8px}
+.row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;border-radius:16px;position:relative}
+.row.locked{grid-template-columns:1fr;background:var(--c);border:2.5px solid var(--ink);box-shadow:0 4px 0 var(--ink);padding:10px 12px;text-align:center;animation:pop .45s cubic-bezier(.2,.9,.3,1.4)}
+.row.locked b{display:block;font-weight:900;font-size:15px;text-transform:uppercase;letter-spacing:.04em}
+.row.locked span{font-size:13.5px;font-weight:600}
+@keyframes pop{0%{transform:scale(.94)}100%{transform:none}}
+.w{height:62px;border-radius:12px;border:2.5px solid var(--ink);background:var(--card);box-shadow:0 3px 0 var(--ink);display:grid;place-items:center;font:800 clamp(10.5px,3.1vw,14px) system-ui;text-transform:uppercase;letter-spacing:.01em;cursor:pointer;padding:2px;text-align:center;word-break:break-word;transition:transform .12s,background .12s}
+.w.sel{background:var(--ink);color:#fff;transform:translateY(-3px)}
+.stat{display:flex;justify-content:space-between;font-weight:700;font-size:15px}
+.stat b{font-weight:900}
+.win{display:none;background:var(--card);border:2.5px solid var(--ink);border-radius:16px;box-shadow:0 4px 0 var(--ink);padding:12px 14px;font-weight:700;line-height:1.4}
+.win.show{display:block}
+.win small{display:block;color:var(--muted);font-weight:500;font-size:13px}
+.btns{display:flex;gap:8px}
+.btn{flex:1;border:2.5px solid var(--ink);background:var(--card);font:800 15px system-ui;padding:11px;border-radius:14px;cursor:pointer;box-shadow:0 3px 0 var(--ink)}
+.note{font-size:12.5px;color:var(--muted);line-height:1.45}
+</style>
+</head>
+<body>
+<div class="app">
+  <header><div class="logo">SWAP<i>.</i></div><div class="tag">10 test puzzles</div></header>
+  <div class="pick" id="pick"></div>
+  <div class="rule">Four rows, four hidden groups. Some words are in the wrong row.<small>Tap two words to swap them. A row locks when it's exactly right. Fix the board in as few swaps as you can.</small></div>
+  <div class="board" id="board"></div>
+  <div class="stat"><span>Swaps: <b id="swaps">0</b></span><span id="left"></span></div>
+  <div class="win" id="win"></div>
+  <div class="btns"><button class="btn" id="reset">Start over</button><button class="btn" id="reveal">Show answers</button></div>
+  <div class="note">Test build to judge the puzzles, not the finished game. Colours go yellow (easiest), green, blue, purple (trickiest).</div>
+</div>
+<script>
+// Each puzzle: four groups [colour, category, w1..w4] and the swaps that scramble it (pairs of words).
+const P = [
+  { groups: [
+    ['y', 'Chess pieces', 'KING', 'ROOK', 'BISHOP', 'PAWN'],
+    ['g', '___ball', 'FOOT', 'SNOW', 'EYE', 'MEAT'],
+    ['b', 'Card games', 'SNAP', 'POKER', 'BRIDGE', 'RUMMY'],
+    ['p', 'Hidden animals', 'SCATTER', 'BEARD', 'PANTRY', 'DOGMA']],
+    mix: [['KING', 'SNAP'], ['FOOT', 'BEARD'], ['BRIDGE', 'PAWN'], ['EYE', 'DOGMA']] },
+  { groups: [
+    ['y', 'Things with keys', 'PIANO', 'MAP', 'KEYBOARD', 'LOCK'],
+    ['g', 'Things with shells', 'EGG', 'SNAIL', 'TURTLE', 'PEANUT'],
+    ['b', '___house', 'GREEN', 'LIGHT', 'DOG', 'TREE'],
+    ['p', '___nut', 'DOUGH', 'CHEST', 'HAZEL', 'BUTTER']],
+    mix: [['MAP', 'TREE'], ['PEANUT', 'CHEST'], ['LOCK', 'EGG'], ['DOG', 'BUTTER']] },
+  { groups: [
+    ['y', 'Shades of blue', 'NAVY', 'TEAL', 'COBALT', 'AZURE'],
+    ['g', 'Boats', 'CANOE', 'YACHT', 'FERRY', 'LINER'],
+    ['b', 'Anagrams of animals', 'LOINS', 'FLOW', 'SHORE', 'SNEAK'],
+    ['p', '___wash', 'MOUTH', 'CAR', 'WHITE', 'HOG']],
+    mix: [['NAVY', 'LINER'], ['SHORE', 'FERRY'], ['TEAL', 'WHITE'], ['FLOW', 'CAR']] },
+  { groups: [
+    ['y', 'Pasta', 'PENNE', 'FUSILLI', 'RAVIOLI', 'ORZO'],
+    ['g', 'Things you can beat', 'EGGS', 'DRUM', 'RECORD', 'TRAFFIC'],
+    ['b', 'Famous bears', 'PADDINGTON', 'BALOO', 'YOGI', 'POOH'],
+    ['p', 'Hidden numbers', 'OFTEN', 'CANINE', 'WEIGHT', 'STONE']],
+    mix: [['ORZO', 'YOGI'], ['EGGS', 'STONE'], ['DRUM', 'BALOO'], ['RAVIOLI', 'OFTEN']] },
+  { groups: [
+    ['y', 'Kinds of settlement', 'VILLAGE', 'BOROUGH', 'CITY', 'TOWN'],
+    ['g', 'Board games', 'RISK', 'CLUEDO', 'OPERATION', 'MONOPOLY'],
+    ['b', '___board', 'SURF', 'KEY', 'CUP', 'SKATE'],
+    ['p', 'Shakespeare plays', 'HAMLET', 'OTHELLO', 'MACBETH', 'TEMPEST']],
+    mix: [['HAMLET', 'TOWN'], ['OTHELLO', 'RISK'], ['CUP', 'MONOPOLY'], ['SKATE', 'CITY']] },
+  { groups: [
+    ['y', 'Yellow things', 'BANANA', 'LEMON', 'CUSTARD', 'CANARY'],
+    ['g', 'Birds', 'WREN', 'FINCH', 'EAGLE', 'OWL'],
+    ['b', 'Fast', 'RAPID', 'QUICK', 'BRISK', 'SWIFT'],
+    ['p', 'Batman characters', 'JOKER', 'RIDDLER', 'ROBIN', 'PENGUIN']],
+    mix: [['CANARY', 'OWL'], ['SWIFT', 'EAGLE'], ['ROBIN', 'WREN'], ['PENGUIN', 'LEMON']] },
+  { groups: [
+    ['y', 'Weather', 'HAIL', 'SLEET', 'FOG', 'MIST'],
+    ['g', '___storm', 'BRAIN', 'FIRE', 'SAND', 'BARN'],
+    ['b', 'Greetings', 'HELLO', 'HOWDY', 'CHEERS', 'ALOHA'],
+    ['p', 'NBA teams', 'THUNDER', 'HEAT', 'MAGIC', 'JAZZ']],
+    mix: [['HAIL', 'BRAIN'], ['THUNDER', 'MIST'], ['HEAT', 'SLEET'], ['CHEERS', 'FIRE']] },
+  { groups: [
+    ['y', 'Coffee', 'LATTE', 'MOCHA', 'ESPRESSO', 'AMERICANO'],
+    ['g', 'Shades of brown', 'TAN', 'UMBER', 'SEPIA', 'TAUPE'],
+    ['b', 'Things with a crown', 'TOOTH', 'HAT', 'TREE', 'KING'],
+    ['p', 'Hidden body parts', 'EARTH', 'CHINA', 'SHIPMENT', 'CARMEN']],
+    mix: [['MOCHA', 'TAN'], ['TREE', 'SEPIA'], ['EARTH', 'HAT'], ['LATTE', 'CHINA']] },
+  { groups: [
+    ['y', 'Instruments', 'DRUM', 'HARP', 'FLUTE', 'TUBA'],
+    ['g', 'Things with a string', 'KITE', 'YOYO', 'PUPPET', 'BOW'],
+    ['b', '___fish', 'SWORD', 'STAR', 'CAT', 'JELLY'],
+    ['p', 'Things you pick', 'TEAM', 'LOCK', 'NOSE', 'FIGHT']],
+    mix: [['HARP', 'BOW'], ['STAR', 'TEAM'], ['DRUM', 'JELLY'], ['KITE', 'NOSE']] },
+  { groups: [
+    ['y', 'Fonts', 'ARIAL', 'HELVETICA', 'GARAMOND', 'FUTURA'],
+    ['g', 'In space', 'COMET', 'NEBULA', 'QUASAR', 'PULSAR'],
+    ['b', 'Car models', 'FIESTA', 'CIVIC', 'BEETLE', 'MINI'],
+    ['p', 'Hidden "car"', 'SCARF', 'CARPET', 'OSCAR', 'CARROT']],
+    mix: [['FUTURA', 'COMET'], ['MINI', 'OSCAR'], ['CIVIC', 'CARROT'], ['ARIAL', 'NEBULA']] }
+];
+const COL = { y: 'var(--y)', g: 'var(--g)', b: 'var(--b)', p: 'var(--p)' };
+const $ = id => document.getElementById(id);
+let N = 0, rows, locked, swaps, sel, solved = JSON.parse(sessionStorage.getItem('swap-solved') || '{}');
+
+function load(n) {
+  N = n; const p = P[n];
+  rows = p.groups.map(g => g.slice(2));
+  for (const [a, b] of p.mix) { const pa = find(a), pb = find(b); rows[pa[0]][pa[1]] = b; rows[pb[0]][pb[1]] = a; }
+  rows = rows.map(r => shuffle(r)); locked = [false, false, false, false]; swaps = 0; sel = null;
+  $('win').classList.remove('show'); check(true); render(); pick();
+}
+function find(w) { for (let r = 0; r < 4; r++) { const c = rows[r].indexOf(w); if (c >= 0) return [r, c]; } }
+function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+const groupOfRow = r => P[N].groups.findIndex(g => g.slice(2).every(w => rows[r].includes(w)));
+function check(quiet) {
+  for (let r = 0; r < 4; r++) if (!locked[r] && groupOfRow(r) >= 0) locked[r] = true;
+  if (!quiet && locked.every(Boolean)) {
+    const par = P[N].mix.length; solved[N] = swaps; sessionStorage.setItem('swap-solved', JSON.stringify(solved));
+    $('win').innerHTML = `${swaps === par ? 'Perfect! ' : ''}Fixed in ${swaps} ${swaps === 1 ? 'swap' : 'swaps'}.<small>Best possible: ${par} swaps.</small>`; $('win').classList.add('show');
+  }
+}
+function render() {
+  $('board').innerHTML = '';
+  // locked rows float to the top, like Connections
+  const order = [0, 1, 2, 3].sort((a, b) => locked[b] - locked[a]);
+  for (const r of order) {
+    const el = document.createElement('div'); el.className = 'row';
+    if (locked[r]) { const g = P[N].groups[groupOfRow(r)]; el.classList.add('locked'); el.style.setProperty('--c', COL[g[0]]); el.innerHTML = `<b>${g[1]}</b><span>${g.slice(2).join(', ')}</span>`; }
+    else rows[r].forEach((w, c) => { const b = document.createElement('button'); b.className = 'w' + (sel && sel[0] === r && sel[1] === c ? ' sel' : ''); b.textContent = w; b.onclick = () => tap(r, c); el.appendChild(b); });
+    $('board').appendChild(el);
+  }
+  $('swaps').textContent = swaps; $('left').textContent = `${locked.filter(Boolean).length} / 4 rows fixed`;
+}
+function tap(r, c) {
+  if (!sel) { sel = [r, c]; return render(); }
+  if (sel[0] === r && sel[1] === c) { sel = null; return render(); }
+  if (sel[0] === r) { sel = [r, c]; return render(); }            // same row: just change the selection
+  const [r0, c0] = sel; [rows[r0][c0], rows[r][c]] = [rows[r][c], rows[r0][c0]]; sel = null; swaps++;
+  check(); render();
+}
+function pick() { $('pick').innerHTML = P.map((_, i) => `<button class="${i === N ? 'on' : ''} ${solved[i] != null ? 'done' : ''}" onclick="load(${i})">${i + 1}</button>`).join(''); }
+$('reset').onclick = () => load(N);
+$('reveal').onclick = () => { rows = P[N].groups.map(g => g.slice(2)); locked = [true, true, true, true]; sel = null; render(); };
+load(0);
+</script>
+</body>
+</html>

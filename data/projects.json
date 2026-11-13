@@ -105,15 +105,51 @@
     "featured": false
   },
   {
-    "title": "Magnitude",
+    "title": "Ballpark",
     "daily": true,
     "description": "Estimate surprising quantities, then see how close your intuition was.",
-    "path": "/magnitude/index.html",
-    "source": "/magnitude/game.js",
+    "path": "/ballpark/index.html",
+    "source": "/ballpark/game.js",
     "aspect": "fill",
-    "thumbnail": "data/thumbnails/magnitude-thumbnail.png",
+    "thumbnail": "data/thumbnails/ballpark-thumbnail.png",
     "controls": [["Drag", "set your estimate"], ["− / +", "fine-tune"], ["Enter", "lock it in"]],
     "tags": ["game", "daily", "estimation"],
+    "featured": false
+  },
+  {
+    "title": "Whereabouts",
+    "daily": true,
+    "description": "Five places a day. Drop a pin on a blank globe and see how many kilometres you were off.",
+    "path": "/whereabouts/index.html",
+    "source": "/whereabouts/game.js",
+    "aspect": "fill",
+    "thumbnail": "data/thumbnails/whereabouts-thumbnail.png",
+    "controls": [["Drag", "spin the globe"], ["Pinch / scroll", "zoom"], ["Tap", "drop your pin"], ["Enter", "lock it in"]],
+    "tags": ["game", "daily", "geography"],
+    "featured": false
+  },
+  {
+    "title": "Rank",
+    "daily": true,
+    "description": "Five things a day: cities, countries, mountains, landmarks, history or animals. Put them in order in two tries.",
+    "path": "/rank/index.html",
+    "source": "/rank/game.js",
+    "aspect": "fill",
+    "thumbnail": "data/thumbnails/rank-thumbnail.png",
+    "controls": [["Drag", "move a card"], ["Arrows", "nudge up or down"], ["Enter", "lock it in"]],
+    "tags": ["game", "daily", "trivia"],
+    "featured": false
+  },
+  {
+    "title": "Tick",
+    "daily": true,
+    "description": "The clock starts, then goes blank. Stop it on the target time by counting in your head.",
+    "path": "/tick/index.html",
+    "source": "/tick/game.js",
+    "aspect": "fill",
+    "thumbnail": "data/thumbnails/tick-thumbnail.png",
+    "controls": [["Tap / Space", "start, then stop the clock"], ["Enter", "next round"]],
+    "tags": ["game", "daily", "timing"],
     "featured": false
   },
   {

@@ -1,0 +1,134 @@
+# Wikipedia title | name shown | category clue | other accepted names
+Halloween|Halloween|A holiday
+Christmas|Christmas|A holiday|xmas
+Thanksgiving|Thanksgiving|A holiday
+Valentine's Day|Valentine's Day|A holiday|valentines day|valentine's
+Easter|Easter|A holiday
+Saint Patrick's Day|St Patrick's Day|A holiday|saint patrick's day|st patricks day
+April Fools' Day|April Fools' Day|A holiday|april fools
+Groundhog Day|Groundhog Day|A holiday
+Mother's Day|Mother's Day|A holiday|mothers day
+Father's Day|Father's Day|A holiday|fathers day
+Guy Fawkes Night|Bonfire Night|A holiday|guy fawkes night|guy fawkes
+Hanukkah|Hanukkah|A holiday|chanukah
+Diwali|Diwali|A festival
+Holi|Holi|A festival
+Ramadan|Ramadan|A religious month
+Chinese New Year|Chinese New Year|A festival|lunar new year
+Day of the Dead|Day of the Dead|A holiday|dia de los muertos
+Mardi Gras|Mardi Gras|A festival|carnival
+Shrove Tuesday|Pancake Day|A holiday|shrove tuesday
+Lent|Lent|A religious season
+Yom Kippur|Yom Kippur|A holiday
+Cinco de Mayo|Cinco de Mayo|A holiday
+Juneteenth|Juneteenth|A holiday
+Independence Day (United States)|Fourth of July|A holiday|independence day|4th of july|july 4th
+Bastille Day|Bastille Day|A holiday
+Canada Day|Canada Day|A holiday
+Australia Day|Australia Day|A holiday
+Anzac Day|Anzac Day|A day of remembrance
+Remembrance Day|Remembrance Day|A day of remembrance|armistice day
+Memorial Day|Memorial Day|A holiday
+Labor Day|Labor Day|A holiday|labour day
+Martin Luther King Jr. Day|MLK Day|A holiday|martin luther king jr day|mlk day
+Black Friday (shopping)|Black Friday|A shopping day
+Cyber Monday|Cyber Monday|A shopping day
+Boxing Day|Boxing Day|A holiday
+New Year's Eve|New Year's Eve|A celebration|new years eve
+Pi Day|Pi Day|A celebration
+Friday the 13th|Friday the 13th|A superstition
+Daylight saving time|Daylight saving time|A clock thing|dst|daylight savings
+Leap year|Leap year|A calendar thing
+Summer solstice|Summer solstice|Something in the sky|solstice
+Winter solstice|Winter solstice|Something in the sky
+Equinox|Equinox|Something in the sky
+Perseids|Perseids|Something in the sky|perseid meteor shower
+Supermoon|Supermoon|Something in the sky
+Harvest moon|Harvest moon|Something in the sky
+Aurora|Northern lights|Something in the sky|aurora|aurora borealis
+Advent calendar|Advent calendar|A tradition
+Santa Claus|Santa Claus|A character|santa|father christmas
+Krampus|Krampus|A character
+Christmas tree|Christmas tree|A tradition
+Mistletoe|Mistletoe|A plant
+Eggnog|Eggnog|A drink
+Mulled wine|Mulled wine|A drink|gluhwein
+Pumpkin|Pumpkin|A plant
+Jack-o'-lantern|Jack-o'-lantern|A tradition|jack o lantern
+Trick-or-treating|Trick-or-treating|A tradition|trick or treating
+Easter egg|Easter egg|A tradition
+Hot cross bun|Hot cross bun|A food
+Ice cream|Ice cream|A food
+Sunscreen|Sunscreen|A product|sun cream|suncream
+Heat wave|Heatwave|Weather|heat wave
+Snow|Snow|Weather
+Hay fever|Hay fever|A health thing|allergic rhinitis
+Influenza|Flu|A health thing|influenza
+Common cold|Common cold|A health thing|cold
+Oktoberfest|Oktoberfest|A festival
+Glastonbury Festival|Glastonbury|A festival|glastonbury festival
+Coachella|Coachella|A festival
+Burning Man|Burning Man|A festival
+Eurovision Song Contest|Eurovision|A contest|eurovision song contest
+Academy Awards|The Oscars|An awards show|oscars|academy awards
+Met Gala|Met Gala|An event
+Super Bowl|Super Bowl|A sporting event
+Wimbledon Championships|Wimbledon|A sporting event|wimbledon
+Tour de France|Tour de France|A sporting event
+Kentucky Derby|Kentucky Derby|A sporting event
+Grand National|Grand National|A sporting event
+Indianapolis 500|Indy 500|A sporting event|indianapolis 500
+Monaco Grand Prix|Monaco Grand Prix|A sporting event
+Masters Tournament|The Masters|A sporting event|masters tournament|the masters
+NCAA Division I men's basketball tournament|March Madness|A sporting event|march madness
+NFL draft|NFL Draft|A sporting event|nfl draft
+US Open (tennis)|US Open (tennis)|A sporting event|us open
+Ballon d'Or|Ballon d'Or|An award
+Nobel Prize|Nobel Prize|An award
+Time Person of the Year|Time Person of the Year|An award|person of the year
+Saturday Night Live|Saturday Night Live|A TV show|snl
+Photosynthesis|Photosynthesis|A science topic
+Mitochondrion|Mitochondria|A science topic|mitochondrion
+Pythagorean theorem|Pythagorean theorem|A maths topic|pythagoras theorem|pythagoras
+World War I|World War I|A historical event|ww1|first world war
+Black History Month|Black History Month|A month
+Movember|Movember|A month
+Dry January|Dry January|A month
+Veganuary|Veganuary|A month
+National Novel Writing Month|NaNoWriMo|A month|nanowrimo
+Back to school|Back to school|A season
+Hurricane|Hurricane|Weather
+Tornado|Tornado|Weather
+Monsoon|Monsoon|Weather
+Wildfire|Wildfire|Weather|forest fire|bushfire
+Swimming pool|Swimming pool|A place
+Barbecue|Barbecue|A food|bbq
+Strawberry|Strawberry|A food
+Asparagus|Asparagus|A food
+Watermelon|Watermelon|A food
+Tax Day|Tax Day|A day
+Bonfire|Bonfire|A tradition
+Fireworks|Fireworks|A tradition|firework
+Auld Lang Syne|Auld Lang Syne|A song
+All I Want for Christmas Is You|All I Want for Christmas Is You|A song
+Last Christmas|Last Christmas|A song
+Home Alone|Home Alone|A film
+It's a Wonderful Life|It's a Wonderful Life|A film
+Die Hard|Die Hard|A film
+Hocus Pocus (1993 film)|Hocus Pocus|A film|hocus pocus
+The Nightmare Before Christmas|The Nightmare Before Christmas|A film
+Love Actually|Love Actually|A film
+Elf (film)|Elf|A film|elf
+The Grinch|The Grinch|A character|grinch
+A Christmas Carol|A Christmas Carol|A book
+Rudolph the Red-Nosed Reindeer|Rudolph|A character|rudolph the red-nosed reindeer
+Turkey (bird)|Turkey|An animal|turkey
+Easter Bunny|Easter Bunny|A character
+Tooth fairy|Tooth fairy|A character
+Cupid|Cupid|A character
+Leprechaun|Leprechaun|A character
+Witch|Witch|A character
+Zombie|Zombie|A character
+Vampire|Vampire|A character
+Ghost|Ghost|A character
+Werewolf|Werewolf|A character

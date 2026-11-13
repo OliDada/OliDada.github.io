@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Spike</title>
+<link rel="icon" href="/images/logo-favicon.png?v=3" type="image/png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=3">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="hl"><a class="back" href="/daily.html" target="_top" aria-label="Back to daily games"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></a><div class="logo">SPIKE<i>.</i> <span id="dayNo"></span></div></div>
+    <div class="hr"><div class="dots" id="dots"></div><button class="mute" id="mute" aria-label="Sound on"></button></div>
+  </header>
+
+  <div id="play" class="col">
+    <div class="title"><h1 id="name">What is this?</h1><span id="count"></span></div>
+    <div class="stage" id="stage"><div class="cap" id="cap"></div><canvas id="cv"></canvas><div class="hint" id="hint"></div></div>
+    <div class="clues" id="clues"></div>
+    <div class="guess" id="guessBox">
+      <div class="wrong" id="wrong"></div>
+      <div class="sugs" id="sugs" role="listbox"></div>
+      <div class="row"><button class="btn ghost" id="clueBtn">Clue</button><input id="guess" type="text" placeholder="Guess the page" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" aria-label="Your guess"><button class="btn" id="go">Guess</button></div>
+    </div>
+    <div class="result" id="result">
+      <div class="vrow"><div class="pill" id="pill"></div><div class="vtxt" id="vtxt"></div></div>
+      <button class="btn" id="next">Next</button>
+    </div>
+  </div>
+
+  <div class="end" id="end">
+    <div class="sub">Spike <span id="endDay"></span> · today's score</div>
+    <div class="big" id="total"></div>
+    <div class="rcard" id="rcard"></div>
+    <button class="btn" id="share">Share result</button>
+    <div class="stats" id="stats"></div>
+    <div class="countdown">Next set in <b id="countdown"></b></div>
+    <div class="credit">Data: <a href="https://wikimedia.org/api/rest_v1/" target="_blank" rel="noopener">Wikipedia pageviews</a> (English Wikipedia, people only, not bots)</div>
+  </div>
+</div>
+<script src="data.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

@@ -290,7 +290,7 @@ function frame(now) {
 const SQ = { g: '🟩', y: '🟨', o: '🟧', r: '🟥' };
 const total = res => res.reduce((s, r) => s + r.pts, 0);
 function streak() { let s = 0; for (let d = todayNo; d > 0; d--) { const x = store.days[d]; if (x && x.res && x.res.length === PER_DAY) s++; else if (d === todayNo) continue; else break; } return s; }
-function shareStr() { const p = today.res.filter(r => r.c === 'g').length; return `Mix #${DAY} 🎨 ${total(today.res)}/${PER_DAY * 100}\n${today.res.map(r => SQ[r.c]).join('')}  ${p}/${PER_DAY} perfect\nolid.is/mix`; }
+function shareStr() { const p = today.res.filter(r => r.c === 'g').length; return `Mix #${DAY} ${total(today.res)}/${PER_DAY * 100}\n${today.res.map(r => SQ[r.c]).join('')}  ${p}/${PER_DAY} perfect\nolid.is/mix`; }
 function finish(fresh) {
   $('play').classList.add('hide'); $('end').classList.add('show');
   const s = document.documentElement.style; s.setProperty('--bg', '#F4EFE6'); s.setProperty('--accent', INK);

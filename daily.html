@@ -18,6 +18,23 @@
     <script src="script.js" defer></script>
     <script src="site.js" defer></script>
     <script src="bit.js?v=20261113" defer></script>
+    <style>
+      /* Daily page: each game is its thumbnail with a slim strip underneath showing today's squares, score and streak. */
+      .dg-hero p { font-size: 18px; }
+      .dg-done { display: inline-block; margin-left: 6px; padding: 2px 12px; border: 2px solid var(--ink); border-radius: 999px; background: var(--cream); font-size: 14px; vertical-align: 2px; }
+      .dg-done:empty { display: none; }
+      .daily-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+      .dg-body { flex: none; display: block; padding: 7px 12px; background: var(--g, var(--cream)); }
+      .dg-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+      .dg-btn { font-weight: 800; font-size: 14px; line-height: 1.2; white-space: nowrap; }
+      .dg-card:not(.is-going):not(.is-done) .dg-btn { opacity: .6; }
+      .dg-sq { display: flex; gap: 4px; order: -1; }
+      .dg-sq i { width: 13px; height: 13px; border-radius: 4px; border: 2px solid var(--ink); background: transparent; }
+      .dg-sq i.g { background: #2FB36D; } .dg-sq i.y { background: #F2B33D; } .dg-sq i.o { background: #F28A3D; } .dg-sq i.r { background: #F0563E; }
+      @media (max-width: 1100px) { .daily-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+      @media (max-width: 860px) { .daily-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+      @media (max-width: 620px) { .daily-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; } }
+    </style>
     <title>OliD.is – Daily games</title>
   </head>
   <body>
@@ -42,43 +59,88 @@
         </nav>
       </header>
 
-      <main style="display:flex;flex-direction:column;gap:36px">
-        <section class="hero">
+      <main style="display:flex;flex-direction:column;gap:28px">
+        <section class="hero dg-hero">
           <h1 class="disp">Daily games</h1>
-          <p>Come back every day for a new challenge!</p>
+          <p><span id="dgDate">New puzzles every day.</span> <span id="dgDone" class="dg-done"></span></p>
         </section>
-
         <section class="daily-grid" aria-label="Daily games">
-          <a class="dg-card stk" href="/slice/index.html">
+          <a class="dg-card stk" style="--g:#FFE08A" aria-label="Slice. One cut per shape. Get it exactly in half." href="/slice/index.html" data-key="slice:v1" data-field="cuts" data-launch="12">
             <img src="data/thumbnails/slice-thumbnail.png" alt="">
             <span class="dg-body">
-              <span class="dg-text"><span class="dg-title disp">Slice</span><span class="dg-line">One cut per shape. Get it exactly in half.</span></span>
-              <span class="dg-play" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg></span>
+              <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
             </span>
           </a>
-          <a class="dg-card stk" href="/pinpoint/index.html">
+          <a class="dg-card stk" style="--g:#FFB8A8" aria-label="Pinpoint. Pin each shape at its balance point." href="/pinpoint/index.html" data-key="pinpoint:v1" data-field="res" data-launch="12">
             <img src="data/thumbnails/pinpoint-thumbnail.png" alt="">
             <span class="dg-body">
-              <span class="dg-text"><span class="dg-title disp">Pinpoint</span><span class="dg-line">Pin each shape at its balance point.</span></span>
-              <span class="dg-play" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg></span>
+              <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
             </span>
           </a>
-          <a class="dg-card stk" href="/magnitude/index.html">
-            <img src="data/thumbnails/magnitude-thumbnail.png" alt="">
+          <a class="dg-card stk" style="--g:#9FDCCF" aria-label="Ballpark. How big? How many? Guess the number." href="/ballpark/index.html" data-key="magnitude:v3" data-field="res" data-launch="12">
+            <img src="data/thumbnails/ballpark-thumbnail.png" alt="">
             <span class="dg-body">
-              <span class="dg-text"><span class="dg-title disp">Magnitude</span><span class="dg-line">How big? How many? Guess the number.</span></span>
-              <span class="dg-play" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg></span>
+              <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
             </span>
           </a>
-          <a class="dg-card stk" href="/mix/index.html">
+          <a class="dg-card stk" style="--g:#A9C4FF" aria-label="Whereabouts. Five places. Drop a pin on the globe." href="/whereabouts/index.html" data-key="whereabouts:v1" data-field="res" data-launch="13">
+            <img src="data/thumbnails/whereabouts-thumbnail.png" alt="">
+            <span class="dg-body">
+              <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
+            </span>
+          </a>
+          <a class="dg-card stk" style="--g:#FFC08A" aria-label="Rank. Five things. Put them in order." href="/rank/index.html" data-key="rank:v1" data-field="tries" data-launch="13">
+            <img src="data/thumbnails/rank-thumbnail.png" alt="">
+            <span class="dg-body">
+              <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
+            </span>
+          </a>
+          <a class="dg-card stk" style="--g:#D8C2FF" aria-label="Mix. Match the colour, one drop at a time." href="/mix/index.html" data-key="mix:v1" data-field="res" data-launch="12">
             <img src="data/thumbnails/mix-thumbnail.png" alt="">
             <span class="dg-body">
-              <span class="dg-text"><span class="dg-title disp">Mix</span><span class="dg-line">Match the colour, one drop at a time.</span></span>
-              <span class="dg-play" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg></span>
+              <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
+            </span>
+          </a>
+          <a class="dg-card stk" style="--g:#A8E0B4" aria-label="Tick. Stop the clock on time, counting in your head." href="/tick/index.html" data-key="tick:v1" data-field="res" data-launch="13">
+            <img src="data/thumbnails/tick-thumbnail.png" alt="">
+            <span class="dg-body">
+              <span class="dg-foot"><span class="dg-btn">Play</span><span class="dg-sq" aria-hidden="true"></span></span>
             </span>
           </a>
         </section>
       </main>
     </div>
+    <script>
+      // Fill in today's date and, for each game, today's squares, score and streak from what the games saved on this device.
+      (() => {
+        const now = new Date(), day = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 864e5;
+        document.getElementById('dgDate').textContent = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) + '.';
+        const cards = [...document.querySelectorAll('.dg-card')]; let done = 0;
+        for (const c of cards) {
+          const field = c.dataset.field, rank = field === 'tries';
+          let days = {}, no = 0;
+          try { no = day - Date.UTC(2026, 10, +c.dataset.launch) / 864e5 + 1; days = (JSON.parse(localStorage.getItem(c.dataset.key)) || {}).days || {}; } catch (e) {}
+          const get = d => (days[d] || {})[field] || [];
+          const last = t => t[t.length - 1] || [];
+          // Rank is one puzzle with two tries; the others are five rounds
+          const finished = r => rank ? r.length >= 2 || (r.length > 0 && last(r).every(Boolean)) : r.filter(Boolean).length >= 5;
+          const res = get(no), n = res.filter(Boolean).length, fin = finished(res);
+          const marks = rank ? last(res).map(ok => ok ? 'g' : 'r') : res.map(r => r && r.c || '');
+          let streak = 0; for (let d = no; d > 0; d--) { if (finished(get(d))) streak++; else if (d === no) continue; else break; }
+          let score = '';
+          if (fin) {
+            if (rank) score = `${last(res).every(Boolean) ? res.length : 'X'}/2 tries`;
+            else if (field === 'cuts') score = (Math.round(res.reduce((a, r) => a + (100 - 2 * (50 - r.small)), 0) / res.length * 10) / 10).toFixed(1) + '%';
+            else score = `${res.reduce((a, r) => a + (r.pts || 0), 0)}/500`;
+          }
+          c.querySelector('.dg-sq').innerHTML = Array.from({ length: 5 }, (_, i) => `<i class="${marks[i] || ''}"></i>`).join('');
+          const btn = c.querySelector('.dg-btn'), fire = streak > 1 ? ` · ${streak}-day streak` : '';
+          if (fin) { done++; c.classList.add('is-done'); btn.textContent = score + fire; }
+          else if (n > 0) { c.classList.add('is-going'); btn.textContent = `${n}/${rank ? 2 : 5} done` + fire; }
+          else btn.textContent = 'Not played' + fire;
+        }
+        document.getElementById('dgDone').textContent = `${done} of ${cards.length} played`;
+      })();
+    </script>
   </body>
 </html>

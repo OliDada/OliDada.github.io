@@ -218,7 +218,7 @@ $('next').onclick = () => { audio(); blip(600, .06, .05); const n = today.res.le
 const SQ = { g: '🟩', y: '🟨', o: '🟧', r: '🟥' };
 const total = res => res.reduce((s, r) => s + r.pts, 0);
 function streak() { let s = 0; for (let d = todayNo; d > 0; d--) { const x = store.days[d]; if (x && x.res.length === PER_DAY) s++; else if (d === todayNo) continue; else break; } return s; }
-function shareStr() { return `Pinpoint #${DAY} 📌 ${total(today.res)}/${PER_DAY * 100}\n${today.res.map(r => SQ[r.c]).join('')}\nolid.is/pinpoint`; }
+function shareStr() { return `Pinpoint #${DAY} ${total(today.res)}/${PER_DAY * 100}\n${today.res.map(r => SQ[r.c]).join('')}\nolid.is/pinpoint`; }
 function finish(fresh) {
   $('play').classList.add('hide'); $('end').classList.add('show'); document.documentElement.style.setProperty('--bg', '#F4EFE6');
   $('endDay').textContent = '#' + DAY; $('total').innerHTML = `${total(today.res)}<small> / ${PER_DAY * 100}</small>`;

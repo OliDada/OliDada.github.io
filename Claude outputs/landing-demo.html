@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Landing (demo)</title>
+<style>
+:root{--bg:#E8F0FA;--ink:#1E1B24;--muted:#857F75;--card:#FFFBF5;--accent:#3D6BFF}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:Rubik,system-ui,-apple-system,sans-serif;display:flex;justify-content:center;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.app{width:100%;max-width:min(440px,70vh);padding:16px 16px 28px;display:flex;flex-direction:column;gap:14px}
+header{display:flex;justify-content:space-between;align-items:baseline}
+.logo{font-weight:900;font-size:30px;letter-spacing:-.03em}
+.logo i{font-style:normal;color:var(--accent)}
+.tag{font-weight:700;font-size:13px;color:var(--muted)}
+.stage{position:relative;aspect-ratio:3/4;background-color:var(--card);background-image:radial-gradient(rgba(30,27,36,.10) 1.4px,transparent 1.6px);background-size:22px 22px;border:2.5px solid var(--ink);border-radius:24px;box-shadow:0 5px 0 var(--ink);overflow:hidden;touch-action:none;cursor:crosshair}
+canvas{width:100%;height:100%;display:block}
+.hint{position:absolute;left:0;right:0;bottom:12px;text-align:center;font-weight:700;font-size:14px;color:var(--muted);pointer-events:none}
+.btn{width:100%;border:2.5px solid var(--ink);background:var(--ink);color:#fff;font:900 20px Rubik,system-ui,sans-serif;padding:16px;border-radius:18px;cursor:pointer;box-shadow:0 5px 0 rgba(30,27,36,.35)}
+.btn:active{transform:translateY(4px);box-shadow:0 1px 0 rgba(30,27,36,.35)}
+.btn[disabled]{opacity:.3;pointer-events:none}
+.res{display:flex;align-items:center;gap:12px;min-height:46px}
+.pill{font-weight:900;font-size:20px;padding:8px 14px;border-radius:14px;border:2.5px solid var(--ink);box-shadow:0 3px 0 var(--ink);white-space:nowrap}
+.pill.g{background:#7EE0A8}.pill.y{background:#FFD66B}.pill.o{background:#FFB27A}.pill.r{background:#FF9A85}
+.vt{font-weight:700;font-size:15px;line-height:1.3}
+.vt small{display:block;color:var(--muted);font-weight:500;font-size:13px}
+.note{font-size:12.5px;color:var(--muted);text-align:center;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="app">
+  <header><div class="logo">LANDING<i>.</i></div><div class="tag">quick demo</div></header>
+  <div class="stage" id="stage"><canvas id="cv"></canvas><div class="hint" id="hint">Tap where the ball will stop</div></div>
+  <div class="res" id="res"></div>
+  <button class="btn" id="go" disabled>Drop it</button>
+  <div class="note">Demo only: one random contraption each time. The real game would be five a day, the same for everyone, getting harder.</div>
+</div>
+<script>
+(() => {
+const INK = '#1E1B24', $ = id => document.getElementById(id);
+const cv = $('cv'), cx = cv.getContext('2d'), stage = $('stage');
+let W, H, DPR, S;                               // world is 300 x 400 units, scaled to the card
+const WW = 300, WH = 400, R = 9, G = 900;
+function resize() { DPR = Math.min(3, devicePixelRatio || 1); const r = cv.getBoundingClientRect(); W = r.width; H = r.height; cv.width = W * DPR; cv.height = H * DPR; S = W / WW; }
+addEventListener('resize', resize);
+
+/* ---------- a random contraption ---------- */
+let segs, pegs, ball, start, pin, mode, trail, still, simT, seed = Date.now() % 100000;
+function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+function build() {
+  segs = []; pegs = [];
+  // walls and floor (with a few little bumps so it doesn't just roll forever)
+  segs.push([0, 0, 0, WH], [WW, 0, WW, WH], [0, WH - 6, WW, WH - 6]);
+  // ramps that zig-zag down
+  let y = 95, left = rnd() < .5;
+  const n = 3 + Math.floor(rnd() * 2);
+  for (let k = 0; k < n; k++) {
+    const len = 110 + rnd() * 70, drop = 18 + rnd() * 34, x0 = left ? 0 : WW, x1 = left ? len : WW - len;
+    segs.push([x0, y, x1, y + drop]);
+    if (rnd() < .2) { const lx = x1, ly = y + drop; segs.push([lx, ly, lx + (left ? 1 : -1) * 6, ly - 10]); } // a little lip at the end
+    y += 62 + rnd() * 18; left = !left;
+  }
+  // pegs to bounce off
+  for (let k = 0, tries = 0; k < 4 && tries < 60; tries++) {
+    const p = [30 + rnd() * (WW - 60), 120 + rnd() * (WH - 170), 6 + rnd() * 6];
+    if (pegs.every(q => Math.hypot(q[0] - p[0], q[1] - p[1]) > 46) && segs.slice(3).every(s => segDist(p[0], p[1], s) > p[2] + R * 2.6)) { pegs.push(p); k++; }
+  }
+  // a cup or two on the floor: places the ball likes to settle
+  for (let k = 0; k < 2; k++) { const cxp = 40 + rnd() * (WW - 80); segs.push([cxp - 22, WH - 6, cxp - 16, WH - 26], [cxp + 22, WH - 6, cxp + 16, WH - 26]); }
+  start = { x: 40 + rnd() * (WW - 80), y: 28 };
+  ball = { x: start.x, y: start.y, vx: (rnd() - .5) * 60, vy: 0 };
+  pin = null; mode = 'aim'; trail = []; still = 0; simT = 0;
+  $('go').disabled = true; $('go').textContent = 'Drop it'; $('res').innerHTML = ''; $('hint').textContent = 'Tap where the ball will stop';
+}
+function segDist(px, py, [x0, y0, x1, y1]) { const dx = x1 - x0, dy = y1 - y0, t = Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / (dx * dx + dy * dy))); return Math.hypot(x0 + dx * t - px, y0 + dy * t - py); }
+
+/* ---------- physics ---------- */
+function step(dt) {
+  const b = ball; b.vy += G * dt; b.x += b.vx * dt; b.y += b.vy * dt;
+  for (const s of segs) {
+    const [x0, y0, x1, y1] = s, dx = x1 - x0, dy = y1 - y0, t = Math.max(0, Math.min(1, ((b.x - x0) * dx + (b.y - y0) * dy) / (dx * dx + dy * dy)));
+    const qx = x0 + dx * t, qy = y0 + dy * t; let nx = b.x - qx, ny = b.y - qy; const d = Math.hypot(nx, ny);
+    if (d < R && d > 1e-6) {
+      nx /= d; ny /= d; b.x += nx * (R - d); b.y += ny * (R - d);
+      const vn = b.vx * nx + b.vy * ny;
+      if (vn < 0) { const tx = -ny, ty = nx, vt = b.vx * tx + b.vy * ty, e = Math.abs(vn) > 60 ? .35 : 0, f = .9993;
+        b.vx = tx * vt * f - nx * vn * e; b.vy = ty * vt * f - ny * vn * e; if (Math.abs(vn) > 140) tap(Math.abs(vn)); }
+    }
+  }
+  for (const [px, py, pr] of pegs) {
+    let nx = b.x - px, ny = b.y - py; const d = Math.hypot(nx, ny);
+    if (d < R + pr) { nx /= d; ny /= d; b.x = px + nx * (R + pr); b.y = py + ny * (R + pr); const vn = b.vx * nx + b.vy * ny; if (vn < 0) { b.vx -= 1.75 * vn * nx; b.vy -= 1.75 * vn * ny; tap(Math.abs(vn) + 200); } }
+  }
+  // rolling resistance on the floor
+  if (b.y > WH - 6 - R - .5) b.vx *= .9985;
+}
+
+/* ---------- sound ---------- */
+let ac, lastTap = 0;
+function audio() { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); ac.resume(); } catch (e) {} }
+function blip(f, dur = .07, vol = .05, type = 'triangle', delay = 0) { if (!ac) return; const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.value = f; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .005); g.gain.exponentialRampToValueAtTime(.0001, t + dur); o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur + .02); }
+function tap(v) { const now = performance.now(); if (now - lastTap < 60) return; lastTap = now; blip(300 + Math.min(900, v), .05, Math.min(.08, v / 4000)); }
+
+/* ---------- input ---------- */
+stage.addEventListener('pointerdown', e => {
+  if (mode !== 'aim') return; audio();
+  const r = cv.getBoundingClientRect(); pin = { x: (e.clientX - r.left) / r.width * WW, y: (e.clientY - r.top) / r.height * WH };
+  $('go').disabled = false; $('hint').textContent = 'Happy? Drop it. Or tap to move your pin'; blip(660, .06);
+});
+$('go').onclick = () => {
+  audio();
+  if (mode === 'done') { build(); return; }
+  if (mode !== 'aim' || !pin) return;
+  mode = 'run'; $('go').disabled = true; $('hint').textContent = ''; blip(440, .1, .05, 'sine');
+};
+
+/* ---------- drawing ---------- */
+let last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (mode === 'run') {
+    for (let k = 0; k < 8; k++) step(dt / 8);
+    simT += dt; trail.push([ball.x, ball.y]); if (trail.length > 400) trail.shift();
+    const sp = Math.hypot(ball.vx, ball.vy); still = sp < 6 ? still + dt : 0;
+    if (still > .5 || simT > 14) finish();
+  }
+  cx.setTransform(DPR * S, 0, 0, DPR * S, 0, 0); cx.clearRect(0, 0, WW, WH); cx.lineCap = cx.lineJoin = 'round';
+  // ramps
+  for (const s of segs.slice(3)) { cx.beginPath(); cx.moveTo(s[0], s[1]); cx.lineTo(s[2], s[3]); cx.strokeStyle = INK; cx.lineWidth = 7; cx.stroke(); cx.strokeStyle = '#FFD66B'; cx.lineWidth = 3; cx.stroke(); }
+  cx.fillStyle = 'rgba(30,27,36,.12)'; cx.fillRect(0, WH - 6, WW, 6);
+  // pegs
+  for (const [px, py, pr] of pegs) { cx.beginPath(); cx.arc(px, py + 1.5, pr, 0, 7); cx.fillStyle = INK; cx.fill(); cx.beginPath(); cx.arc(px, py, pr, 0, 7); cx.fillStyle = '#FF7AA8'; cx.fill(); cx.lineWidth = 2.5; cx.strokeStyle = INK; cx.stroke(); }
+  // trail
+  if (trail.length > 1) { cx.beginPath(); trail.forEach(([x, y], k) => k ? cx.lineTo(x, y) : cx.moveTo(x, y)); cx.strokeStyle = 'rgba(61,107,255,.25)'; cx.lineWidth = 4; cx.stroke(); }
+  // your pin
+  if (pin) {
+    cx.save(); cx.translate(pin.x, pin.y); cx.strokeStyle = INK; cx.lineWidth = 3;
+    cx.beginPath(); cx.moveTo(-8, -8); cx.lineTo(8, 8); cx.moveTo(8, -8); cx.lineTo(-8, 8); cx.stroke();
+    cx.strokeStyle = '#F06449'; cx.lineWidth = 1.6; cx.stroke(); cx.restore();
+  }
+  // gap line after the drop
+  if (mode === 'done' && pin) { cx.setLineDash([4, 5]); cx.beginPath(); cx.moveTo(pin.x, pin.y); cx.lineTo(ball.x, ball.y); cx.strokeStyle = INK; cx.lineWidth = 2; cx.stroke(); cx.setLineDash([]); }
+  // the ball
+  cx.beginPath(); cx.arc(ball.x, ball.y + 1.5, R, 0, 7); cx.fillStyle = INK; cx.fill();
+  cx.beginPath(); cx.arc(ball.x, ball.y, R, 0, 7); cx.fillStyle = '#3D6BFF'; cx.fill(); cx.lineWidth = 2.5; cx.strokeStyle = INK; cx.stroke();
+  cx.beginPath(); cx.arc(ball.x - 3, ball.y - 3, 2.6, 0, 7); cx.fillStyle = 'rgba(255,255,255,.7)'; cx.fill();
+  if (mode === 'aim') { cx.font = '700 11px system-ui'; cx.fillStyle = '#857F75'; cx.textAlign = 'center'; cx.fillText('start', start.x, start.y - 14); }
+}
+function finish() {
+  mode = 'done'; const d = Math.hypot(pin.x - ball.x, pin.y - ball.y), off = Math.round(d / WW * 100);
+  const [c, l] = off <= 3 ? ['g', 'Bullseye'] : off <= 8 ? ['y', 'Close'] : off <= 20 ? ['o', 'Not quite'] : ['r', 'Nowhere near'];
+  $('res').innerHTML = `<div class="pill ${c}">${l}</div><div class="vt">${off}% of the box off.<small>${Math.max(0, 100 - off * 4)} points</small></div>`;
+  $('go').disabled = false; $('go').textContent = 'Another one';
+  if (c === 'g') [523, 659, 784, 1047].forEach((f, k) => blip(f, .2, .07, 'triangle', k * .07)); else [440, 330].forEach((f, k) => blip(f, .18, .06, 'sine', k * .1));
+}
+resize(); build(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
