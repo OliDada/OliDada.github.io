@@ -139,7 +139,7 @@
   },
   {
     "title": "Farm Frenzy",
-    "description": "Jump over animals, collect rings, and choose upgrades as you run.",
+    "description": "Bounce off animals to build chains, grab coins, and pick perks as you run through six areas.",
     "path": "/farm-frenzy/index.html",
     "source": "/farm-frenzy/main.js",
     "aspect": "16:9",
