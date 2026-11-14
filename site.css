@@ -120,6 +120,7 @@ img { max-width: 100%; }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; }
 
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin: -6px 0 22px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 30px; }
 .card {
   display: flex; flex-direction: column; overflow: hidden; text-decoration: none;
@@ -456,3 +457,56 @@ body.terminal-player.is-playing:has(.player-area:not(.fullscreen)) { overflow: a
 .brand-eyes.blink .be-shine { opacity: 0; }
 .brand-eyes.pip ellipse { fill: #b58cff; }
 .brand-eyes.pip .be-shine { display: none; }
+
+/* ---------- The Studio strip: a dark stage, not a card ---------- */
+.studio-strip {
+  display: flex; align-items: center; gap: 22px; min-height: 124px; padding: 0 26px 0 0; overflow: hidden; text-decoration: none; color: #f3f0ff;
+  border: 2px solid var(--ink); border-radius: var(--radius); box-shadow: var(--shadow);
+  background:
+    radial-gradient(60% 120% at 18% 110%, rgba(155, 135, 255, .28), transparent 70%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, .025) 0 22px, transparent 22px 44px),
+    linear-gradient(180deg, #1a1630, #121119);
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.studio-strip:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--ink); }
+.studio-strip:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+.studio-strip-art { flex: none; align-self: stretch; width: 250px; height: auto; min-height: 124px; object-fit: cover; object-position: 50% 42%;
+  -webkit-mask-image: linear-gradient(90deg, #000 70%, transparent); mask-image: linear-gradient(90deg, #000 70%, transparent); }
+.studio-strip-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; padding: 14px 0; }
+.studio-strip-title { font-size: 34px; line-height: 1; color: #fff; }
+.studio-strip-text { font-size: 16px; line-height: 1.4; color: #c9c4e6; }
+.studio-strip-btn { flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px; border-radius: 999px; background: #9b87ff; color: #15121f; font-weight: 800; font-size: 16px; }
+.studio-strip:hover .studio-strip-btn { background: #b3a3ff; }
+@media (max-width: 700px) {
+  .studio-strip { flex-wrap: wrap; gap: 0 14px; padding: 0 16px 14px 0; }
+  .studio-strip-art { width: 130px; min-height: 96px; }
+  .studio-strip-title { font-size: 26px; }
+  .studio-strip-text { font-size: 14px; }
+  .studio-strip-btn { margin-left: 16px; width: calc(100% - 16px); justify-content: center; }
+}
+
+/* ---------- Daily games and the Studio share a row, half each ---------- */
+.duo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: stretch; }
+.duo .daily-banner { gap: 18px; padding: 16px 20px; }
+.duo .daily-banner-body { width: auto; flex: 1 1 0; min-width: 0; gap: 6px; }
+.duo .daily-banner-title { font-size: 30px; }
+.duo .daily-banner-text { font-size: 15px; }
+/* the three thumbnails overlap like a hand of cards, so each one can be about twice as wide as when they sat side by side */
+.duo .daily-banner-art { flex: 0 0 58%; max-width: none; margin: 0; gap: 0; display: flex; align-items: center; }
+.duo .daily-banner-art img { flex: 0 0 46%; width: 46%; min-width: 0; border-radius: 8px; box-shadow: 2px 2px 0 var(--ink); }
+.duo .daily-banner-art img + img { margin-left: -19%; }
+.duo .daily-banner-art img:nth-child(2) { transform: translateY(-7px); }
+.duo .studio-strip { gap: 6px; padding: 0 20px 0 0; min-height: 0; }
+.duo .studio-strip-art { flex: 0 0 36%; width: 36%; align-self: center; height: auto; max-height: 150px; min-height: 0; margin-left: 18px; object-fit: contain; object-position: 50% 50%;
+  -webkit-mask-image: none; mask-image: none; }
+.duo .studio-strip-body { padding: 16px 0; gap: 6px; align-items: flex-start; }
+.duo .studio-strip-title { font-size: 30px; }
+.duo .studio-strip-text { font-size: 15px; }
+.duo .studio-strip-btn { font-size: 15px; padding: 9px 16px; margin-top: 6px; }
+@media (max-width: 1000px) { .duo { grid-template-columns: minmax(0, 1fr); gap: 20px; } }
+@media (max-width: 700px) {
+  .duo .daily-banner { flex-direction: column; align-items: stretch; }
+  .duo .daily-banner-art { flex: none; }
+  .duo .studio-strip { flex-wrap: nowrap; padding: 0 14px 0 0; }
+  .duo .studio-strip-art { max-height: 120px; margin-left: 12px; }
+}

@@ -33,7 +33,9 @@ def main():
             '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n'
             '<meta name="description" content="Niceland: an isometric pixel-art god sandbox of Iceland, every house at true scale.">\n'
             '<link rel="icon" href="../images/dolphin2.png">\n' + FONTS +
-            '<style>html,body{margin:0;height:100%;background:#0b1622;overflow:hidden}</style>\n</head>\n<body>\n'
+            '<style>html,body{margin:0;height:100%;background:#0b1622;overflow:hidden}</style>\n'
+            # music made in the site's Studio (olid.is/music); the site's Music button turns it on and off
+            '<script type="module" src="/music/game-music.js" data-slot="niceland" data-song="/music/songs/niceland-midnight-sun.json"></script>\n</head>\n<body>\n'
             + inner + '</body>\n</html>\n')
     open(os.path.join(ROOT, 'index.html'), 'w', encoding='utf-8').write(page)
     os.makedirs(os.path.join(ROOT, 'dist'), exist_ok=True)

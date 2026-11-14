@@ -5,22 +5,23 @@ import {
     state, hooks, start, setUi, player, song, inst, pattern, trackNames, drumTracks, notesOf, edit, pushHistory,
     markChanged, renderAll, selectPattern, toast, manifest, setSong, uniqueName, nextColor, nextPatternName,
     patternColor, mySongs, confirmDiscard, openSongDialog, openUseInGameDialog, shareLink, exportWav, esc, ago,
-    openHelp, openModal, closeModal, store, setMode, togglePlay,
+    openHelp, openModal, closeModal, store, setMode, togglePlay, play,
 } from "./maker.js";
 import { normalizeSong, serializeSong, withDefaults, DRUM_KINDS, getGameSongOverride, setGameSong } from "./player.js";
 import { encodeShare, decodeShare } from "./share.js";
+import { creature } from "./band.js";
 import {
     PRESETS, findPreset, KEYS, SCALES, MOODS, STYLES, KITS, kitDrum, BEATS, PROGRESSIONS, safeDegrees, degreeOf,
     isSafe, degreeToMidi, remapNote, chordPcs, roleOf, ROLE_NAMES, inScale, TRACK_COLORS,
 } from "./presets.js";
 
 const $ = (s) => document.querySelector(s);
-const GUTTER = 44;
+const GUTTER = 54;
 const CHORD_BAND = 22;
 const EASY_PREFS = "olid-music:easy";
 
 const es = {
-    safe: store.get(EASY_PREFS, {}).safe ?? true,
+    safe: false, // the grid always shows every note in the key
     beat: 0,
     center: {},      // per track: which notes are in view
     anim: new Map(), // note key -> time it popped
@@ -28,6 +29,11 @@ const es = {
     drag: null,
     touch: null,
     songRef: null,
+    screen: "remix", // "remix": the band and a few big controls · "edit": one member's notes
+    editing: null,
+    beatPick: null,
+    pick: null,  // the band member whose card is open on the remix screen
+    orig: null,  // the song as it was opened, for the "Original" choices
 };
 
 const rnd = (a) => a[Math.floor(Math.random() * a.length)];
@@ -56,13 +62,14 @@ function melodyRows(track) {
     if (!track) return [];
     const s = song();
     if (es.center[track] === undefined) es.center[track] = defaultCenter(track);
-    const c = es.center[track];
+    // Two octaves either side of where this kind of member usually plays, and always every note already written.
+    const base = { bass: 48, pad: 62, keys: 64, lead: 67 }[role(track)] ?? 64;
     const used = new Set();
-    let lo = c - 11, hi = c + 11;
-    for (const p of [pattern()]) for (const n of p.tracks[track] ?? []) { used.add(n.note); lo = Math.min(lo, n.note); hi = Math.max(hi, n.note); }
+    let lo = base - 24, hi = base + 24;
+    for (const n of pattern().tracks[track] ?? []) { used.add(n.note); lo = Math.min(lo, n.note - 4); hi = Math.max(hi, n.note + 4); }
     const rows = [];
     for (let m = clamp(hi, 24, 108); m >= clamp(lo, 24, 108); m--) {
-        if (used.has(m) || (inScale(m, s.key, s.scale) && (!es.safe || isSafe(m, s.key, s.scale)))) rows.push(m);
+        if (used.has(m) || inScale(m, s.key, s.scale)) rows.push(m);
     }
     return rows;
 }
@@ -234,13 +241,14 @@ function genMelody(p) {
 }
 
 const GENERATORS = { lead: genMelody, keys: genKeys, pad: genPad, bass: genBass };
-const GEN_LABEL = { lead: "Make a melody", keys: "Make a pattern", pad: "Make chords", bass: "Make a bassline" };
+const GEN_LABEL = { lead: "Make a melody", keys: "Make a pattern", pad: "Surprise chords", bass: "Make a bassline" };
 
 function generateFor(track) {
     const r = role(track);
     const gen = GENERATORS[r] ?? genMelody;
     edit(() => { pattern().tracks[track] = gen(pattern()); });
     es.center[track] = defaultCenter(track);
+    es.scrollKey = null; // bring the new notes into view
     popAll(track);
     renderAll();
 }
@@ -260,22 +268,25 @@ function newChords() {
     popAll();
 }
 
-function applyBeat(beat) {
+function applyBeat(beat, everyPart = false) {
     edit(() => {
         if (!drumTracks().length && beat.kick) addKit("classic");
-        const p = pattern();
-        for (const t of drumTracks()) {
-            const kind = inst(t).kind;
-            const line = { kick: beat.kick, snare: beat.snare, clap: beat.snare, hat: beat.hat, openhat: beat.open, tom: beat.perc, perc: beat.perc }[kind] ?? "";
-            const hits = [];
-            if (line) for (let s = 0; s < p.steps; s++) {
-                const c = line[s % 16];
-                if (c === "x" || c === "o") hits.push({ step: s, note: null, length: 1, velocity: c === "x" ? 1 : 0.55 });
-            }
-            p.tracks[t] = hits;
-        }
+        for (const p of everyPart ? Object.values(song().patterns) : [pattern()]) fillBeat(p, beat);
     });
     popAll();
+}
+
+function fillBeat(p, beat) {
+    for (const t of drumTracks()) {
+        const kind = inst(t).kind;
+        const line = { kick: beat.kick, snare: beat.snare, clap: beat.snare, hat: beat.hat, openhat: beat.open, tom: beat.perc, perc: beat.perc }[kind] ?? "";
+        const hits = [];
+        if (line) for (let s = 0; s < p.steps; s++) {
+            const c = line[s % 16];
+            if (c === "x" || c === "o") hits.push({ step: s, note: null, length: 1, velocity: c === "x" ? 1 : 0.55 });
+        }
+        p.tracks[t] = hits;
+    }
 }
 
 function addKit(kitId) {
@@ -287,10 +298,11 @@ function addKit(kitId) {
 
 // ---------- Vibe ----------
 
-function setMood(scale) {
+const now = (fn) => fn(); // for changes that are part of a bigger, single undo step
+function setMood(scale, run = edit) {
     const s = song();
     if (s.scale === scale) return;
-    edit(() => {
+    run(() => {
         for (const p of Object.values(s.patterns)) {
             for (const [t, notes] of Object.entries(p.tracks)) {
                 if (inst(t)?.type === "drum") continue;
@@ -302,9 +314,9 @@ function setMood(scale) {
     es.center = {};
 }
 
-function setStyle(style) {
+function setStyle(style, run = edit) {
     const s = song();
-    edit(() => {
+    run(() => {
         for (const name of trackNames()) {
             const old = inst(name);
             if (old.type === "drum") {
@@ -337,16 +349,377 @@ function transpose(semis) {
 function render() {
     if (es.songRef !== state.song) { es.songRef = state.song; es.center = {}; }
     const s = song();
+    if (!es.orig) {
+        es.orig = structuredClone(s);
+        es.origChords = Object.fromEntries(Object.entries(s.patterns).map(([n, p]) => [n, [...(displayChords(p) ?? [])]]));
+    }
+    if (es.screen === "edit" && es.editing !== DRUMS_ID && !inst(es.editing)) es.editing = melodyTrack();
+    document.body.dataset.style = s.style ?? "";
+    document.body.classList.toggle("scr-remix", es.screen === "remix");
+    document.body.classList.toggle("scr-edit", es.screen === "edit");
     if (document.activeElement !== $("#eTitle")) $("#eTitle").value = s.title;
     $("#eSpeed").value = s.bpm;
     $("#eSpeedOut").textContent = s.bpm;
+    renderGameBar();
     renderBand();
-    renderTools();
+    renderRemix();
     renderParts();
+    if (es.screen === "remix") return;
+    renderTools();
     renderJam();
     renderChordsView();
-    draw();
     renderViews();
+    draw();
+}
+
+// ---------- Remix: the front of the Studio ----------
+// The band plays the whole song. Tap members to mute them, and change the mood, style, beat and speed.
+// Notes are only shown after "Change tune" on a member (the edit screen).
+
+const SOUND_GROUP = { lead: ["Lead", "FX"], keys: ["Keys"], pad: ["Pad"], bass: ["Bass"] };
+const drumSig = (sg) => JSON.stringify(Object.entries(sg.patterns).map(([n, p]) => [n, Object.entries(p.tracks)
+    .filter(([t, ns]) => sg.instruments[t]?.type === "drum" && ns.length).map(([t, ns]) => [t, ns.map((x) => [x.step, x.velocity])]).sort()]));
+
+function setSound(m, choice) {
+    edit(() => {
+        const s = song();
+        for (const t of m.tracks) {
+            const old = inst(t);
+            s.instruments[t] = m.r === "drum"
+                ? withDefaults({ ...kitDrum(choice, old.kind), color: old.color })
+                : withDefaults({ ...findPreset(choice), role: m.r, color: old.color });
+        }
+    });
+    if (m.r === "drum") player.preview(song(), m.tracks[0], 60, 1); else player.preview(song(), m.id, defaultCenter(m.id), 4);
+    hop(m.id);
+}
+
+function originalStyle() {
+    const s = song(), o = es.orig;
+    edit(() => {
+        for (const t of trackNames()) if (o.instruments[t]) s.instruments[t] = { ...structuredClone(o.instruments[t]), color: inst(t).color };
+        s.swing = o.swing;
+        s.style = o.style;
+    });
+}
+
+function originalBeat() {
+    const op = es.orig.patterns[state.selPattern];
+    if (!op) return;
+    edit(() => { for (const t of drumTracks()) pattern().tracks[t] = structuredClone(op.tracks[t] ?? []); });
+    popAll();
+}
+
+// Beats belong to a part. These tell which beat a part is using (if it is one from the list).
+const drumNames = (sg) => Object.keys(sg.instruments).filter((t) => sg.instruments[t].type === "drum");
+const partDrums = (sg, p) => JSON.stringify(drumNames(sg).map((t) => [t, (p.tracks[t] ?? []).map((x) => [x.step, x.velocity]).sort((a, b) => a[0] - b[0])]).filter((x) => x[1].length).sort());
+function partBeatSig(sg, p, beat) {
+    return JSON.stringify(drumNames(sg).map((t) => {
+        const kind = sg.instruments[t].kind;
+        const line = { kick: beat.kick, snare: beat.snare, clap: beat.snare, hat: beat.hat, openhat: beat.open, tom: beat.perc, perc: beat.perc }[kind] ?? "";
+        const hits = [];
+        if (line) for (let st = 0; st < p.steps; st++) { const c = line[st % 16]; if (c === "x" || c === "o") hits.push([st, c === "x" ? 1 : 0.55]); }
+        return [t, hits];
+    }).filter((x) => x[1].length).sort());
+}
+const beatOfPart = (sg, p) => { if (!p) return null; const sig = partDrums(sg, p); return BEATS.find((b) => partBeatSig(sg, p, b) === sig)?.name ?? null; };
+
+// The Beat chips: on the band screen and with the drummer. They change the part that is selected.
+function beatChipsHTML() {
+    const s = song(), o = es.orig ?? s, p = pattern(), op = o.patterns[state.selPattern];
+    const cur = beatOfPart(s, p);
+    const origListed = !op || !!beatOfPart(o, op);
+    return `${origListed ? "" : `<button data-beat="__orig" class="orig${partDrums(s, p) === partDrums(o, op) ? " on" : ""}">Original</button>`}${BEATS.map((b) => `<button data-beat="${esc(b.name)}" class="${b.name === cur ? "on" : ""}">${esc(b.name)}</button>`).join("")}`;
+}
+// Changing one part's beat or harmony while the whole song plays would keep jumping to the next part,
+// so the first change stops on the part you are hearing and loops it.
+function stayOnPart() {
+    if (es.screen !== "remix" || state.mode !== "song") return;
+    setMode("pattern");
+    toast(`Staying on Part ${state.selPattern} while you change it`);
+}
+function wireBeatChips(box) {
+    box.querySelectorAll("[data-beat]").forEach((b) => (b.onclick = () => {
+        stayOnPart();
+        if (b.dataset.beat === "__orig") return originalBeat();
+        es.beat = BEATS.findIndex((x) => x.name === b.dataset.beat);
+        applyBeat(BEATS[es.beat]);
+        if (!player.playing) toast(`${BEATS[es.beat].name} beat. Press play to hear it`);
+    }));
+}
+
+// ---------- Harmony: chord patterns by feeling ----------
+// Each is four chords, as steps of the key. Ones that would need a harsh (diminished) chord in the current mood are left out.
+const HARMONIES = [
+    { name: "Classic", degs: [0, 4, 5, 3] },
+    { name: "Hopeful", degs: [0, 3, 5, 4] },
+    { name: "Bittersweet", degs: [5, 3, 0, 4] },
+    { name: "Old-school", degs: [0, 5, 3, 4] },
+    { name: "Bright", degs: [0, 4, 5, 4] },
+    { name: "Groovy", degs: [0, 3, 0, 4] },
+    { name: "Calm", degs: [0, 0, 3, 3] },
+    { name: "Floating", degs: [0, 1, 0, 1] },
+    { name: "Climbing", degs: [0, 1, 3, 4] },
+    { name: "Epic", degs: [5, 4, 3, 4] },
+    { name: "Driving", degs: [0, 6, 5, 6] },
+];
+function harmonyChoices() {
+    const n = (SCALES[song().scale] ?? SCALES.major).steps.length;
+    return HARMONIES.map((h) => ({ name: h.name, degs: h.degs.map((d) => d % n) })).filter((h) => h.degs.every((d) => !/^(dim|\+)$/.test(quality(d)))).slice(0, 7);
+}
+const spread = (degs, n) => Array.from({ length: n }, (_, i) => degs[i % degs.length]);
+// Each choice is a small picture of its four chords: the colour is the feeling, the height is how tense it is.
+const harmonyBars = (degs) => `<span class="h-bars">${degs.slice(0, 4).map((d) => { const f = feeling(d); return `<i style="--t:${f.tint};--h:${(0.35 + f.tension * 0.65).toFixed(2)}"></i>`; }).join("")}</span>`;
+function harmonyChipsHTML() {
+    const p = pattern();
+    const n = chordCount(p);
+    const cur = (displayChords(p) ?? []).join();
+    const choices = harmonyChoices();
+    const orig = es.origChords?.[state.selPattern];
+    const origListed = !orig?.length || orig.length !== n || choices.some((h) => spread(h.degs, n).join() === orig.join());
+    const card = (id, name, degs, on, extra = "") => `<button data-harmony="${id}" class="${extra.trim()}${on ? " on" : ""}" title="${esc(degs.slice(0, 4).map((d) => `${chordName(d)} (${feeling(d).word})`).join("  →  "))}">${esc(name)}</button>`;
+    return `${origListed ? "" : card("__orig", "Original", orig, cur === orig.join(), " orig")}${choices.map((h, i) => card(i, h.name, h.degs, spread(h.degs, n).join() === cur)).join("")}`;
+}
+// The part's chords drawn as a little landscape: one block per chord, in order. The colour is the feeling,
+// the height of the hill is how tense it is, and the block that is playing lights up. Tap a block to hear it.
+function harmonyStripHTML() {
+    const p = pattern();
+    const chords = displayChords(p) ?? [];
+    if (!chords.length) return "";
+    const pts = chords.map((d, i) => [((i + 0.5) / chords.length) * 100, 30 - (4 + feeling(d).tension * 20)]);
+    const line = smoothLine([[0, pts[0][1]], ...pts, [100, pts[pts.length - 1][1]]]);
+    return `<div class="h-strip" id="rStrip">
+      <svg class="h-hill" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><path d="${line} L100 30 L0 30 Z"/><path class="h-ridge" d="${line}"/></svg>
+      ${chords.map((d, i) => { const f = feeling(d); return `<button class="h-seg" data-seg="${i}" style="--t:${f.tint}" title="${esc(f.line)}"><b>${esc(chordName(d, colorAt(p, i)))}</b><span>${esc(f.word)}</span></button>`; }).join(`<i class="h-arrow">→</i>`)}
+    </div>`;
+}
+function smoothLine(pts) {
+    let d = `M${pts[0][0]} ${pts[0][1].toFixed(1)}`;
+    for (let i = 1; i < pts.length; i++) {
+        const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], mx = (x0 + x1) / 2;
+        d += ` C${mx.toFixed(1)} ${y0.toFixed(1)} ${mx.toFixed(1)} ${y1.toFixed(1)} ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+    }
+    return d;
+}
+function wireHarmonyStrip() {
+    const p = pattern();
+    document.querySelectorAll("#rStrip .h-seg").forEach((b) => (b.onclick = () => hearChord((displayChords(p) ?? [])[Number(b.dataset.seg)], colorAt(p, Number(b.dataset.seg)))));
+}
+function stripStep(info) {
+    const strip = $("#rStrip");
+    if (!strip) return;
+    const p = pattern();
+    const now = info && info.pattern === state.selPattern ? Math.floor(info.step / (p.steps / chordCount(p))) : -1;
+    strip.querySelectorAll(".h-seg").forEach((b) => b.classList.toggle("now", Number(b.dataset.seg) === now));
+}
+let harmonyDemo = [];
+function wireHarmonyChips(box) {
+    box.querySelectorAll("[data-harmony]").forEach((b) => (b.onclick = () => {
+        const h = b.dataset.harmony === "__orig" ? { name: "Original", degs: es.origChords[state.selPattern] } : harmonyChoices()[Number(b.dataset.harmony)];
+        stayOnPart();
+        applyHarmony(h.degs);
+        cheer();
+        // not playing? then play the four chords so you hear what you picked
+        harmonyDemo.forEach(clearTimeout);
+        harmonyDemo = player.playing ? [] : h.degs.slice(0, 4).flatMap((d, i) => [
+            setTimeout(() => { hearChord(d); stripStep({ pattern: state.selPattern, step: i * (pattern().steps / chordCount(pattern())) }); }, i * 460),
+            ...(i === 3 ? [setTimeout(() => stripStep(null), 4 * 460 + 300)] : []),
+        ]);
+    }));
+}
+// Put a whole chord pattern on the selected part. Chords, bass and keys move with it; the melody keeps its tune,
+// and only its long notes that would clash are moved to the nearest note that fits.
+function applyHarmony(degs) {
+    const p = pattern();
+    const n = chordCount(p), len = p.steps / n;
+    edit(() => {
+        ensureChordArrays(p);
+        for (let seg = 0; seg < n; seg++) {
+            const old = p.chords[seg], nw = degs[seg % degs.length];
+            if (old === nw) continue;
+            p.chords[seg] = nw;
+            p.colors[seg] = "";
+            shiftSegment(p, seg * len, (seg + 1) * len, old, nw);
+            voicePad(p, seg, len);
+            fitLead(p, seg * len, (seg + 1) * len, nw);
+        }
+    });
+    popAll();
+}
+function fitLead(p, a, b, deg) {
+    const s = song();
+    const pcs = chordPcs(deg, s.key, s.scale);
+    const long = s.stepsPerBeat; // a beat or longer is a note you really hear against the chord
+    for (const [t, notes] of Object.entries(p.tracks)) {
+        if (inst(t)?.type === "drum" || role(t) !== "lead") continue;
+        for (const nt of notes) {
+            if (nt.step < a || nt.step >= b || nt.length < long || pcs.includes(mod(nt.note, 12))) continue;
+            for (const d of [-1, 1, -2, 2, -3, 3]) if (pcs.includes(mod(nt.note + d, 12))) { nt.note += d; break; }
+        }
+    }
+}
+
+// What the drums would be if a beat from the list were applied: lets us show which beat a song already uses.
+function beatSig(sg, beat) {
+    const drums = Object.keys(sg.instruments).filter((t) => sg.instruments[t].type === "drum");
+    return JSON.stringify(Object.entries(sg.patterns).map(([n, p]) => [n, drums.map((t) => {
+        const kind = sg.instruments[t].kind;
+        const line = { kick: beat.kick, snare: beat.snare, clap: beat.snare, hat: beat.hat, openhat: beat.open, tom: beat.perc, perc: beat.perc }[kind] ?? "";
+        const hits = [];
+        if (line) for (let st = 0; st < p.steps; st++) { const c = line[st % 16]; if (c === "x" || c === "o") hits.push([st, c === "x" ? 1 : 0.55]); }
+        return [t, hits];
+    }).filter((x) => x[1].length).sort()]));
+}
+const beatOf = (sg) => { const sig = drumSig(sg); return BEATS.find((b) => beatSig(sg, b) === sig)?.name ?? null; };
+
+// Back to the song as it was opened (for a game: the game's own music). One undo step.
+function resetSong() {
+    const o = structuredClone(es.orig), s = song();
+    const colors = Object.fromEntries(trackNames().map((t) => [t, inst(t).color]));
+    edit(() => {
+        for (const k of Object.keys(s)) delete s[k];
+        Object.assign(s, o);
+        for (const [t, i] of Object.entries(s.instruments)) i.color ??= colors[t] ?? nextColor();
+        if (!s.patterns[state.selPattern]) state.selPattern = s.arrangement[0];
+        if (!s.instruments[state.selTrack]) state.selTrack = trackNames()[0] ?? null;
+    });
+    state.mix.muted.clear();
+    player.setMix(state.mix);
+    es.beatPick = null;
+    es.center = {};
+    render();
+    cheer();
+    toast("Back to the original");
+}
+
+// Tap a band member: a small menu right under them with their instruments, mute and notes.
+function soundChoices(m) {
+    const cur = currentSound(m);
+    const list = m.r === "drum" ? Object.keys(KITS) : (SOUND_GROUP[m.r] ?? ["Lead"]).flatMap((g) => Object.keys(PRESETS[g]));
+    return cur && !list.includes(cur) ? [cur, ...list] : list;
+}
+const currentSound = (m) => (m.r === "drum" ? (inst(m.tracks[0]).kit ?? "classic") : inst(m.id).preset);
+function stepSound(m, dir) {
+    const list = soundChoices(m);
+    setSound(m, list[mod(Math.max(0, list.indexOf(currentSound(m))) + dir, list.length)]);
+}
+
+// Every instrument a member can play, as pictures. Opens from the instrument's name under them.
+function memberMenu(id) {
+    const m = bandMembers().find((x) => x.id === id);
+    const anchor = document.querySelector("#eDock .m-cur");
+    if (!m || !anchor) return;
+    const cur = currentSound(m);
+    openPop(anchor, `<div class="mp" style="--c:${m.color}">
+        <div class="mp-head"><b>${m.r === "drum" ? "Drum kits" : `${esc(m.name)}'s instruments`}</b></div>
+        <div class="mp-sounds">${soundChoices(m).map((c) => `<button data-sound="${esc(c)}" class="${c === cur ? "on" : ""}"><span class="r-thumb">${creature(m.r, lookOf(m, { preset: c, kit: c }))}</span><small>${esc(m.r === "drum" ? KITS[c].name : c)}</small></button>`).join("")}</div>
+        <button class="mp-more" data-more>${m.r === "drum" ? "Tune each drum…" : "All sounds…"}</button></div>`);
+    pop.querySelectorAll("[data-sound]").forEach((b) => (b.onclick = () => { setSound(m, b.dataset.sound); memberMenu(id); }));
+    pop.querySelector("[data-more]").onclick = () => (m.r === "drum" ? kitMenu(memberEl(id)) : soundMenu(memberEl(id), m.id));
+}
+
+const partsEl = $("#eParts");
+function renderRemix() {
+    const box = $("#eRemix");
+    if (es.screen !== "remix") {
+        const parts = partsEl;
+        if (!parts.isConnected || box.contains(parts)) $("#easyApp").append(parts); // parked (hidden) while a member's notes are open
+        box.innerHTML = "";
+        return;
+    }
+    const s = song(), o = es.orig ?? s;
+    const chip = (attr, id, name, on) => `<button data-${attr}="${esc(id)}" class="${on ? "on" : ""}">${esc(name)}</button>`;
+    // "Original" only appears when the song's own mood, style or beat isn't one of the choices.
+    const orig = (attr, listed, on) => (listed ? "" : `<button data-${attr}="__orig" class="orig${on ? " on" : ""}">Original</button>`);
+    const parts = partsEl;
+    parts.remove(); // lives inside this panel; taken out while the panel is rebuilt
+    es.remixFor = state.selPattern;
+    const many = s.arrangement.length > 1 || Object.keys(s.patterns).length > 1;
+    box.innerHTML = `<div class="r-cols">
+      <div class="r-col">
+        <div class="r-row"><span class="r-label">Mood</span><div class="r-chips">${orig("mood", MOODS.some((x) => x.scale === o.scale), s.scale === o.scale)}${MOODS.map((x) => chip("mood", x.scale, x.name, x.scale === s.scale)).join("")}</div></div>
+        <div class="r-row"><span class="r-label">Style</span><div class="r-chips">${orig("style", STYLES.some((x) => x.id === o.style), (s.style ?? "") === (o.style ?? ""))}${STYLES.map((x) => chip("style", x.id, x.name, x.id === s.style)).join("")}</div></div>
+        <div class="r-row"><span class="r-label">Speed</span><div class="r-speed"><span>Slow</span><input type="range" id="rSpeed" min="50" max="180" step="1" value="${s.bpm}" aria-label="Speed"><span>Fast</span></div></div>
+        <div class="r-actions">
+          <button id="rDice" class="e-tool hero r-dice" title="A new mood and style at random"><span class="spark">✦</span> Surprise me</button>
+          <button id="rReset" class="e-tool r-reset" title="${es.game ? "Back to the game's own music" : "Back to the song as you opened it"}">↺ Reset</button>
+        </div>
+      </div>
+      <div class="r-col r-part" style="--c:${patternColor(state.selPattern)}">
+        <div class="r-row r-songrow"><span class="r-label">Song</span><div id="rPartsSlot" class="r-parts"></div></div>
+        <div class="r-row"><span class="r-label">Beat</span><div class="r-chips" id="rBeats">${beatChipsHTML()}</div></div>
+        <div class="r-row"><span class="r-label">Harmony</span><div class="r-chips" id="rHarmony">${harmonyChipsHTML()}</div></div>
+        ${harmonyStripHTML()}
+      </div></div>`;
+    $("#rPartsSlot").append(parts);
+    box.querySelectorAll("[data-mood]").forEach((b) => (b.onclick = () => { setMood(b.dataset.mood === "__orig" ? o.scale : b.dataset.mood); cheer(); if (!player.playing) previewChord(); }));
+    box.querySelectorAll("[data-style]").forEach((b) => (b.onclick = () => {
+        if (b.dataset.style === "__orig") originalStyle(); else setStyle(STYLES.find((x) => x.id === b.dataset.style));
+        cheer();
+        if (!player.playing) previewChord();
+    }));
+    wireBeatChips($("#rBeats"));
+    wireHarmonyChips($("#rHarmony"));
+    wireHarmonyStrip();
+    const sp = $("#rSpeed");
+    sp.addEventListener("pointerdown", () => pushHistory());
+    sp.addEventListener("input", () => { song().bpm = Number(sp.value); $("#eSpeed").value = sp.value; $("#eSpeedOut").textContent = sp.value; });
+    sp.addEventListener("change", markChanged);
+    $("#rDice").onclick = surprise;
+    $("#rReset").onclick = resetSong;
+}
+
+function surprise() {
+    const s = song();
+    const mood = rnd(MOODS.filter((m) => m.scale !== s.scale));
+    const style = rnd(STYLES.filter((x) => x.id !== s.style));
+    pushHistory();
+    setMood(mood.scale, now);
+    setStyle(style, now);
+    song().bpm = clamp(Math.round(style.bpm * (0.92 + Math.random() * 0.16)), 50, 180);
+    markChanged();
+    render();
+    cheer();
+    toast(`${mood.name} ${style.name}`);
+}
+
+function enterEdit(id) {
+    flyTo(id, () => {
+        es.screen = "edit";
+        es.editing = id;
+        if (id !== DRUMS_ID) state.selTrack = id;
+        es.page = 0;
+        closePop();
+        setMode("pattern");
+        render();
+    });
+}
+
+// Run a change that moves a band member, and have them travel from where they were to where they are now.
+function flyTo(id, change) {
+    const from = memberEl(id)?.querySelector(".m-body")?.getBoundingClientRect();
+    change();
+    const el = memberEl(id);
+    const body = el?.querySelector(".m-body");
+    if (!body) return;
+    el.scrollIntoView({ inline: "center", block: "nearest" });
+    const to = body.getBoundingClientRect();
+    if (!from || !to.width || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const box = $("#eChips");
+    box.classList.add("flying");
+    body.animate([
+        { transformOrigin: "0 0", transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width})` },
+        { transformOrigin: "0 0", transform: "none" },
+    ], { duration: 480, easing: "cubic-bezier(.2,.8,.2,1)" }).onfinish = () => box.classList.remove("flying");
+}
+
+function exitEdit() {
+    if (es.jam.rec) toggleRecord();
+    es.screen = "remix";
+    es.editing = null;
+    if (es.cv.on) { es.cv.on = false; es.chordOpen = undefined; }
+    closePop();
+    render(); // still on the part you were editing; "Whole song" plays everything again
 }
 
 function renderTools() {
@@ -355,25 +728,47 @@ function renderTools() {
     gen.disabled = !t;
     gen.innerHTML = `<span class="spark">✦</span> ${t ? GEN_LABEL[role(t)] ?? "Make a melody" : "Make a melody"}`;
     gen.title = t ? `Write something for ${t} in this part (press again for another idea)` : "";
-    $("#eBeat").innerHTML = `Beat: <b>${esc(BEATS[es.beat].name)}</b> <span class="cycle">↻</span>`;
-    $("#eSafe").classList.toggle("on", es.safe);
-    const mood = MOODS.find((m) => m.scale === song().scale);
-    const style = STYLES.find((x) => x.id === song().style);
-    $("#eHint").textContent = matchMedia("(pointer: coarse)").matches
-        ? "Tap a square to add a note, tap it again to remove it. Tap a chord name to change it. Swipe sideways for more."
-        : "Click squares to add notes, drag to make them longer, click a note to remove it. Click a chord name to change it.";
+    const drumsMode = es.editing === DRUMS_ID;
+    document.body.classList.toggle("edit-drums", drumsMode);
+    const beats = $("#eBeats");
+    beats.hidden = !drumsMode;
+    if (drumsMode) { beats.innerHTML = `<span class="r-label">Beat</span>${beatChipsHTML()}`; wireBeatChips(beats); }
+    $("#ePartTag").textContent = Object.keys(song().patterns).length > 1 ? `Part ${state.selPattern}` : "";
+    const touch = matchMedia("(pointer: coarse)").matches;
+    const rec = $("#eRec");
+    rec.classList.toggle("on", es.jam.rec);
+    rec.innerHTML = `<span class="dot"></span>${es.jam.rec ? "Stop recording" : "Record"}`;
+    rec.title = es.jam.rec ? "Stop recording (R)" : "Play along and record what you play into this part (R)";
+    $("#eHint").textContent = es.jam.rec
+        ? (touch ? `Recording: tap the ${drumsMode ? "drums on the left" : "piano keys"} along with the music. Each hit lands where you played it. Undo takes the whole recording back out.`
+            : drumsMode ? "Recording: play the drums with Z X C V (or click them on the left). Each hit lands where you played it. Undo takes the whole recording back out."
+                : "Recording: play the piano keys with the letters shown on them (or click them). Each note lands where you played it, for as long as you hold it. Undo takes the whole recording back out.")
+        : drumsMode ? (touch ? "Pick a beat to start from, then tap the grid to add or remove hits." : "Pick a beat to start from, then click the grid to add or remove hits. Z X C V play the drums; press Record to keep what you play.")
+            : touch ? "Tap the grid to add a note, tap it again to remove it. The lit rows fit the chord shown above them."
+                : "Click the grid to add a note, drag to make it longer, click a note to remove it. The lit rows fit the chord shown above them. The letters on the piano keys play them.";
 }
 
 function renderParts() {
     const box = $("#eParts");
     box.innerHTML = "";
     const arr = song().arrangement;
+    const remix = es.screen === "remix";
+    const whole = remix && state.mode === "song";
+    if (remix) {
+        const all = document.createElement("button");
+        all.className = `e-part all${whole ? " sel" : ""}`;
+        all.innerHTML = `<b>▶</b><span>Whole song</span>`;
+        all.title = "Play every part in order";
+        all.onclick = () => { setMode("song"); render(); };
+        box.append(all);
+    }
     arr.forEach((name, idx) => {
         const card = document.createElement("div");
         const playingHere = player.playing && state.mode === "song" && state.playPos?.index === idx;
         const blockOk = arr[state.selBlock] === state.selPattern;
         const isSel = blockOk ? idx === state.selBlock : name === state.selPattern && arr.indexOf(name) === idx;
-        card.className = `e-part${isSel ? " sel" : ""}${playingHere ? " now" : ""}`;
+        card.className = `e-part${isSel && !whole ? " sel" : ""}${playingHere || (isSel && whole) ? " now" : ""}`;
+        if (remix) card.title = "Stay on this part: it loops while you change its beat and harmony";
         card.dataset.index = idx;
         card.draggable = true;
         card.style.setProperty("--c", patternColor(name));
@@ -381,6 +776,7 @@ function renderParts() {
         card.onclick = (e) => {
             if (e.target.closest("button")) return;
             state.selBlock = idx;
+            if (remix) { state.selPattern = name; setMode("pattern"); }
             if (player.playing && state.mode === "song") player.seek(idx);
             selectPattern(name);
             es.center = {};
@@ -870,6 +1266,7 @@ function setChord(seg, deg) {
         p.colors[seg] = "";
         shiftSegment(p, seg * len, (seg + 1) * len, old, deg);
         voicePad(p, seg, len);
+        fitLead(p, seg * len, (seg + 1) * len, deg);
     });
     popAll();
 }
@@ -1234,7 +1631,8 @@ function openChordPicker(seg) { openChordsView(seg); }
 addEventListener("resize", () => { if (es.cv.on) drawArc(); });
 
 function chordHit(e) {
-    const L = es.layout;
+    return null; // on a note grid the chords are a guide; they are changed with the Chords player or the Harmony row
+    const L = es.layout; // eslint-disable-line no-unreachable
     if (!L?.band) return null;
     const r = canvas.getBoundingClientRect();
     const x = e.clientX - r.left, y = e.clientY - r.top;
@@ -1251,7 +1649,7 @@ const canvas = $("#eGrid");
 let drawQueued = false;
 
 function requestDraw() {
-    if (drawQueued) return;
+    if (drawQueued || es.screen !== "edit") return;
     drawQueued = true;
     requestAnimationFrame(() => { drawQueued = false; draw(); });
 }
@@ -1266,20 +1664,21 @@ const isPaged = () => es.layout && es.layout.viewSteps < es.layout.steps;
 function computeLayout() {
     const p = pattern();
     const track = melodyTrack();
-    const rows = melodyRows(track);
-    const drums = drumTracks();
+    const drumsMode = es.editing === DRUMS_ID;
+    const rows = drumsMode ? [] : melodyRows(track);
+    const drums = drumsMode ? drumTracks() : [];
     const W = stage.clientWidth;
     const H = stage.clientHeight;
     const narrow = W < 520;
-    const gutter = narrow ? 30 : GUTTER;
+    const gutter = narrow ? 36 : GUTTER;
     const viewSteps = pageSize(p.steps, W);
     const pages = Math.ceil(p.steps / viewSteps);
     es.page = clamp(es.page ?? 0, 0, pages - 1);
     const viewStart = es.page * viewSteps;
     const band = rows.length ? CHORD_BAND : 0;
-    const drumH = drums.length ? clamp(Math.floor(H * 0.075), narrow ? 34 : 28, 40) : 0;
+    const drumH = drums.length ? clamp(Math.floor((H - 4) / drums.length), 36, 76) : 0;
     const gap = drums.length && rows.length ? 12 : 0;
-    const rowH = rows.length ? clamp(Math.floor((H - band - gap - drumH * drums.length - 2) / rows.length), narrow ? 26 : 15, 40) : 0;
+    const rowH = rows.length ? clamp(Math.floor((H - band) / 13), narrow ? 26 : 20, 36) : 0; // about 13 notes on screen; scroll for the rest
     const cellW = viewSteps < p.steps ? (W - gutter) / viewSteps : Math.max(18, Math.floor((W - gutter) / p.steps));
     const melodyH = rows.length * rowH;
     return {
@@ -1332,7 +1731,7 @@ function popAll(track) {
 }
 
 function draw() {
-    if (state.ui !== "easy" || !state.song || es.jam?.on || es.cv?.on || es.view !== "grid") return;
+    if (state.ui !== "easy" || !state.song || es.screen !== "edit" || es.jam?.on || es.cv?.on || es.view !== "grid") return;
     const L = es.drag ? es.layout : (es.layout = computeLayout());
     const dpr = devicePixelRatio || 1;
     if (canvas.width !== Math.round(L.width * dpr) || canvas.height !== Math.round(L.height * dpr)) {
@@ -1341,6 +1740,16 @@ function draw() {
         canvas.style.width = `${L.width}px`;
         canvas.style.height = `${L.height}px`;
     }
+    const scrollKey = `${es.editing}|${L.track}|${state.selPattern}`;
+    if (es.scrollKey !== scrollKey && !es.drag) {
+        es.scrollKey = scrollKey;
+        const mine = (pattern().tracks[L.track] ?? []).map((n) => n.note).sort((a, b) => a - b);
+        const mid = mine.length ? mine[Math.floor(mine.length / 2)] : es.center[L.track] ?? 64;
+        const idx = L.rows.findIndex((m) => m <= mid);
+        stage.scrollTop = L.rows.length ? Math.max(0, L.melodyTop + (idx < 0 ? 0 : idx) * L.rowH - (stage.clientHeight - L.rowH) / 2) : 0;
+    }
+    const sTop = L.rows.length ? stage.scrollTop : 0;
+    L.keyRow = L.rows.length ? clamp(Math.floor((sTop + stage.clientHeight - L.melodyTop) / L.rowH) - 1, 0, L.rows.length - 1) : -1; // lowest row fully in view
     const c = canvas.getContext("2d");
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     const s = song();
@@ -1366,45 +1775,6 @@ function draw() {
     }
     for (let st = 0; st <= L.steps; st += beat * 4) { c.fillStyle = "rgba(255,255,255,0.09)"; c.fillRect(Math.round(gx(st)), 0, 1, L.height); }
 
-    if (L.band) {
-        const shown = displayChords(p);
-        const n = chordCount(p);
-        const segSteps = L.steps / n;
-        c.font = "800 11px Nunito, sans-serif";
-        for (let i = 0; i < n; i++) {
-            const a = i * segSteps, b = a + segSteps;
-            if (b <= L.viewStart || a >= viewEnd) continue;
-            const x0 = gx(Math.max(a, L.viewStart)) + 3;
-            const room = gx(Math.min(b, viewEnd)) - x0 - 3;
-            const f = shown ? feeling(shown[i]) : null;
-            const name = shown ? chordName(shown[i], colorAt(p, i)) : "Chord";
-            c.font = "800 11px Nunito, sans-serif";
-            const nameW = c.measureText(name).width;
-            c.font = "600 10px Nunito, sans-serif";
-            const wordW = f ? c.measureText(f.word).width : 0;
-            const withWord = f && nameW + wordW + 40 <= room;
-            const w = Math.min(Math.max((withWord ? nameW + wordW + 12 : nameW) + 28, 46), room);
-            const active = playStep >= a && playStep < b;
-            const open = es.chordOpen === i;
-            const tint = f?.tint ?? "#8d8ca3";
-            c.globalAlpha = open ? 0.5 : active ? 0.38 : 0.17;
-            c.fillStyle = tint;
-            rr(c, x0, 3, w, 16, 8);
-            c.globalAlpha = 1;
-            c.font = "800 11px Nunito, sans-serif";
-            c.fillStyle = active || open ? "#ffffff" : shown ? "#e4e3f0" : "rgba(141,140,163,0.8)";
-            c.fillText(name, x0 + 8, 15);
-            if (withWord) {
-                c.font = "600 10px Nunito, sans-serif";
-                c.fillStyle = tint;
-                c.fillText(f.word, x0 + 8 + nameW + 7, 14.6);
-            }
-            c.font = "800 11px Nunito, sans-serif";
-            c.fillStyle = "rgba(200,199,216,0.55)";
-            if (w > 30) c.fillText("▾", x0 + w - 12, 14.5);
-        }
-    }
-
     const rowOf = new Map(L.rows.map((m, i) => [m, i]));
     const root = KEYS.indexOf(s.key);
     L.rows.forEach((m, i) => {
@@ -1420,7 +1790,7 @@ function draw() {
             const pcs = chordPcs(deg, s.key, s.scale);
             L.rows.forEach((m, r) => {
                 if (!pcs.includes(mod(m, 12))) return;
-                c.fillStyle = "rgba(255,255,255,0.03)";
+                c.fillStyle = "rgba(255,255,255,0.055)";
                 c.fillRect(gx(i * segSteps), L.melodyTop + r * L.rowH, segSteps * L.cellW, L.rowH - 1);
             });
         });
@@ -1434,22 +1804,6 @@ function draw() {
     c.fillStyle = "rgba(255,255,255,0.07)";
     for (let i = 0; i < L.rows.length; i++) for (let st = L.viewStart; st < viewEnd; st++) {
         c.fillRect(gx(st) + L.cellW / 2 - 1, L.melodyTop + i * L.rowH + L.rowH / 2 - 1, 2, 2);
-    }
-
-    for (const [t, notes] of Object.entries(p.tracks)) {
-        const ins = inst(t);
-        if (!ins || ins.type === "drum" || t === L.track) continue;
-        c.strokeStyle = ins.color;
-        c.globalAlpha = 0.28;
-        c.lineWidth = 1.5;
-        for (const n of notes) {
-            const r = rowOf.get(n.note);
-            if (r === undefined || n.step + n.length <= L.viewStart || n.step >= viewEnd) continue;
-            c.beginPath();
-            c.roundRect?.(gx(n.step) + 3, L.melodyTop + r * L.rowH + 3, n.length * L.cellW - 6, L.rowH - 6, 6);
-            c.stroke();
-        }
-        c.globalAlpha = 1;
     }
 
     if (L.track) {
@@ -1492,19 +1846,88 @@ function draw() {
             c.globalAlpha = 1;
         }
     });
+    // the chord names stay at the top while the keyboard scrolls under them
+    c.save();
+    c.translate(0, sTop);
+    if (L.band) { c.fillStyle = "#14141b"; c.fillRect(G, 0, L.width - G, L.band); }
+    if (L.band) {
+        const shown = displayChords(p);
+        const n = chordCount(p);
+        const segSteps = L.steps / n;
+        c.font = "800 11px Nunito, sans-serif";
+        for (let i = 0; i < n; i++) {
+            const a = i * segSteps, b = a + segSteps;
+            if (b <= L.viewStart || a >= viewEnd) continue;
+            const x0 = gx(Math.max(a, L.viewStart)) + 3;
+            const room = gx(Math.min(b, viewEnd)) - x0 - 3;
+            const f = shown ? feeling(shown[i]) : null;
+            const name = shown ? chordName(shown[i], colorAt(p, i)) : "Chord";
+            c.font = "800 11px Nunito, sans-serif";
+            const nameW = c.measureText(name).width;
+            c.font = "600 10px Nunito, sans-serif";
+            const wordW = f ? c.measureText(f.word).width : 0;
+            const withWord = f && nameW + wordW + 40 <= room;
+            const w = Math.min(Math.max((withWord ? nameW + wordW + 7 : nameW) + 16, 30), room);
+            const active = playStep >= a && playStep < b;
+            const open = es.chordOpen === i;
+            const tint = f?.tint ?? "#8d8ca3";
+            c.globalAlpha = open ? 0.5 : active ? 0.38 : 0.17;
+            c.fillStyle = tint;
+            rr(c, x0, 3, w, 16, 8);
+            c.globalAlpha = 1;
+            c.font = "800 11px Nunito, sans-serif";
+            c.fillStyle = active || open ? "#ffffff" : shown ? "#e4e3f0" : "rgba(141,140,163,0.8)";
+            c.fillText(name, x0 + 8, 15);
+            if (withWord) {
+                c.font = "600 10px Nunito, sans-serif";
+                c.fillStyle = tint;
+                c.fillText(f.word, x0 + 8 + nameW + 7, 14.6);
+            }
+        }
+    }
+
+    c.restore();
     c.restore();
 
-    // Gutter: colored keys to hear each row, and drum icons.
+    // Gutter: a piano keyboard (tap a key to hear it), and drum icons.
+    c.textBaseline = "middle";
+    c.font = `800 ${Math.min(11, Math.max(8, L.rowH - 6))}px Nunito, sans-serif`;
     L.rows.forEach((m, i) => {
-        c.fillStyle = degreeColor(m, 0.85);
-        rr(c, G > 36 ? 10 : 5, L.melodyTop + i * L.rowH + 3, G - (G > 36 ? 18 : 10), L.rowH - 6, 5);
+        const pc = mod(m, 12);
+        const black = [1, 3, 6, 8, 10].includes(pc);
+        const y = L.melodyTop + i * L.rowH;
+        c.fillStyle = black ? "#22202e" : "#ecebf5";
+        rr(c, 2, y + 1, black ? G - 16 : G - 7, L.rowH - 2, 3);
+        c.fillStyle = degreeColor(m, 0.9);
+        c.fillRect(G - 4, y + 2, 2.5, L.rowH - 4);
+        c.fillStyle = black ? "#d9d7ea" : "#2a2a35";
+        c.fillText(pcName(pc) + (Math.floor(m / 12) - 1), 7, y + L.rowH / 2 + 0.5);
+        const key = GRID_KEYS[L.keyRow - i];
+        if (key && L.rowH >= 12 && G >= 50 && !matchMedia("(pointer: coarse)").matches) {
+            c.textAlign = "right";
+            c.fillStyle = es.jam.rec ? "#ff5a6e" : black ? "#9b87ff" : "#7a62e6";
+            c.fillText(key.toUpperCase(), G - 9, y + L.rowH / 2 + 0.5);
+            c.textAlign = "left";
+        }
     });
+    if (L.band) { c.fillStyle = "#14141b"; c.fillRect(0, sTop, G, L.band); }
+    c.textBaseline = "alphabetic";
     L.drums.forEach((t, i) => {
         const ins = inst(t);
         c.fillStyle = ins.color;
         c.globalAlpha = 0.8;
-        drumShape(c, ins.kind, G / 2 - 1, L.drumTop + i * L.drumH + L.drumH / 2, Math.min(L.drumH - 12, G - 14, 20));
+        const named = L.drumH >= 44 && G >= 50;
+        drumShape(c, ins.kind, G / 2 - 1, L.drumTop + i * L.drumH + L.drumH / 2 - (named ? 7 : 0), Math.min(L.drumH - 12, G - 14, 20));
         c.globalAlpha = 1;
+        if (named) {
+            const key = matchMedia("(pointer: coarse)").matches ? "" : (JAM_DRUM_KEYS[i] ?? "").toUpperCase();
+            c.textAlign = "center";
+            c.font = "800 9.5px Nunito, sans-serif";
+            c.fillStyle = "#c9c7dc";
+            c.fillText(t.length > 8 ? `${t.slice(0, 7)}…` : t, G / 2 - 1, L.drumTop + i * L.drumH + L.drumH / 2 + 15);
+            if (key) { c.fillStyle = es.jam.rec ? "#ff5a6e" : "#9b87ff"; c.fillText(key, G - 9, L.drumTop + i * L.drumH + 12); }
+            c.textAlign = "left";
+        }
     });
 
     if (!L.rows.length && !L.drums.length) {
@@ -1550,6 +1973,7 @@ function hit(e) {
     const x = e.clientX - r.left, y = e.clientY - r.top;
     const step = clamp(L.viewStart + Math.floor((x - L.gutter) / L.cellW), L.viewStart, L.viewStart + L.viewSteps - 1);
     const inGutter = x < L.gutter;
+    if (L.rows.length && y < stage.scrollTop + L.band) return null; // under the chord names
     if (y >= L.melodyTop && y < L.melodyTop + L.rows.length * L.rowH) {
         return { kind: "note", step, pitch: L.rows[Math.floor((y - L.melodyTop) / L.rowH)], inGutter };
     }
@@ -1606,8 +2030,9 @@ canvas.addEventListener("pointerdown", (e) => {
     if (ch) { openChordPicker(ch.seg, ch.x, ch.y); return; }
     if (!h) return;
     if (h.inGutter) {
-        if (h.kind === "note") player.preview(song(), es.layout.track, h.pitch, 3);
-        else player.preview(song(), h.track, 60, 1);
+        const id = h.kind === "note" ? `n:${h.pitch}` : `d:${h.track}`;
+        padDown(id);
+        addEventListener("pointerup", () => padUp(id), { once: true });
         return;
     }
     if (e.button !== 0) return;
@@ -1653,8 +2078,9 @@ canvas.addEventListener("pointerup", (e) => {
         if (Math.hypot(dx, dy) < 10 && t.ch) { openChordPicker(t.ch.seg, t.ch.x, t.ch.y); return; }
         if (Math.hypot(dx, dy) < 10 && t.h) {
             if (t.h.inGutter) {
-                if (t.h.kind === "note") player.preview(song(), es.layout.track, t.h.pitch, 3);
-                else player.preview(song(), t.h.track, 60, 1);
+                const id = t.h.kind === "note" ? `n:${t.h.pitch}` : `d:${t.h.track}`;
+                padDown(id);
+                setTimeout(() => padUp(id), 120);
                 return;
             }
             toggleAt(t.h);
@@ -1680,79 +2106,105 @@ function followPlayhead(info) {
 // fall asleep when muted. The drummer covers all the drum tracks.
 
 const DRUMS_ID = "__drums";
-const BODY = {
-    lead: `<path d="M32 10C47 10 55 22 55 36C55 51 45 58 32 58C19 58 9 51 9 36C9 22 17 10 32 10Z"/>`,
-    keys: `<rect x="11" y="10" width="42" height="44" rx="16"/>`,
-    pad: `<path d="M11 32C11 16 21 7 32 7C43 7 53 16 53 32V57L46.5 51L39.5 57L32 51L24.5 57L17.5 51L11 57Z"/>`,
-    bass: `<path d="M5 42C5 27 17 20 32 20C47 20 59 27 59 42C59 54 49 59 32 59C15 59 5 54 5 42Z"/>`,
-    drum: `<path d="M32 10C45 10 52 19 52 30C52 42 44 48 32 48C20 48 12 42 12 30C12 19 19 10 32 10Z"/>`,
-};
-const FACE_Y = { lead: 31, keys: 28, pad: 27, bass: 36, drum: 26 };
-
-function creature(r) {
-    const y = FACE_Y[r] ?? 31;
-    const front = {
-        lead: `<g class="prop"><rect x="45" y="42" width="3.5" height="16" rx="1.75" fill="#4a4a5a"/><circle cx="46.75" cy="40" r="5" fill="#b9b8c9"/><circle cx="46.75" cy="40" r="5" fill="none" stroke="#7a7990" stroke-dasharray="1.5 1.5"/></g>`,
-        keys: `<g class="prop"><rect x="3" y="49" width="58" height="12" rx="3" fill="#ecebf5"/>${[9, 16, 27, 34, 41, 52].map((x) => `<rect x="${x}" y="49" width="4" height="7" rx="1" fill="#2a2a35"/>`).join("")}</g>`,
-        pad: `<g class="prop sparkle"><path d="M7 10l1.2 2.8L11 14l-2.8 1.2L7 18l-1.2-2.8L3 14l2.8-1.2z" fill="#fff"/><circle cx="58" cy="20" r="1.6" fill="#fff"/><circle cx="54" cy="5" r="1.1" fill="#fff"/></g>`,
-        bass: `<g class="prop"><rect x="47" y="2" width="4" height="34" rx="2" fill="#8a6a4f" transform="rotate(28 49 19)"/><ellipse cx="42" cy="44" rx="9" ry="7" fill="#a5805f" transform="rotate(28 42 44)"/></g>`,
-        drum: `<g class="stick stick-l"><rect x="5" y="33" width="19" height="3.2" rx="1.6" fill="#f0d2a8"/></g><g class="stick stick-r"><rect x="40" y="33" width="19" height="3.2" rx="1.6" fill="#f0d2a8"/></g>
-            <g class="prop"><rect x="12" y="48" width="40" height="13" rx="3" fill="#d9d2ff"/><ellipse cx="32" cy="48" rx="20" ry="4.5" fill="#f4f2ff"/><path d="M12 52h40M12 57h40" stroke="#b9aaff" stroke-width="1"/></g>`,
-    }[r] ?? "";
-    return `<svg viewBox="0 0 64 64" class="creature r-${r}" aria-hidden="true">
-      <ellipse cx="32" cy="61" rx="20" ry="2.6" fill="rgba(0,0,0,.35)"/>
-      <g class="bob"><g class="breath"><g class="squash">
-        <g class="body">${BODY[r] ?? BODY.lead}</g>
-        <g class="face">
-          <g class="eyes"><circle cx="24" cy="${y}" r="6" fill="#fff"/><circle cx="40" cy="${y}" r="6" fill="#fff"/>
-            <circle class="pupil" cx="25" cy="${y + 1}" r="3" fill="#1a1626"/><circle class="pupil" cx="41" cy="${y + 1}" r="3" fill="#1a1626"/></g>
-          <g class="lids"><path d="M18 ${y} q6 4 12 0M34 ${y} q6 4 12 0" stroke="#1a1626" stroke-width="2.2" fill="none" stroke-linecap="round"/></g>
-          <ellipse class="mouth" cx="32" cy="${y + 11}" rx="4.5" ry="2.2" fill="#2a1630"/>
-          <circle cx="15.5" cy="${y + 8}" r="3" fill="#ff9ec0" opacity=".45"/><circle cx="48.5" cy="${y + 8}" r="3" fill="#ff9ec0" opacity=".45"/>
-        </g>
-      </g></g></g>${front}</svg>`;
-}
-
 const audible = (t) => !state.mix.muted.has(t) && (state.mix.soloed.size === 0 || state.mix.soloed.has(t));
 const memberId = (t) => (inst(t)?.type === "drum" ? DRUMS_ID : t);
 const memberEl = (id) => document.querySelector(`#eChips .member[data-member="${CSS.escape(id)}"]`);
 const SPEAKER = `<svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor"><path d="M2 6h3l4-3v10L5 10H2z"/><path d="M11 5.5c1 .7 1.5 1.5 1.5 2.5s-.5 1.8-1.5 2.5" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>`;
 const SPEAKER_OFF = `<svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor"><path d="M2 6h3l4-3v10L5 10H2z"/><path d="M11 6l4 4M15 6l-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
 
-function renderBand() {
-    const box = $("#eChips");
-    box.innerHTML = "";
-    const sel = melodyTrack();
+function bandMembers() {
     const members = melodicTracks().map((t) => ({ id: t, r: role(t), name: t, sub: inst(t).preset ?? ROLE_NAMES[role(t)], color: inst(t).color, tracks: [t] }));
     const drums = drumTracks();
     if (drums.length) {
         const kit = KITS[inst(drums[0]).kit]?.name ?? "Classic";
         members.push({ id: DRUMS_ID, r: "drum", name: "Drums", sub: `${kit} kit`, color: "#ff8fb3", tracks: drums });
     }
-    for (const m of members) {
+    return members;
+}
+const lookOf = (m, over = {}) => ({ preset: inst(m.tracks[0]).preset, kit: inst(m.tracks[0]).kit ?? "classic", scale: song().scale, style: song().style, ...over });
+
+function renderBand() {
+    const box = $("#eChips");
+    box.innerHTML = "";
+    const sel = melodyTrack();
+    const members = bandMembers();
+    const drums = drumTracks();
+    if (es.screen === "remix" && !members.some((m) => m.id === es.pick)) es.pick = members[0]?.id ?? null;
+    // On the remix screen the band stands in formation: a back row (drums in the middle, keys either side)
+    // on a riser, and a front row (the singer in the middle) on the stage. Their controls live in one dock.
+    const remixing = es.screen === "remix";
+    const focusId = es.editing === DRUMS_ID ? DRUMS_ID : sel;
+    const rows = remixing ? formation(members) : [es.screen === "edit" ? centredOn(members, focusId) : members];
+    const rowEls = rows.map((row, k) => {
+        if (!remixing) return box;
+        const el = document.createElement("div");
+        el.className = `row ${rows.length > 1 && k === 0 ? "back" : "front"}`;
+        return el;
+    });
+    if (remixing) {
+        const crew = document.createElement("div");
+        crew.className = `crew${rows.length > 1 ? " two" : ""}`;
+        box.style.setProperty("--n", Math.max(...rows.map((r) => r.length)));
+        box.style.setProperty("--nb", rows[0].length);
+        crew.innerHTML = `${rows.length > 1 ? `<i class="plat riser"></i>` : ""}<i class="plat floor"></i>`;
+        crew.append(...rowEls);
+        box.append(crew);
+    }
+    if (es.screen === "edit") {
+        const back = document.createElement("button");
+        back.className = "member back";
+        back.title = "Back to the whole band";
+        back.innerHTML = `<span class="back-arrow">←</span><span>Back to<br>the band</span>`;
+        back.onclick = exitEdit;
+        box.append(back);
+    }
+    const place = new Map();
+    rows.forEach((row, k) => row.forEach((m, i) => place.set(m.id, { crew: rowEls[k], t: row.length > 1 ? (i - (row.length - 1) / 2) / ((row.length - 1) / 2) : 0 })));
+    for (const m of rows.flat()) {
+        const { crew, t } = place.get(m.id);
         const asleep = m.tracks.every((t) => !audible(t));
         const el = document.createElement("div");
-        el.className = `member${m.id === sel ? " sel" : ""}${asleep ? " sleep" : ""}`;
+        const remix = es.screen === "remix";
+        const isSel = remix ? false : es.editing === DRUMS_ID ? m.id === DRUMS_ID : m.id === sel;
+        el.className = `member${isSel ? " sel" : ""}${asleep ? " sleep" : ""}${remix && m.id === es.pick ? " pick" : ""}`;
         el.dataset.member = m.id;
         el.style.setProperty("--c", m.color);
+        el.style.setProperty("--t", t.toFixed(3)); // -1 (left end of their row) … 1 (right end)
         el.innerHTML = `<button class="m-mute" title="${asleep ? "Wake up (unmute)" : "Mute"}">${asleep ? SPEAKER_OFF : SPEAKER}</button>
-            <button class="m-body" title="${m.id === DRUMS_ID ? "Drums" : `Write notes for ${esc(m.name)}`}">${creature(m.r)}</button>
+            <button class="m-body" title="${remix ? `Hear ${esc(m.name)}` : `Change what ${esc(m.name)} plays`}">${creature(m.r, lookOf(m))}</button>
             <div class="m-name"><b></b><small></small></div>
             <button class="m-sound" data-pop>${m.id === DRUMS_ID ? "Kit" : "Sound"} ▾</button>
             <input type="range" class="m-fader" min="0" max="1.5" step="0.01" value="${groupLevel(m.tracks).toFixed(2)}" title="Volume" aria-label="${esc(m.name)} volume">`;
+        const toggleMute = () => {
+            const allMuted = m.tracks.every((t) => state.mix.muted.has(t));
+            for (const t of m.tracks) allMuted ? state.mix.muted.delete(t) : state.mix.muted.add(t);
+            player.setMix(state.mix);
+            renderBand();
+            renderRemix();
+            if (allMuted) hop(m.id); // just woke up
+        };
         el.querySelector("b").textContent = m.name;
         el.querySelector("small").textContent = m.sub;
         el.querySelector(".m-body").onclick = () => {
+            if (remix) { // say hello, and step forward: the dock now works for them
+                if (m.id === DRUMS_ID) { player.preview(song(), drums[0], 60, 1); } else { player.preview(song(), m.id, defaultCenter(m.id), 4); }
+                hop(m.id);
+                es.pick = m.id;
+                if (state.mix.soloed.size) { state.mix.soloed = new Set(m.tracks); player.setMix(state.mix); return renderBand(); } // the solo follows whoever you tap
+                box.querySelectorAll(".member[data-member]").forEach((x) => x.classList.toggle("pick", x.dataset.member === m.id));
+                renderDock();
+                return;
+            }
             if (m.id === DRUMS_ID) {
                 player.preview(song(), drums[0], 60, 1);
+                if (es.editing !== DRUMS_ID) return enterEdit(DRUMS_ID);
                 sing(drums[0], { note: null }, 0.2);
                 return;
             }
-            const changed = state.selTrack !== m.id;
-            state.selTrack = m.id;
+            const changed = state.selTrack !== m.id || es.editing !== m.id;
             const n = defaultCenter(m.id);
             player.preview(song(), m.id, n, 4);
-            if (changed) render();
+            if (changed) flyTo(m.id, () => { es.editing = m.id; state.selTrack = m.id; render(); });
             sing(m.id, { note: n }, 0.5);
         };
         el.querySelector(".m-sound").onclick = (e) => (m.id === DRUMS_ID ? kitMenu(e.currentTarget) : soundMenu(e.currentTarget, m.id));
@@ -1772,20 +2224,74 @@ function renderBand() {
         });
         fader.addEventListener("change", () => { start = null; });
         el.classList.toggle("quiet", groupLevel(m.tracks) < 0.02);
-        el.querySelector(".m-mute").onclick = () => {
-            const allMuted = m.tracks.every((t) => state.mix.muted.has(t));
-            for (const t of m.tracks) allMuted ? state.mix.muted.delete(t) : state.mix.muted.add(t);
-            player.setMix(state.mix);
-            renderBand();
-        };
-        box.append(el);
+        el.querySelector(".m-mute").onclick = toggleMute;
+        crew.append(el);
     }
     const add = document.createElement("button");
     add.className = "member add";
     add.dataset.pop = "";
     add.innerHTML = `<span class="add-plus">+</span><span>Join the band</span>`;
     add.onclick = (e) => addMenu(e.currentTarget);
+    if (remixing) { const dock = document.createElement("div"); dock.className = "dock"; dock.id = "eDock"; box.append(dock); renderDock(); }
     box.append(add);
+}
+
+// Who stands where. Back row: the drums in the middle with the keys either side. Front row: everyone else, the lead in the middle.
+function formation(members) {
+    if (members.length <= 3) return [centred(members, "lead")];
+    let back = members.filter((m) => m.r === "drum" || m.r === "keys");
+    let front = members.filter((m) => !back.includes(m));
+    const most = Math.ceil(members.length / 2) + 1;
+    while (back.length > most || !front.length) front.push(back.pop());
+    while (front.length > most || !back.length) back.push(front.pop());
+    return [centred(back, "drum"), centred(front, "lead")];
+}
+function centredOn(list, id) {
+    const i = list.findIndex((m) => m.id === id);
+    if (i < 0) return list;
+    const rest = list.filter((_, k) => k !== i);
+    rest.splice(Math.ceil(rest.length / 2), 0, list[i]);
+    return rest;
+}
+function centred(list, r) {
+    const i = list.findIndex((m) => m.r === r);
+    if (i < 0) return list;
+    const rest = list.filter((_, k) => k !== i);
+    rest.splice(Math.floor(rest.length / 2), 0, list[i]);
+    return rest;
+}
+
+// The dock under the stage: one set of controls, for whoever was tapped last.
+function renderDock() {
+    const dock = $("#eDock");
+    const m = bandMembers().find((x) => x.id === es.pick);
+    if (!dock || !m) return;
+    const asleep = m.tracks.every((t) => !audible(t));
+    const solo = m.tracks.some((t) => state.mix.soloed.has(t));
+    dock.style.setProperty("--c", m.color);
+    dock.innerHTML = `<span class="d-who"><i></i><b>${esc(m.name)}</b></span>
+        <div class="m-inst"><button class="m-step" data-dir="-1" aria-label="Previous instrument">‹</button><button class="m-cur" data-pop title="See them all">${esc(m.sub)}</button><button class="m-step" data-dir="1" aria-label="Next instrument">›</button></div>
+        <button class="m-act m-quiet${asleep ? " on" : ""}" title="${asleep ? "Let them play again" : "Send them to sleep"}">${asleep ? SPEAKER_OFF : SPEAKER}<span>${asleep ? "Unmute" : "Mute"}</span></button>
+        <button class="m-act m-solo${solo ? " on" : ""}" title="${solo ? "Bring the rest of the band back" : `Hear only ${esc(m.name)}`}">${solo ? "Everyone" : "Solo"}</button>
+        <button class="m-act m-notes" title="See and change what ${esc(m.name)} plays">✎ <span>Edit ${m.r === "pad" ? "chords" : m.r === "drum" ? "beat" : "notes"}</span></button>`;
+    dock.querySelector(".m-solo").onclick = () => {
+        state.mix.soloed = solo ? new Set() : new Set(m.tracks);
+        if (!solo) for (const t of m.tracks) state.mix.muted.delete(t);
+        player.setMix(state.mix);
+        renderBand();
+        if (solo) cheer(); else hop(m.id);
+    };
+    dock.querySelectorAll(".m-step").forEach((b) => (b.onclick = () => stepSound(m, Number(b.dataset.dir))));
+    dock.querySelector(".m-cur").onclick = () => memberMenu(m.id);
+    dock.querySelector(".m-quiet").onclick = () => {
+        const allMuted = m.tracks.every((t) => state.mix.muted.has(t));
+        for (const t of m.tracks) allMuted ? state.mix.muted.delete(t) : state.mix.muted.add(t);
+        player.setMix(state.mix);
+        renderBand();
+        renderRemix();
+        if (allMuted) hop(m.id);
+    };
+    dock.querySelector(".m-notes").onclick = () => enterEdit(m.id);
 }
 
 function groupLevel(tracks) {
@@ -1807,8 +2313,10 @@ function sing(track, n, durSec) {
     if (!el || el.classList.contains("sleep")) return;
     const ins = inst(track);
     const squash = el.querySelector(".squash");
+    puff(el, ins?.type === "drum" ? null : n.note, ins?.type === "drum" ? ins.kind : null);
     if (ins?.type === "drum") {
         const k = ins.kind;
+        if (k === "kick" || k === "tom") el.querySelector(".ears")?.animate([{ transform: "rotate(0deg) scaleY(1)" }, { transform: "rotate(0deg) scaleY(.78)" }, { transform: "rotate(0deg) scaleY(1.06)" }, { transform: "rotate(0deg) scaleY(1)" }], { duration: 260, easing: "ease-out" });
         if (k === "kick" || k === "tom") squash.animate([{ transform: "scale(1,1)" }, { transform: "scale(1.1,.88)" }, { transform: "scale(1,1)" }], { duration: 190, easing: "ease-out" });
         if (k !== "kick") {
             const left = k === "snare" || k === "clap";
@@ -1818,6 +2326,7 @@ function sing(track, n, durSec) {
         return;
     }
     const d = clamp(durSec * 1000, 150, 1800);
+    el.querySelector(".flair")?.animate([{ transform: "rotate(0deg)" }, { transform: "rotate(-8deg)" }, { transform: "rotate(6deg)" }, { transform: "rotate(0deg)" }], { duration: 320, easing: "ease-out" });
     if (role(track) === "pad") {
         squash.animate([{ transform: "rotate(0deg)" }, { transform: "rotate(-5deg)" }, { transform: "rotate(4deg)" }, { transform: "rotate(0deg)" }], { duration: Math.max(d, 700), easing: "ease-in-out" });
     } else {
@@ -1833,10 +2342,51 @@ function sing(track, n, durSec) {
     el.querySelectorAll(".pupil").forEach((p) => p.animate([{ transform: "translateY(0)" }, { transform: `translateY(${-2.2 * high}px)` }, { transform: "translateY(0)" }], { duration: d }));
 }
 
-function bob(id) {
+// Every note someone plays floats up out of them in their own colour (higher notes fly higher), so you can see who makes which sound.
+const NOTE_GLYPHS = ["♪", "♫", "♩", "♬"];
+function puff(el, note, drum) {
+    const now = performance.now();
+    if (now - (el._puff ?? 0) < 90 || document.hidden) return;
+    el._puff = now;
+    const size = el.querySelector(".m-body")?.offsetWidth ?? 66;
+    const high = note === null || note === undefined ? 0.4 : clamp((note - 43) / 40, 0, 1);
+    const s = document.createElement("span");
+    s.className = `m-note${drum ? " hit" : ""}`;
+    s.textContent = drum ? (drum === "kick" || drum === "tom" ? "●" : "✦") : NOTE_GLYPHS[Math.floor(Math.random() * NOTE_GLYPHS.length)];
+    el.append(s);
+    const side = Math.random() < 0.5 ? -1 : 1, x0 = side * size * (0.18 + Math.random() * 0.2), x1 = x0 + side * size * (0.1 + Math.random() * 0.25);
+    const rise = drum ? size * 0.28 : size * (0.3 + high * 0.6);
+    s.animate([
+        { transform: `translate(${x0}px, 0) scale(.4)`, opacity: 0 },
+        { transform: `translate(${(x0 + x1) / 2}px, ${-rise * 0.5}px) scale(1.1) rotate(${side * 8}deg)`, opacity: 1, offset: 0.2 },
+        { transform: `translate(${(x0 + 3 * x1) / 4}px, ${-rise * 0.88}px) scale(1) rotate(${side * -6}deg)`, opacity: 1, offset: 0.75 },
+        { transform: `translate(${x1}px, ${-rise}px) scale(.9) rotate(${side * -10}deg)`, opacity: 0 },
+    ], { duration: drum ? 520 : 1100, easing: "ease-out" }).onfinish = () => s.remove();
+}
+
+// On the beat everyone bounces, leaning left then right; each kind of character leans its own amount.
+const LEAN = { lead: 4, keys: 2.5, pad: 3, bass: 1.5, drum: 5 };
+function bob(id, beat = 0) {
     const el = memberEl(id);
     if (!el || el.classList.contains("sleep")) return;
-    el.querySelector(".bob").animate([{ transform: "translateY(0)" }, { transform: "translateY(-3px)" }, { transform: "translateY(0)" }], { duration: 170, easing: "ease-out" });
+    const r = id === DRUMS_ID ? "drum" : role(id);
+    const lean = (LEAN[r] ?? 3) * (beat % 2 ? 1 : -1);
+    el.querySelector(".bob").animate(
+        [{ transform: "translateY(0) rotate(0deg)" }, { transform: `translateY(-4px) rotate(${lean}deg)` }, { transform: "translateY(0) rotate(0deg)" }],
+        { duration: 230, easing: "ease-out" });
+}
+
+// A little jump: waking up, or the whole band reacting to a new mood or style.
+function hop(id, delay = 0) {
+    const el = memberEl(id);
+    if (!el || el.classList.contains("sleep")) return;
+    el.querySelector(".bob").animate([
+        { transform: "translateY(0) scale(1,1)" }, { transform: "translateY(2px) scale(1.12,.85)", offset: 0.18 },
+        { transform: "translateY(-13px) scale(.92,1.1)", offset: 0.5 }, { transform: "translateY(0) scale(1.08,.92)", offset: 0.85 }, { transform: "translateY(0) scale(1,1)" },
+    ], { duration: 520, delay, easing: "ease-out" });
+}
+function cheer() {
+    document.querySelectorAll("#eChips .member[data-member]").forEach((el, i) => hop(el.dataset.member, i * 70));
 }
 
 function bandStep(info) {
@@ -1852,14 +2402,19 @@ function bandStep(info) {
         if (!audible(t)) continue;
         for (const n of notes) if (n.step === info.step) sing(t, n, n.length * st);
     }
-    if (info.step % s.stepsPerBeat === 0) for (const id of busy) bob(id);
+    if (info.step % s.stepsPerBeat === 0) for (const id of busy) bob(id, Math.floor(info.step / s.stepsPerBeat));
 }
 
 // Now and then someone blinks.
 setInterval(() => {
     const eyes = document.querySelectorAll("#eChips .member:not(.sleep) .eyes");
     if (!eyes.length || document.hidden) return;
-    eyes[Math.floor(Math.random() * eyes.length)].animate([{ transform: "scaleY(1)" }, { transform: "scaleY(.1)" }, { transform: "scaleY(1)" }], { duration: 160 });
+    const who = eyes[Math.floor(Math.random() * eyes.length)];
+    if (Math.random() < 0.3) {
+        // a glance at a bandmate
+        const dx = Math.random() < 0.5 ? -2 : 2;
+        who.querySelectorAll(".pupil").forEach((p) => p.animate([{ transform: "translateX(0)" }, { transform: `translateX(${dx}px)`, offset: 0.2 }, { transform: `translateX(${dx}px)`, offset: 0.8 }, { transform: "translateX(0)" }], { duration: 1100 }));
+    } else who.animate([{ transform: "scaleY(1)" }, { transform: "scaleY(.1)" }, { transform: "scaleY(1)" }], { duration: 160 });
 }, 1300);
 
 // ---------- Jam mode ----------
@@ -1928,6 +2483,7 @@ function renderJam() {
 
 function padTarget(id) {
     if (id.startsWith("d:")) return { track: id.slice(2), notes: [null] };
+    if (id.startsWith("n:")) return { track: es.layout?.track ?? melodyTrack(), notes: [Number(id.slice(2))] }; // a piano key on the grid
     const p = es.jam.pads[Number(id.slice(2))];
     return p ? { track: melodyTrack(), notes: p.notes } : null;
 }
@@ -1953,7 +2509,7 @@ function padUp(id) {
     h.el?.classList.remove("down");
     if (!h.rec.length || inst(h.track)?.type === "drum") return;
     const st = 60 / song().bpm / song().stepsPerBeat;
-    const grid = es.jam.tidy ? 2 : 1;
+    const grid = es.jam.on && es.jam.tidy ? 2 : 1;
     const held = (performance.now() - h.t0) / 1000 / st;
     const min = role(h.track) === "pad" ? 4 : grid;
     const len = Math.max(min, Math.round(held / grid) * grid);
@@ -1970,7 +2526,7 @@ function recordHit(track, midi) {
     const pos = player.position();
     if (!pos || pos.pattern !== state.selPattern) return null;
     const p = pattern();
-    const grid = es.jam.tidy ? 2 : 1;
+    const grid = es.jam.on && es.jam.tidy ? 2 : 1; // on the grid, notes land on the step you played them
     const q = Math.round(pos.raw / grid) * grid;
     const step = mod(q, p.steps);
     const list = notesOf(track);
@@ -1978,6 +2534,7 @@ function recordHit(track, midi) {
     const n = { step, note: midi, length: midi === null ? 1 : grid, velocity: 1 };
     if (q >= pos.scheduled) n.skipOnce = true; // you just heard it; don't play it again a moment later
     list.push(n);
+    if (midi !== null) es.anim?.set(`${track}:${n.step}:${midi}`, performance.now());
     es.jam.take++;
     markChanged();
     updateJamCount();
@@ -2004,6 +2561,7 @@ function toggleRecord() {
         renderParts();
     }
     renderJam();
+    if (!es.jam.on) { renderTools(); requestDraw(); }
 }
 
 let jamRaf = 0;
@@ -2048,6 +2606,32 @@ function toggleJam() {
     if (!es.jam.on) render();
 }
 
+// On the note grid the computer keyboard is a piano: the home row plays the grid's rows from the bottom up,
+// Z X C V… play the drums, R records. Runs before the Studio's own keyboard piano.
+const GRID_KEYS = "asdfghjkl;'";
+const gridPlayable = () => state.ui === "easy" && es.screen === "edit" && !es.jam.on && !es.cv.on && !es.cards && es.view === "grid" && !!es.layout;
+function gridKeyId(k) {
+    const L = es.layout;
+    const i = GRID_KEYS.indexOf(k);
+    if (i >= 0 && L.keyRow - i >= 0) return `n:${L.rows[L.keyRow - i]}`;
+    const d = JAM_DRUM_KEYS.indexOf(k);
+    return d >= 0 && L.drums[d] ? `d:${L.drums[d]}` : null;
+}
+const gridHeld = new Map();
+window.addEventListener("keydown", (e) => {
+    if (!gridPlayable() || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target.closest?.("input:not([type=range]), select, textarea") || !$("#modal").hidden || !$("#landing").hidden) return;
+    const k = e.key.toLowerCase();
+    const id = gridKeyId(k);
+    if (id) { e.preventDefault(); e.stopImmediatePropagation(); if (!e.repeat && !gridHeld.has(k)) { gridHeld.set(k, id); padDown(id); } return; }
+    if (k === "r" && !e.repeat) { e.preventDefault(); e.stopImmediatePropagation(); toggleRecord(); }
+}, true);
+window.addEventListener("keyup", (e) => {
+    const k = e.key.toLowerCase();
+    const id = gridHeld.get(k);
+    if (id) { gridHeld.delete(k); padUp(id); }
+}, true);
+
 // Keyboard: A–K melody pads, Z–M drum pads, R record. Runs before the Studio's own keyboard piano.
 window.addEventListener("keydown", (e) => {
     if (!es.jam.on || state.ui !== "easy" || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -2075,8 +2659,8 @@ window.addEventListener("keyup", (e) => {
 // notes that fit the song. Chords are picked by feeling along the top; drums come from the Beat.
 
 const VIEW_PREF = store.get(EASY_PREFS, {}).view;
-es.view = ["draw", "grid", "jam"].includes(VIEW_PREF) ? VIEW_PREF : "draw";
-es.jam.on = es.view === "jam";
+es.view = "grid"; // one way to write notes: the keyboard grid
+es.jam.on = false;
 es.draw = { tool: "draw", rhythm: store.get(EASY_PREFS, {}).rhythm ?? "bouncy", stroke: null, lastPitch: null };
 const RHYTHMS = [
     { id: "smooth", name: "Smooth", tip: "Long, flowing notes" },
@@ -2101,8 +2685,14 @@ function setView(v) {
 }
 
 function renderViews() {
-    const draw = es.view === "draw" && !es.cv.on;
-    const grid = es.view === "grid" && !es.cv.on && !es.jam.on;
+    // The chords member gets a row of chord cards instead of notes.
+    const t = melodyTrack();
+    es.cards = es.editing !== DRUMS_ID && !!t && role(t) === "pad" && !es.cv.on;
+    document.body.classList.toggle("view-cards", es.cards);
+    $("#eCards").hidden = !es.cards;
+    if (es.cards) renderCards();
+    const draw = es.view === "draw" && !es.cv.on && !es.cards;
+    const grid = es.view === "grid" && !es.cv.on && !es.jam.on && !es.cards;
     document.body.classList.toggle("view-draw", es.view === "draw");
     document.body.classList.toggle("view-grid", es.view === "grid");
     document.body.classList.toggle("view-jam", es.view === "jam");
@@ -2112,6 +2702,25 @@ function renderViews() {
     if (!grid) $("#ePager").hidden = true;
     if (draw) renderDrawBar();
     requestDrawView();
+}
+
+function renderCards() {
+    const p = pattern();
+    const chords = displayChords(p) ?? [];
+    const box = $("#eCards");
+    box.innerHTML = `<p class="c-head">Chords are the harmony: the feeling underneath the melody. Pick a whole pattern, or tap one chord to change how that moment feels. The rest of the band follows.</p>
+      <div class="r-row c-harmony"><span class="r-label">Harmony</span><div class="r-chips" id="cHarmony">${harmonyChipsHTML()}</div></div>
+      <div class="c-row">${chords.map((d, i) => {
+        const f = feeling(d);
+        return `<button class="c-card" data-seg="${i}" style="--t:${f.tint}"><small>${i + 1}</small><b>${esc(chordName(d, colorAt(p, i)))}</b><span>${esc(f.word)}</span><em>${esc(f.line)}</em></button>`;
+    }).join("")}</div>`;
+    wireHarmonyChips($("#cHarmony"));
+    box.querySelectorAll(".c-card").forEach((b) => (b.onclick = () => {
+        const seg = Number(b.dataset.seg);
+        const r = b.getBoundingClientRect();
+        hearChord(chords[seg], colorAt(p, seg));
+        chordMenuAt(seg, r.left + r.width / 2, r.top + Math.min(r.height, 90));
+    }));
 }
 
 function renderDrawBar() {
@@ -2165,7 +2774,7 @@ const stepAtX = (L, x) => clamp((x - L.padL) / L.stepW, 0, L.steps - 0.001);
 // ----- drawing the view -----
 let drawViewQueued = false;
 function requestDrawView() {
-    if (drawViewQueued || es.view !== "draw" || es.cv.on) return;
+    if (drawViewQueued || es.screen !== "edit" || es.cards || es.view !== "draw" || es.cv.on) return;
     drawViewQueued = true;
     requestAnimationFrame(() => { drawViewQueued = false; paintDrawView(); });
 }
@@ -2405,14 +3014,13 @@ function chordMenuAt(seg, clientX, clientY) {
             const f = feeling(d);
             return `<button data-deg="${d}" class="${d === cur ? "on" : ""}" style="--t:${f.tint}"><b>${esc(chordName(d))}</b><span>${esc(f.word)}</span><small>${esc(f.line)}</small></button>`;
         }).join("")}</div>
-        <div class="d-chords-foot"><span>calm at the top, tense at the bottom</span><button class="btn ghost small-btn" id="dMore">More in Chords &amp; mood</button></div>`);
+        <div class="d-chords-foot"><span>calm at the top, tense at the bottom</span></div>`);
     pop.querySelectorAll("[data-deg]").forEach((b) => (b.onclick = () => {
         const d = Number(b.dataset.deg);
         hearChord(d);
         if (d !== displayChords(pattern())?.[seg] || colorAt(pattern(), seg)) setChord(seg, d);
         pop.querySelectorAll("[data-deg]").forEach((x) => x.classList.toggle("on", x === b));
     }));
-    $("#dMore").onclick = () => openChordsView(seg);
 }
 
 drawCanvas.addEventListener("pointerdown", (e) => {
@@ -2486,13 +3094,22 @@ async function openGame(slot, { shared } = {}) {
     setSong(s, { dirty: !!shared });
     es.center = {};
     es.game = { slot };
+    es.orig = structuredClone(await slotDefault(slot)); // "Original" means the game's own music, even over your saved version
+    es.screen = "remix";
+    es.editing = null;
+    state.selBlock = 0;
+    setMode("song");
     const mel = melodyTrack();
     if (mel) state.selTrack = mel;
     window.history.replaceState(null, "", `${location.pathname}?game=${encodeURIComponent(slot.id)}`);
     hideLanding();
     renderGameBar();
     renderAll();
-    toast(shared ? "Someone sent you this song. Change it, or play the game with it" : `This is the music in ${slot.gameTitle}. Press play, then change anything`);
+    // straight into the music when the browser allows it (it does after a click on the Studio's front page)
+    const started = navigator.userActivation?.hasBeenActive && !player.playing;
+    if (started) { play(); renderRemix(); }
+    toast(shared ? "Someone sent you this song. Change it, or play the game with it"
+        : `This is the music in ${slot.gameTitle}.${started ? "" : " Press play, then"} ${started ? "Tap" : "tap"} the band or change the mood`);
 }
 
 function leaveGame() {
@@ -2505,7 +3122,25 @@ function leaveGame() {
 function renderGameBar() {
     const bar = $("#eGameBar");
     document.body.classList.toggle("in-game", !!es.game);
-    if (!es.game) { bar.hidden = true; bar.innerHTML = ""; return; }
+    if (!es.game) {
+        // not working on one game's music: any game can still be played with this song
+        bar.hidden = false;
+        bar.innerHTML = `<span class="g-txt"><small>Hear your song where it belongs</small><b>Play a game with this song</b></span><span class="g-grow"></span>
+          <button class="btn primary g-play" id="gPick" data-pop>▶ Play a game with it</button>`;
+        $("#gPick").onclick = async (e) => {
+            const anchor = e.currentTarget;
+            const m = await manifest();
+            openPop(anchor, `<div class="pop-title">Which game?</div><div class="pop-list">${m.slots.map((x, i) => `<button data-g="${i}">${esc(x.gameTitle)}</button>`).join("")}</div>`);
+            pop.querySelectorAll("[data-g]").forEach((b) => (b.onclick = () => {
+                const slot = m.slots[Number(b.dataset.g)];
+                if (!setGameSong(slot.id, song())) { toast("Couldn't save, browser storage is blocked"); return; }
+                state.dirty = false;
+                player.stop();
+                location.href = slot.path;
+            }));
+        };
+        return;
+    }
     const { slot } = es.game;
     const mine = !!getGameSongOverride(slot.id);
     bar.hidden = false;
@@ -2605,9 +3240,13 @@ async function startFresh(style) {
     const { song: s, fill } = starterSong(style);
     setSong(s, { dirty: true });
     fill();
+    es.orig = null;
     markChanged();
     state.selTrack = "Melody";
     es.center = {};
+    es.screen = "edit";
+    es.editing = "Melody";
+    setMode("pattern");
     hideLanding();
     renderAll();
     popAll();
@@ -2619,10 +3258,13 @@ async function remix(entry) {
         const raw = await (await fetch(`songs/${entry.file}`)).json();
         if (!(await confirmDiscard())) return;
         player.stop();
+        es.screen = "remix";
+        es.editing = null;
+        setMode("song");
         setSong(normalizeSong(raw), { dirty: true });
         es.center = {};
         hideLanding();
-        toast("Press play, then try Vibe, Sound or ✦ Make");
+        toast("Press play, then change the mood, style or beat");
     } catch (err) {
         toast("Couldn't open that song: " + err.message);
     }
@@ -2682,7 +3324,8 @@ function wire() {
     speed.addEventListener("input", () => { song().bpm = Number(speed.value); $("#eSpeedOut").textContent = speed.value; });
     speed.addEventListener("change", markChanged);
 
-    $("#eGen").onclick = () => { const t = melodyTrack(); if (t) generateFor(t); if (es.jam.on) renderJam(); };
+    $("#eGen").onclick = () => { const t = melodyTrack(); if (!t) return; if (es.cards) newChords(); else generateFor(t); };
+    $("#eRec").onclick = toggleRecord;
     document.querySelectorAll("#eViewSeg [data-view]").forEach((b) => (b.onclick = () => setView(b.dataset.view)));
     $("#eBeat").onclick = () => {
         es.beat = (es.beat + 1) % BEATS.length;
@@ -2700,36 +3343,33 @@ function wire() {
     $("#eUp").onclick = () => shift(12);
     $("#eDown").onclick = () => shift(-12);
     $("#eClear").onclick = () => {
-        const t = melodyTrack();
-        const targets = [t, ...drumTracks()].filter((x) => x && (pattern().tracks[x] ?? []).length);
-        if (!targets.length) return;
-        openPop($("#eClear"), `<div class="pop-title">Clear this part</div><div class="pop-list">
-            ${t && (pattern().tracks[t] ?? []).length ? `<button data-c="one">${esc(t)}'s notes</button>` : ""}
-            ${drumTracks().some((d) => (pattern().tracks[d] ?? []).length) ? `<button data-c="drums">The drums</button>` : ""}
-            <button data-c="all">Everything</button></div>`);
-        pop.querySelectorAll("[data-c]").forEach((b) => (b.onclick = () => {
-            const which = b.dataset.c;
-            edit(() => {
-                const p = pattern();
-                const list = which === "one" ? [t] : which === "drums" ? drumTracks() : trackNames();
-                for (const x of list) p.tracks[x] = [];
-                if (which === "all") { delete p.chords; delete p.colors; }
-            });
-            closePop();
-        }));
+        const drumsMode = es.editing === DRUMS_ID;
+        const list = (drumsMode ? drumTracks() : [melodyTrack()]).filter((x) => x && (pattern().tracks[x] ?? []).length);
+        if (!list.length) return toast("Nothing to clear here");
+        edit(() => { for (const x of list) pattern().tracks[x] = []; });
+        toast(`${drumsMode ? "The drums are" : `${list[0]} is`} cleared in this part. Undo brings it back`);
     };
-    $("#eClear").dataset.pop = "";
     $("#eMoreBtn").onclick = (e) => moreMenu(e.currentTarget);
     $("#eHome").onclick = showLanding;
     $("#lClose").onclick = hideLanding;
 
     new ResizeObserver(() => requestDraw()).observe(stage);
+    stage.addEventListener("scroll", () => requestDraw(), { passive: true });
 }
 
 hooks.render = render;
+hooks.newSong = () => { es.orig = null; es.pick = null; };
 hooks.onStep = (info) => {
     if (state.ui !== "easy") return;
     bandStep(info);
+    if (state.song && es.screen === "remix" && es.remixFor !== state.selPattern && !document.activeElement?.closest?.("#eRemix input")) { renderRemix(); renderParts(); }
+    if (es.screen === "remix" && state.song) stripStep(info);
+    if (es.screen !== "edit") return;
+    if (es.cards) {
+        const p = pattern();
+        const now = info && info.pattern === state.selPattern ? Math.floor(info.step / (p.steps / chordCount(p))) : -1;
+        document.querySelectorAll("#eCards .c-card").forEach((c) => c.classList.toggle("playing", Number(c.dataset.seg) === now));
+    }
     jamStep(info);
     if (es.view === "draw") requestDrawView();
     if (es.cv.on) {

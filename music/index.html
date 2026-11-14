@@ -138,24 +138,23 @@
     </div>
   </header>
   <div class="e-band" id="eChips"></div>
-  <div class="e-stage" id="eStage"><canvas id="eGrid"></canvas><div id="eDrawView" class="e-draw" hidden><div class="d-bar" id="eDrawBar"></div><canvas id="eDraw"></canvas></div><div id="eJam" class="e-jam" hidden></div><div id="eChordsView" class="e-cv" hidden></div></div>
+  <div class="e-remix" id="eRemix"></div>
+  <div class="e-stage" id="eStage"><canvas id="eGrid"></canvas><div id="eDrawView" class="e-draw" hidden><div class="d-bar" id="eDrawBar"></div><canvas id="eDraw"></canvas></div><div id="eJam" class="e-jam" hidden></div><div id="eChordsView" class="e-cv" hidden></div><div id="eCards" class="e-cards" hidden></div></div>
   <div class="e-pager" id="ePager" hidden></div>
   <div class="e-tools">
     <div class="e-main-tools">
-      <div class="seg view-seg" id="eViewSeg" aria-label="How to make the song">
-        <button data-view="draw" title="Draw lines to make melodies">✎ Draw</button>
-        <button data-view="grid" title="Place notes on a grid">▦ Grid</button>
-        <button data-view="jam" title="Play pads along with the beat and record">♪ Jam</button>
-      </div>
       <button id="eGen" class="e-tool hero"></button>
-      <button id="eBeat" class="e-tool" title="Try the next drum beat"></button>
-      <button id="eVibe" class="e-tool cv-btn" title="How the song feels: mood, sounds, key, speed and its chords"></button>
+      <button id="eRec" class="e-tool e-rec"></button>
+      <button id="eBeat" class="e-tool gone"></button>
+      <button id="eVibe" class="e-tool cv-btn gone"></button>
+      <div id="eBeats" class="r-chips e-beats" hidden></div>
     </div>
+    <span id="ePartTag" class="e-parttag"></span>
     <div class="spacer"></div>
-    <button id="eSafe" class="toggle" title="Only show the notes that always sound good together">Safe notes</button>
+    <button id="eSafe" class="toggle gone">Safe notes</button>
     <button id="eUp" class="icon-btn" title="Show higher notes">▲</button>
     <button id="eDown" class="icon-btn" title="Show lower notes">▼</button>
-    <button id="eClear" class="btn ghost small-btn">Clear…</button>
+    <button id="eClear" class="btn ghost small-btn" title="Remove this member's notes from this part">Clear</button>
   </div>
   <div class="e-hint" id="eHint"></div>
   <div class="e-parts" id="eParts"></div>

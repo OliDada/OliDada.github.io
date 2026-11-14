@@ -804,3 +804,600 @@ body:not(.view-grid) #eSafe, body:not(.view-grid) #eUp, body:not(.view-grid) #eD
   .e-gamebar { flex-wrap: wrap; padding: 8px 10px; gap: 8px; }
   .e-gamebar .g-play { order: 5; flex: 1 0 100%; }
 }
+
+/* ---------- Remix screen (the front of the Studio) and the edit screen ---------- */
+#eVibe { display: none; }
+body.scr-remix .e-stage, body.scr-remix .e-tools, body.scr-remix .e-hint, body.scr-remix .e-parts, body.scr-remix .e-pager,
+body.scr-remix .e-transport .seg, body.scr-remix .e-speed { display: none !important; }
+body.scr-edit .e-remix { display: none; }
+body.scr-remix .e-band { justify-content: center; flex-wrap: wrap; overflow: visible; gap: 10px; padding: 20px 10px 14px; }
+body.scr-remix .member { width: 128px; }
+body.scr-remix .m-body { width: 108px; height: 108px; }
+body.scr-remix .member::before { top: 90px; }
+body.scr-remix .m-fader { display: none; }
+body.scr-remix .member.add { min-height: 150px; width: 96px; }
+.m-edit { display: none; border: 1px solid var(--line-2); background: var(--panel); color: var(--text); font-size: 11px; font-weight: 700; padding: 5px 9px; border-radius: 999px; margin-top: 4px; white-space: nowrap; }
+.m-edit:hover { border-color: var(--c); }
+body.scr-remix .m-edit { display: inline-block; }
+.e-remix { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 6px 4px 24px; }
+.r-hint { margin: 0; color: var(--muted); font-size: 13px; font-weight: 600; text-align: center; }
+.r-row { display: flex; align-items: center; gap: 12px; width: min(720px, 100%); }
+.r-label { flex: none; width: 52px; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.r-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.r-chips button { padding: 9px 14px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--panel); color: var(--text); font-weight: 700; font-size: 14px; transition: transform .1s, border-color .15s; }
+.r-chips button:hover { border-color: var(--accent); }
+.r-chips button:active { transform: scale(.95); }
+.r-chips button.on { background: var(--accent); border-color: transparent; color: #15121f; }
+.r-speed { flex: 1; display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.r-speed input { flex: 1; accent-color: var(--accent); }
+.r-dice { padding: 12px 22px; font-size: 15px; margin-top: 4px; }
+.e-back { flex: none; }
+
+.e-cards { position: absolute; inset: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding: 18px; }
+.e-cards[hidden] { display: none; }
+.c-head { margin: 0; max-width: 640px; color: var(--muted); font-size: 13px; font-weight: 600; }
+.c-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.c-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; min-height: 140px; padding: 14px 16px; border-radius: 16px; color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--t) 45%, transparent); background: color-mix(in srgb, var(--t) 13%, var(--panel)); transition: transform .1s, box-shadow .15s; }
+.c-card:hover { border-color: var(--t); }
+.c-card:active { transform: scale(.98); }
+.c-card small { font-size: 11px; font-weight: 800; color: var(--muted); }
+.c-card b { font-size: 28px; line-height: 1.1; }
+.c-card span { font-size: 14px; font-weight: 800; color: var(--t); }
+.c-card em { font-style: normal; font-size: 12px; color: var(--muted); font-weight: 500; }
+.c-card.playing { box-shadow: 0 0 0 3px color-mix(in srgb, var(--t) 65%, transparent); }
+body.view-cards #eViewSeg, body.view-cards #eBeat, body.view-cards #eSafe, body.view-cards #eUp, body.view-cards #eDown, body.view-cards #eClear, body.view-cards .e-hint { display: none; }
+
+@media (max-width: 600px) {
+  body.scr-remix .e-band { gap: 2px; padding: 12px 4px 10px; }
+  body.scr-remix .member { width: 31%; }
+  body.scr-remix .m-body { width: 72px; height: 72px; }
+  body.scr-remix .member::before { top: 58px; }
+  body.scr-remix .member.add { width: 100%; min-height: 0; flex-direction: row; justify-content: center; gap: 8px; padding: 9px; margin-top: 6px; }
+  body.scr-remix .member.add .add-plus { font-size: 18px; }
+  .r-row { flex-direction: column; align-items: stretch; gap: 6px; }
+  .r-label { width: auto; }
+  .r-chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 -10px; padding: 0 10px 2px; scrollbar-width: none; }
+  .r-chips::-webkit-scrollbar { display: none; }
+  .r-chips button { flex: none; padding: 11px 15px; }
+  .r-dice { width: 100%; }
+  .e-back { width: 100%; }
+  .c-row { grid-template-columns: 1fr 1fr; }
+  .c-card { min-height: 120px; }
+  .c-card b { font-size: 24px; }
+}
+
+/* ---------- The band's characters (drawn in band.js) ---------- */
+.creature .shade { filter: brightness(.86); }
+.creature .idle, .creature .ears { transform-box: view-box; transform-origin: 32px 60px; }
+.creature .ears { transform-origin: 32px 20px; }
+.creature .tail { transform-box: view-box; transform-origin: 51px 50px; animation: tail-wag 1.9s ease-in-out infinite; }
+.creature .tear { transform-box: fill-box; transform-origin: center top; animation: tear-drip 2.8s ease-in infinite; }
+.creature.r-lead .idle { animation: idle-sway 2.8s ease-in-out infinite; }
+.creature.r-bass .idle { animation: idle-sway 4.6s ease-in-out infinite; }
+.creature.r-pad .idle { animation: idle-float 3.2s ease-in-out infinite; }
+.creature.r-pad .ground { animation: idle-shadow 3.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.creature.r-drum .idle { animation: idle-bounce .9s ease-in-out infinite; }
+.member.sleep .creature .idle, .member.sleep .creature .tail, .member.sleep .creature .ground { animation-play-state: paused; }
+.member.sleep .creature .tear { display: none; }
+@keyframes idle-sway { 0%, 100% { transform: rotate(-1.6deg); } 50% { transform: rotate(1.6deg); } }
+@keyframes idle-float { 0%, 100% { transform: translateY(-1px); } 50% { transform: translateY(-5px); } }
+@keyframes idle-shadow { 0%, 100% { transform: scaleX(1); opacity: 1; } 50% { transform: scaleX(.8); opacity: .6; } }
+@keyframes idle-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.4px); } }
+@keyframes tail-wag { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(9deg); } }
+@keyframes tear-drip { 0%, 55% { transform: translateY(0) scale(1); opacity: .95; } 90% { transform: translateY(7px) scale(.8); opacity: 0; } 100% { transform: translateY(0) scale(.4); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .creature .idle, .creature .tail, .creature .tear, .creature .ground { animation: none !important; } }
+
+/* the stage takes on the song's style */
+body[data-style="chip"] .e-band { background: linear-gradient(rgba(92,224,106,.07) 1px, transparent 1px) 0 0 / 100% 14px, linear-gradient(90deg, rgba(92,224,106,.07) 1px, transparent 1px) 0 0 / 14px 100%, linear-gradient(180deg, #10201a, #12131b 80%); }
+body[data-style="lofi"] .e-band { background: radial-gradient(500px 220px at 50% 0%, rgba(243,180,120,.2), transparent 70%), linear-gradient(180deg, #221a1c, #15141c 80%); }
+body[data-style="dreamy"] .e-band { background: radial-gradient(2px 2px at 12% 22%, #fff, transparent), radial-gradient(1.5px 1.5px at 30% 12%, #fff, transparent), radial-gradient(2px 2px at 58% 18%, #fff, transparent), radial-gradient(1.5px 1.5px at 78% 10%, #fff, transparent), radial-gradient(2px 2px at 90% 26%, #fff, transparent), linear-gradient(180deg, #1d1a3a, #14141f 85%); }
+body[data-style="synth"] .e-band { background: linear-gradient(180deg, rgba(255,95,210,.2), rgba(125,249,255,.06) 55%, transparent 56%), linear-gradient(180deg, #1c1030, #12131b 90%); }
+body[data-style="fairy"] .e-band { background: radial-gradient(420px 200px at 20% 0%, rgba(111,207,127,.18), transparent 70%), radial-gradient(420px 200px at 85% 0%, rgba(255,158,192,.16), transparent 70%), linear-gradient(180deg, #172019, #14151b 85%); }
+
+/* ---------- Remix: the member card (instrument + notes) ---------- */
+body.scr-remix .m-sound { display: none; }
+body.scr-remix .m-mute { opacity: .75; }
+body.scr-remix .member { cursor: pointer; }
+.r-card { width: min(720px, 100%); border-radius: 18px; padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); background: color-mix(in srgb, var(--c) 9%, var(--panel)); }
+.r-card-head { display: flex; align-items: baseline; gap: 10px; }
+.r-card-head b { font-size: 18px; }
+.r-card-head span { color: var(--muted); font-size: 13px; font-weight: 600; flex: 1; }
+.r-sounds { display: flex; flex-wrap: wrap; gap: 8px; }
+.r-sounds button { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 88px; padding: 8px 4px 7px; border-radius: 14px;
+  border: 2px solid transparent; background: rgba(255, 255, 255, .04); color: var(--text); transition: transform .1s, border-color .15s, background .15s; }
+.r-sounds button:hover { background: rgba(255, 255, 255, .08); }
+.r-sounds button:active { transform: scale(.95); }
+.r-sounds button.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 20%, transparent); }
+.r-sounds small { font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.r-thumb { width: 56px; height: 56px; display: block; pointer-events: none; }
+.r-thumb .creature * { animation: none !important; }
+.r-sounds .r-more { justify-content: center; color: var(--muted); font-size: 12px; font-weight: 700; border: 1px dashed var(--line-2); background: transparent; }
+.r-notes { align-self: flex-start; padding: 11px 18px; font-size: 14px; background: var(--c); border-color: transparent; color: #15121f; font-weight: 800; }
+.r-notes:hover:not(:disabled) { filter: brightness(1.1); border-color: transparent; }
+.r-song { width: min(720px, 100%); display: flex; flex-direction: column; gap: 12px; }
+.r-chips button.orig { border-style: dashed; }
+.r-chips button.orig.on { border-style: solid; }
+@media (max-width: 600px) {
+  .r-sounds { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px; padding: 0 16px 2px; scrollbar-width: none; }
+  .r-sounds::-webkit-scrollbar { display: none; }
+  .r-sounds button { flex: none; width: 80px; }
+  .r-notes { align-self: stretch; }
+}
+
+/* the menu under a band member (replaces the big card) */
+.mp { display: flex; flex-direction: column; gap: 10px; }
+.mp-head { display: flex; align-items: center; justify-content: space-between; }
+.mp-head b { font-size: 16px; }
+.mp-sounds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.mp-sounds button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 7px 2px 6px; border-radius: 12px; border: 2px solid transparent;
+  background: rgba(255, 255, 255, .04); color: var(--text); transition: transform .1s, border-color .15s, background .15s; }
+.mp-sounds button:hover { background: rgba(255, 255, 255, .09); }
+.mp-sounds button:active { transform: scale(.95); }
+.mp-sounds button.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 20%, transparent); }
+.mp-sounds small { font-size: 11px; font-weight: 700; white-space: nowrap; }
+.mp-sounds .r-thumb { width: 52px; height: 52px; }
+.mp-notes { padding: 10px 14px; border-radius: 12px; border: 0; background: var(--c); color: #15121f; font-weight: 800; font-size: 14px; }
+.mp-notes:hover { filter: brightness(1.1); }
+.mp-more { border: 0; background: transparent; color: var(--muted); font-size: 12px; font-weight: 700; padding: 2px; }
+.mp-more:hover { color: var(--text); }
+.r-actions { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
+.r-dice { margin-top: 0; }
+.r-reset { padding: 12px 18px; font-size: 14px; color: var(--muted); }
+.r-reset:hover:not(:disabled) { color: var(--text); }
+@media (max-width: 600px) { .r-actions { width: 100%; } .r-actions .r-dice { flex: 1; width: auto; } }
+
+/* ---------- Remix layout: the band is the hero, the song's settings sit at the bottom ---------- */
+body.scr-remix .e-band { --sz: clamp(104px, 13.5vw, 176px); flex: 1 1 auto; min-height: calc(var(--sz) + 90px); align-items: center; align-content: center; gap: 4px 14px; padding: 16px 12px; }
+body.scr-remix .member { width: calc(var(--sz) + 20px); padding: 8px 4px 8px; border-radius: 20px; }
+body.scr-remix .member:hover { background: rgba(255, 255, 255, .04); }
+body.scr-remix .m-body { width: var(--sz); height: var(--sz); }
+body.scr-remix .member::before { top: calc(var(--sz) * .8); height: calc(var(--sz) * .3); }
+body.scr-remix .m-name { margin-top: 6px; max-width: none; }
+body.scr-remix .m-name b { font-size: 16px; max-width: calc(var(--sz) + 12px); }
+body.scr-remix .m-name small { font-size: 12px; max-width: calc(var(--sz) + 12px); }
+body.scr-remix .member.add { width: auto; min-height: 0; align-self: center; flex-direction: row; gap: 6px; padding: 9px 14px; border-radius: 999px; font-size: 12px; }
+body.scr-remix .member.add .add-plus { font-size: 16px; }
+.e-remix { flex: none; overflow: visible; gap: 9px; padding: 2px 4px 6px; }
+.e-remix .r-hint { font-size: 12px; }
+.e-remix .r-row { width: min(860px, 100%); }
+.e-remix .r-chips button { padding: 6px 12px; font-size: 13px; }
+.e-remix .r-actions { margin-top: 2px; }
+.e-remix .r-dice, .e-remix .r-reset { padding: 9px 18px; font-size: 14px; }
+@media (max-width: 860px) {
+  body.scr-remix .e-band { flex: none; }
+}
+@media (max-width: 600px) {
+  body.scr-remix .e-band { --sz: 92px; gap: 2px 0; padding: 12px 2px 10px; }
+  body.scr-remix .member { width: 33%; }
+  body.scr-remix .member.add { width: auto; margin-top: 6px; }
+  .e-remix .r-chips button { padding: 10px 14px; }
+}
+
+/* ---------- Remix: each member's own controls, right under them ---------- */
+.creature .tint { filter: brightness(1.2) saturate(1.2); }
+.creature .flair { transform-box: fill-box; transform-origin: center bottom; }
+body.scr-remix .e-band { --sz: clamp(100px, 12vw, 164px); min-height: calc(var(--sz) + 150px); }
+body.scr-remix .m-mute, body.scr-remix .m-name small { display: none; }
+body.scr-remix .member:hover { background: transparent; }
+.m-inst { display: flex; align-items: center; justify-content: center; gap: 2px; margin-top: 6px; max-width: 100%; }
+.m-cur { min-width: 0; max-width: calc(var(--sz) - 30px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 6px 10px; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--c) 50%, transparent); background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--text); font-size: 12.5px; font-weight: 800; }
+.m-cur:hover { background: color-mix(in srgb, var(--c) 26%, transparent); }
+.m-step { flex: none; width: 26px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 20px; line-height: 1; font-weight: 700; padding: 0 0 3px; }
+.m-step:hover { color: var(--text); background: rgba(255, 255, 255, .07); }
+.m-step:active { transform: scale(.88); }
+.m-acts { display: flex; justify-content: center; gap: 4px; margin-top: 5px; }
+.m-act { display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; border-radius: 999px; border: 1px solid var(--line-2); background: transparent; color: var(--muted); font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.m-act:hover { color: var(--text); border-color: var(--c); }
+.member.sleep .m-quiet { color: var(--text); border-color: var(--c); background: color-mix(in srgb, var(--c) 18%, transparent); }
+.mp-head b { font-size: 14px; }
+@media (max-width: 600px) {
+  body.scr-remix .e-band { --sz: 88px; }
+  .m-cur { max-width: calc(33vw - 62px); padding: 6px 8px; font-size: 11.5px; }
+  .m-step { width: 22px; }
+  .m-act { padding: 6px 7px; font-size: 11px; }
+  .m-act svg { display: none; }
+}
+
+.creature .pixel-heart { animation: heart-bob 1s steps(2, jump-none) infinite; }
+.member:nth-child(2n) .creature .pixel-heart { animation-delay: -.5s; }
+.member.sleep .creature .pixel-heart { animation-play-state: paused; opacity: .4; }
+@keyframes heart-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -1.2px; } }
+body.scr-edit .e-band { padding-top: 12px; }
+@media (prefers-reduced-motion: reduce) { .creature .pixel-heart { animation: none; } }
+
+/* ---------- Stage backdrops: one scene per style, plus a plain concert stage ---------- */
+.e-band { position: relative; isolation: isolate; }
+body.scr-remix .e-band { overflow: hidden; }
+.e-band::before, .e-band::after { content: ""; position: absolute; pointer-events: none; z-index: -1; }
+.member { z-index: 1; }
+
+/* no style: a dark stage with three spotlights and a floor */
+.e-band {
+  background:
+    conic-gradient(from 168deg at 18% -12%, transparent 0deg, rgba(155, 135, 255, .16) 10deg, transparent 22deg),
+    conic-gradient(from 172deg at 50% -14%, transparent 0deg, rgba(111, 182, 255, .14) 9deg, transparent 18deg),
+    conic-gradient(from 170deg at 82% -12%, transparent 0deg, rgba(255, 143, 179, .15) 10deg, transparent 22deg),
+    radial-gradient(70% 34% at 50% 78%, rgba(155, 135, 255, .10), transparent 72%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, .018) 0 22px, transparent 22px 44px),
+    linear-gradient(180deg, #1a1630, #121119 75%);
+}
+
+/* chiptune: a night level from an old platformer */
+body[data-style="chip"] .e-band {
+  background:
+    linear-gradient(180deg, transparent 0 66%, #57e07a 66% 68%, #2f9a4c 68% 71%, transparent 71%),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, .22) 0 2px, transparent 2px 34px) 0 100% / 100% 29% no-repeat,
+    repeating-linear-gradient(180deg, rgba(0, 0, 0, .22) 0 2px, transparent 2px 17px) 0 100% / 100% 29% no-repeat,
+    linear-gradient(180deg, #0a1433 0 22%, #0e1d47 22% 40%, #13295c 40% 54%, #1a3672 54% 66%, #6b4a2c 66%);
+}
+body[data-style="chip"] .e-band::before {
+  left: 0; top: 0; width: 4px; height: 4px; background: #fff; image-rendering: pixelated;
+  box-shadow: 60px 30px #fff, 180px 70px #ffe98a, 310px 24px #fff, 420px 90px #fff, 560px 40px #9fe8ff, 700px 76px #fff, 830px 28px #fff, 960px 64px #ffe98a,
+    1090px 34px #fff, 1210px 84px #fff, 1330px 22px #9fe8ff, 1450px 60px #fff, 1580px 36px #fff, 120px 110px #fff, 640px 120px #fff, 1150px 118px #fff;
+  animation: px-twinkle 1.6s steps(2, jump-none) infinite;
+}
+body[data-style="chip"] .e-band::after {
+  left: -80px; top: 16%; width: 16px; height: 8px; background: #dfe9ff; opacity: .5;
+  box-shadow: 16px 0 #dfe9ff, 32px 0 #dfe9ff, 8px -8px #dfe9ff, 24px -8px #dfe9ff, 420px 34px #dfe9ff, 436px 34px #dfe9ff, 452px 34px #dfe9ff, 436px 26px #dfe9ff,
+    900px -6px #dfe9ff, 916px -6px #dfe9ff, 932px -6px #dfe9ff, 948px -6px #dfe9ff, 916px -14px #dfe9ff, 932px -14px #dfe9ff;
+  animation: px-drift 60s steps(240) infinite;
+}
+@keyframes px-twinkle { 50% { opacity: .35; } }
+@keyframes px-drift { to { transform: translateX(640px); } }
+
+/* lo-fi: a cosy room at dusk, fairy lights and a window */
+body[data-style="lofi"] .e-band {
+  background:
+    radial-gradient(circle, #ffd58a 0 2.5px, rgba(255, 213, 138, .25) 3px 7px, transparent 8px) 10px 6px / 64px 34px repeat-x,
+    radial-gradient(420px 260px at 14% 8%, rgba(255, 170, 100, .22), transparent 70%),
+    linear-gradient(180deg, transparent 0 66%, rgba(0, 0, 0, .28) 66% 67%, transparent 67%),
+    repeating-linear-gradient(90deg, #3b2a24 0 138px, #2f211d 138px 140px) 0 100% / 100% 34% no-repeat,
+    linear-gradient(180deg, #2b2028, #241a20 66%);
+}
+body[data-style="lofi"] .e-band::before {
+  right: 7%; top: 12%; width: clamp(110px, 15%, 200px); aspect-ratio: 4 / 3; border-radius: 10px; border: 5px solid #1c1418;
+  background:
+    linear-gradient(90deg, transparent 47.5%, #1c1418 47.5% 52.5%, transparent 52.5%),
+    linear-gradient(180deg, transparent 47%, #1c1418 47% 53%, transparent 53%),
+    radial-gradient(circle at 62% 62%, #ffe6a6 0 9%, transparent 10%),
+    linear-gradient(180deg, #4b3f7a, #c9668a 55%, #ffb37a);
+  box-shadow: 0 0 60px rgba(255, 150, 110, .25);
+}
+body[data-style="lofi"] .e-band::after { inset: 0; background: radial-gradient(circle, #fff3d6 0 2px, transparent 3px) 42px 6px / 128px 34px repeat-x; animation: lights 2.4s ease-in-out infinite; }
+@keyframes lights { 50% { opacity: .15; } }
+
+/* dreamy: night sky, moon and drifting clouds */
+body[data-style="dreamy"] .e-band {
+  background:
+    radial-gradient(circle at 84% 20%, #fff6d0 0 26px, rgba(255, 246, 208, .22) 27px 60px, transparent 130px),
+    radial-gradient(60% 34% at 20% 104%, rgba(190, 170, 255, .28), transparent 70%),
+    radial-gradient(70% 38% at 78% 108%, rgba(150, 190, 255, .24), transparent 70%),
+    linear-gradient(180deg, #161338, #2a1f5c 60%, #3a2a70);
+}
+body[data-style="dreamy"] .e-band::before {
+  inset: 0;
+  background:
+    radial-gradient(1.6px 1.6px at 8% 18%, #fff, transparent 60%), radial-gradient(1.2px 1.2px at 17% 42%, #fff, transparent 60%),
+    radial-gradient(2px 2px at 27% 12%, #fff, transparent 60%), radial-gradient(1.2px 1.2px at 36% 30%, #cfe0ff, transparent 60%),
+    radial-gradient(1.6px 1.6px at 46% 9%, #fff, transparent 60%), radial-gradient(1.2px 1.2px at 55% 26%, #fff, transparent 60%),
+    radial-gradient(2px 2px at 64% 14%, #ffe9c0, transparent 60%), radial-gradient(1.2px 1.2px at 72% 38%, #fff, transparent 60%),
+    radial-gradient(1.6px 1.6px at 93% 44%, #fff, transparent 60%), radial-gradient(1.2px 1.2px at 3% 52%, #fff, transparent 60%),
+    radial-gradient(1.6px 1.6px at 41% 50%, #fff, transparent 60%), radial-gradient(1.2px 1.2px at 88% 62%, #cfe0ff, transparent 60%);
+  animation: lights 3.6s ease-in-out infinite;
+}
+body[data-style="dreamy"] .e-band::after {
+  left: -30%; bottom: -8%; width: 160%; height: 34%;
+  background: radial-gradient(18% 70% at 12% 80%, rgba(255, 255, 255, .13), transparent 70%), radial-gradient(22% 80% at 40% 90%, rgba(255, 255, 255, .1), transparent 70%),
+    radial-gradient(16% 60% at 66% 78%, rgba(255, 255, 255, .12), transparent 70%), radial-gradient(20% 80% at 90% 92%, rgba(255, 255, 255, .1), transparent 70%);
+  animation: cloud-drift 26s ease-in-out infinite alternate;
+}
+@keyframes cloud-drift { to { transform: translateX(12%); } }
+
+/* synthwave: striped sun over a moving neon grid */
+body[data-style="synth"] .e-band { background: linear-gradient(180deg, #120a2c 0%, #3a1161 40%, #a02a86 62%, #0c0a1c 62.2%); }
+body[data-style="synth"] .e-band::before {
+  left: 50%; top: 62%; width: clamp(180px, 26%, 340px); aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -62%);
+  background: linear-gradient(180deg, #ffe37a, #ff8a5c 45%, #ff3d9a);
+  -webkit-mask: linear-gradient(#000 0 46%, transparent 46%), repeating-linear-gradient(180deg, #000 0 9px, transparent 9px 15px);
+  mask: linear-gradient(#000 0 46%, transparent 46%), repeating-linear-gradient(180deg, #000 0 9px, transparent 9px 15px);
+  clip-path: inset(0 0 38% 0); opacity: .8;
+}
+body[data-style="synth"] .e-band::after {
+  left: -50%; top: 62%; width: 200%; height: 60%; transform-origin: 50% 0; transform: perspective(260px) rotateX(62deg);
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 95, 210, .55) 0 2px, transparent 2px 70px),
+    repeating-linear-gradient(180deg, rgba(125, 249, 255, .5) 0 2px, transparent 2px 46px),
+    linear-gradient(180deg, #1a0d3a, #0c0a1c);
+  animation: grid-roll 1.4s linear infinite;
+  -webkit-mask: linear-gradient(180deg, #000 0, rgba(0, 0, 0, .25) 100%); mask: linear-gradient(180deg, #000 0, rgba(0, 0, 0, .25) 100%);
+}
+@keyframes grid-roll { to { background-position: 0 0, 0 46px, 0 0; } }
+
+/* fairytale: a forest glade with light rays and fireflies */
+body[data-style="fairy"] .e-band {
+  background:
+    linear-gradient(112deg, transparent 30%, rgba(255, 244, 190, .09) 34% 39%, transparent 43%, transparent 50%, rgba(255, 244, 190, .07) 54% 57%, transparent 61%),
+    radial-gradient(46% 46% at 18% 108%, #1f5a33 0 99%, transparent 100%),
+    radial-gradient(52% 40% at 62% 112%, #256a3b 0 99%, transparent 100%),
+    radial-gradient(40% 44% at 96% 108%, #1b4f2e 0 99%, transparent 100%),
+    radial-gradient(60% 50% at 50% 0%, rgba(160, 230, 170, .16), transparent 70%),
+    linear-gradient(180deg, #0f2a22, #173826 70%);
+}
+body[data-style="fairy"] .e-band::before, body[data-style="fairy"] .e-band::after {
+  inset: 0;
+  background:
+    radial-gradient(2.5px 2.5px at 12% 30%, #fff6a8, transparent 70%), radial-gradient(2px 2px at 31% 58%, #fff6a8, transparent 70%),
+    radial-gradient(2.5px 2.5px at 49% 22%, #d8ffb0, transparent 70%), radial-gradient(2px 2px at 68% 46%, #fff6a8, transparent 70%),
+    radial-gradient(2.5px 2.5px at 86% 26%, #fff6a8, transparent 70%), radial-gradient(2px 2px at 94% 60%, #d8ffb0, transparent 70%);
+  filter: drop-shadow(0 0 4px #fff6a8);
+  animation: fireflies 7s ease-in-out infinite alternate;
+}
+body[data-style="fairy"] .e-band::after { transform: scaleX(-1); animation-duration: 9s; animation-delay: -3s; }
+@keyframes fireflies { 0% { translate: 0 0; opacity: .2; } 50% { opacity: 1; } 100% { translate: 14px -18px; opacity: .35; } }
+
+@media (prefers-reduced-motion: reduce) { .e-band::before, .e-band::after { animation: none !important; } }
+/* keep each member's controls readable on top of any backdrop */
+body.scr-remix .m-act { background: rgba(16, 15, 24, .78); color: #d6d4e6; }
+body.scr-remix .m-cur { background: color-mix(in srgb, var(--c) 22%, rgba(16, 15, 24, .85)); }
+body.scr-remix .m-step { color: #d6d4e6; text-shadow: 0 1px 3px rgba(0, 0, 0, .7); }
+body.scr-remix .m-name b { text-shadow: 0 1px 4px rgba(0, 0, 0, .75); }
+body.scr-remix .member.add { background: rgba(16, 15, 24, .6); }
+
+/* ---------- Remix on small screens: nothing cut off, nothing overlapping ---------- */
+body.scr-remix .member { width: max(calc(var(--sz) + 20px), 172px); }
+.m-cur { max-width: 116px; }
+.m-act svg { display: none; }
+@media (max-width: 600px) {
+  body.scr-remix .e-band { --sz: 108px; gap: 6px 0; }
+  body.scr-remix .member { width: 50%; }
+  .m-cur { max-width: calc(50vw - 74px); padding: 7px 10px; font-size: 12.5px; }
+  .m-step { width: 28px; height: 32px; }
+  .m-act { padding: 7px 11px; font-size: 12px; }
+  body.scr-remix .member.add { width: calc(100% - 24px); margin: 4px auto 0; justify-content: center; }
+}
+/* phones held sideways: a short screen, so a smaller band that still fits its buttons */
+@media (max-height: 520px) and (min-width: 601px) {
+  body.scr-remix .e-band { --sz: 96px; padding: 10px 8px; gap: 6px 4px; }
+  body.scr-remix .member { width: 156px; padding: 4px 2px 6px; }
+  .m-cur { max-width: 108px; padding: 5px 7px; font-size: 11.5px; }
+  .m-step { width: 22px; }
+  .m-act { padding: 5px 9px; }
+}
+
+/* ---------- Remix: the band in formation ---------- */
+/* A back row on a riser (drums in the middle), a front row on the stage, everyone turned a little towards the middle.
+   Nobody carries their own buttons: tap a member and the dock under the stage works for them. */
+body.scr-remix .e-band {
+  --fsz: min(clamp(104px, 13vw, 176px), calc((100vw - 56px) / (var(--n, 3) * 1.06)), 21vh); --bsz: calc(var(--fsz) * .84);
+  flex-direction: column; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 0; padding: 40px 12px 14px;
+  min-height: calc(var(--fsz) * 2.2 + 110px);
+}
+.crew { position: relative; isolation: isolate; display: flex; flex-direction: column; align-items: center; margin-bottom: calc(var(--fsz) * .3); }
+.crew .row { position: relative; display: flex; justify-content: center; }
+.crew .row.back { --sz: var(--bsz); z-index: 1; }
+.crew .row.front { --sz: var(--fsz); z-index: 2; }
+.crew.two .row.front { margin-top: calc(var(--fsz) * -.08); }
+.crew .row.front .member { translate: 0 calc((1 - var(--t) * var(--t)) * var(--sz) * .07); }
+body.scr-remix .crew .member { --t: 0; width: calc(var(--sz) * .9); padding: 0; margin: 0; border: 0; background: none; }
+body.scr-remix .crew .row.front .member { width: calc(var(--sz) * 1.04); }
+.crew .m-body { flex: none; transform-origin: 50% 94%; rotate: calc(var(--t) * -2.5deg); transition: translate .18s, filter .18s; }
+.crew .member:hover .m-body { translate: 0 -3px; }
+.crew .creature .pupil { translate: calc(var(--t) * -1.3px) 0; }
+.crew .m-sound, .crew .m-mute, .crew .m-fader { display: none !important; }
+/* their name floats above them when you point at them */
+body.scr-remix .crew .m-name { position: absolute; left: 50%; top: 0; translate: -50% -70%; margin: 0; padding: 3px 10px; border-radius: 999px; background: rgba(16, 15, 24, .85); opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 3; }
+body.scr-remix .crew .m-name b { font-size: 12px; text-shadow: none; }
+.crew .member:hover .m-name { opacity: 1; }
+/* the one the dock is working for stands in their own light */
+body.scr-remix .crew .member::before { left: 4%; right: 4%; top: calc(var(--sz) * .76); height: calc(var(--sz) * .3); opacity: 0; background: radial-gradient(ellipse at center, color-mix(in srgb, var(--c) 85%, #fff), color-mix(in srgb, var(--c) 50%, transparent) 45%, transparent 70%); }
+body.scr-remix .crew .member.pick::before { opacity: .9; }
+.crew .member.pick .m-body { filter: drop-shadow(0 0 calc(var(--sz) * .09) color-mix(in srgb, var(--c) 55%, transparent)); }
+
+/* what they stand on. Plain stage: a round podium with a riser at the back. Each style swaps it below. */
+.crew .plat { position: absolute; left: 50%; translate: -50% 0; z-index: 0; pointer-events: none; border-radius: 50%; }
+.crew .floor {
+  width: calc(var(--n) * var(--fsz) * 1.04 + var(--fsz) * .7); top: calc(var(--fsz) * .56); bottom: calc(var(--fsz) * -.1);
+  background: radial-gradient(60% 70% at 50% 30%, #453a72, #2b2449 75%);
+  box-shadow: 0 calc(var(--fsz) * .08) 0 #18142c, 0 calc(var(--fsz) * .2) 40px rgba(0, 0, 0, .45);
+}
+.crew.two .floor { top: calc(var(--bsz) * .5); }
+.crew .riser {
+  width: calc(var(--nb) * var(--bsz) * .9 + var(--bsz) * .3); top: calc(var(--bsz) * .68); height: calc(var(--bsz) * .44); z-index: 1;
+  background: radial-gradient(60% 70% at 50% 30%, #6a5aa8, #483c7a 75%);
+  box-shadow: 0 calc(var(--bsz) * .07) 0 #241e42, 0 calc(var(--bsz) * .12) 14px rgba(0, 0, 0, .35);
+}
+
+.crew .floor { max-width: calc(100vw - 28px); }
+/* chiptune: floating grass blocks from a platformer */
+body[data-style="chip"] .crew .plat { border-radius: 0; image-rendering: pixelated; }
+body[data-style="chip"] .crew .floor {
+  background: repeating-conic-gradient(#4fc46a 0 25%, #45b860 0 50%) 0 0 / 32px 32px;
+  box-shadow: 0 calc(var(--fsz) * .05) 0 #2f9a4c, 0 calc(var(--fsz) * .16) 0 #6b4a2c, 0 calc(var(--fsz) * .2) 0 #4a3220;
+}
+body[data-style="chip"] .crew .riser {
+  background: repeating-conic-gradient(#7fe08f 0 25%, #6fd482 0 50%) 0 0 / 32px 32px;
+  box-shadow: 0 calc(var(--bsz) * .04) 0 #2f9a4c, 0 calc(var(--bsz) * .13) 0 #8a6238;
+}
+/* lo-fi: a round rug on the floor, and a low wooden bench at the back */
+body[data-style="lofi"] .crew .floor {
+  background: repeating-radial-gradient(closest-side, #8c4a5e 0 14%, #d9a070 14% 17%, #6d3a52 17% 31%, #e6c79a 31% 34%);
+  box-shadow: 0 3px 0 #4a2a38, 0 calc(var(--fsz) * .12) 30px rgba(0, 0, 0, .45);
+}
+body[data-style="lofi"] .crew .riser {
+  border-radius: 14px; background: linear-gradient(180deg, #b98556, #9a6a42);
+  box-shadow: 0 calc(var(--bsz) * .09) 0 #5e3d26, 0 calc(var(--bsz) * .14) 12px rgba(0, 0, 0, .4);
+}
+/* dreamy: they play on a cloud */
+body[data-style="dreamy"] .crew .floor {
+  background: radial-gradient(closest-side, rgba(255, 255, 255, .95), rgba(226, 220, 255, .85) 60%, rgba(200, 190, 255, .0));
+  box-shadow: 0 calc(var(--fsz) * .1) 30px rgba(170, 160, 255, .45); filter: blur(3px);
+}
+body[data-style="dreamy"] .crew .floor::before, body[data-style="dreamy"] .crew .floor::after {
+  content: ""; position: absolute; border-radius: 50%; background: rgba(255, 255, 255, .9); width: 34%; height: 70%; top: -18%; left: 4%;
+}
+body[data-style="dreamy"] .crew .floor::after { left: auto; right: 5%; width: 28%; height: 60%; top: -10%; }
+body[data-style="dreamy"] .crew .riser { background: radial-gradient(closest-side, #fff, rgba(240, 236, 255, .9) 70%, transparent); box-shadow: none; filter: blur(2px); }
+/* synthwave: a neon ring hovering over the grid */
+body[data-style="synth"] .crew .floor {
+  background: radial-gradient(closest-side, #1a0f3c 0 78%, #7df9ff 79% 81%, #1a0f3c 82% 93%, #ff5fd2 94%);
+  box-shadow: 0 0 22px #ff5fd2, 0 calc(var(--fsz) * .08) 0 #0c0820, 0 calc(var(--fsz) * .1) 26px rgba(255, 95, 210, .55);
+}
+body[data-style="synth"] .crew .riser { background: #2a1458; box-shadow: 0 0 0 2px #7df9ff, 0 0 16px #7df9ff, 0 calc(var(--bsz) * .07) 0 #150a30; }
+/* fairytale: a mossy mound, with a tree stump at the back */
+body[data-style="fairy"] .crew .floor {
+  background: radial-gradient(60% 70% at 50% 30%, #6fcf7f, #3f9a55 75%);
+  box-shadow: 0 calc(var(--fsz) * .06) 0 #2c6f3e, 0 calc(var(--fsz) * .16) 30px rgba(0, 0, 0, .4);
+}
+body[data-style="fairy"] .crew .riser {
+  background: repeating-radial-gradient(closest-side, #e3c08a 0 16%, #cfa46a 16% 20%);
+  box-shadow: 0 calc(var(--bsz) * .1) 0 #7a5230, 0 calc(var(--bsz) * .14) 10px rgba(0, 0, 0, .35);
+}
+
+/* the dock: one set of controls, for whoever was tapped last */
+.dock {
+  position: relative; z-index: 3; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 8px; max-width: 100%;
+  padding: 6px 8px 6px 14px; border-radius: 999px; background: rgba(16, 15, 24, .84);
+  border: 1px solid color-mix(in srgb, var(--c) 45%, var(--line-2)); box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.dock .d-who { display: inline-flex; align-items: center; gap: 7px; margin-right: 2px; }
+.dock .d-who i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
+.dock .d-who b { font-size: 14px; }
+.dock .m-inst, .dock .m-acts { margin: 0; }
+.dock .m-cur { max-width: 170px; }
+.dock .m-act { padding: 7px 12px; font-size: 12.5px; }
+.dock .m-act svg { display: inline; width: 14px; height: 14px; }
+.dock .m-quiet.on { color: var(--text); border-color: var(--c); background: color-mix(in srgb, var(--c) 22%, transparent); }
+.dock .m-notes { background: var(--c); border-color: transparent; color: #15121f; font-weight: 800; }
+.dock .m-notes:hover { filter: brightness(1.1); color: #15121f; }
+body.scr-remix .e-band > .member.add { position: absolute; top: 10px; right: 10px; width: auto; margin: 0; padding: 7px 12px; }
+@media (max-width: 600px) {
+  .dock { border-radius: 20px; padding: 8px 10px; }
+  .dock .d-who { width: 100%; justify-content: center; }
+}
+
+/* the notes each member plays float up out of them, in their colour */
+.m-note { position: absolute; left: 50%; top: 4%; margin-left: -.4em; z-index: 4; pointer-events: none; font-size: calc(var(--sz, 66px) * .32); line-height: 1; font-weight: 800;
+  color: color-mix(in srgb, var(--c) 78%, #fff); -webkit-text-stroke: 1.5px rgba(16, 15, 24, .55); paint-order: stroke fill; text-shadow: 0 1px 0 rgba(0, 0, 0, .45), 0 0 10px color-mix(in srgb, var(--c) 70%, transparent); }
+.m-note.hit { font-size: calc(var(--sz, 66px) * .16); top: 22%; }
+.dock .m-solo.on { color: #15121f; border-color: transparent; background: var(--c); font-weight: 800; }
+@media (prefers-reduced-motion: reduce) { .m-note { display: none; } }
+
+/* back to the band: the first thing in the band strip on the notes screen */
+.member.back { justify-content: center; gap: 6px; align-self: stretch; width: 92px; min-height: 120px; margin-right: 4px; border: 0; border-radius: 14px;
+  background: var(--accent); color: #15121f; font-weight: 800; font-size: 12.5px; line-height: 1.2; cursor: pointer; position: sticky; left: 0; z-index: 3; }
+.member.back::before { display: none; }
+.member.back .back-arrow { font-size: 24px; line-height: 1; }
+.member.back:hover { filter: brightness(1.1); }
+/* record what you play on the grid's piano keys */
+.e-rec { display: inline-flex; align-items: center; gap: 8px; }
+.e-rec .dot { width: 11px; height: 11px; border-radius: 50%; background: #ff5a6e; }
+.e-rec.on { background: rgba(255, 90, 110, .16); border-color: #ff5a6e; color: var(--text); }
+.e-rec.on .dot { border-radius: 2px; animation: recpulse 1s ease-in-out infinite; }
+body.view-cards #eRec, body.jamming #eRec, body.chordsview #eRec { display: none; }
+
+/* ---------- The simpler Studio: two screens, one job each ---------- */
+.gone { display: none !important; }
+/* header: each screen plays one thing (band = whole song, a member = their part), so no switch and one Speed */
+.e-transport .seg, .e-speed { display: none !important; }
+/* the parts strip lives on the band screen */
+body.scr-edit .e-parts { display: none !important; }
+body.scr-remix .e-remix .e-parts { display: flex !important; padding: 2px; }
+.r-cols { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 14px; width: min(1260px, 100%); align-items: start; }
+.r-col { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.r-col .r-row { width: 100%; }
+.r-col .r-actions { margin-top: 4px; }
+.r-songrow { align-items: center; }
+.r-parts { min-width: 0; max-width: 100%; flex: 1; overflow: hidden; }
+.r-songrow { min-width: 0; }
+.e-remix .e-parts { max-width: 100%; }
+.e-remix .e-part { height: 48px; min-width: 92px; }
+.e-remix .e-part canvas { height: 20px; bottom: 5px; }
+.e-remix .e-part.add { min-width: 80px; }
+.r-part { padding: 10px 12px 12px; border-radius: 16px; border: 1px solid color-mix(in srgb, var(--c) 40%, var(--line)); background: color-mix(in srgb, var(--c) 7%, transparent); }
+.r-part-head { font-size: 13px; font-weight: 800; display: flex; align-items: baseline; gap: 10px; }
+.r-part-head:empty { display: none; }
+.r-part-head small { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.e-remix .r-col .r-chips { gap: 5px; }
+.e-remix .r-col .r-chips button { padding: 5px 9px; font-size: 12.5px; }
+.r-col .r-label { width: 58px; }
+@media (max-width: 1100px) { .r-cols { grid-template-columns: minmax(0, 1fr); width: min(860px, 100%); } }
+body.scr-remix .e-band { --fsz: min(clamp(96px, 13vw, 176px), calc((100vw - 56px) / (var(--n, 3) * 1.06)), 16vh); min-height: calc(var(--fsz) * 2.2 + 96px); padding-top: 30px; }
+.r-label { width: 64px; }
+/* a member's tools */
+.e-beats { align-items: center; gap: 6px; }
+.e-beats[hidden] { display: none; }
+.e-beats button { padding: 7px 12px; font-size: 13px; }
+.e-beats .r-label { width: auto; margin-right: 4px; }
+.e-parttag { font-size: 12px; font-weight: 700; color: var(--muted); padding: 0 4px; }
+.e-parttag:empty { display: none; }
+body.edit-drums #eGen, body.edit-drums #eUp, body.edit-drums #eDown { display: none; }
+.c-harmony { width: min(860px, 100%); margin: 0 auto 12px; }
+@media (max-width: 600px) {
+  .r-part { padding: 8px 8px 10px; }
+  body.scr-remix .e-band { --fsz: min(clamp(96px, 13vw, 176px), calc((100vw - 56px) / (var(--n, 3) * 1.06)), 20vh); }
+  .e-beats { grid-column: span 2; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .e-beats button { flex: none; }
+}
+
+/* ---------- Focus, scrolling keyboard, harmony pictures (2026-11-14) ---------- */
+.toast { top: 14px; bottom: auto; max-width: min(560px, calc(100vw - 32px)); text-align: center; }
+#eUp, #eDown { display: none !important; }
+.e-stage { scrollbar-width: thin; scrollbar-color: #3a3852 transparent; }
+/* the dock's main button */
+body.scr-remix .dock .m-notes { background: var(--c); border-color: transparent; color: #15121f; font-weight: 800; font-size: 14px; padding: 9px 18px; margin-left: 4px; box-shadow: 0 4px 14px color-mix(in srgb, var(--c) 45%, transparent); }
+body.scr-remix .dock .m-notes:hover { filter: brightness(1.1); color: #15121f; }
+/* notes screen: the member you are editing stands in the middle, bigger, in their own light; the rest step back */
+body.scr-edit .e-band { justify-content: safe center; align-items: center; min-height: 172px; }
+body.scr-edit .e-band.flying { overflow: visible; }
+body.scr-edit .e-band .member[data-member] { transition: opacity .2s; }
+body.scr-edit .e-band .member[data-member]:not(.sel) { width: 78px; opacity: .5; }
+body.scr-edit .e-band .member[data-member]:not(.sel):hover { opacity: 1; }
+body.scr-edit .e-band .member[data-member]:not(.sel) .m-body { width: 52px; height: 52px; }
+body.scr-edit .e-band .member[data-member]:not(.sel) .m-sound, body.scr-edit .e-band .member[data-member]:not(.sel) .m-fader,
+body.scr-edit .e-band .member[data-member]:not(.sel) .m-name small { display: none; }
+body.scr-edit .e-band .member[data-member]:not(.sel)::before { display: none; }
+body.scr-edit .e-band .member.sel { width: 150px; margin: 0 14px; background: none; border-color: transparent; }
+body.scr-edit .e-band .member.sel .m-body { width: 104px; height: 104px; filter: drop-shadow(0 0 12px color-mix(in srgb, var(--c) 55%, transparent)); }
+body.scr-edit .e-band .member.sel::before { top: 80px; height: 36px; left: 12%; right: 12%; opacity: 1; }
+body.scr-edit .e-band .member.sel .m-name b { font-size: 15px; }
+body.scr-edit .e-band .member.add { min-height: 0; width: auto; align-self: center; flex-direction: row; gap: 6px; padding: 8px 12px; border-radius: 999px; opacity: .7; }
+body.scr-edit .e-band .member.add .add-plus { font-size: 16px; }
+@media (min-width: 700px) {
+  body.scr-edit .e-band { padding-left: 116px; padding-right: 116px; }
+  body.scr-edit .e-band .member.back { position: absolute; left: 8px; top: 8px; bottom: 8px; min-height: 0; margin: 0; }
+}
+/* harmony choices: a small picture of the four chords, then the name */
+.r-chips button.h-card { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 10px 5px; border-radius: 12px; min-width: 70px; }
+.h-bars { display: flex; align-items: flex-end; gap: 3px; height: 20px; }
+.h-bars i { width: 11px; height: calc(var(--h) * 20px); border-radius: 3px; background: var(--t); }
+.r-chips button.h-card.on { background: color-mix(in srgb, var(--accent) 24%, var(--panel)); border-color: var(--accent); color: var(--text); }
+.c-harmony .r-chips button.h-card { min-width: 84px; padding: 8px 12px 6px; }
+body.scr-edit .e-band .member[data-member]:not(.sel) .m-mute { display: none; }
+
+/* harmony strip: the part's chords as a landscape */
+.h-strip { position: relative; display: flex; align-items: stretch; gap: 0; height: 58px; border-radius: 12px; overflow: hidden; background: rgba(0, 0, 0, .22); border: 1px solid var(--line); }
+.h-hill { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.h-hill path { fill: rgba(255, 255, 255, .1); }
+.h-hill .h-ridge { fill: none; stroke: rgba(255, 255, 255, .28); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.h-seg { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 4px 6px; border: 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--t) 8%, transparent), color-mix(in srgb, var(--t) 30%, transparent)); color: var(--text); cursor: pointer; transition: background .15s, box-shadow .15s; }
+.h-seg b { font-size: 16px; line-height: 1.1; }
+.h-seg span { font-size: 11px; font-weight: 700; color: var(--t); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.h-seg:hover { background: linear-gradient(180deg, color-mix(in srgb, var(--t) 18%, transparent), color-mix(in srgb, var(--t) 42%, transparent)); }
+.h-seg.now { background: linear-gradient(180deg, color-mix(in srgb, var(--t) 35%, transparent), color-mix(in srgb, var(--t) 65%, transparent)); box-shadow: inset 0 -3px 0 var(--t); }
+.h-seg.now span { color: #fff; }
+.h-arrow { position: relative; z-index: 1; align-self: center; width: 0; overflow: visible; font-style: normal; font-weight: 800; font-size: 13px; color: rgba(255, 255, 255, .45); text-indent: -6px; pointer-events: none; }
+.r-cols { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); }
+@media (max-width: 1100px) { .r-cols { grid-template-columns: minmax(0, 1fr); } }
+.h-strip { height: 54px; }
+
+/* whole song, or stay on one part */
+.e-remix .e-part.all { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-width: 78px; width: 78px; background: var(--panel); color: var(--muted); font-size: 11.5px; font-weight: 800; }
+.e-remix .e-part.all b { font-size: 13px; }
+.e-remix .e-part.all.sel { background: var(--accent); border-color: transparent; color: #15121f; box-shadow: none; }
+.e-remix .e-part.sel::after { content: "↻"; position: absolute; right: 26px; top: 4px; font-size: 12px; font-weight: 800; color: var(--c); }
+.e-remix .e-part.all.sel::after { content: none; }

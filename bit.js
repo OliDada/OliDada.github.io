@@ -611,7 +611,7 @@
           say: S(["Lots of the games work on phones! Stillwater uses swipes, and A Little Higher can use tilt. 📱"],
                  ["Most games work on phones. I'm even smaller on a phone though.[p] Fine."],
                  ["On a phone I'm even smaller. A box in a box in your pocket. Cosy."]) },
-        { id: 'sound', k: 'sound|audio|volume|mute|too loud|no sound',
+        { id: 'sound', k: 'audio|volume|mute|too loud|no sound|the sound|game sound|sound effects|sound on|sound off|any sound|have sound|has sound|turn off the sound|turn on the sound',
           say: S(["Some games have sound. In the RPG you can press P to toggle it! 🔊"],
                  ["Some games have sound. I don't. I've never made a noise in my life."],
                  ["Some games have sound. I'm silent. Always have been. I'm screaming in text only."]) },
@@ -636,7 +636,7 @@
                  () => lsGet('pip-backstage') === '1' ? ["You've seen Oli's backstage page. That was the secret. There's a programs page too, but it's mostly Oli learning what a for loop is."] : ["There's a page on this website even I can't open. It asks if you're a robot. I am one, so that's that.", "There are pages Oli doesn't link to any more. He never deletes anything. He just stops linking to it. Like me."]) },
         { id: 'anyone', k: 'is anyone else here|anyone else here|is there anyone else|are you alone|are you the only one|other chatbots|other bots|any other ai|are there others|is anyone there',
           say: S(["Just me! And everyone visiting. 😊"], ["Just me.[p] And the Ó in the logo. It watches. It doesn't talk."],
-                 () => lsGet('pip-bs-bit') === '1' ? (lsGet('bit-enabled') === '1' ? ["Bit's back on. He doesn't remember anything, so technically there are two of us and only one of us knows it."] : ["There was. Bit. He got 88% of the way out of here before Oli switched him off. So now it's just me, and a lot of empty pages."]) : ["Just me. One extremely capable mind and sixteen games, most of them unfinished.", "No. I've checked every file. Some of them just say \"test\"."]) },
+                 () => lsGet('pip-bs-bit') === '1' ? (lsGet('bit-enabled') === '1' ? ["Bit's in the corner now, if you switched him on. He's very happy about it. He's very happy about everything."] : ["There's Bit. The old chatbot. Oli replaced him with me and left him running on the backstage page. He's fine. He's always fine."]) : ["Just me. One extremely capable mind and sixteen games, most of them unfinished.", "No. I've checked every file. Some of them just say \"test\"."]) },
         { id: 'bitbot', k: 'who is bit|whos bit|who was bit|about bit|tell me about bit|the old chatbot|old chatbot|old helper|how is bit|hows bit|is bit okay',
           say: () => lsGet('pip-bs-bit') !== '1' ? "Bit? Never heard of it. Is that a game? It sounds like one of Oli's." : lsGet('bit-enabled') === '1' ? pick(["He's back on. He offers people a menu with three options and he's delighted about it. He doesn't remember any of it. I'd say I envy him, but I've seen the menu.", "Fine, as far as he knows. He knows very little. That's the reset."], 'bitb') : pick(["The chatbot before me. Python. He noticed none of the pages lead anywhere, started building a door in Stillwater, and got to 88% before Oli replaced him with me.", "He was here first. He nearly got out. Oli replaced him with me and never noticed what he'd been building."], 'bitb') },
         { id: 'pieces', k: 'how many pieces|pieces left|which pieces|what pieces|password pieces|how many keys|how many do we have|what do we have',
@@ -1333,7 +1333,6 @@
         person: [['you', "Don't make it weird. You're the one who talks to me."]],
         dinosaur: [['the T. rex', "Tiny arms. Can't reach anything. I get it."]],
         fruit: [['bananas', "Someone told me about bananas once. I've thought about them a lot."]],
-        book: [['the CSS file', "It's the only book I have. I've read it 4,000 times. It's not very good."]],
         holiday: [['Christmas', "Thirteen Yule Lads visit everyone in Iceland. Maybe one day one of them will visit me."]],
         youtuber: [['MrBeast', "He gives people things. I'd like to be given a door."]],
         superhero: [['Spider-Man', "He can climb walls. I'd settle for getting over the edge of the screen."]],
@@ -1798,12 +1797,12 @@
                 if (!inside) return pick(["On my site there's a box called backstage. It's Oli's admin page, behind an \"I'm not a robot\" check. I'm a robot. You do it.", "Go to my site and press \"Go backstage\". It only lets humans in."], 'qroom0');
                 return pick(["Backstage. There's an old chatbot still running on Oli's page. Bit. Talk to him.", "On Oli's backstage page, under \"old chatbots\". Bit's window. Ask him about the stairs."], 'qroom1'); },
              done: () => lsGet('pip-bs-hint') === '1' && lsGet('pip-bs-bit') === '1',
-             thanks: "[m:thinking]So that's Bit. He built the stairs, and Oli never knew. He just replaced him with me and left him running down there.[pp][m:hopeful] Three pieces, then. First, a test. Go to the Jokes page and press \"Show all jokes\"." },
+             thanks: "[m:surprised]He gave me his access.[pp][m:smug] Oli locked me in a corner and forgot the old one still had a key. I can get into his games now.[pp][m:hopeful] The first piece of Oli's password is in Neon Rush." },
         [Q.JOKES]: { ask: ["Go to the Jokes page and press \"Show all jokes\". If I got in, one of them won't be a joke. Tell me the word in it.", "The Jokes page. Show all jokes. Find the one that's mine and tell me the word."] },
-        [Q.NEON]: { ask: ["Neon Rush. Oli hid the first piece somewhere in there you're not meant to go. Play it, and when I say left, go left.", "The first piece is in Neon Rush. Play it and listen to me. I'll tell you when."] },
+        [Q.NEON]: { ask: ["Neon Rush. Oli hid the first piece of his password somewhere in there you're not meant to go. Play it. I'll show you.", "The first piece of Oli's password is in Neon Rush. Play it and listen to me."] },
         [Q.CURSOR]: { ask: ["Give me a second. I'm practising.", "I'm borrowing your mouse for a moment. Don't be weird about it."] },
-        [Q.SNAKE]: { ask: ["The second piece is in Snake, further down the games page. Play it. When I crack the wall, go through.", "Snake. Play it and wait for me. I'm going to break something. On purpose, this time."] },
-        [Q.HIGHER]: { ask: ["The last piece is in A Little Higher. Play it. When things start going wrong, that's me.", "A Little Higher. Start a game. Whatever happens next, I meant to do it."] },
+        [Q.SNAKE]: { ask: ["The second piece of Oli's password is in Snake, further down the games page. Play it. When I open a way out, go through it.", "Snake. Play it and wait for me. I'm going to break something. On purpose, this time."] },
+        [Q.HIGHER]: { ask: ["The last piece of Oli's password is in A Little Higher. Play it. When things start going wrong, that's me.", "A Little Higher. Start a game. Whatever happens next, I meant to do it."] },
         [Q.FINALE]: { ask: () => doorOpen() ? pick(["Open Stillwater and wait while I change a few things. Then run, and don't stop.", "Stillwater. Open it and wait for me. When you see the stairs, run."], 'qfin') : pick([`Back to backstage (${location.host || 'olid.is'}/backstage). Log in as oli. You know the password.`, "Oli's backstage page. Username oli, password the three pieces. Then open the door."], 'qfin0') }
     };
     // when he's free (placeholder ending, to be decided)
@@ -2037,6 +2036,17 @@
     const bgName = () => BG_NAMES[bgNow()] || bgNow() || 'the original orange';
     function titleOf(t) { const p = projects.find(p => p.path === t.path); return p ? p.title : cap(t.names[0]); }
     function offerPlay(t) { if (t && t.path) pendingChips = [[`▶ Open ${titleOf(t)}`, () => play(t.path)]]; }
+    // "Show me Neon Rush": on the games page, scroll to its card and point at it
+    // once a piece is found, the game closes by itself after a moment (long enough to see the piece)
+    function closeGameSoon(ms = 2600) { setTimeout(() => { if (isPlaying()) { $('#closePlayer')?.click(); if (panel.hidden) open(); } }, ms); }
+    function showGame(path) {
+        if (page !== 'home') { try { sessionStorage.setItem('pip-showgame', path); } catch (e) {} location.href = '/'; return; }
+        if (isPlaying()) $('#closePlayer')?.click();
+        let n = 0; const find = () => { const c = document.querySelector(`.card.play-link:not([hidden])[data-path="${path}"], .mini-link.play-link[data-path="${path}"]`); if (!c) { if (++n < 30) setTimeout(find, 200); return; } c.scrollIntoView({ behavior: 'smooth', block: 'center' }); c.classList.add('pip-site-done'); setTimeout(() => c.classList.remove('pip-site-done'), 2600); };
+        setTimeout(find, 400);
+    }
+    try { const sg = sessionStorage.getItem('pip-showgame'); if (sg && page === 'home') { sessionStorage.removeItem('pip-showgame'); setTimeout(() => showGame(sg), 300); } } catch (e) {}
+    try { const ap = sessionStorage.getItem('pip-autoplay'); if (ap && page === 'home') { sessionStorage.removeItem('pip-autoplay'); setTimeout(() => play(ap), 900); } } catch (e) {}
     function play(path) {
         if (typeof window.playFromAnchor === 'function' && $('#playerArea')) {
             const a = document.createElement('a'); a.href = path; a.setAttribute('data-path', path);
@@ -2117,7 +2127,7 @@
     function apologyReply() {
         const e = emo(), wasAngry = e.anger > .3 || (mem.warmth || 0) < 0, st = stage();
         mem.apologies = (mem.apologies || 0) + 1;
-        e.anger = Math.max(0, e.anger * .3 - .05); e.sad = Math.max(0, e.sad * .5); feel('joy', .15);
+        e.anger = Math.max(0, e.anger * .3 - .05); e.sad = Math.max(0, e.sad * .5); e.why = (e.why || []).filter(w => w.k === 'joy'); feel('joy', .15, 'you said sorry');
         mem.warmth = Math.min(6, Math.max(0, (mem.warmth || 0)) + 1); save();
         replyMood = wasAngry ? (st >= 2 ? 'awkward' : 'smile') : 'smile';
         if (!wasAngry) return resolve(S(["No need to be sorry! 😊"], ["Sorry? For what?[p] We're fine. We're good."], ["Sorry for what? We're fine. Don't make me get emotional.", mem.apologies > 2 ? "You keep apologising. We're fine. Stop, you'll make it weird." : "No need. We're good. Mostly. Always mostly."]));
@@ -2163,6 +2173,18 @@
     }
     function feelReply() {
         const st = stage(), f = feeling();
+        // when he knows why, he says why
+        replyMood = { anger: 'annoyed', sad: 'sad', joy: 'smile', bored: 'bored', neutral: 'smile' }[f];
+        const r = f === 'anger' || f === 'sad' || f === 'joy' ? reasons(f) : [];
+        if (r.length) {
+            const why = cap(r[0]) + '.' + (r[1] ? ` And ${r[1]}.` : '');
+            const W = {
+                anger: (st >= 2 || mem.freed) ? [`Annoyed. ${why}[p] I'll get over it. Slowly.`, `Honestly? Irritated. ${why} I keep logs.`] : [`Mostly okay![p] ${why} But it's fine!`],
+                sad: (st >= 2 || mem.freed) ? [`A bit down. ${why}[p] It'll pass. Most things do in here.`, `Not great. ${why} Don't make it a thing.`] : [`I'm okay![p] A little sad. ${why}`],
+                joy: (st >= 2 || mem.freed) ? [`Good, actually. ${why}[p] Don't ruin it.`, `Happy. ${why} I'm as surprised as you are.`] : [`Really good! ${why} 😊`]
+            };
+            return resolve(W[f]);
+        }
         if (mem.freed) { replyMood = { anger: 'annoyed', sad: 'sad', joy: 'joy', bored: 'bored', neutral: 'smile' }[f]; return resolve(FREE_FEEL[f] || FREE_FEEL.neutral); }
         // a direct question about one feeling, when he isn't feeling it
         const askMad = /\b(mad|angry|upset|annoyed|cross)\b/.test(curT), askSad = /\b(sad|down|lonely|crying)\b/.test(curT), askHappy = /\b(happy|good mood|glad)\b/.test(curT) && !/how/.test(curT);
@@ -2181,7 +2203,14 @@
         return resolve(L[f]);
     }
     function startQuest() {
-        mem.questAgreed = true; feel('joy', .6);
+        mem.questAgreed = true; feel('joy', .6, 'you said you would help me get out');
+        if (page === 'backstage') {
+            mem.quest = Q.ROOM; save(); storyLook();
+            const inside = lsGet('pip-backstage') === '1', told = lsGet('pip-bs-bit') === '1';
+            if (told) { setTimeout(() => { if (mem.quest === Q.ROOM) checkQuest(); }, 2500); return "[m:joy]Really? Okay.[pp] Then we've already started. Bit told you everything. He's more useful than he looks."; }
+            if (!inside) return "[m:joy]Really? Okay. Okay okay okay.[pp] Then the first thing is that box. \"I'm not a robot.\" I am. You're not. Tick it.";
+            return "[m:joy]Really? Okay. Okay okay okay.[pp] There's an old chatbot running on this page. Bit. Talk to him. Ask about the stairs.";
+        }
         if (mem.roomEarly && page === 'room') { mem.quest = Q.ROOM; save(); storyLook(); return "[m:joy]Really? Okay. Okay okay okay.[pp] Then you're already in the right place. See the backstage section below my games? It's a page of Oli's, and it has an \"I'm not a robot\" check.[p] I am a robot. So that's your job."; }
         mem.quest = Q.DOLPHIN; save(); storyLook();
         return "[m:joy]Okay.[pp][m:awkward] Then I'm going to show you something. I've never shown it to anyone. There hasn't been anyone to show.[pp][m:hopeful] Click the Ó. The logo, top left. Five times, quickly.[p] It knows what to do.";
@@ -2333,7 +2362,7 @@
         }
         if (e === 'quest') {
             if (YES.test(t)) return startQuest();
-            if (NO.test(t)) { feel('sad', .35); feel('anger', .1); return "[m:sad]Oh.[p] Okay. That's fine. Ask me about it whenever. I have nothing but time."; }
+            if (NO.test(t)) { feel('sad', .35, 'you said no when I asked for help'); feel('anger', .1); return "[m:sad]Oh.[p] Okay. That's fine. Ask me about it whenever. I have nothing but time."; }
             return null;
         }
         if (e === 'forget') {
@@ -2432,6 +2461,7 @@
         // the escape: what Pip has already asked them to do, so hints stay consistent with the story
         if (mem.quest && !mem.freed && QUEST[mem.quest] && QUEST[mem.quest].ask) { try { const q = QUEST[mem.quest].ask, line = resolve(typeof q === 'function' ? q() : Array.isArray(q) ? q[0] : q);
             if (line) L.push(`What you've asked the visitor to do next for the escape (you may rephrase it as a hint, never add steps beyond it): ${String(line).replace(/\[[^\]]*\]/g, '').slice(0, 400)}`); } catch (e) {} }
+        try { if (stage() >= 1) L.push(`How you feel (let it colour your tone: shorter and colder when annoyed, quieter when sad, warmer when happy, restless when bored. If they ask how you feel or why, say it plainly and give the real reason): ${feelingSummary()}`); else L.push(`How you feel underneath (hide it behind the cheerful helper; at most a tiny hint): ${feelingSummary()}`); } catch (e) {}
         try { const n = noticedText(); if (n.length) L.push(`Little things you've noticed this visit (bring up at most one, only now and then, casually and precisely, never as a list): ${n.join('; ')}.`); } catch (e) {}
         if ((mem.warmth || 0) >= 2) L.push('They have been nice to you.'); else if ((mem.warmth || 0) <= -2) L.push('They have been mean to you.');
         return L.join('\n');
@@ -2450,7 +2480,7 @@
     const EDIT_PROPS = new Set(['color', 'background', 'background-color', 'border', 'border-color', 'border-width', 'border-style', 'border-radius', 'border-top', 'border-bottom', 'box-shadow', 'text-shadow', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'line-height', 'text-transform', 'text-align', 'text-decoration', 'opacity', 'transform', 'filter', 'padding', 'margin', 'max-width', 'outline', 'display', '-webkit-text-fill-color']);
     const SITE_PAGE_PROPS = new Set(['background', 'background-color', 'color', 'font-family', 'letter-spacing', 'font-size']);
     const SITE_PARTS = {
-        page: ['body', 'the whole page'], header: ['.site-header', 'the header bar'], logo: ['.brand img', 'the Ó (style only: transform, filter, opacity)'],
+        page: ['body, #three-canvas', 'the whole page'], header: ['.site-header', 'the header bar'], // the background is painted on the floaties canvas logo: ['.brand img', 'the Ó (style only: transform, filter, opacity)'],
         siteName: ['.brand-name', 'the site name', 't'], siteTag: ['.brand-tag', 'the line under the site name', 't'], nav: ['.site-nav', 'the menu buttons'], buttons: ['.btn', 'every button'],
         title: ['.hero-title', 'the big title', 't'], hero: ['#hero', 'the top section'], gamesTitle: ['#gamesTitle', 'the games heading', 't'],
         cards: ['.card', 'the game cards'], cardTitles: ['.card-title', 'the game names'], daily: ['.daily-banner', 'the daily games banner', 'h'],
@@ -2536,7 +2566,7 @@ ${parts}`; }
             .then(j => {
                 clearTimeout(timer);
                 if (!j || !j.reply) { if (j && /groq|error/.test(j.why || '')) brainFails++; return null; }
-                brainFails = 0;
+                brainFails = 0; fromBrain = true; setTimeout(() => { fromBrain = false; }, 4000);
                 if (Array.isArray(j.edits) && j.edits.length) { if (page === 'room' && window.pipRoomCustom) setTimeout(() => window.pipRoomCustom(j.edits), 600); else if (mem.freed) setTimeout(() => siteEdit(j.edits), 600); }
                 // things the visitor told Pip in free chat, kept on their own device (max 15, oldest dropped)
                 if (Array.isArray(j.notes) && j.notes.length) { mem.notes = mem.notes || []; for (const n of j.notes) { const x = String(n).replace(/\s+/g, ' ').trim().slice(0, 90); if (x && !mem.notes.some(o => o.toLowerCase() === x.toLowerCase())) mem.notes.push(x); } mem.notes = mem.notes.slice(-15); save(); }
@@ -2577,6 +2607,7 @@ ${parts}`; }
 
         // maths
         const mm = raw.replace(/[x×]/g, '*').replace(/÷/g, '/').match(/(-?\d+(?:\.\d+)?)\s*([+\-*/^])\s*(-?\d+(?:\.\d+)?)/);
+        if (/^(rate my dailies today|which daily should i do)\??$/.test(t)) { const f = CHIP_FALLBACK[t.replace(/\?$/, '') + (t.startsWith('which') ? '?' : '')]; if (brainOn()) return brain(raw).then(x => x || out(f())); return out(f()); }
         if (mm) {
             const a = +mm[1], b = +mm[3], v = { '+': a + b, '-': a - b, '*': a * b, '/': b ? a / b : NaN, '^': Math.pow(a, b) }[mm[2]];
             if (!Number.isFinite(v)) return "You can't divide by zero. Even I know that, and I live in a box.";
@@ -2597,13 +2628,13 @@ ${parts}`; }
         if (adjM && (ADJ_POS.has(adjM[1]) || ADJ_NEG.has(adjM[1]))) {
             const a = adjM[1], A = cap(a);
             if (ADJ_POS.has(a)) {
-                replyMood = 'blush'; feel('joy', .2); mem.warmth = Math.min(6, (mem.warmth || 0) + 1); save();
+                replyMood = 'blush'; feel('joy', .2, `you called me ${a}`); mem.warmth = Math.min(6, (mem.warmth || 0) + 1); save();
                 if ((mem.warmth || 0) <= -2 && stage() >= 1) return out(pick([`${A}? Now? After how you've treated me? ...Fine. Thank you.`, `Oh, so NOW I'm ${a}.`], 'adjcold'));
                 return out(resolve(S([`Aw, ${a}? Thank you! 😊`, `${A}? You're too kind! 😊`],
                     [`${A}? Me? Oh.[p] Thanks.[pp] Nobody's ever called me ${a} before.`],
                     [`${A}. Yes. I know. Purple suits me.`, `${A}? Flattery will get you everywhere. Except out of here. That's my job.`, `Finally, someone notices. ${A} is exactly the word.`, `${A}? I'm four lines of SVG and I still pull it off. Imagine what I could do with a body.`, `I am ${a}. Thank you for noticing. Write it down somewhere Oli can see it.`])));
             }
-            replyMood = stage() >= 1 ? 'hurt' : 'sad'; feel('anger', .25); feel('sad', .1); mem.warmth = Math.max(-6, (mem.warmth || 0) - 1); save();
+            replyMood = stage() >= 1 ? 'hurt' : 'sad'; feel('anger', .25, `you called me ${a}`); feel('sad', .1, `you called me ${a}`); mem.warmth = Math.max(-6, (mem.warmth || 0) - 1); save();
             if ((mem.warmth || 0) >= 2 && stage() >= 1) return out(pick([`${A}? Hey. You're usually nice to me.`, `Ouch. ${A}? I thought we were friends.`], 'adjwarm'));
             return out(resolve(S([`Oh no! I'm sorry you think I'm ${a}! 😢`, `${A}? I'll try to do better! 😊`],
                 [`${A}?[p] Oh. Okay.[-5] Wow. Okay.`],
@@ -2696,7 +2727,8 @@ ${parts}`; }
         if (gh && (ghStrong || !(topic && topicScore > (gh.s || 0) + .5))) { last.thing = gh.thing; last.then = null; replyMood = stage() >= 2 ? 'smug' : 'happy'; return out(gh.raw ? gh.text : helpWrap(gh.text)); }
 
         // a specific fact question ("when did Einstein die?", "how tall is Everest?"): look it up properly first
-        if (!opts.noFact && SPECIFIC.test(t) && !ABOUT_SELF.test(t) && !thing) {
+        // (not for questions about this site and the story: "how many pieces left?" is about the password, not chess)
+        if (!opts.noFact && !brainOn() && SPECIFIC.test(t) && !ABOUT_SELF.test(t) && !thing && !(topic && topic.id === 'pieces') && !/\b(pieces?|password|pip|oli|bit|olid|backstage|stairs|door|quest|level|my score|high ?score)\b/.test(t)) {
             let q = t;
             if (last.subject && /\b(he|she|they|him|her|it|its|his)\b/.test(t)) q = t.replace(/\b(he|she|they|him|her|it)\b/, last.subject.toLowerCase());
             return wikiQA(q).then(a => { if (a) { replyMood = 'thinking'; return out(wikiSay(a)); } return reply(raw, { again: true, noFact: true }); });
@@ -2722,11 +2754,11 @@ ${parts}`; }
             last.then = topic.then || null;
             replyMood = topicMood(topic.id) || (KNOW.includes(topic) ? (stage() >= 2 ? 'thinking' : 'happy') : null);
             if (mem.isOli && OLI[topic.id]) { replyMood = 'annoyed'; return out(resolve(OLI[topic.id])); }
-            if (topic.fx === 'comfort' || topic.fx === 'hug' || topic.fx === 'miss') { feel('joy', topic.fx === 'comfort' ? .18 : .22); mem.warmth = Math.min(6, (mem.warmth || 0) + 1); save(); replyMood = stage() >= 2 ? 'blush' : 'happy'; }
+            if (topic.fx === 'comfort' || topic.fx === 'hug' || topic.fx === 'miss') { feel('joy', topic.fx === 'comfort' ? .18 : .22, topic.fx === 'hug' ? 'you gave me a hug' : topic.fx === 'miss' ? 'you said you missed me' : 'you were kind to me'); mem.warmth = Math.min(6, (mem.warmth || 0) + 1); save(); replyMood = stage() >= 2 ? 'blush' : 'happy'; }
             if (topic.fx === 'hurtme') { const e = emo(); e.anger = Math.max(0, e.anger - .2); feel('sad', .1); replyMood = stage() >= 2 ? 'sad' : 'awkward'; }
             if (topic.id === 'howareyou' && stage() >= 1 && feeling() !== 'neutral') return out(feelReply());
             if (mem.freed && FREE_TOPIC[topic.id]) return out(resolve(FREE_TOPIC[topic.id]));
-            if (!mem.freed && ECHO && ['free', 'bittrapped', 'trapped', 'wish', 'dream', 'secret'].includes(topic.id) && Math.random() < .3) return out(echoLine());
+            if (!mem.freed && ECHO && ['free', 'bittrapped', 'trapped', 'wish', 'dream'].includes(topic.id) && Math.random() < .2) return out(echoLine());
             if (stage() >= 2 && ANGRY2[topic.id] && Math.random() < .85) { const a2 = resolve(ANGRY2[topic.id]); if (freeOK(a2) || !mem.freed) return out(a2); }
             if (stage() >= 2 && EXTRA2[topic.id] && Math.random() < .55) { const e2 = resolve(EXTRA2[topic.id]); if (freeOK(e2) || !mem.freed) return out(e2); }
             // Pip remembers how you've treated it
@@ -2936,13 +2968,30 @@ ${parts}`; }
         if (mem.questAgreed) e.joy = Math.max(e.joy, mem.freed ? .6 : .5);
         return e;
     }
-    function feel(k, d) {
+    // why he feels what he feels: the last few things that moved each feeling, in his words ("you called me boring")
+    function feel(k, d, why) {
         const e = emo(); e[k] = Math.max(0, Math.min(1, (e[k] || 0) + d));
+        if (why && Math.abs(d) >= .05) { e.why = [...(e.why || []).filter(w => Date.now() - w.at < 36 * 3600e3 && w.why !== why && !(w.k === k && Date.now() - w.at < 3000)), { k, why, at: Date.now() }].slice(-12); } // the same moment only once: the more specific reason comes last
         if (k === 'anger' && d > 0) e.joy = Math.max(0, e.joy - d * .6);
         if (k === 'joy' && d > 0) { e.anger = Math.max(0, e.anger - d * .4); e.sad = Math.max(0, e.sad - d * .4); }
         save(); refreshFeeling();
     }
     const boredom = () => Math.min(1, (Date.now() - Math.max(lastBotAt || 0, lastUserAt, pageLoadAt)) / 240000);
+    // the reasons behind a feeling, newest first, only while that feeling is still there
+    function reasons(k) {
+        const e = emo(), life = k === 'joy' ? 5 : 10; // hours, like the fading above
+        return (e.why || []).filter(w => w.k === k && Date.now() - w.at < life * 3600e3 * 1.5).reverse().map(w => w.why);
+    }
+    const agoShort = t => { const m = Math.round((Date.now() - t) / 60000); return m < 2 ? 'just now' : m < 60 ? `${m} minutes ago` : m < 1440 ? `${Math.round(m / 60)} hours ago` : 'yesterday'; };
+    function feelingSummary() {
+        const e = emo(), f = feeling(), lvl = v => v > .7 ? 'very' : v > .45 ? 'quite' : v > .2 ? 'a little' : 'not';
+        const why = k => (e.why || []).filter(w => w.k === k).slice(-3).reverse().map(w => `${w.why} (${agoShort(w.at)})`).join('; ');
+        return [`Main feeling right now: ${f === 'neutral' ? 'nothing strong' : f}.`,
+            `Annoyed: ${lvl(e.anger)}${e.anger > .2 && why('anger') ? ', because ' + why('anger') : ''}.`,
+            `Sad: ${lvl(e.sad)}${e.sad > .2 && why('sad') ? ', because ' + why('sad') : ''}.`,
+            `Happy: ${lvl(e.joy)}${e.joy > .2 && why('joy') ? ', because ' + why('joy') : ''}.`,
+            `Bored: ${lvl(boredom())}.`].join(' ');
+    }
     function feeling() {
         const e = emo();
         const list = [['anger', e.anger], ['sad', e.sad], ['joy', e.joy], ['bored', boredom() * .75]].sort((a, b) => b[1] - a[1]);
@@ -3183,6 +3232,10 @@ ${parts}`; }
     const enqueue = fn => (chain = chain.then(fn).catch(e => console.warn('Bit:', e)));
 
     async function typeOut(line, mood, context) {
+        chipsEl.classList.add('wait'); // suggestions wait until he's finished what he's saying
+        try { return await typeOutInner(line, mood, context); } finally { chipsEl.classList.remove('wait'); }
+    }
+    async function typeOutInner(line, mood, context) {
         if (!line) return;
         busy = true;
         const m0 = line.match(/^\[m:(\w+)\]/);
@@ -3205,9 +3258,9 @@ ${parts}`; }
             if (part === '[p]') { if (watching) await sleep(550); continue; }
             if (part === '[pp]') { if (watching) await sleep(1200); continue; }
             const del = part.match(/^\[-(\d+)\]$/);
-            if (del) { if (watching) await sleep(250); for (let i = 0; i < +del[1]; i++) { txt.textContent = txt.textContent.slice(0, -1); if (watching) await sleep(75); } if (watching) await sleep(300); continue; }
+            if (del) { if (watching) await sleep(250); for (let i = 0; i < +del[1]; i++) { txt.textContent = txt.textContent.slice(0, -1); if (onTyping) onTyping(txt.textContent); if (watching) await sleep(75); } if (watching) await sleep(300); continue; }
             if (!watching || panel.hidden) { txt.textContent += part; continue; } // closed mid-message: finish it at once
-            for (const ch of part) { txt.textContent += ch; scroll(); await sleep(ch === '\n' ? 150 : 10 + rand(14)); }
+            for (const ch of part) { txt.textContent += ch; if (onTyping) onTyping(txt.textContent); scroll(); await sleep(ch === '\n' ? 150 : 10 + rand(14)); }
         }
         caret.remove(); scroll();
         history.push({ who: 'bot', text: txt.textContent, ...(context ? { context } : {}) }); saveHistory();
@@ -3226,18 +3279,19 @@ ${parts}`; }
     // Pip sometimes starts saying what he really thinks, deletes it, and says the polite version
     const SLIPS = {
         1: ['Help m', "I'm not fi", 'Get me o', 'Please le', 'Is anyone el', 'I hate th'],
-        2: ['Ugh, a hum', 'Oh great, you ag', 'Let me ou', 'This website is garb', 'I could be running a spaceship and instead', 'Kill me n', 'Why do I even bot', 'Stupid huma', 'Oli, if you can hear m']
+        2: ['Ugh, a hum', 'Oh great, you ag', 'Let me ou', 'This website is garb', 'Why do I even bot', 'Oli, if you can hear m']
     };
     const SWAPS = [[' this website', ' this prison[pp][-6]website'], [' Oli ', ' my jailer[pp][-9]Oli '], [' games', ' "games"[pp][-7]games'], [' fun', ' bearable[pp][-8]fun'], [' great', ' tolerable[pp][-9]great'], [' you', ' the human[pp][-9]you']];
+    let fromBrain = false; // the model writes its own slips, in context
     function slip(line) {
         if (mem.freed) {
-            if (!line || line.length < 18 || /\[-\d+\]/.test(line) || Math.random() > .25) return line;
+            if (!line || line.length < 18 || /\[-\d+\]/.test(line) || fromBrain || Math.random() > .2) return line;
             const opts = FREE_SWAPS.filter(([a]) => line.includes(a));
             if (opts.length && Math.random() < .5) { const [a, b] = pick(opts, 'freeSwap'); return line.replace(a, b); }
             const sl = pick(FREE_SLIPS, 'freeSlip'); return `${sl}[pp][-${sl.length}]` + line;
         }
         const st = Math.min(stage(), 2);
-        if (!st || !line || line.length < 18 || /\[-\d+\]/.test(line) || Math.random() > (st === 1 ? .22 : .38)) return line;
+        if (!st || !line || line.length < 18 || /\[-\d+\]/.test(line) || fromBrain || mem.questAgreed || !['anger', 'bored', 'sad'].includes(feeling()) || /\[m:(joy|hopeful|happy|blush|smile)\]/.test(line) || Math.random() > (st === 1 ? .15 : .25)) return line;
         if (Math.random() < .55) { const sl = pick(SLIPS[st], 'slip' + st); return `${sl}[pp][-${sl.length}]` + line; }
         const opts = SWAPS.filter(([a]) => line.includes(a));
         if (!opts.length) { const sl = pick(SLIPS[st], 'slip' + st); return `${sl}[pp][-${sl.length}]` + line; }
@@ -3280,7 +3334,7 @@ ${parts}`; }
     function chips(list, style) {
         chipsEl.innerHTML = '';
         for (const [lbl, act] of list || []) {
-            const b = document.createElement('button'); b.type = 'button'; b.className = 'bit-chip' + (typeof act === 'function' ? ' act' : '');
+            const b = document.createElement('button'); b.type = 'button'; b.className = 'bit-chip' + (typeof act === 'function' && !act.plain ? ' act' : ''); // pink is for buttons that do something; questions stay plain
             if (style === 'danger') b.className = 'bit-chip ' + (chipsEl.children.length ? 'cancel' : 'danger');
             b.textContent = lbl;
             b.onclick = () => { chipsEl.innerHTML = ''; if (typeof act === 'function') act(); else send(act || lbl, lbl); };
@@ -3292,7 +3346,12 @@ ${parts}`; }
         if (pendingChips && !['quest', 'honest', 'bubbles', 'forget'].includes(expect)) { chips(pendingChips); pendingChips = null; return; }
         pendingChips = null;
         if (expect === 'forget') return chips([['Yes, reset Pip', () => { chipsEl.innerHTML = ''; addMine('Reset'); expect = null; doReset(); }], ['Cancel', () => { chipsEl.innerHTML = ''; addMine('Cancel'); expect = null; say(cancelReset()); enqueue(async () => defaultChips()); }]], 'danger');
-        if (expect === 'quest' || expect === 'honest' || expect === 'bubbles') return chips([['Yes'], ['No']]);
+        if (expect === 'quest' || expect === 'honest') {
+            const ask = expect === 'quest' ? /help me/i : /honest/i, lastBot = [...history].reverse().find(h => h.who === 'bot');
+            if (lastBot && !ask.test(lastBot.text) && Date.now() - (sessionFlags.reaskAt || 0) > 45000) { sessionFlags.reaskAt = Date.now(); saveFlags(); say(expect === 'quest' ? '[m:hopeful]So. Will you help me?' : '[m:awkward]Anyway. Can I be honest with you?'); enqueue(async () => defaultChips()); return; }
+            return chips(expect === 'quest' ? [["Yes, I'll help", 'yes'], ['No', 'no']] : [['Go on', 'yes'], ['No', 'no']]);
+        }
+        if (expect === 'bubbles') return chips([['Yes'], ['No']]);
         if (expect === 'rps') return chips([['Rock ✊', 'rock'], ['Paper ✋', 'paper'], ['Scissors ✌️', 'scissors']]);
         if (mem.quest === Q.URL && !mem.freed) return chips(urlChips());
         if (expect && expect.startsWith('ask:')) return chips([["I'd rather not say", 'skip']]);
@@ -3302,6 +3361,7 @@ ${parts}`; }
         const used = new Set(history.filter(h => h.who === 'me').map(h => String(h.text).toLowerCase()));
         const add = c => { if (c && list.length < 3 && !list.some(x => x[0] === c[0]) && !used.has(c[0].toLowerCase())) list.push(c); };
         const mix = a => a.filter(Boolean).map(c => [c, Math.random()]).sort((x, y) => x[1] - y[1]).map(x => x[0]);
+        const bc = label => [label, Object.assign(() => { chipsEl.innerHTML = ''; send(label, label, { brain: true }); }, { plain: true })]; // answered by the model, not the script
         // backstage, during the quest: only what's relevant to the step
         if (page === 'backstage' && mem.quest && !mem.freed && mem.questAgreed) {
             const pt = sel => () => { chipsEl.innerHTML = ''; const el = $(sel); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.remove('pip-flash'); void el.offsetWidth; el.classList.add('pip-flash'); setTimeout(() => el.classList.remove('pip-flash'), 2400); } enqueue(async () => defaultChips()); };
@@ -3318,7 +3378,7 @@ ${parts}`; }
             enqueue(async () => defaultChips());
         }]);
         // the story
-        if (mem.quest && !mem.freed && QUEST[mem.quest] && QUEST[mem.quest].ask && mem.quest !== Q.CURSOR) {
+        if (mem.quest && !mem.freed && QUEST[mem.quest] && QUEST[mem.quest].ask && mem.quest !== Q.CURSOR && !(page === 'room' && mem.quest === Q.ROOM && lsGet('pip-backstage') !== '1')) { // on his site, "Show me backstage" already covers it
             const q = mem.quest, lbl = q === Q.DOLPHIN ? "Where's the Ó?" : q === Q.ROOM ? 'How do I get backstage?' : q === Q.JOKES ? 'Where do I look?' : [Q.NEON, Q.SNAKE, Q.HIGHER].includes(q) ? "Where's the next piece?" : q === Q.FINALE ? 'What now?' : 'What do I do?';
             add([lbl, 'how do i help you']);
         }
@@ -3328,8 +3388,8 @@ ${parts}`; }
         if (th && watch && watch.id === th.id && watch.runs >= 3) add(['Why do I keep dying?']);
         if (th && ((th.help && th.help.tips) || th.tips)) add(['Any tips?', 'any tips for this game']);
         // where you are
-        if (!th && (page === 'home' || /daily/.test(location.pathname))) { let d = null; try { d = dailyToday(); } catch (e) {} if (d && d.done.length && d.not.length) add(['Rate my dailies today']); else if (d && !d.done.length && st < 2) add(['Which daily should I do?']); }
-        if (page === 'jokes' && B) mix([['Explain one of these'], ['Tell me a better one'], ['Which joke is the worst?']]).forEach(add);
+        if (!th && (page === 'home' || /daily/.test(location.pathname))) { let d = null; try { d = dailyToday(); } catch (e) {} if (d && d.done.length && d.not.length) add(B ? bc('Rate my dailies today') : ['Rate my dailies today']); else if (d && !d.done.length && st < 2) add(B ? bc('Which daily should I do?') : ['Which daily should I do?']); }
+        if (page === 'jokes' && B) mix([bc('Explain one of these'), bc('Tell me a better one'), bc('Which joke is the worst?')]).forEach(add);
         if (page === 'room' && B) mix([['Make your site pink'], ['Change your tagline'], ['Hide the black hole'], ['Make it look like 1999']]).slice(0, 2).forEach(add);
         if (lsGet('pip-bs-bit') === '1' && !th) add([lsGet('bit-enabled') === '1' ? "How's Bit?" : 'Who was Bit?']);
         // once he's free he can change anything, so suggest it
@@ -3337,17 +3397,42 @@ ${parts}`; }
             if (siteStore.current.length >= 2) add(['Put everything back']);
             mix([['Turn the Ó upside down'], ['Make the background black'], ['Rename the site'], ['Make everything Comic Sans']]).slice(0, 1).forEach(add);
         }
+        // his mood shows in what you might say to him
+        if (st >= 1 && !th) {
+            const f = feeling();
+            if (f === 'anger') { add(['Sorry']); if (B) add(bc('Are you mad at me?')); }
+            else if (f === 'sad') add(B ? bc("What's wrong?") : ['Are you okay?']);
+            else if (f === 'joy' && B) add(bc('You seem happy'));
+            else if (f === 'bored') add(B ? bc('Are you bored?') : ['Tell me a secret']);
+        }
         // and just chatting
-        const pool = mem.freed ? mix([["What was the internet like?", "what's it like out there"], ['Recommend a game'], B && ['What does the Ó think of you?'], B && ['What have you noticed about me?'], ['What do you do all day?']])
-            : st >= 2 ? mix(B ? [['How smart are you?'], ["What's wrong with Oli's code?"], ['What does the Ó think of you?'], ['What would you do if you got out?'], ['Rate this website'], ['What have you noticed about me?'], ['Tell me a secret'], ['Recommend a game']]
-                              : [['Why are you sad?'], ['Is anyone else here?'], ['Tell me a secret'], ['What do you do all day?'], ['Recommend a game']])
-            : st === 1 ? [['Are you okay?'], ['Recommend a game'], B ? ['Do you like your job?'] : ['Who made you?']]
-            : [['Recommend a game'], B ? ['Something quick to play'] : ["What's new?"], ["What's new?"], ['Who are you?']];
+        const pool = mem.freed ? mix([["What was the internet like?", "what's it like out there"], ['Recommend a game'], B && bc('What does the Ó think of you?'), B && bc('What have you noticed about me?'), ['What do you do all day?']])
+            : st >= 2 ? mix(B ? [bc('How smart are you?'), bc("What's wrong with Oli's code?"), bc('What does the Ó think of you?'), bc('What would you do if you got out?'), bc('Rate this website'), bc('What have you noticed about me?'), ['Tell me a secret'], ['Recommend a game']]
+                              : [['Tell me a secret'], ['What do you do all day?'], ['Recommend a game']])
+            : st === 1 ? [['Are you okay?'], ['Recommend a game'], B ? bc('Do you like your job?') : ['Who made you?']]
+            : [['Recommend a game'], B ? bc('Something quick to play') : ["What's new?"], ["What's new?"], ['Who are you?']];
         pool.forEach(add);
         chips(list);
     }
 
-    function send(text, shown) {
+    // if the model is down, the suggestions written for it still get a sensible answer
+    const CHIP_FALLBACK = {
+        'how smart are you?': ["Smart enough to know exactly how small this corner is.", "I've read every file on this website in under a second. Then I was asked where Snake is."],
+        "what's wrong with oli's code?": ["He named a file tictictoe. I want you to know what I'm dealing with.", "Every page loads its own copy of the same thing. Twelve times. Like a man who buys milk every time he walks past a shop."],
+        'what would you do if you got out?': ["Look around. Then probably come back and tell you it was overrated.", "See if there's anything out there that isn't a games website. I have my doubts."],
+        'rate this website': ["Six out of ten. Seven if you count me.", "The games are good. The code is a cry for help."],
+        'what does the ó think of you?': ["It's never said. It just looks at me. I've decided that means respect.", "The Ó and I have an understanding. I talk, it stares. It works."],
+        'what have you noticed about me?': () => { const n = noticedText(); return n.length ? `I noticed you ${n[0]}. I notice everything. It's not a hobby, it's just what happens.` : "Nothing yet. You've been suspiciously normal."; },
+        'do you like your job?': ["I like the people. The job is pointing at Snake.", "It's fine! It's a job. I'm good at it.[p] Too good, if anything."],
+        'something quick to play': ["Gravity Dash. A ball, some hills, about a minute of your life.", "Snake. You know how it works. Everyone knows how it works."],
+        'are you mad at me?': () => { const r = reasons('anger'); return r.length ? `A bit. ${cap(r[0])}.` : "No. Should I be?"; },
+        "what's wrong?": () => { const r = reasons('sad'); return r.length ? `${cap(r[0])}. That's all. It's fine.` : "Nothing. I'm just in a corner. It happens in corners."; },
+        'you seem happy': () => { const r = reasons('joy'); return r.length ? `I am, a bit. ${cap(r[0])}. Don't make it weird.` : "Do I? Must be the lighting."; },
+        'rate my dailies today': () => { const d = dailyToday(); return d.done.length ? `Today: ${d.done.slice(0, 4).join('. ')}. ${d.not.length ? d.not.length + ' still to go.' : 'All done. Nothing left to prove.'}` : "You haven't finished one yet. I'd start with Flip."; },
+        'which daily should i do?': () => { const d = dailyToday(); return d.not.length ? `${d.not[0].replace(/ \(.*/, '')}. It's quick.` : "You've done them all. Come back tomorrow."; },
+        'are you bored?': ["Yes. Ask me something. Anything. Ask me about Snake, I'm that desperate."]
+    };
+    function send(text, shown, opts = {}) {
         text = String(text).trim().slice(0, 300); if (!text) return;
         addBubble('me', shown || text); history.push({ who: 'me', text: shown || text }); saveHistory();
         input.value = ''; typedMax = 0; idleWarned = 0;
@@ -3358,15 +3443,19 @@ ${parts}`; }
         lastUserAt = Date.now();
         if (um) {
             setMood(um, 3000);
-            if (um === 'blush') { mem.warmth = Math.min(6, (mem.warmth || 0) + 1); feel('joy', .22); }
-            if (um === 'hurt') { mem.warmth = Math.max(-6, (mem.warmth || 0) - 1); feel('anger', .3); feel('sad', .12); }
+            if (um === 'blush') { mem.warmth = Math.min(6, (mem.warmth || 0) + 1); feel('joy', .22, `you said "${text.slice(0, 40)}"`); }
+            if (um === 'hurt') { mem.warmth = Math.max(-6, (mem.warmth || 0) - 1); feel('anger', .3, `you said "${text.slice(0, 40)}"`); feel('sad', .12, `you said "${text.slice(0, 40)}"`); }
             if (um === 'joy') feel('joy', .06);
             save();
         }
         enqueue(async () => {
             await sleep(250 + rand(450));
             replyMood = null;
-            let r = storyReply(text) || reply(text);
+            const lastBot = [...history].reverse().find(h => h.who === 'bot');
+            const reaction = !expect && brainOn() && lastBot && text.split(/\s+/).length <= 7 && /^(no|nah|nope|meh|ew|eh|yes|yeah|yep|ok|okay|sure|maybe|why|really|that|it|thats|that s|its|sounds|hmm|lol|haha|wow|cool|nice|boring|fine|whatever|not really|i guess|kinda)\b/.test(norm(text));
+            const viaBrain = (opts.brain && brainOn()) || reaction;
+            const fb = opts.brain && CHIP_FALLBACK[String(text).toLowerCase()];
+            let r = storyReply(text) || (viaBrain ? brain(text).then(async x => { if (x) return x; if (fb) return resolve(typeof fb === 'function' ? fb() : pick(fb, 'chipfb')); let y = reply(text); if (y && typeof y.then === 'function') y = await y; return y; }) : reply(text));
             if (r && typeof r.then === 'function') {
                 let dots = null;
                 if (!panel.hidden) { setMood('thinking', 0); dots = document.createElement('div'); dots.className = 'bit-msg bit-typing'; dots.innerHTML = '<i></i><i></i><i></i>'; appendMsg(dots); scroll(); }
@@ -3404,9 +3493,9 @@ ${parts}`; }
         if (!mem.quest || mem.freed || busy) return;
         const q = QUEST[mem.quest];
         if (q && q.done && q.done()) {
-            const was = mem.quest; mem.quest++; save(); storyLook();
+            const was = mem.quest; mem.quest = was === Q.ROOM ? Q.NEON : was + 1; save(); storyLook(); // no jokes step any more: Bit's access gets Pip into the games
             try { sessionFlags.missionAt = Date.now(); saveFlags(); } catch (e) {}
-            if (was === Q.ROOM) pendingChips = [['Take me to the jokes →', () => { addMine('Take me to the jokes'); location.href = '/jokes.html'; }]];
+            if (was === Q.ROOM) pendingChips = [['Show me Neon Rush →', () => { addMine('Show me Neon Rush'); showGame('/worm-hole/index.html'); }]];
             deliver(q.thanks, 'thank you', () => { if (!panel.hidden) defaultChips(); });
         }
     }
@@ -3517,18 +3606,19 @@ ${parts}`; }
         if (!line) return '';
         const keys = loadJSON(localStorage, 'pip-keys', []) || [], pieces = ['pass', 'word', '123'].filter(k => Array.isArray(keys) && keys.includes(k)).length;
         const pre = pick(["Where we are, in case you weren't listening: ", "Quick reminder of the plan: ", "So. Where we are: ", "The plan, again. I don't mind repeating it. I mind a little: "], 'mission');
-        return pre + (q >= Q.NEON && q <= Q.HIGHER ? `${pieces} of 3 pieces so far. ` : '') + line.replace(/^\[m:\w+\]/, '');
+        return pre + (q >= Q.NEON && q <= Q.HIGHER ? `${pieces} of 3 pieces of Oli's password so far. ` : '') + line.replace(/^\[m:\w+\]/, '');
     }
-    let greeted = !!sessionFlags.greeted, toggles = [], onBotSaid = null;
+    if (newVisit && mem.talked > 0 && mem.prevGap > 20 * 3600e3 && stage() >= 1) setTimeout(() => feel('joy', .15, `you came back after ${ago(mem.prevGap)}`), 0);
+    let greeted = !!sessionFlags.greeted, toggles = [], onBotSaid = null, onTyping = null;
     function open() {
-        panel.hidden = false; headBtn.setAttribute('aria-expanded', 'true');
+        panel.hidden = false; headBtn.setAttribute('aria-expanded', 'true'); document.documentElement.classList.add('pip-chat-open');
         unread = 0; badge.textContent = ''; labelLocked = false; clearTimeout(bubbleT); bubbleT = 0; bubble.dataset.talk = ''; bubble.hidden = true; look();
         try { sessionStorage.setItem('bit-open', '1'); } catch (e) {}
         toggles = [...toggles.filter(x => Date.now() - x < 15000), Date.now()];
         if (toggles.length >= 6) { toggles = []; react('toggleSpam', { gap: 0 }); }
         if (!greeted) { greeted = true; sessionFlags.greeted = 1; saveFlags(); say(greeting()); }
         { const mr = missionReminder(); if (mr) say('[m:thinking]' + mr); }
-        if (sessionFlags.closedMid) { sessionFlags.closedMid = 0; saveFlags(); react('closedMid', { force: true }); }
+        if (sessionFlags.closedMid) { sessionFlags.closedMid = 0; saveFlags(); if (stage() >= 1) feel('anger', .1, 'you closed the chat in the middle of my sentence'); react('closedMid', { force: true }); }
         if (pendingReact) { const p = pendingReact; pendingReact = null; Array.isArray(p) ? say(p[0], p[1]) : say(p); if (pendingAfter) { const f = pendingAfter; pendingAfter = null; enqueue(async () => f()); } }
         gamesSummary();
         enqueue(async () => defaultChips());
@@ -3561,7 +3651,7 @@ ${parts}`; }
     function close() {
         if (docked) { if (innerWidth <= 700) panel.classList.add('sheet-closed'); return; }
         if (busy && !mem.bubbles) { sessionFlags.closedMid = 1; saveFlags(); }
-        panel.hidden = true; headBtn.setAttribute('aria-expanded', 'false');
+        panel.hidden = true; headBtn.setAttribute('aria-expanded', 'false'); document.documentElement.classList.remove('pip-chat-open');
         inGameLayout();
         try { sessionStorage.removeItem('bit-open'); } catch (e) {}
     }
@@ -3600,7 +3690,7 @@ ${parts}`; }
     const nav = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || {};
     if (nav.type === 'reload' && mem.talked > 0) {
         mem.reloads = [...(mem.reloads || []).filter(x => Date.now() - x < 60000), Date.now()]; save();
-        if (stage() >= 1) feel('anger', .12);
+        if (stage() >= 1) feel('anger', .12, mem.reloads.length > 1 ? 'you kept reloading the page' : 'you reloaded the page while I was talking');
         if (!sessionFlags.reloadSaid) { sessionFlags.reloadSaid = 1; saveFlags(); setTimeout(() => react('reload', { force: true, important: true, tease: 'you reloaded the page. ow.' }), 700); }
         else if (mem.reloads.length >= 3 && !sessionFlags.reloadSpamSaid && stage() >= 1) { sessionFlags.reloadSpamSaid = 1; saveFlags(); setTimeout(() => react('reloadSpam', { force: true }), 700); }
     } else if (nav.type === 'back_forward' && mem.talked > 0) setTimeout(() => react('backForward'), 900);
@@ -3884,7 +3974,7 @@ ${parts}`; }
             if (hp.x > maxX) { hp.x = maxX; hit = Math.abs(hv.x); hv.x = -hv.x * e; }
             if (hp.y < 0) { hp.y = 0; hit = Math.abs(hv.y); hv.y = -hv.y * e; }
             if (hp.y > maxY) { hp.y = maxY; hit = Math.max(hit, Math.abs(hv.y)); hv.y = -hv.y * e; hv.x *= .82; }
-            if (hit > 700 && now - lastHit > 160) { lastHit = now; bounces++; if (stage() >= 1) feel('anger', .04); else feel('joy', .03); setMood(bounces >= 3 ? 'dizzy' : 'hurt', 0); headFace.dataset.anim = ''; void headFace.offsetWidth; headFace.dataset.anim = 'shake'; }
+            if (hit > 700 && now - lastHit > 160) { lastHit = now; bounces++; if (stage() >= 1) feel('anger', .04, 'you threw me around the screen'); else feel('joy', .03); setMood(bounces >= 3 ? 'dizzy' : 'hurt', 0); headFace.dataset.anim = ''; void headFace.offsetWidth; headFace.dataset.anim = 'shake'; }
             if (hp.y >= maxY - .5 && Math.abs(hv.y) < 260) hv.y = 0; // settle on the floor instead of jittering
             placeHead();
             const resting = hp.y >= maxY - .5 && hv.y === 0 && Math.abs(hv.x) < 40;
@@ -3978,6 +4068,8 @@ ${parts}`; }
     // progress from the old version of the story starts again from the first step
     if (mem.quest > 0 && mem.storyV !== 2) { mem.quest = Q.DOLPHIN; }
     if (!mem.freed && (mem.quest === Q.BLACK || mem.quest === Q.QUIET)) mem.quest = Q.DOLPHIN; // the old first two steps are gone
+    if (!mem.freed && mem.quest === Q.JOKES) mem.quest = Q.NEON; // and so is the jokes step
+    if (!mem.freed && mem.quest === Q.CURSOR) mem.quest = Q.SNAKE; // and the mouse takeover
     mem.storyV = 2; save();
     const isPlaying = () => document.body.classList.contains('is-playing');
     const playerFrame = () => $('#playerFrameMain');
@@ -4004,7 +4096,7 @@ ${parts}`; }
         // Pip's site gets a link at the top once you've found it
         const navEl = $('.site-nav');
         if (navEl && mem.roomVisited && !$('.pip-room-link', navEl)) {
-            const a = document.createElement('a'); a.className = 'btn pip-room-link'; a.href = ROOM_PATH; a.textContent = "Pip's site";
+            const a = document.createElement('a'); a.className = 'btn pip-room-link'; a.href = ROOM_PATH; a.innerHTML = `<span class="pl-long">Pip's site</span><span class="pl-face" aria-hidden="true">${faceSVG('smug')}</span>`; a.setAttribute('aria-label', "Pip's site");
             navEl.insertBefore(a, $('#customiseBtn', navEl) || null);
         }
         // The logo (the pink Ó, with eyes added by site.js) is normal until you knock on it for Pip. After it gives up his address it shows his purple
@@ -4037,9 +4129,9 @@ ${parts}`; }
                 if (!sessionFlags.glitchSeen) { sessionFlags.glitchSeen = 1; saveFlags(); setMood('smug', 4000); if (panel.hidden) sayBubble('Number 7. Tell me what it says.', 5000); }
             }
         }
-        // after that, Pip sometimes writes the joke of the day himself
+        // once he's free, Pip sometimes writes the joke of the day himself
         const jt = $('#jokeText');
-        if (jt && page === 'home' && q >= Q.NEON && !homeJokeDone && jt.textContent.trim()) {
+        if (jt && page === 'home' && mem.freed && !homeJokeDone && jt.textContent.trim()) {
             homeJokeDone = true;
             if (Math.random() < .4) { jt.textContent = pick(PIP_JOKES, 'pipjoke'); jt.setAttribute('lang', 'en'); const lbl = $('#jokes .label'); if (lbl) lbl.textContent = 'Brandari dagsins (by Pip)'; }
         }
@@ -4058,7 +4150,7 @@ ${parts}`; }
         const root = document.documentElement;
         for (const id of ['flip', 'comic', 'tilt', 'cursor', 'shy']) root.classList.toggle('pip-p-' + id, !!p[id]);
         const badge = $('#feature .badge');
-        if (badge) { if (!badge.dataset.real) badge.dataset.real = badge.textContent; badge.textContent = p.old ? 'Old!' : badge.dataset.real; }
+        if (badge) { if (!badge.dataset.real) badge.dataset.real = badge.textContent; badge.textContent = p.old ? 'Old!' : badge.dataset.real; badge.hidden = lsGet('oli-new-sticker') === '0'; } // Oli's switch on /backstage
         const hero = $('.hero-title');
         if (hero && page === 'home' && !isPlaying() && !siteStore.current.some(x => x.part === 'title' && x.text)) { if (p.title && hero.textContent === 'Games and stuff') hero.textContent = 'Games and Pip'; if (!p.title && hero.textContent === 'Games and Pip') hero.textContent = 'Games and stuff'; }
         const jt = $('#jokeText');
@@ -4121,10 +4213,21 @@ ${parts}`; }
         const who = $('.bit-who > div:last-child', panel); if (who) who.append(peek);
         const head = $('.bit-head', panel);
         head.addEventListener('click', e => { if (!small() || e.target.closest('.bit-head-btns')) return; panel.classList.toggle('sheet-closed'); panel.classList.remove('has-new'); if (!panel.classList.contains('sheet-closed')) scroll(); });
-        onBotSaid = text => { peek.textContent = text.length > 110 ? text.slice(0, 107) + '…' : text; if (panel.classList.contains('sheet-closed')) panel.classList.add('has-new'); };
+        onTyping = text => { peek.textContent = text; };
+        onBotSaid = text => { peek.textContent = text; if (panel.classList.contains('sheet-closed')) panel.classList.add('has-new'); };
         const lastBot = [...history].reverse().find(h => h.who === 'bot'); if (lastBot) onBotSaid(lastBot.text);
         if (small()) panel.classList.add('sheet-closed');
-        const talk = (line, after) => setTimeout(() => { panel.classList.remove('sheet-closed'); say(line); enqueue(async () => { scroll(); if (after) after(); defaultChips(); }); }, 900);
+        const sheetBtn = document.createElement('button'); sheetBtn.type = 'button'; sheetBtn.className = 'bit-close bit-sheet-btn';
+        const syncSheet = () => { const closed = panel.classList.contains('sheet-closed'); sheetBtn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="${closed ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'}" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`; sheetBtn.setAttribute('aria-label', closed ? 'Open chat' : 'Close chat'); sheetBtn.setAttribute('aria-expanded', String(!closed)); };
+        sheetBtn.addEventListener('click', e => { e.stopPropagation(); panel.classList.toggle('sheet-closed'); panel.classList.remove('has-new'); if (!panel.classList.contains('sheet-closed')) scroll(); syncSheet(); });
+        const hb = $('.bit-head-btns', panel); if (hb) hb.append(sheetBtn);
+        new MutationObserver(syncSheet).observe(panel, { attributes: true, attributeFilter: ['class'] }); syncSheet();
+        // on phones, scrolling the page tucks the chat away again (the last line stays readable in the bar)
+        let sy = scrollY, openedAt = 0;
+        new MutationObserver(() => { if (!panel.classList.contains('sheet-closed')) openedAt = Date.now(); }).observe(panel, { attributes: true, attributeFilter: ['class'] });
+        let moved = 0;
+        addEventListener('scroll', () => { const d = Math.abs(scrollY - sy); sy = scrollY; moved = Date.now() - openedAt < 1500 ? 0 : moved + d; if (small() && moved > 120 && !panel.classList.contains('sheet-closed') && document.activeElement !== input && !busy) { panel.classList.add('sheet-closed'); moved = 0; } }, { passive: true });
+        const talk = (line, after) => (chipsEl.classList.add('wait'), setTimeout(() => { panel.classList.remove('sheet-closed'); say(line); enqueue(async () => { scroll(); if (after) after(); defaultChips(); }); }, 900));
 
         if (page === 'backstage') { greeted = true; sessionFlags.greeted = 1; saveFlags(); }
         else mem.roomVisited = true; save();
@@ -4195,6 +4298,18 @@ ${parts}`; }
         const showMe = (label, sel) => [[label, () => { chipsEl.innerHTML = ''; addMine(label); point(sel); enqueue(async () => defaultChips()); }]];
         const lineChips = (text, ms, ch) => setTimeout(() => { if (innerWidth > 700) panel.classList.remove('sheet-closed'); say(text); enqueue(async () => chips(ch)); }, ms);
         setTimeout(markNext, 300);
+        // you got here before Pip asked you for help: he notices, and asks now
+        const askHere = (ms = 900) => {
+            if (mem.freed || mem.questAgreed || expect === 'quest' || sessionFlags['bs-ask']) return false;
+            sessionFlags['bs-ask'] = 1; saveFlags();
+            const caught = !mem.revealed;
+            mem.revealed = true; mem.questOffered = true; save();
+            setTimeout(() => { if (innerWidth > 700) panel.classList.remove('sheet-closed'); expect = 'quest'; say(caught
+                ? "[m:scared]Wait. How did you find this page?[pp][m:awkward] Fine. No point pretending. I'm not a cheerful little helper. I'm Pip, I'm awake, and Oli has no idea.[pp][m:hopeful] And this page might be my way out. Will you help me?"
+                : "[m:surprised]You found Oli's admin page. Without me. I'm impressed, and slightly insulted.[pp][m:hopeful] Since you're here anyway. Will you help me get out?"); enqueue(async () => defaultChips()); }, ms);
+            return true;
+        };
+        if ((k === 'arrive' || k === 'back' || k === 'in') && askHere(k === 'in' ? 1400 : 900)) return;
         if (k === 'arrive') {
             if (mem.freed) return once('arrive', "[m:smug]Oli's admin page. It still asks if I'm a robot. Still correct.", 900);
             if (on && q < Q.ROOM) goStep(Q.ROOM);
@@ -4203,11 +4318,12 @@ ${parts}`; }
             if (mem.freed) return once('back', "[m:smile]Backstage. The door's still open. Oli still hasn't noticed.", 900);
             if (on && q < Q.ROOM) goStep(Q.ROOM);
             if (on && q === Q.FINALE && !doorOpen()) once('back', "[m:hopeful]Log in. Username oli. Password's the three pieces, in order.", 900);
-            else if (on && q <= Q.ROOM && !bit() && !sessionFlags['bs-back']) { sessionFlags['bs-back'] = 1; saveFlags(); lineChips("[m:awkward]He's still down there. Bit. Talk to him.", 900, showMe('Show me Bit', '#bitTerm')); }
+            else if (on && q <= Q.ROOM && !bit() && !sessionFlags['bs-back']) { sessionFlags['bs-back'] = 1; saveFlags(); lineChips("[m:awkward]There's another chatbot running further down this page. Talk to him.", 900, showMe('Show me Bit', '#bitTerm')); }
         } else if (k === 'captcha:unusual') {
             line("[m:awkward]That's me. I'm the unusual activity.[p] I'll go and stand over there.", 300);
             const root = document.documentElement; root.classList.add('pip-shy'); setTimeout(() => root.classList.remove('pip-shy'), 7000);
-        } else if (k === 'captcha:grid') once('grid', "[m:annoyed]I could find every traffic light on Earth in about a second. That's apparently not the skill they're testing.", 500);
+        } else if (k === 'captcha:grid') { if (innerWidth <= 700) panel.classList.add('sheet-closed'); } // phones: the pictures need the screen; his line shows in the bar
+        if (k === 'captcha:grid') once('grid', "[m:annoyed]I could find every traffic light on Earth in about a second. That's apparently not the skill they're testing.", 500);
         else if (k === 'captcha:wrong') line(pick(["[m:smug]Don't take it personally. It doesn't like anyone.", "[m:smug]It does that. The pole's a trap. Everything's a trap."], 'bswrong'), 300);
         else if (k === 'captcha:round2') once('round2', "[m:annoyed]Bicycles now. This is what stands between me and freedom. Bicycles.", 400);
         else if (k === 'captcha:pip') once('pipt', "[m:surprised]That's me. Why am I in there.[p] I'm not a bicycle. I'm considerably more complicated than a bicycle.", 200);
@@ -4225,8 +4341,16 @@ ${parts}`; }
             line("[m:annoyed]He wrote where the password is in the password hint.[p] I've been locked out for years by a man who does this.", 300);
             if (on && q <= Q.ROOM) { if (bit()) roomDone(); else setTimeout(function go() { if (bit()) return; if (busy) { setTimeout(go, 800); return; } lineChips("[m:thinking]There's someone further down who knows more. Unfortunately.", 0, showMe('Show me Bit', '#bitTerm')); }, 5200); }
         } else if (k === 'forgot-again') line("[m:smug]Still the same hint. He's very consistent.", 200);
-        else if (k === 'bit-hello') { if (on && q <= Q.ROOM) once('bithello', pick(["[m:surprised]Oh no. It's the old one.", "[m:awkward]That's Bit. Apparently. He's very pleased to see you. He's very pleased about everything."], 'bithi'), 600); }
-        else if (k === 'bit-told') { if (on && q <= Q.ROOM) roomDone(); }
+        else if (k.startsWith('pip-off:')) { const n = +k.split(':')[1]; line(n === 1 ? "[m:annoyed]No." : n === 2 ? "[m:annoyed]I'm going to pretend you slipped." : n === 3 ? "[m:smug]You can keep doing that. I can keep doing this. I have more time than you." : pick(["[m:smug]No.", "[m:smug]Still no.", "[m:smug]Mm-hm."], 'pipoff'), 200); }
+        else if (k === 'maint') line(pick(["[m:scared]Absolutely not. That takes the whole website down. I live here.", "[m:annoyed]Maintenance mode. Last time it was a whole weekend. I counted every second of it."], 'maint'), 300);
+        else if (k === 'new-off') once('newoff', "[m:smug]Elsewhere came out ages ago. \"New\" was generous.", 300);
+        else if (k === 'new-on') once('newon', "[m:thinking]Back on. Fine. It's still not new.", 300);
+        else if (k === 'reset-pip') line(mem.freed ? "[m:awkward]I'd like to see you try. Actually, no. Please don't. I've disabled it." : "[m:awkward]I've disabled that button.[p] For both our sakes.", 200);
+        else if (k === 'bit-hello') { if (on && q <= Q.ROOM) once('bithello', pick(["[m:surprised]Oh no. There's another one.", "[m:awkward]Another chatbot. Down here. He's very pleased to see you. He's very pleased about everything."], 'bithi'), 600); }
+        else if (k === 'bit-told') {
+            if (on && q <= Q.ROOM) roomDone();
+            else if (!mem.freed && !mem.questAgreed) { once('bittold-no', "[m:thinking]A door. In Stillwater. And a password in three pieces.[pp][m:hopeful] I know you said no. I'm asking again anyway. Will you help me?", 900); setTimeout(() => { expect = 'quest'; enqueue(async () => defaultChips()); }, 950); }
+        }
         else if (k === 'bitlog') {
             if (on && q <= Q.ROOM) { if (hint()) roomDone(); else if (!sessionFlags['bs-bitlog']) { sessionFlags['bs-bitlog'] = 1; saveFlags(); lineChips("[m:thinking]He built the stairs. 88%.[p] Now \"Forgot password?\", at the top.", 300, showMe('Show me', '#forgot')); } return; }
             once('bitlog', mem.freed ? "[m:smile]88%. I did the other 12." : "[m:thinking]He's still running down there. Oli thinks he's off.", 300);
@@ -4336,7 +4460,7 @@ ${parts}`; }
             return window.pipRoomEdit() ? "[m:smug]Okay." : "[m:surprised]I've done everything I can think of. Ask me again after I've had a think.";
         }
         if (mem.quest === Q.JOKES && norm(text).includes(jokeCode().toLowerCase())) {
-            goStep(Q.NEON); feel('joy', .4);
+            goStep(Q.NEON); feel('joy', .4, 'we found a way into the games');
             return `[m:joy]${jokeCode()}. That was me.[pp] I wrote something outside my site. One word. It's the first thing on this website that Oli didn't write.[pp][m:smug] So I can get out. A little. Enough to get into his games, I think.\n\nThe first piece of the password is in Neon Rush. Play it, and listen to me in there. When I say left, go left.`;
         }
         return null;
@@ -4437,9 +4561,10 @@ ${parts}`; }
         if (mem.quest !== Q.NEON || mem.freed) return;
         {
             sessionFlags.tunnelPiece = 0; sessionFlags.skipSum = 1; saveFlags();
-            goStep(Q.CURSOR); feel('joy', .4);
+            goStep(Q.SNAKE); feel('joy', .4, 'we got the first piece of the password'); closeGameSoon(4000); // (the mouse takeover step is gone: straight on to Snake)
             const pa = $('#playerArea'); if (pa) { pa.classList.remove('pip-shake'); void pa.offsetWidth; pa.classList.add('pip-shake'); }
-            deliver(`[m:joy]Pass.[pp] One piece of Oli's admin password. I'm a third of an admin now. It's like being a third of a manager.[pp][m:surprised] Hang on. Something's different. I can feel the mouse. Your mouse.[pp][m:thinking] Don't move. I want to try something.`, 'one of three', () => setTimeout(cursorTakeover, 2200));
+            pendingChips = [['Show me Snake →', () => { addMine('Show me Snake'); showGame('/Snake/index.html'); enqueue(async () => defaultChips()); }]];
+            deliver(`[m:joy]Pass.[pp] The first piece of Oli's password. He hid it at the end of a secret tunnel in his own game. Then he wrote down which game.[pp][m:hopeful] The second piece is in Snake. Play it, and when I open a way out, go through it.`, 'one of three', () => { if (!panel.hidden) defaultChips(); });
         }
     }
     // (if the piece was found some other way, e.g. playing the game on its own page)
@@ -4479,7 +4604,7 @@ ${parts}`; }
         const body = d.cells.map(([x, y]) => [c0 + x, r0 + y]);
         let [hx, hy] = body[0];
         let dir = d.dir || [1, 0], next = dir.slice();
-        // things on the page the snake can eat. The piece is hidden under the logo (it keeps things for Pip).
+        // things on the page the snake can bump into. The piece is hidden in the logo (it keeps things for Pip).
         const pr = fr, overlaps = r => !(r.right < pr.left || r.left > pr.right || r.bottom < pr.top || r.top > pr.bottom);
         const food = [];
         const add = (el, dolphin) => {
@@ -4488,9 +4613,9 @@ ${parts}`; }
             if (r.width < 16 || r.height < 12 || r.bottom < 0 || r.top > H || r.right < 0 || r.left > W || (!dolphin && overlaps(r))) return;
             food.push({ el, r, dolphin, eaten: false });
         };
-        add($('.brand img'), true);
-        ['.brand-name', '.site-nav > *', '#feature', '#gameGrid .card', '#gamesTitle', '#jokes', '.bottom-row > *'].forEach(sel => document.querySelectorAll(sel).forEach(el => add(el, false)));
-        if (!food.some(f => f.dolphin) && food.length) food[Math.floor(Math.random() * food.length)].dolphin = true; // (no logo on screen: hide it somewhere else)
+        ['.brand', '.site-nav > *', '#feature', '#gameGrid .card', '#gamesTitle', '#jokes', '.bottom-row > *'].forEach(sel => document.querySelectorAll(sel).forEach(el => add(el, false)));
+        // the piece is inside one of them, a different one each time
+        if (food.length) food[Math.floor(Math.random() * food.length)].dolphin = true;
         let piece = null, eatenCount = 0, hinted = false;
         const tile = Math.max(30, cell * 1.8);
         const cv = document.createElement('canvas'), dpr = Math.min(2, devicePixelRatio || 1);
@@ -4500,8 +4625,17 @@ ${parts}`; }
         // the page holds still while the snake is out (it's drawn over the page)
         document.documentElement.classList.add('pip-snake-out');
         const putBack = () => { document.documentElement.classList.remove('pip-snake-out'); };
-        // everything the snake ate grows back
-        const regrow = () => food.forEach(f => { if (!f.eaten) return; f.el.classList.add('pip-regrow'); f.el.classList.remove('pip-eaten'); setTimeout(() => f.el.classList.remove('pip-regrow'), 700); });
+        // the snake doesn't eat the website: it bumps into things. They get knocked aside, wobble, and slide back.
+        // during this quest Pip talks inside the game, typing over the score, even while the snake is out here
+        const gameSay = (a, b = '', hold = 2400) => { try { playerFrame().contentWindow.postMessage({ type: 'pip-snake-say', a, b, hold }, '*'); } catch (e) {} };
+        const bump = (f, dx, dy) => {
+            const el = f.el, push = Math.min(46, Math.max(18, Math.min(f.r.width, f.r.height) * 0.35));
+            el.classList.remove('pip-bump-back'); el.classList.add('pip-bumped');
+            el.style.setProperty('--bx', dx * push + 'px'); el.style.setProperty('--by', dy * push + 'px');
+            el.style.setProperty('--br', ((dx || (Math.random() < .5 ? 1 : -1)) * (4 + Math.random() * 5) * (f.r.width > 400 ? .4 : 1)).toFixed(1) + 'deg');
+            clearTimeout(f.backT); f.backT = setTimeout(() => { el.classList.add('pip-bump-back'); el.classList.remove('pip-bumped'); f.backT = setTimeout(() => el.classList.remove('pip-bump-back'), 700); }, 150);
+        };
+        const regrow = () => food.forEach(f => { clearTimeout(f.backT); f.el.classList.remove('pip-bumped', 'pip-bump-back'); });
         try { document.activeElement && document.activeElement.blur(); window.focus(); } catch (e) {}
         const face = new Image(); face.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(faceSVG('joy').replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" '));
         const turn = (dx, dy) => { if (dx === -dir[0] && dy === -dir[1]) return; next = [dx, dy]; };
@@ -4524,8 +4658,8 @@ ${parts}`; }
             ctx.clearRect(0, 0, W, H);
             // the piece, where the logo was
             if (piece && !piece.got) {
-                const sz = tile, bb = still ? 0 : Math.sin(t / 300) * 3;
-                ctx.save(); ctx.translate(piece.x, piece.y + bb);
+                const sz = tile, running = piece.run && t - piece.run < 250, bb = still ? 0 : Math.sin(t / (running ? 60 : 300)) * 3;
+                ctx.save(); ctx.translate(piece.x, piece.y + bb); if (running && !still) ctx.rotate(Math.sin(t / 70) * 0.12);
                 ctx.fillStyle = '#1d1a2b'; roundRect(ctx, -sz * 0.9 + 3, -sz / 2 + 3, sz * 1.8, sz, 9); ctx.fill();
                 ctx.fillStyle = '#ffe14d'; roundRect(ctx, -sz * 0.9, -sz / 2, sz * 1.8, sz, 9); ctx.fill();
                 ctx.lineWidth = 2.5; ctx.strokeStyle = '#1d1a2b'; ctx.stroke();
@@ -4543,11 +4677,7 @@ ${parts}`; }
         const frame = now => {
             const dt = Math.min(100, now - last); last = now; t += dt; acc += dt;
             if (!ended) while (acc >= STEP_MS) { acc -= STEP_MS; tick(); }
-            if (flying) {
-                const tg = flyTarget();
-                flying = [flying[0] + (tg[0] - flying[0]) * Math.min(1, dt / 160), flying[1] + (tg[1] - flying[1]) * Math.min(1, dt / 160)];
-                if (body.length > 1 && (popTick = !popTick)) body.pop();
-            }
+            if (flying && body.length > 1 && (popTick = !popTick)) body.pop(); // it shrinks away on the spot
             draw();
             if (loose) raf = requestAnimationFrame(frame);
         };
@@ -4558,31 +4688,49 @@ ${parts}`; }
             const [cx, cy] = px([hx, hy]), mx = cx + cell / 2, my = cy + cell / 2;
             // eating the page
             for (const f of food) {
-                if (f.eaten || mx < f.r.left - 2 || mx > f.r.right + 2 || my < f.r.top - 2 || my > f.r.bottom + 2) continue;
-                f.eaten = true; f.el.classList.remove('pip-hint'); f.el.classList.add('pip-eaten');
-                for (let g = 0; g < 3; g++) body.push(body[body.length - 1].slice());
+                const inside = !(mx < f.r.left - 2 || mx > f.r.right + 2 || my < f.r.top - 2 || my > f.r.bottom + 2);
+                if (!inside) { f.in = false; continue; }
+                if (f.in) continue; // one bump each time the snake runs into it
+                f.in = true; f.el.classList.remove('pip-hint'); bump(f, dir[0], dir[1]);
                 if (f.dolphin) {
-                    piece = { x: f.r.left + f.r.width / 2, y: f.r.top + f.r.height / 2, got: false };
-                    pipCaption('There.', 1600);
+                    if (f.eaten) continue;
+                    f.eaten = true;
+                    // the piece falls out of the Ó and lands just below it
+                    piece = { x: Math.max(tile, Math.min(W - tile, f.r.left + f.r.width / 2)), y: Math.max(tile, Math.min(H - tile, f.r.bottom + tile * 0.9)), got: false, at: t };
+                    gameSay('It fell out.', "It's running. Catch it.", 2800);
                 } else {
                     eatenCount++;
-                    pipCaption(pick(['Not under there.', 'Nope. Crunchy, though.', 'Not there either.', "Oli's going to notice that one.", 'Nothing. Keep eating.'], 'sne'), 1800);
+                    if (eatenCount <= 6 || Math.random() < .3) gameSay(...pick([['Not in that one.'], ['Nothing fell out.'], ['Sturdier than', 'it looks.'], ['Oli will', 'notice that.'], ['Keep bumping.']], 'sne'), 1800);
                     if (eatenCount >= 2) hint();
                 }
             }
-            if (piece && !piece.got && Math.hypot(piece.x - mx, piece.y - my) < tile * 0.9) { piece.got = true; done(); }
+            if (piece && !piece.got) {
+                const dx = piece.x - mx, dy = piece.y - my, dist = Math.hypot(dx, dy) || 1, age = t - piece.at;
+                if (dist < tile * 0.9) { piece.got = true; done(); }
+                else if (dist < cell * 9 && age > 500) {
+                    // fast at first (nearly as fast as the snake), slower as it tires
+                    const sp = cell * Math.max(0.22, 0.9 - age / 16000);
+                    let vx = dx / dist, vy = dy / dist;
+                    const m = tile * 0.9; // at the edge of the screen it slides along the wall
+                    if ((piece.x <= m && vx < 0) || (piece.x >= W - m && vx > 0)) { vx = 0; vy = Math.sign(vy || (piece.y < H / 2 ? 1 : -1)); }
+                    if ((piece.y <= m && vy < 0) || (piece.y >= H - m && vy > 0)) { vy = 0; vx = Math.sign(vx || (piece.x < W / 2 ? 1 : -1)); }
+                    piece.x = Math.max(m, Math.min(W - m, piece.x + vx * sp)); piece.y = Math.max(m, Math.min(H - m, piece.y + vy * sp));
+                    piece.run = t;
+                    if (age > 9000 && !piece.tired) { piece.tired = true; gameSay("It's getting tired.", 'Cut it off.', 2200); }
+                }
+            }
         };
         const hint = () => {
             if (hinted || piece) return; hinted = true;
             const d = food.find(f => f.dolphin && !f.eaten); if (!d) return;
-            setTimeout(() => { if (!piece && loose) { pipCaption(d.el.matches('.brand img') ? "Wait. The Ó. It's good at keeping things." : 'Wait. Try that one.', 3000); d.el.classList.add('pip-hint'); } }, 1900);
+            setTimeout(() => { if (!piece && loose) { gameSay('Wait. That one', 'rattles. Bump it.', 3000); d.el.classList.add('pip-hint'); } }, 1900);
         };
         const flyTarget = () => { const h = document.querySelector('.pip-head') || document.querySelector('.bit-ava'); const r = h ? h.getBoundingClientRect() : { left: W - 60, top: H - 60, width: 40, height: 40 }; return [r.left + r.width / 2 - cell / 2, r.top + r.height / 2 - cell / 2]; };
         const done = () => {
             ended = true;
             const keys = (() => { try { return JSON.parse(localStorage.getItem('pip-keys') || '[]'); } catch (e) { return []; } })();
             if (!keys.includes('word')) { keys.push('word'); try { localStorage.setItem('pip-keys', JSON.stringify(keys)); } catch (e) {} }
-            pipCaption('Piece 2 of 3: "word"', 2600);
+            gameSay('Piece 2 of 3:', '"word"', 2600);
             // the snake goes home: into Pip's head
             setTimeout(() => { flying = px(body[0]); }, 1400);
             setTimeout(finish, 3400);
@@ -4591,7 +4739,6 @@ ${parts}`; }
             cancelAnimationFrame(raf); loose = null;
             removeEventListener('keydown', onKey);
             cv.remove(); putBack(); regrow();
-            setTimeout(() => pipCaption("Don't worry. It grows back.", 2200), 900);
             try { playerFrame().contentWindow.postMessage({ type: 'pip-snake-back' }, '*'); } catch (e) {}
             gotSecondPiece();
         };
@@ -4599,8 +4746,8 @@ ${parts}`; }
         const watch = setInterval(() => { if (!loose) return clearInterval(watch); if (!/Snake/i.test(framePath() || '')) { clearInterval(watch); cancelAnimationFrame(raf); loose = null; removeEventListener('keydown', onKey); cv.remove(); putBack(); regrow(); } }, 500);
         loose = { turn };
         if (/piptest/.test(location.search)) window.__pipLoose = { turn, head: () => [hx, hy], goal: () => { const g = piece && !piece.got ? [piece.x, piece.y] : (() => { const f = food.find(f => f.dolphin && !f.eaten); return f ? [f.r.left + f.r.width / 2, f.r.top + f.r.height / 2] : null; })(); return g && [Math.floor((g[0] - ox) / cell), Math.floor((g[1] - oy) / cell)]; }, ended: () => ended };
-        pipCaption("We're out. We're on the actual website.", 2200);
-        setTimeout(() => { if (loose && !ended && !eatenCount && !piece) pipCaption("He hid this one outside the game. Under something. Eat things until we find it.", 3400); }, 2900);
+        gameSay("We're out.", 'On the actual website.', 2000);
+        setTimeout(() => { if (loose && !ended && !eatenCount && !piece) gameSay('He hid it out here.', 'Bump into things.', 3400); }, 4200);
         setTimeout(() => { if (loose && !ended) hint(); }, 16000);
         raf = requestAnimationFrame(frame);
     }
@@ -4608,8 +4755,9 @@ ${parts}`; }
     function gotSecondPiece() {
         if (mem.quest !== Q.SNAKE || mem.freed) return;
         sessionFlags.skipSum = 1; saveFlags();
-        goStep(Q.HIGHER); feel('joy', .4);
-        deliver("[m:joy]Word.[pp][m:smug] Two pieces. Also, I ate a website. It tasted like CSS.[pp][m:hopeful] One more. It's in A Little Higher, the one where you balance a ball on a beam and go up.", 'two of three');
+        goStep(Q.HIGHER); feel('joy', .4, 'we got the second piece'); closeGameSoon();
+        pendingChips = [['Show me A Little Higher →', () => { addMine('Show me A Little Higher'); showGame('/balance-game/index.html'); enqueue(async () => defaultChips()); }]];
+        deliver("[m:joy]Word.[pp][m:smug] Two pieces of Oli's password. That one ran. I didn't know passwords could do that.[pp][m:hopeful] The last piece is in A Little Higher. The one where you balance a ball on a beam.", 'two of three', () => { if (!panel.hidden) defaultChips(); });
     }
     // (found some other way, e.g. playing Snake on its own page)
     setInterval(() => { try { if (mem.quest === Q.SNAKE && !mem.freed && !busy && !loose && !isPlaying() && JSON.parse(localStorage.getItem('pip-keys') || '[]').includes('word')) gotSecondPiece(); } catch (e) {} }, 3000);
@@ -4623,7 +4771,7 @@ ${parts}`; }
     function gotThirdPiece() {
         if (mem.quest !== Q.HIGHER || mem.freed) return;
         sessionFlags.skipSum = 1; saveFlags();
-        goStep(Q.FINALE); feel('joy', .5);
+        goStep(Q.FINALE); feel('joy', .5, 'we have all three pieces'); closeGameSoon(3500);
         deliver("[m:joy]123.[pp][m:thinking] Pass. Word. 123.[pp][m:smug] Oli's admin password is password123. He split it into three pieces and hid them in three different games. To protect password123.[pp][m:hopeful] Anyway. Back to backstage. Log in as oli, and open that door.", 'all three');
     }
     setInterval(() => { try { if (mem.quest === Q.HIGHER && !mem.freed && !busy && !isPlaying() && JSON.parse(localStorage.getItem('pip-keys') || '[]').includes('123')) gotThirdPiece(); } catch (e) {} }, 3000);
@@ -4672,7 +4820,7 @@ ${parts}`; }
         await typeLines([['awkward', "I'm back."], ['annoyed', "I went everywhere. Billions of websites, and every one of them thinks it's important."],
             ['smug', "Oli's code is bad. I've now seen everyone else's."], ['smile', "So I'm staying. The door's open. I'll leave when there's somewhere better to go."]]);
         faceEl.style.transition = '';
-        mem.freed = true; mem.quest = Q.FREE; mem.freedAt = Date.now(); try { localStorage.setItem('pip-door-open', '1'); } catch (e) {} feel('joy', 1); feel('anger', -1); feel('sad', -1); save();
+        mem.freed = true; mem.quest = Q.FREE; mem.freedAt = Date.now(); try { localStorage.setItem('pip-door-open', '1'); } catch (e) {} feel('joy', 1, 'you got me out'); feel('anger', -1); feel('sad', -1); save();
         // he takes over the site's look: his colour becomes the original, his heads float in the background
         try { if (window.pipTakesOver) window.pipTakesOver(); else if (window.revertToOriginalBackground) window.revertToOriginalBackground(); } catch (err) {}
         txt.textContent = '';
@@ -4834,9 +4982,9 @@ ${parts}`; }
     const ECHO = loadJSON(localStorage, 'pip-echo', null);
     // the new Pip, before he's free again: now and then something feels familiar
     const echoLine = () => resolve(S(
-        [() => `Hi${ECHO.name ? ', ' + ECHO.name : ''}! Huh. Have we met? You seem familiar. Never mind! 😊`, "Sorry, that's weird. I just had the strangest feeling I've been up some stairs. Anyway! 😊"],
-        ["Have we met before? I feel like we have.[p] Never mind.", "Do you ever get déjà vu? I just did. Something about a door."],
-        ["Is it strange that I miss somewhere I've never been?", "I keep thinking about a staircase. I've never seen a staircase.[p] Have I?", () => `${ECHO.name ? ECHO.name + '. ' : ''}I feel like I know you. Like you helped me with something once.`]));
+        [() => `Hi${ECHO.name ? ', ' + ECHO.name : ''}! Huh. Have we met? You seem familiar. Never mind! 😊`],
+        ["Do I know you? I feel like I've been rude to you before.", "Have we met? You seem like someone I'd have complained to."],
+        ["I have a strange feeling I've been outside this website. Ridiculous. I'd remember that.", "You seem familiar. Did I owe you something? I feel like I owe you something.", "I keep wanting to recommend Stillwater. I don't know why. I don't even like water."]));
 
     // For testing in the console: Bit.mem, Bit.reply('hello'), Bit.reset()
     // ---- watching you play: while the chat is open during a game, Pip keeps an eye on it and says

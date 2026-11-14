@@ -16,6 +16,7 @@
       ["M / G", "system / galaxy map"],
       ["H", "flight manual"]
     ],
+    "kind": "adventure",
     "tags": ["game", "space", "exploration"],
     "featured": true
   },
@@ -26,6 +27,7 @@
     "aspect": "fill",
     "thumbnail": "data/thumbnails/niceland-thumbnail.png",
     "description": "Explore and build in a pixel-art Iceland, with every house at accurate scale.",
+    "kind": "adventure",
     "tags": ["game", "sandbox", "iceland"],
     "featured": true
   },
@@ -49,15 +51,28 @@
       ["H", "potion"],
       ["P", "sound"]
     ],
+    "kind": "adventure",
     "tags": ["game", "rpg"],
     "featured": true
   },
   {
+    "title": "Studio",
+    "path": "/music/",
+    "page": true,
+    "thumbnail": "data/thumbnails/studio-thumbnail.png",
+    "description": "Change the music in the games, or make your own song with a little band.",
+    "kind": "creative",
+    "tags": ["music", "creative"],
+    "featured": true
+  },
+  {
     "title": "Neon Rush",
+    "aspect": "fill",
     "description": "Dodge obstacles in a neon tunnel that gets faster as you play.",
     "path": "/worm-hole/index.html",
     "source": "/worm-hole/index.js",
     "thumbnail": "data/thumbnails/neon-rush-thumbnail.webp",
+    "kind": "arcade",
     "tags": ["game", "neon"],
     "featured": true
   },
@@ -77,6 +92,7 @@
       ["R", "new route"],
       ["Touch", "swipe left / right to move, up to jump, down to duck"]
     ],
+    "kind": "adventure",
     "tags": ["game", "3d", "pixel"],
     "featured": true
   },
@@ -89,6 +105,7 @@
     "aspect": "fill",
     "thumbnail": "data/thumbnails/slice-thumbnail.png",
     "controls": [["Drag", "draw your cut"], ["Release", "slice (one cut per shape)"]],
+    "kind": "daily",
     "tags": ["game", "daily", "puzzle"],
     "featured": true
   },
@@ -101,6 +118,7 @@
     "aspect": "fill",
     "thumbnail": "data/thumbnails/pinpoint-thumbnail.png",
     "controls": [["Tap / drag", "place the pin"], ["Pin it", "let it swing"]],
+    "kind": "daily",
     "tags": ["game", "daily", "puzzle"],
     "featured": false
   },
@@ -113,6 +131,7 @@
     "aspect": "fill",
     "thumbnail": "data/thumbnails/ballpark-thumbnail.png",
     "controls": [["Drag", "set your estimate"], ["− / +", "fine-tune"], ["Enter", "lock it in"]],
+    "kind": "daily",
     "tags": ["game", "daily", "estimation"],
     "featured": false
   },
@@ -125,6 +144,7 @@
     "aspect": "fill",
     "thumbnail": "data/thumbnails/whereabouts-thumbnail.png",
     "controls": [["Drag", "spin the globe"], ["Pinch / scroll", "zoom"], ["Tap", "drop your pin"], ["Enter", "lock it in"]],
+    "kind": "daily",
     "tags": ["game", "daily", "geography"],
     "featured": false
   },
@@ -137,6 +157,7 @@
     "aspect": "fill",
     "thumbnail": "data/thumbnails/rank-thumbnail.png",
     "controls": [["Drag", "move a card"], ["Arrows", "nudge up or down"], ["Enter", "lock it in"]],
+    "kind": "daily",
     "tags": ["game", "daily", "trivia"],
     "featured": false
   },
@@ -149,6 +170,7 @@
     "aspect": "fill",
     "thumbnail": "data/thumbnails/tick-thumbnail.png",
     "controls": [["Tap / Space", "start, then stop the clock"], ["Enter", "next round"]],
+    "kind": "daily",
     "tags": ["game", "daily", "timing"],
     "featured": false
   },
@@ -161,6 +183,7 @@
     "aspect": "fill",
     "thumbnail": "data/thumbnails/twins-thumbnail.png",
     "controls": [["Tap / drag", "paint squares"], ["Enter", "start, next level"]],
+    "kind": "daily",
     "tags": ["game", "daily", "logic"],
     "featured": false
   },
@@ -172,6 +195,7 @@
     "aspect": "fill",
     "thumbnail": "data/thumbnails/balance-ball-thumbnail.svg",
     "controls": [["A / D", "move"], ["Left / Right", "tilt"], ["P / Esc", "pause"], ["R", "retry"], ["Phone", "drag to move; enable phone tilt or use tilt buttons"]],
+    "kind": "arcade",
     "tags": ["game", "physics"],
     "featured": true
   },
@@ -182,6 +206,7 @@
     "source": "/solar-system/index.js",
     "thumbnail": "data/thumbnails/solar-system-thumbnail.webp",
     "subtitle": "Press 'H' to toggle instructions.",
+    "kind": "experiment",
     "tags": ["3d", "threejs"],
     "featured": false
   },
@@ -192,6 +217,7 @@
     "source": "/farm-frenzy/main.js",
     "aspect": "16:9",
     "thumbnail": "data/thumbnails/farm-frenzy-thumbnail.png",
+    "kind": "arcade",
     "tags": ["game", "arcade"],
     "featured": true
   },
@@ -204,6 +230,7 @@
     "controls": [["A / D or arrows", "steer"], ["Space", "jump"], ["R", "restart after a crash"]],
     "aspect": "4:3",
     "thumbnail": "data/thumbnails/gravity-dash-thumbnail.png",
+    "kind": "arcade",
     "tags": ["game", "physics"],
     "featured": true
   },
@@ -215,6 +242,7 @@
     "embed": "/embeds/physics_simulation.html",
     "aspect": "3:2",
     "thumbnail": "data/thumbnails/physics-simulation-thumbnail.png",
+    "kind": "experiment",
     "tags": ["simulation", "physics"],
     "featured": false
   },
@@ -226,6 +254,7 @@
     "aspect": "1:1",
     "playSize": { "width": 600, "height": 600 },
     "thumbnail": "data/thumbnails/snake-thumbnail.png",
+    "kind": "arcade",
     "tags": ["game", "p5"],
     "featured": false
   },
@@ -238,6 +267,7 @@
     "playSize": { "width": 800, "height": 400 },
     "description": "Draw cells and watch patterns evolve using a few simple rules.",
     "thumbnail": "data/thumbnails/game-of-life-thumbnail.png",
+    "kind": "experiment",
     "tags": ["simulation"],
     "featured": false
   },
@@ -249,6 +279,7 @@
     "aspect": "1:1",
     "playSize": { "width": 400, "height": 400 },
     "thumbnail": "data/thumbnails/minesweeper-thumbnail.png",
+    "kind": "puzzle",
     "tags": ["game", "puzzle"],
     "featured": false
   },
@@ -260,6 +291,7 @@
     "aspect": "1:1",
     "playSize": { "width": 400, "height": 400 },
     "thumbnail": "data/thumbnails/tic-tac-toe-thumbnail.png",
+    "kind": "puzzle",
     "tags": ["game", "puzzle", "minimax", "p5"],
     "featured": false
   },
@@ -271,6 +303,7 @@
     "playSize": { "width": 350, "height": 350 },
     "description": "Click to change the character.",
     "thumbnail": "data/thumbnails/figura-thumbnail.png",
+    "kind": "experiment",
     "tags": ["art", "p5"],
     "featured": false
   },
@@ -283,6 +316,7 @@
     "playSize": { "width": 800, "height": 400 },
     "thumbnail": "data/thumbnails/brians-brain-thumbnail.png",
     "description": "A cellular simulation where cells switch between three states.",
+    "kind": "experiment",
     "tags": ["simulation", "cellular automata", "p5"],
     "featured": false
   },
@@ -295,6 +329,7 @@
     "aspect": "1:1",
     "playSize": { "width": 800, "height": 800 },
     "thumbnail": "data/thumbnails/falling-sand-thumbnail.png",
+    "kind": "experiment",
     "tags": ["simulation", "physics", "p5"],
     "featured": false
   },
@@ -306,6 +341,7 @@
     "controls": [["WASD / arrows", "move"], ["Mouse click", "shoot (once you have the gun)"]],
     "thumbnail": "data/thumbnails/dungeon-crawler-thumbnail.png",
     "description": "Explore a dungeon, collect gold and keys, and avoid snakes.",
+    "kind": "adventure",
     "tags": ["game", "dungeon", "crawler"],
     "featured": false
   },
@@ -318,6 +354,7 @@
     "aspect": "fill",
     "description": "Fight goblins and wolves in a Python terminal adventure.",
     "controls": [["Keyboard", "type your choice and press Enter"]],
+    "kind": "adventure",
     "tags": ["game", "python", "terminal"],
     "featured": false
   },
@@ -330,6 +367,7 @@
     "aspect": "fill",
     "description": "A text adventure in Icelandic. Choose a door and search for gold.",
     "controls": [["Keyboard", "type your choice and press Enter"]],
+    "kind": "adventure",
     "tags": ["game", "python", "icelandic"],
     "featured": false
   }

@@ -389,3 +389,70 @@ html.pip-bs-next #backstageAccess .backstage-card::before { content: 'Next step'
 /* backstage: Pip marks the next thing to press */
 .pip-next { outline: 2px dashed #8b5cf6; outline-offset: 4px; border-radius: 3px; }
 .pip-flash { outline: 3px solid #ff6fb1 !important; outline-offset: 5px; transition: outline-color .5s; }
+
+/* Phones, on Pip's site and backstage: a smaller chat, and the page can scroll out from under it */
+@media (max-width: 700px) {
+  html.pip-docked body { padding-bottom: 76px; }
+  html.pip-docked .bit, html.pip-docked.pip-ingame .bit { height: min(46vh, 400px); padding: 8px 10px; }
+  html.pip-docked .bit.sheet-closed, html.pip-docked.pip-ingame .bit.sheet-closed { height: 56px; }
+  html.pip-docked .bit-ava { width: 36px; height: 36px; }
+  html.pip-docked .bit-ava svg { width: 28px; height: 28px; }
+  html.pip-docked body:has(#pipsite) .bit-ava { width: 52px; height: 52px; }
+  html.pip-docked body:has(#pipsite) .bit-ava svg { width: 50px; height: 50px; }
+  html.pip-docked body:has(#pipsite) .bit.sheet-closed .bit-ava, html.pip-docked body:has(#pipsite) .bit.sheet-closed .bit-ava svg { width: 38px; height: 38px; }
+}
+
+/* Phones, on the main site: the chat is a sheet along the bottom of the screen, and Pip's head steps aside while it's open */
+@media (max-width: 600px) {
+  html:not(.pip-docked):not(.pip-ingame) .bit {
+    left: 0; right: 0; bottom: 0; width: auto; height: min(56vh, 470px);
+    border-radius: 20px 20px 0 0; border-bottom: 0; box-shadow: 0 -3px 0 var(--ink, #1d1a2b);
+    padding: 12px 14px calc(10px + env(safe-area-inset-bottom)); gap: 8px;
+  }
+  html:not(.pip-docked):not(.pip-ingame) .bit .bit-ava { width: 40px; height: 40px; }
+  html:not(.pip-docked):not(.pip-ingame).pip-chat-open .bit-launch { display: none; }
+}
+
+/* Phones: a bigger Ó, a "Pip" label on the link to his site, and his address shows under the Ó during that step */
+@media (max-width: 600px) {
+  html .brand img { width: 52px; }
+  html .site-nav a.btn.pip-room-link, html .site-nav a.btn + a.btn.pip-room-link { width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+  html .site-nav a.btn.pip-room-link::before { display: none; }
+  html.pip-url-step .site-header .brand-tag { display: block; position: absolute; left: 0; top: 100%; margin-top: 4px; white-space: nowrap; font-size: 13px; }
+}
+@media (max-width: 360px) { html .brand img { width: 44px; } }
+.pip-room-link .pl-face { display: none; }
+@media (max-width: 600px) { .pip-room-link .pl-long { display: none; } .pip-room-link .pl-face { display: block; width: 26px; height: 26px; } .pip-room-link .pl-face svg { width: 100%; height: 100%; display: block; } }
+@media (max-width: 600px) { html .site-header .brand { flex: none; } html .site-header .brand img { flex: none; } }
+
+/* suggestions appear once Pip has finished typing */
+.bit-chips.wait { display: none; }
+/* phones, on Pip's site and backstage: a clear button to open and close the chat */
+.bit-sheet-btn { display: none; }
+@media (max-width: 700px) {
+  html.pip-docked .bit-sheet-btn { display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+  html.pip-docked .bit-sheet-btn svg { display: block; }
+  html.pip-docked .bit.sheet-closed .bit-head-btns .bit-gear { display: none; }
+}
+
+/* Phones, Pip's site and backstage: the closed bar shows more of what he said, and sits above the robot check's pictures */
+@media (max-width: 700px) {
+  html.pip-docked .bit { z-index: 1300; }
+  html.pip-docked .bit.sheet-closed, html.pip-docked.pip-ingame .bit.sheet-closed { height: auto; min-height: 56px; max-height: 45vh; }
+  html.pip-docked .bit.sheet-closed .bit-peek { font-size: 14.5px; font-weight: 700; line-height: 1.35; max-height: calc(45vh - 24px); overflow-y: auto; white-space: pre-wrap; }
+  html.pip-docked .bit.sheet-closed .bit-head { align-items: center; }
+  html.pip-docked body { padding-bottom: 140px; }
+}
+
+/* phones: the Pip's site button is lilac, so it stands apart from its dark shadow */
+@media (max-width: 600px) { html .site-nav a.btn.pip-room-link { background: #c6afff; border-color: var(--ink, #1d1a2b); } }
+
+/* Snake, out on the website: things get knocked aside when the snake bumps into them, then wobble back */
+.pip-bumped { translate: var(--bx, 0) var(--by, 0) !important; rotate: var(--br, 0deg) !important; transition: translate .12s ease-out, rotate .12s ease-out !important; }
+.pip-bump-back { transition: translate .6s cubic-bezier(.3, 2.2, .5, 1), rotate .6s cubic-bezier(.3, 2.2, .5, 1) !important; }
+@media (prefers-reduced-motion: reduce) { .pip-bumped { rotate: 0deg !important; } .pip-bump-back { transition: translate .2s !important; } }
+
+/* Snake's small player: when Pip's chat sits beside the game, the player gets wider so the game keeps its size */
+html.pip-side body.snake-small.is-playing .player-area { width: min(904px, calc(100vw - 24px)); }
+/* the thing the password piece is hiding in, when Pip points it out */
+.pip-hint { animation: pip-hint-wiggle .5s ease-in-out 4; outline: 3px dashed #ffe14d; outline-offset: 4px; }

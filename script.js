@@ -249,6 +249,8 @@ async function playFromAnchor(anchor) {
     } catch (err) {
         // ignore and use datasetPath
     }
+    // A project marked "page" (the Studio) is a place of its own: it opens as a normal page, not inside the player.
+    if (match && match.page) { window.location.href = match.path; return; }
     // open in the in-page player
     const player = document.getElementById('playerArea');
     const frame = document.getElementById('playerFrameMain');
@@ -906,6 +908,8 @@ function parseAspect(a) {
 
 function fitForProject(match, path) {
     if (match && match.aspect === 'fill') return { mode: 'fill', probe: false };
+    // games that resize themselves can take the whole player on a phone held upright
+    if (match && match.mobileFill && window.innerWidth <= 700 && window.innerHeight > window.innerWidth) return { mode: 'fill', probe: false };
     const ps = match && match.playSize;
     if (ps && ps.width && ps.height) return { mode: 'native', w: +ps.width, h: +ps.height, probe: false };
     const key = String((match && (match.path || match.source || match.title)) || path || '').toLowerCase();

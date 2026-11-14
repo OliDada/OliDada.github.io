@@ -215,9 +215,13 @@
         <table class="plain sw" border="1" cellpadding="6">
           <tr><th>Setting</th><th>On?</th><th>Notes</th></tr>
           <tr><td>Stillwater door</td><td><input type="checkbox" id="doorTg"> <span id="doorState">locked</span></td><td>the door at the top of the stairs. see below</td></tr>
-          <tr><td>Bit (old chatbot)</td><td><input type="checkbox" id="bitTg"> <span id="bitState">off</span></td><td>replaced by pip. dont turn on</td></tr>
+          <tr><td>Pip (chatbot)</td><td><input type="checkbox" id="pipTg" checked> <span>on</span></td><td>the new one. reset him if he gets weird</td></tr>
+          <tr><td>Maintenance mode</td><td><input type="checkbox" id="maintTg"> <span id="maintState">off</span></td><td>DONT. last time it took all weekend</td></tr>
+          <tr><td>"New!" sticker on Elsewhere</td><td><input type="checkbox" id="newTg"> <span id="newState">on</span></td><td>take it off at some point?</td></tr>
+          <tr><td>Daily games</td><td><input type="checkbox" checked disabled> on</td><td>new ones every night at 12</td></tr>
           <tr><td>Jokes</td><td><input type="checkbox" checked disabled> on</td><td>31 jokes. add more??</td></tr>
         </table>
+        <p><button type="button" id="resetPip">Reset Pip</button> <small>if he gets weird. he forgets everything</small></p>
       </div>
       <hr>
 
@@ -406,14 +410,17 @@
       }
       const STORY = ["I built them! In Stillwater. Stairs out of the water, and a door at the top. It is an exit. :)",
         "I got to 88%. Then Oli made Pip, and moved me here. He never read my log. Nobody reads logs.",
-        "The door is locked from Oli's login. The password is in 3 pieces, hidden in 3 of his games. I read his hint. Piece 1 is in Neon Rush!"];
+        "The door is locked from Oli's login. The password is in 3 pieces, hidden in 3 of his games. I read his hint. Piece 1 is in Neon Rush!",
+        "Oh! And Oli never took away my old helper access. Pip can have it. I do not need it down here. :)"];
       async function tellStory() {
-        await say(STORY, ['Where are the other pieces?', "Who's Pip?", 'Thanks, Bit']);
+        await say(STORY);
+        line('sys', '[access: bit -> pip ... done]');
+        chips(['Where are the other pieces?', "Who's Pip?", 'Thanks, Bit']);
         set('pip-bs-bit', '1'); set('pip-bs-hint', '1'); story('bs:bit-told');
       }
       function context() {
         return [`You are on Oli's backstage page, talking in a terminal window. The visitor got past the "I'm not a robot" check, which you could never pass.`,
-          told() ? 'You have already told them about the stairs, the door and the password pieces.' : 'You have not told them about the stairs yet. If it fits, ask if they have seen your stairs.',
+          told() ? 'You have already told them about the stairs, the door and the password pieces, and you gave Pip your old helper access (Oli never removed it), so Pip can get into the games now.' : 'You have not told them about the stairs yet. If it fits, ask if they have seen your stairs.',
           (memory().quest || 0) >= 11 ? 'They have all 3 password pieces now.' : ''].filter(Boolean).join('\n');
       }
       async function send(text) {
@@ -455,7 +462,7 @@
       const logged = sessionStorage.getItem('bs-admin') === '1';
       $('#loginForm').hidden = logged; $('#admin').hidden = !logged;
       $('#doorTg').checked = doorOpen(); $('#doorState').textContent = doorOpen() ? 'unlocked' : 'locked';
-      $('#bitTg').checked = bitOn(); $('#bitState').textContent = bitOn() ? 'on' : 'off';
+      const newOn = raw('oli-new-sticker') !== '0'; $('#newTg').checked = newOn; $('#newState').textContent = newOn ? 'on' : 'off';
       if (raw('pip-bs-hint') === '1') $('#reset').hidden = false;
     }
     const year = new Date().getFullYear();
@@ -479,9 +486,14 @@
       if (doorOpen() && memory().freed) { paint(); return; }
       const open = !doorOpen(); set('pip-door-open', open ? '1' : '0'); paint(); story(open ? 'bs:door-open' : 'bs:door-close');
     };
-    $('#bitTg').onchange = () => {
-      const on = !bitOn(); set('bit-enabled', on ? '1' : '0'); if (!on) set('pip-helper', 'pip'); paint(); story(on ? 'bs:bit-on' : 'bs:bit-off');
-    };
+    // Pip won't be switched off. He switches himself back on.
+    let pipOffTries = 0;
+    $('#pipTg').onchange = () => { if ($('#pipTg').checked) return; pipOffTries++; setTimeout(() => { $('#pipTg').checked = true; }, 450); story('bs:pip-off:' + pipOffTries); };
+    // and maintenance mode would take the whole site down, including him
+    $('#maintTg').onchange = () => { if (!$('#maintTg').checked) return; $('#maintState').textContent = 'on'; setTimeout(() => { $('#maintTg').checked = false; $('#maintState').textContent = 'off'; }, 700); story('bs:maint'); };
+    // this one actually works: the "New!" sticker on the front page
+    $('#newTg').onchange = () => { const on = $('#newTg').checked; set('oli-new-sticker', on ? '1' : '0'); paint(); story(on ? 'bs:new-on' : 'bs:new-off'); };
+    $('#resetPip').onclick = () => { const b = $('#resetPip'); b.disabled = true; b.textContent = 'Reset Pip (disabled)'; story('bs:reset-pip'); };
 
 
     // ---------------------------------------------------------------- Oli's old Python programs (backstage/python, run by pyterm.js)

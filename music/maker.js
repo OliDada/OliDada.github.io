@@ -19,7 +19,7 @@ const STORE = { draft: "olid-music:draft", songs: "olid-music:mysongs", prefs: "
 const player = createPlayer({ volume: 0.8 });
 
 // Easy mode (easy.js) plugs in here.
-export const hooks = { render: null, onStep: null, firstVisit: null, boot: null };
+export const hooks = { render: null, onStep: null, firstVisit: null, boot: null, newSong: null };
 
 export const state = {
     ui: "easy",
@@ -166,6 +166,7 @@ function setSong(s, { keepSelection = false, keepHistory = false, fileId = null,
     if (!keepSelection || !s.patterns[state.selPattern]) state.selPattern = s.arrangement[0] ?? Object.keys(s.patterns)[0];
     state.selBlock = Math.min(state.selBlock, s.arrangement.length - 1);
     if (!keepHistory) {
+        hooks.newSong?.();
         history.past = [];
         history.future = [];
         state.dirty = dirty;

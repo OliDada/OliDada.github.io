@@ -242,17 +242,19 @@
     function poke() { try { window.__threeScene && window.__threeScene.poke && window.__threeScene.poke(); } catch (e) {} }
 
     // ---------- Home page ----------
-    const TAG_CLASSES = ['c3', 'c1', 'c0', 'c2', 'c4'];
-    const tagClass = (t) => { let h = 0; for (const ch of String(t)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return TAG_CLASSES[h % TAG_CLASSES.length]; };
-    const tagsHtml = (tags) => (tags || []).slice(0, 3).map(t => `<span class="chip ${tagClass(t)}">${esc(t)}</span>`).join('');
+    // Every game has one kind (data/projects.json). It's the chip on the card and what the filter row filters by.
+    // Switched off for now: set SHOW_KINDS to true to bring back the chips and the filter row above "More games".
+    const SHOW_KINDS = false;
+    const KINDS = { adventure: ['Adventure', 'c3'], arcade: ['Arcade', 'c2'], puzzle: ['Puzzle', 'c1'], experiment: ['Experiments', 'c4'], daily: ['Daily', 'c0'], creative: ['Creative', 'c0'] };
+    const kindChip = (p) => { const k = SHOW_KINDS && KINDS[p.kind]; return k ? `<span class="chip ${k[1]}">${esc(p.kind)}</span>` : ''; };
 
     function cardHtml(p) {
         const desc = p.description || p.subtitle || '';
-        return `<a class="card stk play-link" href="${esc(p.path)}" data-path="${esc(p.path)}">
+        return `<a class="card stk play-link" data-kind="${esc(p.kind || '')}" href="${esc(p.path)}" data-path="${esc(p.path)}">
             ${p.thumbnail ? `<img class="thumb" src="${esc(p.thumbnail)}" alt="" loading="lazy">` : '<span class="thumb"></span>'}
             <span class="card-body">
                 <span class="card-title disp">${esc(p.title)}</span>
-                <span class="tags">${tagsHtml(p.tags)}</span>
+                ${kindChip(p) ? `<span class="tags">${kindChip(p)}</span>` : ''}
                 ${desc ? `<span class="card-desc">${esc(desc)}</span>` : ''}
             </span>
         </a>`;
@@ -264,6 +266,7 @@
         let projects = [];
         try { projects = await (await fetch('data/projects.json')).json(); } catch (e) { console.warn('Could not load projects.json', e); }
         projects = projects.filter(p => !p.daily); // daily games live on /daily.html (the home page links there instead)
+        projects = projects.filter(p => !p.page);  // pages of their own (the Studio) have their own strip on the home page
         const featured = projects.filter(p => p.featured);
         const others = projects.filter(p => !p.featured);
         const top = featured[0];
@@ -272,7 +275,7 @@
             featureEl.innerHTML = `
                 ${top.thumbnail ? `<img class="feature-img" src="${esc(top.thumbnail)}" alt="${esc(top.title)} screenshot">` : ''}
                 <div class="feature-body">
-                    <div class="tags">${tagsHtml(top.tags)}</div>
+                    ${kindChip(top) ? `<div class="tags">${kindChip(top)}</div>` : ''}
                     <h2 class="disp">${esc(top.title)}</h2>
                     ${top.description ? `<p>${esc(top.description)}</p>` : ''}
                     <div class="actions">
@@ -288,10 +291,24 @@
             featureEl.addEventListener('click', (e) => { if (e.target.closest('a, button')) return; const a = featureEl.querySelector('.play-link'); if (a) a.click(); });
         }
         if (gridEl) gridEl.innerHTML = featured.slice(1).map(cardHtml).join('');
+        const filtersEl = $('#gameFilters');
+        if (filtersEl && gridEl && SHOW_KINDS) {
+            const have = new Set(featured.slice(1).map(p => p.kind)); // only the main games, not the "Other stuff" shelf
+            const kinds = Object.keys(KINDS).filter(k => have.has(k));
+            filtersEl.innerHTML = kinds.length < 2 ? '' : ['', ...kinds].map(k => `<button type="button" class="pill" data-kind="${k}" aria-pressed="${k ? 'false' : 'true'}">${k ? KINDS[k][0] : 'All'}</button>`).join('');
+            filtersEl.hidden = kinds.length < 2;
+            filtersEl.onclick = (e) => { const b = e.target.closest('.pill'); if (b) setFilter(b.dataset.kind); };
+        }
         if (shelfEl) shelfEl.innerHTML = others.map(p => `
             <a class="mini-link play-link" href="${esc(p.path)}" data-path="${esc(p.path)}">
                 ${p.thumbnail ? `<img src="${esc(p.thumbnail)}" alt="" loading="lazy">` : ''}${esc(p.title)}
             </a>`).join('');
+    }
+
+    // The filter row: only filters the cards under "More games". The "Other stuff" shelf is left alone.
+    function setFilter(kind) {
+        document.querySelectorAll('#gameFilters .pill').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.kind === kind)));
+        document.querySelectorAll('#gameGrid .card').forEach(c => { c.hidden = !!kind && c.dataset.kind !== kind; });
     }
 
     // Clicking a game plays it in the page; ctrl/cmd/middle-click still opens a new tab
@@ -427,6 +444,8 @@
         }
     };
     (function place() {
+        // while the logo is being knocked about (Pip's Snake quest), the eyes ride along with it instead of being re-measured
+        if (brand.classList.contains('pip-bumped') || brand.classList.contains('pip-bump-back')) { requestAnimationFrame(place); return; }
         const src = img.getAttribute('src') || '', on = /logo(-pip)?\.svg/.test(src) && img.offsetWidth > 0;
         eyes.style.display = on ? '' : 'none';
         if (on) {

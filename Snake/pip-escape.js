@@ -72,84 +72,91 @@
     }
 
     // ---- the hole: Pip breaks the game's screen from the outside
-    // Thin cracks spread out from a point on the edge, like glass, then a jagged piece
-    // of the screen pops out and falls away, leaving a dark hole the snake fits through.
+    // Three hits, each harder than the last. Every hit shakes the whole game and the cracks jump further:
+    // blocky, right-angled cracks, in the game's own pixel look. The last hit knocks a chunk of the edge
+    // into the board in a spray of squares and leaves a black hole the snake fits through.
     let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    let hole = [], cracks = [], shards = [];
+    let hole = [], cracks = [], debris = [], holeMid = 0;
+    const HITS = [300, 1700, 3100]; // ms after the cracking starts
+    let hitsDone = 0, shakeAmp = 0, impactAt = 0, flashUntil = 0;
     // into the play area / along the edge → x, y on the canvas, for whichever edge
     const P = (into, al) => side === 'right' ? [width - into, al] : [al, height - into];
     function planHole() {
-        const a0 = gap[0] * scl - 10, a1 = (gap[2] + 1) * scl + 10, am = (a0 + a1) / 2;
-        // the outline of the piece that breaks out: along the edge, then a ragged line back inside
+        const u = scl / 2, a0 = gap[0] * scl - u, a1 = (gap[2] + 1) * scl + u;
+        holeMid = (a0 + a1) / 2;
+        // the outline of the chunk that breaks out: stepped, like everything else in this game
         hole = [[0, a0]];
-        const n = 9;
-        for (let i = 0; i <= n; i++) { const al = a0 + (a1 - a0) * i / n, mid = 1 - Math.abs(i / n - 0.5) * 2; hole.push([scl * (0.5 + 1.5 * mid) + rnd() * scl * 0.6, al + (rnd() - 0.5) * 8]); }
-        hole.push([0, a1]);
-        // cracks: rays from the edge, kinked, a couple of them forked, plus a ring joining them
-        cracks = [];
-        const rays = [];
-        for (let k = 0; k < 9; k++) {
-            const ang = -1.25 + 2.5 * (k / 8) + (rnd() - 0.5) * 0.25, len = 70 + rnd() * 120, pts = [[0, am]];
-            let u = 0, a = am;
-            for (let d = 0; d < len; d += 14 + rnd() * 16) { const aa = ang + (rnd() - 0.5) * 0.5; u = Math.max(0, u + Math.cos(aa) * 18); a += Math.sin(aa) * 18; pts.push([u, a]); }
-            cracks.push(pts); rays.push(pts);
-            if (rnd() < 0.4 && pts.length > 3) { const f = pts[2], br = [f]; let fu = f[0], fa = f[1]; for (let j = 0; j < 3; j++) { fu += 12 + rnd() * 10; fa += (rnd() - 0.5) * 30; br.push([fu, fa]); } cracks.push(br); }
+        const n = Math.round((a1 - a0) / u);
+        for (let i = 0; i < n; i++) {
+            const mid = 1 - Math.abs((i + 0.5) / n - 0.5) * 2;
+            const d = u * Math.max(1, Math.round(1 + mid * 3 + (rnd() - 0.5) * 1.5));
+            hole.push([d, a0 + i * u], [d, a0 + (i + 1) * u]);
         }
-        for (const r of [70]) { const ring = []; for (const ray of rays) { const p = ray[Math.min(ray.length - 1, Math.round(r / 22))]; if (p) ring.push(p); } cracks.push(ring); }
+        hole.push([0, a1]);
+        // the cracks: right-angled zigzags running in from the edge, forking as they go
+        cracks = [];
+        const branch = (u0, al0, dirA, len, depth) => {
+            const pts = [[u0, al0]]; let cu = u0, ca = al0, inward = true;
+            for (let k = 0; k < len; k++) {
+                if (inward) cu += u * (1 + Math.floor(rnd() * 2)); else ca += dirA * u * (1 + Math.floor(rnd() * 2));
+                pts.push([cu, ca]); inward = !inward;
+                if (depth < 2 && k > 1 && rnd() < 0.3) branch(cu, ca, -dirA, Math.max(2, len - k - 1), depth + 1);
+            }
+            cracks.push(pts);
+        };
+        for (let k = 0; k < 6; k++) branch(0, holeMid + (k - 2.5) * u * 1.6, k < 3 ? -1 : 1, 5 + Math.floor(rnd() * 5), 0);
     }
     const path = (ctx, pts) => { ctx.beginPath(); pts.forEach(([u, a], i) => { const [x, y] = P(u, a); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); };
-    // under the snake: the dark hole, once it's open
+    const spray = (n, power) => {
+        const u = scl / 2;
+        for (let i = 0; i < n; i++) {
+            const al = hole[0][1] + Math.random() * (hole[hole.length - 1][1] - hole[0][1]), [x, y] = P(Math.random() * u * 2, al), sp = power * (0.4 + Math.random());
+            debris.push(Object.assign({ x, y, s: Math.max(3, u * (0.4 + Math.random() * 0.7)), c: Math.random() < 0.5 ? '#ffffff' : '#9a9aa8' },
+                side === 'right' ? { vx: -sp, vy: (Math.random() - 0.65) * power * 0.9 } : { vx: (Math.random() - 0.5) * power * 1.1, vy: -sp * 1.3 }));
+        }
+    };
+    // under the snake: the black hole, once it's open
     function drawUnder() {
         if (state === 'wait' || state === 'cracking' || state === 'done' || !hole.length) return;
         const ctx = drawingContext;
-        ctx.save();
-        path(ctx, hole); ctx.closePath();
-        const [gx, gy] = P(0, (hole[0][1] + hole[hole.length - 1][1]) / 2), [hx, hy] = P(scl * 1.6, (hole[0][1] + hole[hole.length - 1][1]) / 2);
-        const g = ctx.createLinearGradient(gx, gy, hx, hy); g.addColorStop(0, '#000'); g.addColorStop(1, '#111118');
-        ctx.fillStyle = g; ctx.fill();
-        // the broken edge catches a little light
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)'; ctx.lineWidth = 1.5; path(ctx, hole.slice(1, -1)); ctx.stroke();
+        ctx.save(); ctx.lineJoin = 'miter'; ctx.lineCap = 'square';
+        path(ctx, hole); ctx.closePath(); ctx.fillStyle = '#000'; ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; path(ctx, hole.slice(1, -1)); ctx.stroke(); // the broken edge
         ctx.restore();
     }
-    // over the snake: the cracks in the screen, and the broken piece falling out
+    // over the snake: the hits, the cracks, and the squares flying out of the wall
     function drawOver() {
-        if (state === 'wait' || state === 'done' || !cracks.length) return;
         const ctx = drawingContext, now = Date.now();
-        const grow = state === 'cracking' ? Math.min(1, (now - crackT) / 4000) : 1;
+        // the whole game shakes when Pip hits it
+        ctx.canvas.style.transform = now < shakeUntil ? `translate(${((Math.random() - 0.5) * 2 * shakeAmp).toFixed(1)}px, ${((Math.random() - 0.5) * 2 * shakeAmp).toFixed(1)}px)` : '';
+        if (state === 'wait' || state === 'done' || !cracks.length) return;
+        if (state === 'cracking') while (hitsDone < HITS.length && now - crackT >= HITS[hitsDone]) { hitsDone++; shakeAmp = 2 + hitsDone * 2; shakeUntil = now + 230; impactAt = now; spray(3 + hitsDone * 2, 3 + hitsDone); }
+        const grow = state === 'cracking' ? hitsDone / HITS.length : 1;
         ctx.save();
-        if (now < shakeUntil) ctx.translate((Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5);
-        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-        // once the piece is out, the cracks stop at the edge of the hole
+        ctx.lineCap = 'square'; ctx.lineJoin = 'miter';
+        ctx.save();
+        // once the chunk is out, the cracks stop at the edge of the hole
         if (state !== 'cracking') { ctx.beginPath(); ctx.rect(-10, -10, width + 20, height + 20); hole.forEach(([u, a], i) => { const [x, y] = P(u, a); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.closePath(); ctx.clip('evenodd'); }
-        cracks.forEach((c, i) => {
-            const m = Math.max(2, Math.ceil(c.length * Math.min(1, grow * (1.3 - (i % 4) * 0.12))));
-            if (grow <= 0) return;
-            const part = c.slice(0, m);
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)'; ctx.lineWidth = 2.6; path(ctx, part); ctx.stroke();
-            ctx.strokeStyle = 'rgba(232, 232, 245, 0.62)'; ctx.lineWidth = 1.1; path(ctx, part); ctx.stroke();
-        });
-        // the pieces of screen that popped out
-        for (const sh of shards) {
-            sh.t += 0.1; sh.u += sh.vu; sh.a += sh.va; sh.vu -= 1.2; sh.va *= 0.96; sh.r += sh.vr;
-            const [cx, cy] = P(sh.u, sh.a);
-            ctx.save(); ctx.globalAlpha = Math.max(0, 1 - sh.t / 1.2); ctx.translate(cx, cy); ctx.rotate(sh.r);
-            ctx.beginPath(); sh.pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath();
-            ctx.fillStyle = '#3a3a44'; ctx.fill(); ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; ctx.lineWidth = 1; ctx.stroke();
-            ctx.restore();
+        if (grow > 0) for (const c of cracks) {
+            const part = c.slice(0, Math.max(2, Math.ceil(c.length * grow)));
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 6; path(ctx, part); ctx.stroke();
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; path(ctx, part); ctx.stroke();
         }
-        shards = shards.filter(sh => sh.t < 1.2);
+        ctx.restore();
+        // the hit itself: a white burst on the edge, for a blink
+        if (now - impactAt < 110) { const [x, y] = P(0, holeMid), r = scl * (0.6 + hitsDone * 0.35); ctx.fillStyle = '#fff'; ctx.fillRect(x - r, y - r / 3, r * 2, r / 1.5); ctx.fillRect(x - r / 3, y - r, r / 1.5, r * 2); }
+        // the chunk flashes white as it goes
+        if (now < flashUntil) { path(ctx, hole); ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill(); }
+        // squares knocked out of the wall, falling
+        for (const d of debris) { d.x += d.vx; d.y += d.vy; d.vy += 0.45; ctx.fillStyle = d.c; ctx.fillRect(Math.round(d.x), Math.round(d.y), d.s, d.s); }
+        debris = debris.filter(d => d.y < height + 30 && d.x > -30 && d.x < width + 30);
         ctx.restore();
     }
     function knockOut() {
-        // break the hole's outline into triangles around its middle, and throw them out of the screen
-        const cu = hole.reduce((t, p) => t + p[0], 0) / hole.length, ca = hole.reduce((t, p) => t + p[1], 0) / hole.length;
-        for (let i = 0; i < hole.length - 1; i++) {
-            const pts = [[cu, ca], hole[i], hole[i + 1]], mu = (pts[0][0] + pts[1][0] + pts[2][0]) / 3, ma = (pts[0][1] + pts[1][1] + pts[2][1]) / 3;
-            const [ox, oy] = P(mu, ma);
-            shards.push({ u: mu, a: ma, vu: -(3 + Math.random() * 5), va: (Math.random() - 0.5) * 6, r: 0, vr: (Math.random() - 0.5) * 0.5, t: 0,
-                pts: pts.map(([u, a]) => { const [x, y] = P(u, a); return [x - ox, y - oy]; }) });
-        }
-        shakeUntil = Date.now() + 420;
+        const now = Date.now();
+        hitsDone = HITS.length; impactAt = now; flashUntil = now + 90;
+        shakeAmp = 11; shakeUntil = now + 520;
+        spray(34, 9);
     }
 
     const start = () => {
@@ -166,6 +173,8 @@
             if (state === 'open' && side === 'bottom' && this.yspeed === 1 && this.y + scl > height - scl && gap.includes(Math.round(this.x / scl))) { escape(this); return; }
             update.call(this);
         };
+        const death0 = snake.death;
+        snake.death = function () { if (state !== 'out') death0.call(this); }; // nothing can kill it while it's out on the website
         snake.show0 = snake.show;
         const show0 = snake.show;
         snake.show = function () { if (state !== 'out') show0.call(this); }; // the normal snake; once it's on the website it's drawn there
@@ -193,9 +202,17 @@
         for (let i = s.tail.length - 1; i >= 0; i--) if (s.tail[i]) cells.push([Math.round(s.tail[i].x / scl), Math.round(s.tail[i].y / scl)]);
         const c = document.querySelector('canvas').getBoundingClientRect();
         post('out', { canvas: { left: c.left, top: c.top, width: c.width }, cols: width / scl, cells, dir: side === 'right' ? [1, 0] : [0, 1] });
-        noLoop(); redraw(); // one last frame: the game without the snake, just the hole
+        shakeUntil = 0; debris = [];
+        queue = []; // the game keeps running without the snake, so Pip can keep typing over the score
     }
 
+    // lines from the website while the snake is out there: typed over the score like everything else
+    addEventListener('message', e => {
+        if (!e.data || e.data.type !== 'pip-snake-say') return;
+        const next = { l: [String(e.data.a || ''), String(e.data.b || '')], hold: e.data.hold || 2400 };
+        queue = [];
+        if (mode === 'real' || !lines) queue.push(next); else { target = next; mode = 'erase'; modeAt = Date.now(); } // interrupts what he was saying
+    });
     addEventListener('message', e => {
         if (!e.data || e.data.type !== 'pip-snake-back') return;
         state = 'done';

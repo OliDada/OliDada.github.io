@@ -17,7 +17,7 @@
     <link href="bit.css" rel="stylesheet">
     <script src="script.js" defer></script>
     <script src="site.js" defer></script>
-    <script src="bit.js?v=20261113" defer></script>
+    <script src="bit.js?v=20261114" defer></script>
     <title>OliD.is</title>
   </head>
   <body>
@@ -76,22 +76,35 @@
 
         <section id="games" aria-labelledby="gamesTitle">
           <h2 id="gamesTitle" class="section-title disp">More games</h2>
+          <div id="gameFilters" class="filters" role="group" aria-label="Filter games by kind" hidden></div>
           <div id="gameGrid" class="grid"></div>
         </section>
 
-        <a class="daily-banner stk" href="/daily.html">
-          <span class="daily-banner-body">
-            <span class="chip c0">New every day</span>
-            <span class="daily-banner-title disp">Daily games</span>
-            <span class="daily-banner-text">Short puzzles that change every day. Everyone gets the same set.</span>
-            <span class="btn btn-pink daily-banner-btn"><span aria-hidden="true">▶</span> Play</span>
-          </span>
-          <span class="daily-banner-art" aria-hidden="true">
-            <img src="data/thumbnails/slice-thumbnail.png" alt="">
-            <img src="data/thumbnails/swap-thumbnail.png" alt="">
-            <img src="data/thumbnails/mix-thumbnail.png" alt="">
-          </span>
-        </a>
+        <div class="duo">
+          <a class="daily-banner stk" href="/daily.html">
+            <span class="daily-banner-body">
+              <span class="chip c0">New every day</span>
+              <span class="daily-banner-title disp">Daily games</span>
+              <span class="daily-banner-text">Short puzzles that change every day. Everyone gets the same set.</span>
+              <span class="btn btn-pink daily-banner-btn"><span aria-hidden="true">▶</span> Play</span>
+            </span>
+            <span class="daily-banner-art" aria-hidden="true">
+              <img src="data/thumbnails/slice-thumbnail.png" alt="">
+              <img src="data/thumbnails/swap-thumbnail.png" alt="">
+              <img src="data/thumbnails/mix-thumbnail.png" alt="">
+            </span>
+          </a>
+
+          <!-- The Studio is not a game: it sits beside the daily games, dressed like the Studio itself, and opens as its own page -->
+          <a class="studio-strip" href="/music/">
+            <img class="studio-strip-art" src="data/thumbnails/studio-band.png" alt="">
+            <span class="studio-strip-body">
+              <span class="studio-strip-title disp">Studio</span>
+              <span class="studio-strip-text">Change the music in the games, or make your own song with a little band.</span>
+              <span class="studio-strip-btn"><span aria-hidden="true">♪</span> Open the Studio</span>
+            </span>
+          </a>
+        </div>
 
         <section class="bottom-row">
           <div id="jokes" class="joke-note">

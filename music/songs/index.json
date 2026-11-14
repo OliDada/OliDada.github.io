@@ -6,6 +6,8 @@
     { "file": "a-little-higher-climb.json", "title": "Up and Up", "game": "balance-game", "gameTitle": "A Little Higher", "thumbnail": "/data/thumbnails/balance-ball-thumbnail.svg" },
     { "file": "farm-frenzy-barnyard-dash.json", "title": "Barnyard Dash", "game": "farm-frenzy", "gameTitle": "Farm Frenzy", "thumbnail": "/data/thumbnails/farm-frenzy-thumbnail.png" },
     { "file": "ever-after-village.json", "title": "Once Upon a Village", "game": "zelda-game", "gameTitle": "Ever After", "thumbnail": "/data/thumbnails/rpg-thumbnail.png" },
+    { "file": "niceland-midnight-sun.json", "title": "Midnight Sun", "game": "niceland", "gameTitle": "Niceland", "thumbnail": "/data/thumbnails/niceland-thumbnail.png" },
+    { "file": "gravity-dash-downhill.json", "title": "Downhill", "game": "gravity-dash", "gameTitle": "Gravity Dash", "thumbnail": "/data/thumbnails/gravity-dash-thumbnail.png" },
     { "file": "demo-harbor.json", "title": "Harbor Demo", "gameTitle": "Example" }
   ],
   "slots": [
@@ -13,6 +15,8 @@
     { "id": "neon-rush", "gameTitle": "Neon Rush", "label": "Music", "default": "neon-rush-pulse.json", "path": "/worm-hole/index.html", "thumbnail": "/data/thumbnails/neon-rush-thumbnail.webp" },
     { "id": "a-little-higher", "gameTitle": "A Little Higher", "label": "Music", "default": "a-little-higher-climb.json", "path": "/balance-game/index.html", "thumbnail": "/data/thumbnails/balance-ball-thumbnail.svg" },
     { "id": "farm-frenzy", "gameTitle": "Farm Frenzy", "label": "Music", "default": "farm-frenzy-barnyard-dash.json", "path": "/farm-frenzy/index.html", "thumbnail": "/data/thumbnails/farm-frenzy-thumbnail.png" },
-    { "id": "elsewhere", "gameTitle": "Elsewhere", "label": "Music", "default": "elsewhere-first-landfall.json", "path": "/galaxy-explorer/index.html", "thumbnail": "/data/thumbnails/elsewhere-thumbnail.png" }
+    { "id": "elsewhere", "gameTitle": "Elsewhere", "label": "Music", "default": "elsewhere-first-landfall.json", "path": "/galaxy-explorer/index.html", "thumbnail": "/data/thumbnails/elsewhere-thumbnail.png" },
+    { "id": "niceland", "gameTitle": "Niceland", "label": "Music", "default": "niceland-midnight-sun.json", "path": "/niceland/index.html", "thumbnail": "/data/thumbnails/niceland-thumbnail.png" },
+    { "id": "gravity-dash", "gameTitle": "Gravity Dash", "label": "Music", "default": "gravity-dash-downhill.json", "path": "/embeds/gravity_dash.html", "thumbnail": "/data/thumbnails/gravity-dash-thumbnail.png" }
   ]
 }

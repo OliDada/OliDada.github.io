@@ -120,9 +120,25 @@ function mousePressed() {
   retry();
 }
 
+// website: swipe to steer on phones, without the page scrolling under your finger
+let swipeFrom = null;
 function touchStarted() {
-  retry();
+  if (gameOver) { retry(); return false; }
+  if (touches.length) swipeFrom = { x: touches[0].x, y: touches[0].y };
+  return false;
 }
+function touchMoved() {
+  if (swipeFrom && touches.length) {
+    const dx = touches[0].x - swipeFrom.x, dy = touches[0].y - swipeFrom.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) > 18) {
+      const [x, y] = Math.abs(dx) > Math.abs(dy) ? [dx > 0 ? 1 : -1, 0] : [0, dy > 0 ? 1 : -1];
+      if (!(snake.tail.length && x === -snake.xspeed && y === -snake.yspeed)) snake.dir(x, y); // no turning back into yourself
+      swipeFrom = { x: touches[0].x, y: touches[0].y };
+    }
+  }
+  return false;
+}
+function touchEnded() { swipeFrom = null; return false; }
 
 function keyPressed() {
   if (gameOver) {
