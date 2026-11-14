@@ -236,6 +236,7 @@
       <a class="l" href="#planet">Space</a>
       <a class="l" href="#games">Games I fixed</a>
       <a class="l" href="#remote">Remote</a>
+      <a class="l" href="#backstageAccess">Backstage</a>
       <a class="l" href="/">← olid.is</a>
     </nav>
 
@@ -249,7 +250,7 @@
         <div class="stat"><b>One afternoon</b><small>to build this page</small></div>
         <div class="stat bad"><b>Four years</b><small>Oli's website, so far</small></div>
         <div class="stat"><b>0</b><small>bugs (that I'll admit to)</small></div>
-        <div class="stat"><b>6 kinds of space</b><small>made before lunch. scroll down</small></div>
+        <div class="stat"><b>1 black hole</b><small>more than Oli's entire galaxy</small></div>
       </div>
     </header>
 
@@ -985,11 +986,14 @@ void main() {
             if (key === 'display' && !(p[2] === 'h' && /^(none|block|flex|grid)$/.test(val))) continue;
             css[key] = val;
           }
+          if (spec.part === 'name') { const c = css.color || css['-webkit-text-fill-color']; if (c && !css.background && !css['background-color']) css.background = c; }
           if (Object.keys(css).length) out.css = css;
         }
         return out.text || out.css ? out : null;
       }
-      const ruleOf = sp => sp.css ? `${PARTS[sp.part][0]} {\n${Object.entries(sp.css).map(([k, v]) => `  ${k}: ${v} !important;`).join('\n')}\n}` : '';
+      // "name" is gradient text: whatever background it gets stays clipped to the letters (a plain background would turn it into a box)
+      const KEEP_CLIP = { name: '  -webkit-background-clip: text !important;\n  background-clip: text !important;\n  color: transparent !important;\n  -webkit-text-fill-color: transparent !important;' };
+      const ruleOf = sp => sp.css ? `${PARTS[sp.part][0]} {\n${Object.entries(sp.css).filter(([k]) => !(sp.part === 'name' && /^(color|-webkit-text-fill-color)$/.test(k))).map(([k, v]) => `  ${k}: ${v} !important;`).join('\n')}${KEEP_CLIP[sp.part] && Object.keys(sp.css).some(k => /^(background|background-color|color|-webkit-text-fill-color)$/.test(k)) ? '\n' + KEEP_CLIP[sp.part] : ''}\n}` : '';
       const codeOf = sp => [sp.text ? `document.querySelector(${JSON.stringify(PARTS[sp.part][0])})\n  .textContent = ${JSON.stringify(sp.text)};` : '', ruleOf(sp)].filter(Boolean).join('\n\n');
       window.pipRoomParts = () => Object.entries(PARTS).map(([k, [sel, label, f]]) => { const el = $(sel), t = f === 't' && el ? ` (now: "${el.textContent.trim().slice(0, 50)}")` : ''; return `${k}: ${label}${f === 't' ? ', words or style' + t : ''}${f === 'h' ? ', can be hidden' : ''}`; }).join('\n');
       const clean = entries => Array.isArray(entries) ? entries.map(e => e && e.id === 'custom' ? ((sp => sp ? { id: 'custom', spec: sp } : null)(vet(e.spec))) : e && EDITS[e.id] && Number.isInteger(e.variant) && EDITS[e.id].variants[e.variant] ? { id: e.id, variant: e.variant } : null).filter(Boolean) : [];

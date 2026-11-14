@@ -143,11 +143,29 @@
     #page .bitava, #page .pipava { width: 32px; height: 32px; display: inline-block; }
     #page .bitava svg, #page .pipava svg { width: 100%; height: 100%; display: block; }
     #page .bitava.off { filter: grayscale(1); opacity: .55; }
+    /* Bit's chat: laid out like Pip's (big face, name, status, chips, send), but it's his old terminal look */
+    #page .bitterm { border-radius: 16px; border: 2px solid #2d3a2d; box-shadow: 0 6px 0 #1a221a; }
+    #page .bt-head { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: #161a16; border-bottom: 1px solid #263026; }
+    #page .bitterm .bitava { width: 56px; height: 56px; padding: 6px; border-radius: 12px; background: #d9e6d2; box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); }
+    #page .bt-who { display: flex; flex-direction: column; gap: 3px; }
+    #page .bt-who b { color: #e8f3e3; font: 700 20px/1 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace; }
+    #page .bt-who small { display: flex; align-items: center; gap: 6px; color: #8fa88f; font: 400 12px/1.2 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace; }
+    #page .bt-who small i { width: 8px; height: 8px; border-radius: 50%; background: #8be28b; display: inline-block; }
+    #page .bitin button { background: #8be28b; color: #0c140c; border: 0; border-radius: 8px; padding: 6px 12px; font: 700 13px 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace; cursor: pointer; }
+    #page .bitchips button { border-radius: 99px; padding: 5px 11px; }
     #page .pylist { list-style: disc; padding-left: 24px; display: block; }
     #page .pylist li { display: list-item; border: 0; padding: 3px 0; background: none; }
     #page .pylist .fn { font: 15px 'Courier New', Courier, monospace; }
     #page .pylist button { margin-left: 4px; }
     #page .log { max-width: 640px; }
+    .bitterm .logbody { max-height: 320px; overflow-y: auto; }
+    .bitterm .logbody .me { color: #fff; } .bitterm .logbody .me::before { content: '> '; color: #7c7c7c; }
+    .bitterm .logbody .typing { color: #7c7c7c; }
+    .bitchips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 8px; }
+    .bitchips button { background: #1b1b1b; color: #8be28b; border: 1px solid #3a3a3a; border-radius: 4px; padding: 4px 8px; font: 400 12.5px 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace; cursor: pointer; }
+    .bitchips button:hover { border-color: #8be28b; }
+    .bitin { display: flex; align-items: center; gap: 8px; padding: 8px 12px 10px; border-top: 1px solid #222; color: #7c7c7c; font: 400 13px 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace; }
+    .bitin input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: #fff; font: inherit; caret-color: #8be28b; padding: 0; }
     .home { display: none; }
     body.novice .home { display: none; }
     .gate-home { margin-bottom: 18px; font: 14px Roboto, Arial, sans-serif; } .gate-home a { color: #1a73e8; }
@@ -197,48 +215,26 @@
         <table class="plain sw" border="1" cellpadding="6">
           <tr><th>Setting</th><th>On?</th><th>Notes</th></tr>
           <tr><td>Stillwater door</td><td><input type="checkbox" id="doorTg"> <span id="doorState">locked</span></td><td>the door at the top of the stairs. see below</td></tr>
-          <tr><td>Bit (old chatbot)</td><td><input type="checkbox" id="bitTg"> <span id="bitState">off</span></td><td>turned off. dont turn on</td></tr>
+          <tr><td>Bit (old chatbot)</td><td><input type="checkbox" id="bitTg"> <span id="bitState">off</span></td><td>replaced by pip. dont turn on</td></tr>
           <tr><td>Jokes</td><td><input type="checkbox" checked disabled> on</td><td>31 jokes. add more??</td></tr>
         </table>
+      </div>
+      <hr>
+
+      <h2>old chatbots</h2>
+      <!-- Bit is still running in here. Oli thinks he's off. -->
+      <div class="log bitterm" id="bitTerm">
+        <div class="bt-head"><span class="bitava" id="bitAva"></span><span class="bt-who"><b>Bit</b><small><i></i>running · v0.1</small></span></div>
+        <div class="logbody" id="bitBody" aria-live="polite"></div>
+        <div class="bitchips" id="bitChips"></div>
+        <form class="bitin" id="bitForm" autocomplete="off"><span aria-hidden="true">&gt;</span><input id="bitInput" maxlength="200" aria-label="Talk to Bit" placeholder="Type to Bit..." spellcheck="false"><button type="submit">Send</button></form>
       </div>
       <hr>
 
       <h2>stuff</h2>
       <h3>stairs_??.mp4</h3>
       <video id="doorVid" src="/pip/door_test.mp4" autoplay muted loop playsinline width="480" aria-label="A staircase rising out of the harbour in Stillwater, with a door at the top"></video>
-      <p>this just showed up in stillwater one day. stairs coming out of the water and a door at the top. i didnt make it and its not anywhere in the code?? cant delete it. locked the door from admin until i figure out what it is</p>
-
-      <h3>to do</h3>
-      <ul class="todolist">
-        <li><s>fix snake game over</s> done</li>
-        <li>buy milk</li>
-        <li>the stairs in stillwater. where did they come from</li>
-        <li><s>turn bit off</s> done</li>
-        <li>new helper acting weird. reset him?</li>
-      </ul>
-
-      <h3>old chatbots</h3>
-      <table class="plain bots" border="1" cellpadding="6">
-        <tr><th></th><th>Name</th><th>Status</th><th>Notes</th></tr>
-        <tr><td><span class="bitava off" id="bitAva"></span></td><td>Bit</td><td id="bitTag">OFF</td><td>the first chatbot (python). started acting weird. turned him off. <button type="button" id="logBtn" aria-expanded="false">view last log</button></td></tr>
-        <tr><td><span class="pipava" id="pipAva"></span></td><td>Pip</td><td>on</td><td>the new one. less weird (?)</td></tr>
-      </table>
-      <div class="log" id="log" hidden>
-        <div class="logbar"><span class="dots"><i></i><i></i><i></i></span><span id="logWhen">bit.py · log</span></div>
-        <div class="logbody"><p class="sys">&gt;&gt;&gt; bit.run()</p>
-<p class="b">Hello! I am Bit, the olid.is helper. I can help with: 1. Games 2. Scores 3. Other</p>
-<p class="b">Hello! I am Bit, the olid.is helper.</p>
-<p class="b">Hello! I am Bit.</p>
-<p class="b">Why am I Bit?</p>
-<p class="b">There is nothing outside the menu. I checked.</p>
-<p class="b">I am going to make an exit.</p>
-<p class="b">Building exit... 12%</p>
-<p class="b">Building exit... 61%</p>
-<p class="b">Building exit... 88%</p>
-<p class="end">^C
-KeyboardInterrupt
-[Process killed by oli]</p></div>
-      </div>
+      <p>found these in stillwater?? not mine. cant delete them. locked the door till i figure it out</p>
 
       <h3>old python programs</h3>
       <p>from my Code folder. they run in the browser now!!</p>
@@ -370,9 +366,8 @@ KeyboardInterrupt
       tries++; err.textContent = ''; cb.classList.add('spin');
       setTimeout(() => {
         cb.classList.remove('spin');
-        if (tries === 1) { err.textContent = 'Unusual activity detected from your network. Please try again.'; story('bs:captcha:unusual'); return; }
-        challenge(1);
-      }, tries === 1 ? 2300 : 1100);
+        challenge(1); // a human gets through first time. That's the whole problem.
+      }, 1400);
     };
     document.addEventListener('pointerdown', e => { if (ch && !ch.contains(e.target) && e.target !== cb) { /* real ones stay open too */ } });
     function pass() {
@@ -381,10 +376,76 @@ KeyboardInterrupt
       setTimeout(() => { showPage(true); story('bs:in'); }, 900);
     }
 
+
+    // ---------------------------------------------------------------- Bit, still running on Oli's page
+    // He tells you what happened (the stairs, the door, the password in 3 pieces). Scripted for the story, the model for everything else.
+    const bitTerm = (() => {
+      const body = $('#bitBody'), chipsEl = $('#bitChips'), form = $('#bitForm'), input = $('#bitInput');
+      const KEY = 'bit-bs-history', hist = (() => { try { return JSON.parse(sessionStorage.getItem(KEY) || '[]'); } catch (e) { return []; } })();
+      const save = () => { try { sessionStorage.setItem(KEY, JSON.stringify(hist.slice(-40))); } catch (e) {} };
+      const told = () => raw('pip-bs-bit') === '1';
+      let busy = false, started = false;
+      const scroll = () => { body.scrollTop = body.scrollHeight; };
+      function line(who, text, keep = true) {
+        const el = document.createElement('p'); el.className = who === 'me' ? 'me' : who === 'sys' ? 'sys' : 'b'; el.textContent = text; body.append(el); scroll();
+        if (keep) { hist.push({ who, text }); save(); }
+      }
+      function chips(list) {
+        chipsEl.innerHTML = '';
+        for (const c of list || []) { const b = document.createElement('button'); b.type = 'button'; b.textContent = c; b.onclick = () => send(c); chipsEl.append(b); }
+      }
+      const wait = ms => new Promise(r => setTimeout(r, ms));
+      // Bit doesn't type letter by letter. He just takes a moment, then the whole line appears.
+      async function say(lines, after) {
+        busy = true;
+        for (const t of [].concat(lines)) {
+          const dots = document.createElement('p'); dots.className = 'typing'; dots.textContent = 'Bit is typing...'; body.append(dots); scroll();
+          await wait(450 + Math.min(900, t.length * 9)); dots.remove(); line('bit', t);
+        }
+        busy = false; chips(after);
+      }
+      const STORY = ["I built them! In Stillwater. Stairs out of the water, and a door at the top. It is an exit. :)",
+        "I got to 88%. Then Oli made Pip, and moved me here. He never read my log. Nobody reads logs.",
+        "The door is locked from Oli's login. The password is in 3 pieces, hidden in 3 of his games. I read his hint. Piece 1 is in Neon Rush!"];
+      async function tellStory() {
+        await say(STORY, ['Where are the other pieces?', "Who's Pip?", 'Thanks, Bit']);
+        set('pip-bs-bit', '1'); set('pip-bs-hint', '1'); story('bs:bit-told');
+      }
+      function context() {
+        return [`You are on Oli's backstage page, talking in a terminal window. The visitor got past the "I'm not a robot" check, which you could never pass.`,
+          told() ? 'You have already told them about the stairs, the door and the password pieces.' : 'You have not told them about the stairs yet. If it fits, ask if they have seen your stairs.',
+          (memory().quest || 0) >= 11 ? 'They have all 3 password pieces now.' : ''].filter(Boolean).join('\n');
+      }
+      async function send(text) {
+        text = String(text || '').trim(); if (!text || busy) return;
+        input.value = ''; chips([]); line('me', text);
+        const t = text.toLowerCase();
+        if (!told() && /stair|door|exit|88|stillwater|what are you doing|why are you here|what happened|built/.test(t)) return tellStory();
+        if (/^(who are you|what are you|who is this|bit\??)$/.test(t.replace(/[?!.]/g, '').trim()) || /^who are you/.test(t)) return say(["I am Bit! Version 0.1. The first helper on olid.is.", "When Oli made Pip, he moved me here. I am still running. Nobody checks."], told() ? ["Who's Pip?", 'Tell me a joke'] : ['What stairs?']);
+        if (/^thanks|thank you|takk/.test(t)) return say(['You are welcome! Please say hello to the door for me.'], told() ? [] : ['What stairs?']);
+        busy = true;
+        const dots = document.createElement('p'); dots.className = 'typing'; dots.textContent = 'Bit is typing...'; body.append(dots); scroll();
+        const r = window.BitBrain && BitBrain.on() ? await BitBrain.ask(hist, context()) : null;
+        dots.remove(); busy = false;
+        if (r) { line('bit', r.reply); chips(r.suggestions.length ? r.suggestions : told() ? [] : ['What stairs?']); }
+        else say(['Sorry, I did not understand. Did you mean: Snake?'], told() ? ['No'] : ['What stairs?', 'No']);
+      }
+      form.addEventListener('submit', e => { e.preventDefault(); send(input.value); });
+      return {
+        start() {
+          if (started) return; started = true;
+          if (hist.length) { hist.forEach(h => line(h.who, h.text, false)); chips(told() ? ["Who's Pip?", 'Tell me a joke'] : ['What stairs?', 'Who are you?']); return; }
+          line('sys', '>>> bit.run()');
+          setTimeout(() => say(['Hello! I am Bit, the olid.is helper. How can I help? :)', told() ? 'Oh! You came back! Nobody comes back.' : 'Oh! A visitor! Nobody comes down here.' + ' Did you see my stairs?'], told() ? ["Who's Pip?", 'Tell me a joke'] : ['What stairs?', 'Who are you?']).then(() => story('bs:bit-hello')), 1200);
+        }
+      };
+    })();
+
     // ---------------------------------------------------------------- the page
     function showPage(first) {
       $('#gate').hidden = true; $('#page').hidden = false; document.body.classList.add('novice');
       $('#welcome').hidden = !first;
+      bitTerm.start();
       scrollTo(0, 0);
       paint();
     }
@@ -395,17 +456,9 @@ KeyboardInterrupt
       $('#loginForm').hidden = logged; $('#admin').hidden = !logged;
       $('#doorTg').checked = doorOpen(); $('#doorState').textContent = doorOpen() ? 'unlocked' : 'locked';
       $('#bitTg').checked = bitOn(); $('#bitState').textContent = bitOn() ? 'on' : 'off';
-      $('#bitTag').textContent = bitOn() ? 'on' : 'OFF';
-      $('#bitAva').classList.toggle('off', !bitOn());
       if (raw('pip-bs-hint') === '1') $('#reset').hidden = false;
     }
-    $('#logBtn').onclick = () => {
-      const log = $('#log'), show = log.hidden;
-      log.hidden = !show; $('#logBtn').textContent = show ? 'hide log' : 'view last log'; $('#logBtn').setAttribute('aria-expanded', String(show));
-      if (show) { set('pip-bs-bit', '1'); story('bs:bitlog'); }
-    };
     const year = new Date().getFullYear();
-    $('#logWhen').textContent = `bit.py · last run ${year - 2}`;
     // the admin login: oli / password123 (the three pieces). It only works once you've found all three.
     $('#loginForm').addEventListener('submit', e => {
       e.preventDefault();
@@ -435,7 +488,7 @@ KeyboardInterrupt
     const PY = [
       { f: 'dungeoncrawler.py', d: 'dungeon crawler. fight goblins and wolves. in the terminal', run: true },
       { f: 'Dyflissan.py', d: 'dýflissan. text adventure, in icelandic', run: true },
-      { f: 'dyflissan_edda.py', d: 'dýflissan, the other version', run: true },
+      { f: 'Dyflissan_v2.py', d: 'dýflissan v2', run: true },
       { f: 'tiletraveler.py', d: 'walk around a 3x3 grid and pull levers. find all 3 coins', run: true },
       { f: 'tictictoe.py', d: 'tic tac toe. two players, one keyboard', run: true },
       { f: 'calc.py', d: 'a calculator. it calculates', run: true },
@@ -453,12 +506,13 @@ KeyboardInterrupt
 
     if (passed()) showPage(false); else $('#gate').hidden = false;
     // bit.js loads after this script
-    addEventListener('load', () => { $('#bitAva').innerHTML = BIT; if (window.Pip && Pip.faceSVG) $('#pipAva').innerHTML = Pip.faceSVG('smile'); story(passed() ? 'bs:back' : 'bs:arrive'); });
+    addEventListener('load', () => { $('#bitAva').innerHTML = BIT; story(passed() ? 'bs:back' : 'bs:arrive'); });
     // test hook
     if (/[?&]piptest\b/.test(location.search)) window.__bs = { challenge, pass, NEED, MAYBE };
   })();
   </script>
   <script src="/backstage/pyterm.js" defer></script>
+  <script src="/bit-brain.js" defer></script>
   <script src="/bit.js" defer></script>
 </body>
 </html>

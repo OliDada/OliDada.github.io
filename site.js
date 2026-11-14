@@ -409,8 +409,23 @@
     eyes.innerHTML = '<g class="be-look"><g class="be-blink"><ellipse cx="-3.6" cy="0" rx="2.4" ry="3.1"/><ellipse cx="3.6" cy="0" rx="2.4" ry="3.1"/></g><circle class="be-shine" cx="-4.4" cy="-1.3" r=".9"/><circle class="be-shine" cx="2.8" cy="-1.3" r=".9"/></g>';
     brand.appendChild(eyes);
     const look = eyes.querySelector('.be-look');
-    let mx = innerWidth / 2, my = 0;
+    let mx = innerWidth / 2, my = 0, gaze = null, gazeUntil = 0;
     addEventListener('pointermove', e => { mx = e.clientX; my = e.clientY; }, { passive: true });
+    // Pip and the Ó: bit.js can make it glance at him, look away, or blink (it never says anything)
+    const pipAt = () => { const el = [document.querySelector('#bit:not([hidden])'), document.querySelector('.bit-launch .pip-head')].find(x => x && x.offsetWidth); if (!el) return null; const r = el.getBoundingClientRect(); return [r.left + Math.min(r.width / 2, 60), r.top + Math.min(r.height / 2, 60)]; };
+    const blinkN = n => { for (let i = 0; i < n; i++) setTimeout(() => { eyes.classList.add('blink'); setTimeout(() => eyes.classList.remove('blink'), 120); }, i * 260); };
+    window.pipLogo = {
+        look(where, ms = 1800) { gaze = where; gazeUntil = Date.now() + ms; },
+        blink: (n = 1) => blinkN(n),
+        // a short reaction: 'glance' (at Pip), 'away' (looks away from him), 'blink', 'stare' (at Pip, long), 'roll' (looks up, then at Pip)
+        react(kind) {
+            if (kind === 'glance') { this.look('pip', 1600); setTimeout(() => blinkN(1), 700); }
+            else if (kind === 'away') { this.look('away', 2200); }
+            else if (kind === 'stare') { this.look('pip', 4200); }
+            else if (kind === 'roll') { this.look('up', 900); setTimeout(() => this.look('pip', 1400), 900); }
+            else blinkN(2);
+        }
+    };
     (function place() {
         const src = img.getAttribute('src') || '', on = /logo(-pip)?\.svg/.test(src) && img.offsetWidth > 0;
         eyes.style.display = on ? '' : 'none';
@@ -421,7 +436,10 @@
             const cx = ir.left + ir.width / 2 + m.c * dy - br.left, cy = ir.top + ir.height / 2 + m.d * dy - br.top, size = w * .26;
             eyes.style.width = eyes.style.height = size + 'px'; eyes.style.left = (cx - size / 2) + 'px'; eyes.style.top = (cy - size / 2) + 'px';
             eyes.style.transform = `rotate(${Math.atan2(m.b, m.a)}rad)`;
-            const ex = br.left + cx, ey = br.top + cy, a = Math.atan2(my - ey, mx - ex), d = Math.min(1, Math.hypot(mx - ex, my - ey) / 300);
+            const ex = br.left + cx, ey = br.top + cy;
+            let tx = mx, ty = my;
+            if (gaze && Date.now() < gazeUntil) { const p = pipAt(); if (gaze === 'pip' && p) [tx, ty] = p; else if (gaze === 'away' && p) [tx, ty] = [2 * ex - p[0], 2 * ey - p[1]]; else if (gaze === 'up') [tx, ty] = [ex, ey - 400]; } else gaze = null;
+            const a = Math.atan2(ty - ey, tx - ex), d = Math.min(1, Math.hypot(tx - ex, ty - ey) / 300);
             look.setAttribute('transform', `translate(${(Math.cos(a) * 2.6 * d).toFixed(2)} ${(Math.sin(a) * 2.6 * d).toFixed(2)})`);
             eyes.classList.toggle('pip', /logo-pip/.test(src));
         }

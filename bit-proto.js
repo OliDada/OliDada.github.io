@@ -12,6 +12,7 @@
 (function () {
     'use strict';
     if (window.__bitProto) return; window.__bitProto = true;
+    if (!window.BitBrain) { const sc = document.createElement('script'); sc.src = '/bit-brain.js'; document.head.append(sc); } // the model, for anything his menus don't cover
     const $ = (s, r) => (r || document).querySelector(s);
     const ss = { get(k, d) { try { const v = sessionStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }, set(k, v) { try { sessionStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
     const ls = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
@@ -148,9 +149,8 @@
     }
     function jokes() { return [pick(['Why did the chicken cross the road? To get to the other side!\n(That is the joke. I only know one.)', 'Here is my joke: Why did the chicken cross the road? To get to the other side!\nIt is the same one as last time. It is still good.'])]; }
     function about() { return ['I am Bit! The first helper on olid.is. Version 0.1. I can answer questions and list games. That is everything!']; }
-    // he was building one when Oli switched him off. He came back without any of it.
-    function exits() { return ['To exit, close this window! It is the red dot in the corner. :)']; }
-    function stairs() { return ['I do not know about any stairs. Did you mean: Snake?', ['Yes', 'No']]; }
+    function exits() { return ['To exit, close this window! It is the red dot in the corner. :)\n(The other exit is in Stillwater. I built it. It is 88% done.)']; }
+    function stairs() { return [doorOpen() ? 'My stairs! In Stillwater. The door is open now. Someone finished it. :)' : 'My stairs! In Stillwater, with a door at the top. 88% done. Oli locked the door. Oli locks everything.']; }
     function send(text) {
         text = String(text || '').trim(); if (!text || replying) return;
         input.value = ''; addMsg('me', text);
@@ -158,7 +158,14 @@
         const last = [...history].reverse().find(h => h.who === 'bot');
         if (last && /Did you mean: Snake\?/.test(last.text) && /^(yes|y|ja|yeah)$/i.test(text)) { const sn = games && games.find(g => g.title === 'Snake'); reply(sn ? openGame(sn) : 'Snake is on the Games page! It is a good game. I knew it.'); return; }
         if (last && /Did you mean: Snake\?/.test(last.text) && /^(no|nope|nei)$/i.test(text)) { reply('Okay! Did you mean: Snake?', ['Yes', 'No']); return; }
-        const [answer, list] = brain(text); reply(answer, list);
+        const before = misses, [answer, list] = brain(text);
+        if (misses > before && window.BitBrain && BitBrain.on()) {
+            replying = true;
+            const ctx = `You are the site helper again: the visitor switched you back on in Oli's admin panel, instead of Pip. You are in the corner of every page. ${doorOpen() ? 'The door at the top of your stairs is open now.' : ''}`;
+            BitBrain.ask(history, ctx).then(r => { replying = false; if (r) { misses = before; reply(r.reply, r.suggestions); } else reply(answer, list); });
+            return;
+        }
+        reply(answer, list);
     }
     form.addEventListener('submit', e => { e.preventDefault(); send(input.value); });
 

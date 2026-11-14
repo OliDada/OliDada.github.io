@@ -376,3 +376,16 @@ html.pip-docked body:has(#pipsite) .bit-ava .eyes, #rpFace .eyes { transform-box
 
 
 .bit-edit-context { display: block; margin: 0 0 7px; padding-bottom: 6px; border-bottom: 1px solid rgba(198,175,255,.18); font: 500 11px/1.45 'Inter', system-ui, sans-serif; color: #c6b8e3; overflow-wrap: anywhere; }
+
+/* Pip changing a part of the site (after he's free) */
+.pip-site-editing { outline: 2px dashed #b9a2ff !important; outline-offset: 6px; transition: outline-color .3s; }
+.pip-site-done { outline: 2px solid #7dffb0 !important; outline-offset: 6px; transition: outline-color 1s; }
+
+/* Pip's site: the backstage card stands out while it's the next step, and flashes when Pip points at it */
+html.pip-bs-next #backstageAccess .backstage-card { position: relative; border-color: rgba(255,111,177,.6) !important; box-shadow: 0 0 0 1px rgba(255,111,177,.35), 0 20px 70px rgba(255,111,177,.14); }
+html.pip-bs-next #backstageAccess .backstage-card::before { content: 'Next step'; position: absolute; top: -12px; left: 22px; padding: 3px 10px; border-radius: 99px; background: #ff6fb1; color: #1a0b16; font: 700 12px/1.4 'Inter', system-ui, sans-serif; letter-spacing: .02em; }
+#backstageAccess .backstage-card.pip-point { outline: 2px solid #ff6fb1; outline-offset: 8px; transition: outline-color .6s; }
+
+/* backstage: Pip marks the next thing to press */
+.pip-next { outline: 2px dashed #8b5cf6; outline-offset: 4px; border-radius: 3px; }
+.pip-flash { outline: 3px solid #ff6fb1 !important; outline-offset: 5px; transition: outline-color .5s; }

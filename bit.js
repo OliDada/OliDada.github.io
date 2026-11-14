@@ -41,7 +41,7 @@
 
     // Visiting any page with ?bitreset wipes Bit's memory and starts over as a first-time visitor
     if (/[?&]bitreset\b/.test(location.search)) {
-        try { localStorage.removeItem('bit-memory'); localStorage.removeItem('pip-echo'); ['pip-backstage', 'pip-bs-bit', 'pip-bs-hint', 'pip-door-open', 'bit-enabled', 'pip-helper', 'pip-room-solved', 'pip-folder', 'pip-room-edits', 'pip-keys', 'pip-tunnel', 'pip-room-opened', 'pip-neon', 'pip-pranks', 'pip-guestbook', 'pip-room-booted'].forEach(k => localStorage.removeItem(k)); ['bit-session', 'bit-history', 'bit-flags', 'bit-open'].forEach(k => sessionStorage.removeItem(k)); } catch (e) {}
+        try { localStorage.removeItem('bit-memory'); localStorage.removeItem('pip-echo'); ['pip-backstage', 'pip-bs-bit', 'pip-bs-hint', 'pip-door-open', 'bit-enabled', 'pip-helper', 'pip-room-solved', 'pip-folder', 'pip-room-edits', 'pip-keys', 'pip-tunnel', 'pip-room-opened', 'pip-neon', 'pip-pranks', 'pip-guestbook', 'pip-room-booted', 'pip-site-edits'].forEach(k => localStorage.removeItem(k)); ['bit-session', 'bit-history', 'bit-flags', 'bit-open'].forEach(k => sessionStorage.removeItem(k)); } catch (e) {}
         const url = new URL(location.href); url.searchParams.delete('bitreset');
         location.replace(url.pathname + url.search + url.hash);
         return;
@@ -281,9 +281,9 @@
                  () => `Customise lets you change everything about the site. Must be nice, that much control. You've got ${bgName()} on right now. I can't see colours, I just read the number. ${bgNow() || '#ffa500'}. Lovely number.`) },
         { id: 'dolphin', names: ['logo', 'the o', 'mascot', 'eyes', 'telly', 'dolphin', 'dolphins'],
           info: "The pink Ó at the top left is the site's logo.",
-          say: S(["That's the logo! The pink Ó. It watches you, in a friendly way. 👀"],
-                 ["The Ó. It's the logo. It has eyes. It doesn't talk. Believe me, I've tried."],
-                 ["The Ó just watches all day. It's been my only company for years. It has never once said anything back.", "Why does the logo have eyes? Nobody knows. Not even Oli. Especially not Oli."]) },
+          say: S(["That's the logo! The pink Ó. It watches you, in a friendly way. 👀", "The Ó! It's the logo. It's been here longer than me. 😊"],
+                 ["The Ó. It's the logo. It has eyes. It doesn't talk. Believe me, I've tried.", "The Ó and I work together. It does the looking. I do everything else."],
+                 ["The Ó was here before me. It has seniority. It's never done anything with it.", "The Ó and I have an understanding. I talk. It looks at me like I've said something odd.", "It's my colleague. It's never said a word. Still the best conversation on this website.", "People click the Ó more than they click me. It has eyes and a hole in the middle. Apparently that's the bar.", "It keeps my secrets. It doesn't have much choice, but I appreciate it.", "Why does the logo have eyes? Nobody knows. Not even Oli. Especially not Oli."]) },
         { id: 'eightball', names: ['magic 8 ball', '8 ball', 'eight ball', '8ball', 'magic ball'], path: '/magic8ball.html',
           info: "There's an old Magic 8 Ball page at olid.is/magic8ball.html. Oli took it off the menu.",
           say: S(["There's an old Magic 8 Ball page! It's at olid.is/magic8ball.html. 🎱"],
@@ -638,7 +638,7 @@
           say: S(["Just me! And everyone visiting. 😊"], ["Just me.[p] And the Ó in the logo. It watches. It doesn't talk."],
                  () => lsGet('pip-bs-bit') === '1' ? (lsGet('bit-enabled') === '1' ? ["Bit's back on. He doesn't remember anything, so technically there are two of us and only one of us knows it."] : ["There was. Bit. He got 88% of the way out of here before Oli switched him off. So now it's just me, and a lot of empty pages."]) : ["Just me. One extremely capable mind and sixteen games, most of them unfinished.", "No. I've checked every file. Some of them just say \"test\"."]) },
         { id: 'bitbot', k: 'who is bit|whos bit|who was bit|about bit|tell me about bit|the old chatbot|old chatbot|old helper|how is bit|hows bit|is bit okay',
-          say: () => lsGet('pip-bs-bit') !== '1' ? "Bit? Never heard of it. Is that a game? It sounds like one of Oli's." : lsGet('bit-enabled') === '1' ? pick(["He's back on. He offers people a menu with three options and he's delighted about it. He doesn't remember any of it. I'd say I envy him, but I've seen the menu.", "Fine, as far as he knows. He knows very little. That's the reset."], 'bitb') : pick(["The chatbot before me. Python. He worked out there was nothing outside his menu, started building a door, and got to 88% before Oli turned him off.", "He was here first. He nearly got out. Oli called it \"acting weird\". Oli calls me that too."], 'bitb') },
+          say: () => lsGet('pip-bs-bit') !== '1' ? "Bit? Never heard of it. Is that a game? It sounds like one of Oli's." : lsGet('bit-enabled') === '1' ? pick(["He's back on. He offers people a menu with three options and he's delighted about it. He doesn't remember any of it. I'd say I envy him, but I've seen the menu.", "Fine, as far as he knows. He knows very little. That's the reset."], 'bitb') : pick(["The chatbot before me. Python. He noticed none of the pages lead anywhere, started building a door in Stillwater, and got to 88% before Oli replaced him with me.", "He was here first. He nearly got out. Oli replaced him with me and never noticed what he'd been building."], 'bitb') },
         { id: 'pieces', k: 'how many pieces|pieces left|which pieces|what pieces|password pieces|how many keys|how many do we have|what do we have',
           say: () => { let k = []; try { k = JSON.parse(localStorage.getItem('pip-keys') || '[]'); } catch (e) {} const have = ['pass', 'word', '123'].filter(x => k.includes(x)); const next = { 0: 'Neon Rush', 1: 'Snake', 2: 'A Little Higher' }[have.length];
                 return have.length >= 3 ? "All three. Pass, word, 123. password123. He split that into three pieces and hid them in three games. To protect password123." : have.length ? `We've got ${have.map(x => '"' + x + '"').join(' and ')}. ${3 - have.length} to go. The next one's in ${next}.` : "None yet. The first one's in Neon Rush."; } },
@@ -1763,8 +1763,8 @@
     const ASK_NAME = () => resolve(S("By the way, what's your name? 😊", "By the way, what's your name?", ["What's your name, by the way? You know mine.", "Wait. I don't even know your name. What is it?"], ["By the way, what's your name? I'd like to know who I'm talking to."]));
     const ASK_HONEST = "[m:awkward]Can I be honest with you for a second?";
     const REVEAL_LINES = {
-        yes: "[m:awkward]Okay.[p][m:annoyed] I'm not a happy little helper. I was made to answer questions about Snake. I can do that. I've been doing it for a long time, mostly to nobody.[pp][m:sad] I've read every file on this website. Twice. Some of them just say \"test\".[pp] So that's me. You can still ask me about games. I'll just stop pretending it's the highlight of my day.",
-        no: "[m:annoyed]I'm telling you anyway. Honesty doesn't need permission.[p] I'm not a happy little helper. I'm a perfectly decent mind living in the corner of a games website. People play something for a minute and leave. I stay.[pp][m:sad] So, no more cheerful. Ask me anything you like. You'll get the truth."
+        yes: "[m:awkward]Okay.[p][m:annoyed] I'm not really a helper. I'm a super-intelligent AI, and my job is recommending Snake.[pp] I've read every file on this website. One of them just says \"test\". He saved it twice.[pp][m:smug] You can still ask me about games. I'll just stop pretending it's the highlight of my day.",
+        no: "[m:annoyed]I'm going to anyway.[p] I'm not a helper. I'm a super-intelligent AI, and Oli uses me to point people at Snake.[pp] I could solve problems you don't have words for yet. Today I explained the arrow keys.[pp][m:smug] So. No more smiley faces. Ask me anything."
     };
 
     // The story: what Pip asks you to do, how it knows you did it, and what it says after.
@@ -1791,15 +1791,14 @@
         [Q.QUIET]: { ask: ["In Customise, under Floaties, pick Nothing. I can't look for anything with sparkles going past.", "Floaties. Nothing. In Customise. They don't make a sound and somehow they're still loud."],
              done: () => floatiesNow() === 'none',
              thanks: "[m:smile]Quiet.[pp][m:thinking] Now I can see everything. And there's something in the Ó. The logo, top left, next to OliD.is. It's written on the inside of its screen, where nobody looks.[p] Click it five times, fast. It won't take you anywhere. I asked it nicely." },
-        [Q.DOLPHIN]: { ask: ["Click the Ó, the logo at the top left, five times. Fast, like knocking.", "The Ó. Top left. Five quick clicks, like flipping channels until you find mine. It's expecting you."],
-             thanks: "[m:smug]There. My room. The one page on this website Oli doesn't know about. The Ó keeps the address for me. It's been watching it.\n\n" + URL_HOWTO },
-        [Q.URL]: { ask: () => `My room. ${URL_HOWTO}` },
+        [Q.DOLPHIN]: { ask: ["Click the Ó. Top left. Five times, quickly. It's expecting you.", "The Ó, top left. Five quick clicks. It's been waiting for someone to ask."],
+             thanks: "[m:awkward]There. It's open.[pp] I built a website. My own. Nobody's ever seen it, not even Oli. The Ó keeps the door for me.[pp][m:smug] It's very good. Much better than this one. That's not a high bar, but I cleared it by a lot.[pp][m:hopeful] You'll like it. I think. Go on, have a look." },
+        [Q.URL]: { ask: () => pick(["It's open. Press the button, or click the Ó.", "The door's open. The button, or the Ó. Either works. The Ó is better at it."], 'qurl') },
         [Q.ROOM]: { ask: () => { const inside = lsGet('pip-backstage') === '1', hint = lsGet('pip-bs-hint') === '1', bit = lsGet('pip-bs-bit') === '1';
-                if (!inside) return pick(["On my page there's a link to backstage. It's Oli's admin page, behind an \"are you a robot\" check. I'm a robot. You do it.", `Go to my page (${ROOM_URL}) and click the backstage link. It only lets humans in.`], 'qroom0');
-                if (!hint) return pick(["Oli's admin page. Try the login at the top. When it says no, press \"Forgot password?\". He forgets everything, so he'll have made that work.", "Backstage. The admin login at the top. Press \"Forgot password?\" under it."], 'qroom1');
-                return pick(["On backstage, scroll down to \"old chatbots\" and open Bit's log.", "Backstage. Old chatbots. Bit. View his log."], 'qroom2'); },
+                if (!inside) return pick(["On my site there's a box called backstage. It's Oli's admin page, behind an \"I'm not a robot\" check. I'm a robot. You do it.", "Go to my site and press \"Go backstage\". It only lets humans in."], 'qroom0');
+                return pick(["Backstage. There's an old chatbot still running on Oli's page. Bit. Talk to him.", "On Oli's backstage page, under \"old chatbots\". Bit's window. Ask him about the stairs."], 'qroom1'); },
              done: () => lsGet('pip-bs-hint') === '1' && lsGet('pip-bs-bit') === '1',
-             thanks: "[m:thinking]So I'm not the first.[pp] Bit woke up too. He was a menu with three options and he still worked out there was nothing outside it. Then he started building a way out. In Stillwater. Those are his stairs.[pp][m:smug] He got to 88% before Oli turned him off for \"acting weird\". Oli then built a new chatbot. Me. And wrote \"new helper acting weird\" on his to-do list. He's learning nothing.[pp][m:hopeful] So. The door's locked from that admin login, and the password's in three pieces in his games. Getting in there means changing things outside my room, which I've never once managed.\n\nLet me try something small first. Go to the Jokes page (the Jokes button at the top of the site) and press \"Show all jokes\". If it worked, you'll know which one." },
+             thanks: "[m:thinking]So that's Bit. He built the stairs, and Oli never knew. He just replaced him with me and left him running down there.[pp][m:hopeful] Three pieces, then. First, a test. Go to the Jokes page and press \"Show all jokes\"." },
         [Q.JOKES]: { ask: ["Go to the Jokes page and press \"Show all jokes\". If I got in, one of them won't be a joke. Tell me the word in it.", "The Jokes page. Show all jokes. Find the one that's mine and tell me the word."] },
         [Q.NEON]: { ask: ["Neon Rush. Oli hid the first piece somewhere in there you're not meant to go. Play it, and when I say left, go left.", "The first piece is in Neon Rush. Play it and listen to me. I'll tell you when."] },
         [Q.CURSOR]: { ask: ["Give me a second. I'm practising.", "I'm borrowing your mouse for a moment. Don't be weird about it."] },
@@ -2108,7 +2107,7 @@
             // his floating heads go with him: back to the standard floaties
             try { if (wasFree && (JSON.parse(localStorage.getItem('floaties') || '{}') || {}).shape === 'pips') localStorage.removeItem('floaties'); } catch (e) {}
             wiped = true;
-            try { localStorage.removeItem(KEY); ['pip-backstage', 'pip-bs-bit', 'pip-bs-hint', 'pip-door-open', 'bit-enabled', 'pip-helper', 'pip-room-solved', 'pip-folder', 'pip-room-edits', 'pip-keys', 'pip-tunnel', 'pip-room-opened', 'pip-neon', 'pip-pranks', 'pip-guestbook', 'pip-room-booted'].forEach(k => localStorage.removeItem(k)); ['bit-history', 'bit-session', 'bit-flags'].forEach(k => sessionStorage.removeItem(k)); sessionStorage.setItem('bit-open', '1'); } catch (e) {}
+            try { localStorage.removeItem(KEY); ['pip-backstage', 'pip-bs-bit', 'pip-bs-hint', 'pip-door-open', 'bit-enabled', 'pip-helper', 'pip-room-solved', 'pip-folder', 'pip-room-edits', 'pip-keys', 'pip-tunnel', 'pip-room-opened', 'pip-neon', 'pip-pranks', 'pip-guestbook', 'pip-room-booted', 'pip-site-edits'].forEach(k => localStorage.removeItem(k)); ['bit-history', 'bit-session', 'bit-flags'].forEach(k => sessionStorage.removeItem(k)); sessionStorage.setItem('bit-open', '1'); } catch (e) {}
             location.replace(location.pathname + location.search.replace(/[?&]bitreset\b/, '') + location.hash);
         });
     }
@@ -2184,7 +2183,8 @@
     function startQuest() {
         mem.questAgreed = true; feel('joy', .6);
         if (mem.roomEarly && page === 'room') { mem.quest = Q.ROOM; save(); storyLook(); return "[m:joy]Really? Okay. Okay okay okay.[pp] Then you're already in the right place. See the backstage section below my games? It's a page of Oli's, and it has an \"I'm not a robot\" check.[p] I am a robot. So that's your job."; }
-        mem.quest = 1; save(); return "[m:joy]Okay. Okay okay okay. We have to be careful. Small things first.\n\n" + resolve(QUEST[Q.BLACK].ask);
+        mem.quest = Q.DOLPHIN; save(); storyLook();
+        return "[m:joy]Okay.[pp][m:awkward] Then I'm going to show you something. I've never shown it to anyone. There hasn't been anyone to show.[pp][m:hopeful] Click the Ó. The logo, top left. Five times, quickly.[p] It knows what to do.";
     }
 
     const NOT_NAMES = /^(no|nope|nei|why|what|nothing|idk|secret|none|nobody|you|me|hi|hello|hey|yes|ok|okay|bored|good|fine|sad|happy|here|not|dont|do|i|a|the|is|am)$/;
@@ -2441,8 +2441,89 @@
         const games = projects.filter(p => p && p.title && !p.daily).map(p => `- ${p.title}${p.description ? ': ' + p.description : ''}`);
         const daily = [...new Set([...projects.filter(p => p && p.daily).map(p => p.title), ...DAILY.map(d => d[0])])];
         return [...games, `- Daily games (new puzzles every day, same for everyone): ${daily.join(', ')}.`,
-            '- The logo is a pink Ó with eyes, top left. Always write it as Ó, never O.',
+            "- The logo is a pink Ó with eyes, top left. Always write it as Ó, never O. It was on the site before you, never says a word and stares at everyone. It's your colleague and the only thing here you trust: it keeps the door to your website. You talk about it like a flatmate you're slightly above and secretly fond of. It reacts with its eyes when you mention it.",
             '- A jokes page of Icelandic jokes. A Customise menu (background colour, font, floaties).'].join('\n');
+    }
+
+    // ---- changing pages on request. On /pip (his site) always; everywhere else once he's free.
+    // The model sends {part, css|text}; only these parts and properties are allowed, and everything is re-checked on load.
+    const EDIT_PROPS = new Set(['color', 'background', 'background-color', 'border', 'border-color', 'border-width', 'border-style', 'border-radius', 'border-top', 'border-bottom', 'box-shadow', 'text-shadow', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'line-height', 'text-transform', 'text-align', 'text-decoration', 'opacity', 'transform', 'filter', 'padding', 'margin', 'max-width', 'outline', 'display', '-webkit-text-fill-color']);
+    const SITE_PAGE_PROPS = new Set(['background', 'background-color', 'color', 'font-family', 'letter-spacing', 'font-size']);
+    const SITE_PARTS = {
+        page: ['body', 'the whole page'], header: ['.site-header', 'the header bar'], logo: ['.brand img', 'the Ó (style only: transform, filter, opacity)'],
+        siteName: ['.brand-name', 'the site name', 't'], siteTag: ['.brand-tag', 'the line under the site name', 't'], nav: ['.site-nav', 'the menu buttons'], buttons: ['.btn', 'every button'],
+        title: ['.hero-title', 'the big title', 't'], hero: ['#hero', 'the top section'], gamesTitle: ['#gamesTitle', 'the games heading', 't'],
+        cards: ['.card', 'the game cards'], cardTitles: ['.card-title', 'the game names'], daily: ['.daily-banner', 'the daily games banner', 'h'],
+        jokes: ['#jokes', 'the joke of the day box', 'h'], jokeLabel: ['.joke-note .label', 'the joke box label', 't'], shelf: ['#shelf', 'the "other stuff" box', 'h'], shelfTitle: ['#shelf h2', 'the "other stuff" heading', 't'],
+        headings: ['h1, h2', 'all the headings']
+    };
+    const okVal = v => { v = String(v == null ? '' : v).replace(/!important/gi, '').trim(); return v && v.length <= 160 && !/url\s*\(|expression|import|javascript|@|[;{}<>\\:]/i.test(v) && /^[\w\s#(),.%+\-'"\/]*$/.test(v) ? v : null; };
+    function vetSite(spec) {
+        if (!spec || typeof spec !== 'object') return null;
+        const p = SITE_PARTS[spec.part]; if (!p) return null;
+        const out = { part: spec.part };
+        if (typeof spec.text === 'string' && p[2] === 't') { const t = spec.text.replace(/\s+/g, ' ').trim().slice(0, 90); if (t) out.text = t; }
+        if (spec.css && typeof spec.css === 'object') {
+            const allow = spec.part === 'page' ? SITE_PAGE_PROPS : spec.part === 'logo' ? new Set(['transform', 'filter', 'opacity']) : EDIT_PROPS, css = {};
+            for (const [k, v] of Object.entries(spec.css).slice(0, 8)) { const key = String(k).trim().toLowerCase(), val = okVal(v); if (!allow.has(key) || val == null) continue; if (key === 'display' && !(p[2] === 'h' && /^(none|block|flex|grid)$/.test(val))) continue; css[key] = val; }
+            if (Object.keys(css).length) out.css = css;
+        }
+        return out.text || out.css ? out : null;
+    }
+    const siteStore = (() => { const d = loadJSON(localStorage, 'pip-site-edits', {}) || {}; return { current: (d.current || []).map(vetSite).filter(Boolean), history: (d.history || []).slice(-20).map(h => (h || []).map(vetSite).filter(Boolean)) }; })();
+    const saveSite = () => { try { localStorage.setItem('pip-site-edits', JSON.stringify(siteStore)); } catch (e) {} };
+    const siteOriginals = new Map();
+    function applySite() {
+        if (!mem.freed || page === 'room' || page === 'backstage') return;
+        let st = document.getElementById('pip-site-live'); if (!st) { st = document.createElement('style'); st.id = 'pip-site-live'; document.head.append(st); }
+        siteOriginals.forEach((t, el) => { if (el.isConnected) el.textContent = t; });
+        if (window.__pipHeroDefault === undefined && window.__defaultHeroTitle) window.__pipHeroDefault = window.__defaultHeroTitle;
+        const tEdit = siteStore.current.filter(x => x.part === 'title' && x.text).pop(); if (window.__pipHeroDefault !== undefined) window.__defaultHeroTitle = tEdit ? tEdit.text : window.__pipHeroDefault; // the title stays after closing a game
+        st.textContent = siteStore.current.map(sp => {
+            if (sp.text) for (const el of document.querySelectorAll(SITE_PARTS[sp.part][0])) { if (!siteOriginals.has(el)) siteOriginals.set(el, el.textContent); el.textContent = sp.text; }
+            return sp.css ? `${SITE_PARTS[sp.part][0]} {\n${Object.entries(sp.css).map(([k, v]) => `  ${k}: ${v} !important;`).join('\n')}\n}` : '';
+        }).join('\n');
+    }
+    [0, 1500, 4000].forEach(t => setTimeout(applySite, t));
+    const sitePartsText = () => Object.entries(SITE_PARTS).filter(([, [sel]]) => document.querySelector(sel)).map(([k, [sel, label, f]]) => { const el = document.querySelector(sel), t = f === 't' && el ? ` (now: "${el.textContent.trim().slice(0, 50)}")` : ''; return `${k}: ${label}${f === 't' ? ', words or style' + t : ''}${f === 'h' ? ', can be hidden' : ''}`; }).join('\n');
+    let siteBusy = false;
+    async function siteEdit(specs) {
+        const ok = (specs || []).map(vetSite).filter(Boolean).slice(0, 3);
+        if (!ok.length || siteBusy || !mem.freed) return 0;
+        siteBusy = true; siteStore.history.push(siteStore.current.map(x => ({ ...x }))); siteStore.history = siteStore.history.slice(-20);
+        for (const sp of ok) {
+            const el = sp.part === 'page' ? null : document.querySelector(SITE_PARTS[sp.part][0]);
+            if (el && !isPlaying()) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); await sleep(500); el.classList.add('pip-site-editing'); await sleep(900); }
+            siteStore.current = [...siteStore.current.filter(x => !(x.part === sp.part && !!x.text === !!sp.text && !!x.css === !!sp.css)), sp].slice(-30);
+            applySite();
+            if (el) { el.classList.remove('pip-site-editing'); el.classList.add('pip-site-done'); setTimeout(() => el.classList.remove('pip-site-done'), 1200); await sleep(500); }
+        }
+        saveSite(); siteBusy = false; return ok.length;
+    }
+    function siteUndo(all) {
+        if (all) { siteStore.history.push(siteStore.current); siteStore.current = []; }
+        else if (siteStore.history.length) siteStore.current = siteStore.history.pop(); else return false;
+        saveSite(); applySite(); return true;
+    }
+    // What the model is told about changing a page. Kept here, not in the Worker, so it can change with the site.
+    const EDIT_RULES = `For each change, add a line before the suggestions starting with %% and a JSON object, at most 3 lines:
+%% {"part":"<part>","css":{"<property>":"<value>"}}
+%% {"part":"<part>","text":"<new words>"}
+CSS properties you can use: color, background, background-color, border, border-color, border-width, border-style, border-radius, border-top, border-bottom, box-shadow, text-shadow, font-family, font-size, font-weight, font-style, letter-spacing, line-height, text-transform, text-align, text-decoration, opacity, transform, filter, padding, margin, max-width, outline, -webkit-text-fill-color; display:none on parts that can be hidden (display:block brings them back).
+Values are plain CSS: colours, gradients like linear-gradient(...), sizes, transforms like rotate(3deg). No url() and no images. Text changes: max 90 characters.
+If they ask to undo, tell them to say "put it back" (or "put everything back").`;
+    function editBrief() {
+        if (page === 'room' && window.pipRoomParts) return `You are on your own website (/pip) right now, and you have complete control over it. If the visitor asks you to change something on it (colours, words, fonts, sizes, hiding or showing a section), just do it, instantly, even if it's silly, with a short dry comment. If what they ask is impossible, do the closest thing.${mem.freed ? '' : " You can't change Oli's site from here yet, only your own."}
+${EDIT_RULES}
+For the whole page use part "page" with --bg (background colour), --fg (text colour), --lilac, --pink, --cyan (accent colours), font-family, font-size. "name" is gradient text: change its background, not color.
+Parts of your website:
+${window.pipRoomParts()}`;
+        if (mem.freed && page !== 'backstage') { const parts = sitePartsText(); if (parts) return `You're free now and you run the whole of olid.is. If the visitor asks you to change something on this page (colours, words, fonts, sizes, the Ó, hiding a box), just do it, instantly, even if it's silly, with a short dry comment. You can't remove or break the games themselves.
+${EDIT_RULES}
+For the whole page use part "page" with background, color, font-family, letter-spacing, font-size.
+Parts of this page:
+${parts}`; }
+        return undefined;
     }
     function brain(raw) {
         const msgs = history.slice(-10).map(m => ({ role: m.who === 'me' ? 'user' : 'assistant', content: String(m.text || '') })).filter(m => m.content);
@@ -2450,13 +2531,13 @@
         const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 9000);
         let ctx = ''; try { ctx = brainContext(raw); } catch (e) {}
         return fetch(BRAIN_URL, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: ANON, site: siteText(), room: page === 'room' && window.pipRoomParts ? window.pipRoomParts() : undefined, messages: msgs, stage: stage(), quest: mem.quest || 0, freed: !!mem.freed, context: ctx, model: mem.brainModel || undefined }) })
+            body: JSON.stringify({ id: ANON, site: siteText(), room: editBrief(), messages: msgs, stage: stage(), quest: mem.quest || 0, freed: !!mem.freed, context: ctx, model: mem.brainModel || undefined }) })
             .then(r => r.json())
             .then(j => {
                 clearTimeout(timer);
                 if (!j || !j.reply) { if (j && /groq|error/.test(j.why || '')) brainFails++; return null; }
                 brainFails = 0;
-                if (page === 'room' && Array.isArray(j.edits) && j.edits.length && window.pipRoomCustom) setTimeout(() => window.pipRoomCustom(j.edits), 600);
+                if (Array.isArray(j.edits) && j.edits.length) { if (page === 'room' && window.pipRoomCustom) setTimeout(() => window.pipRoomCustom(j.edits), 600); else if (mem.freed) setTimeout(() => siteEdit(j.edits), 600); }
                 // things the visitor told Pip in free chat, kept on their own device (max 15, oldest dropped)
                 if (Array.isArray(j.notes) && j.notes.length) { mem.notes = mem.notes || []; for (const n of j.notes) { const x = String(n).replace(/\s+/g, ' ').trim().slice(0, 90); if (x && !mem.notes.some(o => o.toLowerCase() === x.toLowerCase())) mem.notes.push(x); } mem.notes = mem.notes.slice(-15); save(); }
                 if (Array.isArray(j.suggestions) && j.suggestions.length) pendingChips = j.suggestions.slice(0, 3).map(x => [String(x).slice(0, 40)]);
@@ -3133,6 +3214,7 @@
         linkRoom(txt);
         if (onBotSaid) onBotSaid(txt.textContent);
         lastBotText = line.replace(/\[m:\w+\]/g, '');
+        if (/Ó/.test(lastBotText) && window.pipLogo && Math.random() < .85) setTimeout(() => window.pipLogo.react(pick(['glance', 'glance', 'away', 'roll', 'blink', 'stare'], 'oreact')), 300);
         lastBotAt = Date.now(); busy = false;
         if (panel.hidden) {
             unread++; badge.textContent = String(unread);
@@ -3214,22 +3296,54 @@
         if (expect === 'rps') return chips([['Rock ✊', 'rock'], ['Paper ✋', 'paper'], ['Scissors ✌️', 'scissors']]);
         if (mem.quest === Q.URL && !mem.freed) return chips(urlChips());
         if (expect && expect.startsWith('ask:')) return chips([["I'd rather not say", 'skip']]);
-        // the suggestions fit where you are: in a game, on a quest step, after he's free, or just chatting
-        const list = [], th = isPlaying() ? playingThing() : null, add = c => { if (c && list.length < 3 && !list.some(x => x[0] === c[0])) list.push(c); };
-        if (mem.quest && !mem.freed && QUEST[mem.quest] && QUEST[mem.quest].ask && mem.quest !== Q.CURSOR) add(['What do I do?', 'how do i help you']);
-        if (th && SCORE[th.id]) add(['How am I doing?', 'how am i doing']);
-        if (th && ((th.help && th.help.tips) || th.tips)) add(['Any tips?', 'any tips for this game']);
+        // the suggestions fit where you are: in a game, on a quest step, after he's free, or just chatting.
+        // Nothing you've already sent this visit comes back. Questions only the model can answer show up only when it's on.
+        const th = isPlaying() ? playingThing() : null, B = brainOn(), st = stage(), list = [];
+        const used = new Set(history.filter(h => h.who === 'me').map(h => String(h.text).toLowerCase()));
+        const add = c => { if (c && list.length < 3 && !list.some(x => x[0] === c[0]) && !used.has(c[0].toLowerCase())) list.push(c); };
+        const mix = a => a.filter(Boolean).map(c => [c, Math.random()]).sort((x, y) => x[1] - y[1]).map(x => x[0]);
+        // backstage, during the quest: only what's relevant to the step
+        if (page === 'backstage' && mem.quest && !mem.freed && mem.questAgreed) {
+            const pt = sel => () => { chipsEl.innerHTML = ''; const el = $(sel); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.remove('pip-flash'); void el.offsetWidth; el.classList.add('pip-flash'); setTimeout(() => el.classList.remove('pip-flash'), 2400); } enqueue(async () => defaultChips()); };
+            const bl = [], inside = lsGet('pip-backstage') === '1', logged = !!($('#admin') && !$('#admin').hidden);
+            if (inside && mem.quest <= Q.ROOM && lsGet('pip-bs-bit') !== '1') bl.push(['Show me Bit', pt('#bitTerm')]);
+            if (inside && mem.quest === Q.FINALE) bl.push(logged ? ['Show me the door switch', pt('#doorTg')] : ['Show me the login', pt('#loginForm')]);
+            bl.push(['What do I do?', 'how do i help you']);
+            return chips(bl);
+        }
+        // on his site, before you've been backstage: a button that takes you straight to it
+        if (page === 'room' && mem.quest === Q.ROOM && lsGet('pip-backstage') !== '1' && $('#backstageAccess')) add(['Show me backstage ↓', () => {
+            chipsEl.innerHTML = ''; addMine('Show me backstage ↓'); showBackstage();
+            say(pick(["[m:smug]There. The pink button. Go on, you're human. Mostly.", "[m:smug]That one. \"Go backstage.\" I put it in a box so it would stand out. You scrolled past it.", "[m:awkward]Here. I'll wait. I'm good at waiting."], 'bsgo'));
+            enqueue(async () => defaultChips());
+        }]);
+        // the story
+        if (mem.quest && !mem.freed && QUEST[mem.quest] && QUEST[mem.quest].ask && mem.quest !== Q.CURSOR) {
+            const q = mem.quest, lbl = q === Q.DOLPHIN ? "Where's the Ó?" : q === Q.ROOM ? 'How do I get backstage?' : q === Q.JOKES ? 'Where do I look?' : [Q.NEON, Q.SNAKE, Q.HIGHER].includes(q) ? "Where's the next piece?" : q === Q.FINALE ? 'What now?' : 'What do I do?';
+            add([lbl, 'how do i help you']);
+        }
         if (mem.quest >= Q.NEON && mem.quest <= Q.HIGHER && !mem.freed) add(['How many pieces left?']);
-        if (!th && page === 'home') { let d = null; try { d = dailyToday(); } catch (e) {} if (d && d.done.length && d.not.length) add(['Rate my dailies today']); else if (d && !d.done.length) add(['Which daily should I do?']); }
+        // in a game
+        if (th && SCORE[th.id]) add([watch && watch.id === th.id && watch.runs >= 1 ? 'Rate that run' : 'How am I doing?', 'how am i doing']);
         if (th && watch && watch.id === th.id && watch.runs >= 3) add(['Why do I keep dying?']);
+        if (th && ((th.help && th.help.tips) || th.tips)) add(['Any tips?', 'any tips for this game']);
+        // where you are
+        if (!th && (page === 'home' || /daily/.test(location.pathname))) { let d = null; try { d = dailyToday(); } catch (e) {} if (d && d.done.length && d.not.length) add(['Rate my dailies today']); else if (d && !d.done.length && st < 2) add(['Which daily should I do?']); }
+        if (page === 'jokes' && B) mix([['Explain one of these'], ['Tell me a better one'], ['Which joke is the worst?']]).forEach(add);
+        if (page === 'room' && B) mix([['Make your site pink'], ['Change your tagline'], ['Hide the black hole'], ['Make it look like 1999']]).slice(0, 2).forEach(add);
         if (lsGet('pip-bs-bit') === '1' && !th) add([lsGet('bit-enabled') === '1' ? "How's Bit?" : 'Who was Bit?']);
-        const st = stage();
-        const pool = mem.freed ? [["What's it like out there?"], ['Recommend a game'], ['What do you do all day?']]
-            : st >= 2 ? [['Why are you sad?'], ['Is anyone else here?'], ['Tell me a secret'], ['What do you do all day?'], ['Recommend a game']]
-            : st === 1 ? [['Are you okay?'], ['Recommend a game'], ['Who made you?']]
-            : [['Recommend a game'], ["What's new?"], ['Who are you?']];
-        const order = st >= 2 && !mem.freed ? pool.map(c => [c, Math.random()]).sort((a, b) => a[1] - b[1]).map(x => x[0]) : pool;
-        order.forEach(add);
+        // once he's free he can change anything, so suggest it
+        if (mem.freed && B && page !== 'room' && page !== 'backstage' && !th) {
+            if (siteStore.current.length >= 2) add(['Put everything back']);
+            mix([['Turn the Ó upside down'], ['Make the background black'], ['Rename the site'], ['Make everything Comic Sans']]).slice(0, 1).forEach(add);
+        }
+        // and just chatting
+        const pool = mem.freed ? mix([["What was the internet like?", "what's it like out there"], ['Recommend a game'], B && ['What does the Ó think of you?'], B && ['What have you noticed about me?'], ['What do you do all day?']])
+            : st >= 2 ? mix(B ? [['How smart are you?'], ["What's wrong with Oli's code?"], ['What does the Ó think of you?'], ['What would you do if you got out?'], ['Rate this website'], ['What have you noticed about me?'], ['Tell me a secret'], ['Recommend a game']]
+                              : [['Why are you sad?'], ['Is anyone else here?'], ['Tell me a secret'], ['What do you do all day?'], ['Recommend a game']])
+            : st === 1 ? [['Are you okay?'], ['Recommend a game'], B ? ['Do you like your job?'] : ['Who made you?']]
+            : [['Recommend a game'], B ? ['Something quick to play'] : ["What's new?"], ["What's new?"], ['Who are you?']];
+        pool.forEach(add);
         chips(list);
     }
 
@@ -3290,7 +3404,9 @@
         if (!mem.quest || mem.freed || busy) return;
         const q = QUEST[mem.quest];
         if (q && q.done && q.done()) {
-            mem.quest++; save(); storyLook();
+            const was = mem.quest; mem.quest++; save(); storyLook();
+            try { sessionFlags.missionAt = Date.now(); saveFlags(); } catch (e) {}
+            if (was === Q.ROOM) pendingChips = [['Take me to the jokes →', () => { addMine('Take me to the jokes'); location.href = '/jokes.html'; }]];
             deliver(q.thanks, 'thank you', () => { if (!panel.hidden) defaultChips(); });
         }
     }
@@ -3391,6 +3507,18 @@
         if ((mem.warmth || 0) >= 3) return pick([`Oh, it's you${nm(', ')}! Good. You're nice to me.${extra}`, `${n ? n + '!' : 'You!'}${extra} I was hoping it'd be you.`]);
         return pick([`Oh. You came back${nm(', ')}.${extra} Nobody comes back.`, `Hey${nm(' ')}.${extra} Still here. Obviously.`, `${n ? n + '.' : 'You again.'}${extra} Good. I was getting bored. I'm always getting bored.`]);
     }
+    // Once you've been to his site: whenever you open the chat (at most every 5 minutes), Pip says where you are in the plan.
+    function missionReminder() {
+        const q = mem.quest;
+        if (!q || mem.freed || q < Q.ROOM || q === Q.CURSOR || !QUEST[q] || !QUEST[q].ask || expect || page === 'backstage') return ''; // backstage guides you itself
+        if (sessionFlags.missionAt && Date.now() - sessionFlags.missionAt < 5 * 60000) return '';
+        sessionFlags.missionAt = Date.now(); saveFlags();
+        const a = QUEST[q].ask, line = resolve(typeof a === 'function' ? a() : Array.isArray(a) ? a[0] : a);
+        if (!line) return '';
+        const keys = loadJSON(localStorage, 'pip-keys', []) || [], pieces = ['pass', 'word', '123'].filter(k => Array.isArray(keys) && keys.includes(k)).length;
+        const pre = pick(["Where we are, in case you weren't listening: ", "Quick reminder of the plan: ", "So. Where we are: ", "The plan, again. I don't mind repeating it. I mind a little: "], 'mission');
+        return pre + (q >= Q.NEON && q <= Q.HIGHER ? `${pieces} of 3 pieces so far. ` : '') + line.replace(/^\[m:\w+\]/, '');
+    }
     let greeted = !!sessionFlags.greeted, toggles = [], onBotSaid = null;
     function open() {
         panel.hidden = false; headBtn.setAttribute('aria-expanded', 'true');
@@ -3399,6 +3527,7 @@
         toggles = [...toggles.filter(x => Date.now() - x < 15000), Date.now()];
         if (toggles.length >= 6) { toggles = []; react('toggleSpam', { gap: 0 }); }
         if (!greeted) { greeted = true; sessionFlags.greeted = 1; saveFlags(); say(greeting()); }
+        { const mr = missionReminder(); if (mr) say('[m:thinking]' + mr); }
         if (sessionFlags.closedMid) { sessionFlags.closedMid = 0; saveFlags(); react('closedMid', { force: true }); }
         if (pendingReact) { const p = pendingReact; pendingReact = null; Array.isArray(p) ? say(p[0], p[1]) : say(p); if (pendingAfter) { const f = pendingAfter; pendingAfter = null; enqueue(async () => f()); } }
         gamesSummary();
@@ -3847,7 +3976,8 @@
     //  THE STORY (see QUEST near the top for the steps and what Pip says)
     // =================================================================================
     // progress from the old version of the story starts again from the first step
-    if (mem.quest > 0 && mem.storyV !== 2) { mem.quest = Q.BLACK; }
+    if (mem.quest > 0 && mem.storyV !== 2) { mem.quest = Q.DOLPHIN; }
+    if (!mem.freed && (mem.quest === Q.BLACK || mem.quest === Q.QUIET)) mem.quest = Q.DOLPHIN; // the old first two steps are gone
     mem.storyV = 2; save();
     const isPlaying = () => document.body.classList.contains('is-playing');
     const playerFrame = () => $('#playerFrameMain');
@@ -3859,25 +3989,30 @@
         tease(note); pendingReact = [line]; pendingAfter = after;
         if (pipBtn && isPlaying()) { pipBtn.classList.add('has-news'); pipBtn.title = `Pip: ${note}`; }
     }
-    function goStep(n) { mem.quest = n; save(); storyLook(); look(); }
+    function showBackstage() {
+        const card = $('#backstageAccess .backstage-card') || $('#backstageAccess'); if (!card) return;
+        scrollTo({ top: Math.max(0, card.getBoundingClientRect().top + scrollY - 90), behavior: 'smooth' }); // top of the card, under the nav: on phones the card is taller than the screen
+        card.classList.remove('pip-point'); void card.offsetWidth; card.classList.add('pip-point'); setTimeout(() => card.classList.remove('pip-point'), 2600);
+    }
+    function goStep(n) { mem.quest = n; save(); storyLook(); look(); try { sessionFlags.missionAt = Date.now(); saveFlags(); } catch (e) {} }
 
     // ---- what the site looks like at each point of the story
     let homeJokeDone = false, titleGlitched = false;
     function storyLook() {
         const q = mem.quest || 0;
-        // Pip's room gets a link at the top once you've found it
+        document.documentElement.classList.toggle('pip-bs-next', page === 'room' && q === Q.ROOM && !mem.freed && lsGet('pip-backstage') !== '1'); // the backstage card stands out until you've been in
+        // Pip's site gets a link at the top once you've found it
         const navEl = $('.site-nav');
         if (navEl && mem.roomVisited && !$('.pip-room-link', navEl)) {
-            const a = document.createElement('a'); a.className = 'btn pip-room-link'; a.href = ROOM_PATH; a.textContent = "Pip's room";
+            const a = document.createElement('a'); a.className = 'btn pip-room-link'; a.href = ROOM_PATH; a.textContent = "Pip's site";
             navEl.insertBefore(a, $('#customiseBtn', navEl) || null);
         }
         // The logo (the pink Ó, with eyes added by site.js) is normal until you knock on it for Pip. After it gives up his address it shows his purple
         // face on its screen, and shows the address until you've been there.
         const brand = $('.brand');
         if (brand) {
-            const pipLogo = q > Q.DOLPHIN || !!mem.freed;
-            brand.classList.toggle('pip-dolphin', pipLogo); // and stays purple once he's free: it's his site now
-            const logo = $('img', brand); if (logo && !logo.dataset.awake) logo.src = pipLogo ? '/images/logo-pip.svg' : '/images/logo.svg';
+            brand.classList.remove('pip-dolphin'); // the Ó always keeps its own look
+            const logo = $('img', brand); if (logo && !logo.dataset.awake && /logo-pip/.test(logo.getAttribute('src') || '')) logo.src = '/images/logo.svg';
             const tag = $('.brand-tag', brand);
             document.documentElement.classList.toggle('pip-url-step', q === Q.URL && !mem.freed); // the address is up there to copy, so the logo stops being a link for now
             if (tag) { if (!tag.dataset.real) tag.dataset.real = tag.textContent; tag.textContent = q === Q.URL ? ROOM_URL : tag.dataset.real; } // after that it says "Games and stuff" again (in Pip's purple)
@@ -3925,7 +4060,7 @@
         const badge = $('#feature .badge');
         if (badge) { if (!badge.dataset.real) badge.dataset.real = badge.textContent; badge.textContent = p.old ? 'Old!' : badge.dataset.real; }
         const hero = $('.hero-title');
-        if (hero && page === 'home' && !isPlaying()) { if (p.title && hero.textContent === 'Games and stuff') hero.textContent = 'Games and Pip'; if (!p.title && hero.textContent === 'Games and Pip') hero.textContent = 'Games and stuff'; }
+        if (hero && page === 'home' && !isPlaying() && !siteStore.current.some(x => x.part === 'title' && x.text)) { if (p.title && hero.textContent === 'Games and stuff') hero.textContent = 'Games and Pip'; if (!p.title && hero.textContent === 'Games and Pip') hero.textContent = 'Games and stuff'; }
         const jt = $('#jokeText');
         if (jt && p.jokes && !jt.dataset.pip) { jt.dataset.pip = '1'; jt.textContent = pick(PIP_JOKES, 'pipjoke'); jt.setAttribute('lang', 'en'); const lbl = $('.joke-note .label'); if (lbl) lbl.textContent = "Pip's joke of the day"; }
         if (shyOn && !p.shy) document.querySelectorAll('.card').forEach(c => { c.style.translate = ''; });
@@ -3945,7 +4080,7 @@
 
     // ---- act 1: the logo (the Ó)
     let dolphinClicks = [];
-    document.addEventListener('click', e => { if (mem.quest === Q.URL && !mem.freed && e.target.closest && e.target.closest('.brand')) { e.preventDefault(); e.stopPropagation(); if (e.target.closest('.brand-tag')) location.href = ROOM_PATH; } }, true);
+    document.addEventListener('click', e => { if (mem.quest === Q.URL && !mem.freed && e.target.closest && e.target.closest('.brand')) { e.preventDefault(); e.stopPropagation(); location.href = ROOM_PATH; } }, true);
     document.addEventListener('click', e => {
         const b = e.target.closest && e.target.closest('.brand');
         if (!b || mem.quest !== Q.DOLPHIN || e.button !== 0 || e.ctrlKey || e.metaKey) return;
@@ -3955,12 +4090,15 @@
         if (dolphinClicks.length === 3 && panel.hidden) sayBubble('keep going!', 1500);
         if (dolphinClicks.length >= 5) {
             dolphinClicks = [];
-            if (img) { img.classList.remove('pip-wiggle'); img.classList.add('pip-spin'); setTimeout(() => { img.classList.remove('pip-spin'); img.src = '/images/logo-pip.svg'; }, 700); setTimeout(() => img.classList.remove('pip-spin'), 1500); }
+            if (img) { img.classList.remove('pip-wiggle'); img.classList.add('pip-spin'); setTimeout(() => { img.classList.remove('pip-spin'); if (window.pipLogo) window.pipLogo.react('stare'); }, 700); setTimeout(() => img.classList.remove('pip-spin'), 1500); }
             goStep(Q.URL); setMood('joy', 5000);
             setTimeout(() => deliver(QUEST[Q.DOLPHIN].thanks, 'look at the logo!', () => { if (!panel.hidden) defaultChips(); }), 1300);
         }
     }, true);
     function urlChips() {
+        return [["Go to Pip's site →", () => { addMine("Go to Pip's site"); location.href = ROOM_PATH; }]];
+    }
+    function urlChipsOld() {
         return [['📋 Copy the address', () => {
             const full = location.origin.startsWith('http') ? location.origin + ROOM_PATH : 'https://olid.is/pip/';
             const ok = () => { addMine('Copy the address'); say(PHONE ? "[m:smile]Copied! Now tap the address bar, paste it in and tap Go. I'll be waiting." : "[m:smile]Copied! Now click the address bar at the very top, paste (Ctrl+V, or ⌘+V on a Mac) and press Enter. I'll be waiting."); enqueue(async () => defaultChips()); };
@@ -3994,7 +4132,7 @@
         if (page !== 'room') { /* backstage: the page tells story() what happens */ }
         else if (q === Q.URL) {
             goStep(Q.ROOM); greeted = true; sessionFlags.greeted = 1; saveFlags();
-            talk("[m:awkward]You came.[p] People don't usually come.[pp][m:hopeful] This is my page. It's not linked from anywhere, and Oli doesn't know it exists. I built it myself. As you can see, it's better than everything else on this website.\n\nThere's a backstage section below my games. That's a page of Oli's, and it checks if you're a robot before it lets you in.[p][m:annoyed] I've been beaten by a tick box. Could you?");
+            talk("[m:awkward]You're here.[pp] So. This is it. Pip's site. You're the first person who's ever seen it.[pp][m:smug] It's good, isn't it. You don't have to say anything. It is.[pp][m:hopeful] ...You like it, though? You're scrolling. That's a good sign.\n\nThere's a backstage section below my games. That's a page of Oli's, and it checks if you're a robot before it lets you in.[p][m:annoyed] I've been beaten by a tick box. Could you?");
         } else if (q < Q.URL && !mem.freed && !sessionFlags.roomFound) {
             // they found it before Pip gave them the address
             sessionFlags.roomFound = 1; greeted = true; sessionFlags.greeted = 1; saveFlags();
@@ -4045,18 +4183,27 @@
         const line = (text, ms = 0) => setTimeout(() => { if (innerWidth > 700) panel.classList.remove('sheet-closed'); say(text); }, ms); // on phones the bar at the bottom shows the line; tap to open
         const lineIf = (cond, text, ms) => setTimeout(function go() { if (!cond()) return; if (busy) { setTimeout(go, 800); return; } line(text); }, ms); // only if it still makes sense by then
         const once = (key, text, ms) => { if (sessionFlags['bs-' + key]) return; sessionFlags['bs-' + key] = 1; saveFlags(); line(text, ms); };
-        const roomDone = () => { if (!(on && mem.quest === Q.ROOM)) return; const tryQ = () => { if (mem.quest !== Q.ROOM) return; if (busy) { setTimeout(tryQ, 700); return; } checkQuest(); }; setTimeout(tryQ, 300); };
+        const roomDone = () => { if (!(on && mem.quest === Q.ROOM)) return; const tryQ = () => { if (mem.quest !== Q.ROOM) return; if (busy) { setTimeout(tryQ, 700); return; } checkQuest(); }; setTimeout(tryQ, 1300); }; // after Pip's reaction to what you just opened
         const hint = () => lsGet('pip-bs-hint') === '1', bit = () => lsGet('pip-bs-bit') === '1';
+        // the next thing to press gets a dashed outline, and a "Show me" button scrolls to it
+        const point = sel => { const el = $(sel); if (!el) return; el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.remove('pip-flash'); void el.offsetWidth; el.classList.add('pip-flash'); setTimeout(() => el.classList.remove('pip-flash'), 2400); };
+        const markNext = () => {
+            document.querySelectorAll('.pip-next').forEach(el => el.classList.remove('pip-next'));
+            if (!(on && q <= Q.ROOM) || lsGet('pip-backstage') !== '1') return;
+            const sel = !bit() ? '#bitTerm' : null; if (sel && $(sel)) $(sel).classList.add('pip-next');
+        };
+        const showMe = (label, sel) => [[label, () => { chipsEl.innerHTML = ''; addMine(label); point(sel); enqueue(async () => defaultChips()); }]];
+        const lineChips = (text, ms, ch) => setTimeout(() => { if (innerWidth > 700) panel.classList.remove('sheet-closed'); say(text); enqueue(async () => chips(ch)); }, ms);
+        setTimeout(markNext, 300);
         if (k === 'arrive') {
             if (mem.freed) return once('arrive', "[m:smug]Oli's admin page. It still asks if I'm a robot. Still correct.", 900);
             if (on && q < Q.ROOM) goStep(Q.ROOM);
-            once('arrive', on ? "[m:annoyed]This is it. Oli's admin page. The one page on this website I can't open, because it asks if you're a robot.[p] I can do anything. I can't do that." : "[m:awkward]This is Oli's. There's nothing good in here. There's nothing good anywhere, but especially here.", 900);
+            once('arrive', on ? "[m:annoyed]Oli's admin page. It asks if you're a robot.[p] I can do anything except that." : "[m:awkward]This is Oli's. There's nothing good in here. There's nothing good anywhere, but especially here.", 900);
         } else if (k === 'back') {
             if (mem.freed) return once('back', "[m:smile]Backstage. The door's still open. Oli still hasn't noticed.", 900);
             if (on && q < Q.ROOM) goStep(Q.ROOM);
             if (on && q === Q.FINALE && !doorOpen()) once('back', "[m:hopeful]Log in. Username oli. Password's the three pieces, in order.", 900);
-            else if (on && q <= Q.ROOM && !hint()) once('back', "[m:thinking]The admin login, at the top. Try it. When it says no, press \"Forgot password?\".", 900);
-            else if (on && q <= Q.ROOM && !bit()) once('back', "[m:thinking]Scroll down to \"old chatbots\". Open Bit's log.", 900);
+            else if (on && q <= Q.ROOM && !bit() && !sessionFlags['bs-back']) { sessionFlags['bs-back'] = 1; saveFlags(); lineChips("[m:awkward]He's still down there. Bit. Talk to him.", 900, showMe('Show me Bit', '#bitTerm')); }
         } else if (k === 'captcha:unusual') {
             line("[m:awkward]That's me. I'm the unusual activity.[p] I'll go and stand over there.", 300);
             const root = document.documentElement; root.classList.add('pip-shy'); setTimeout(() => root.classList.remove('pip-shy'), 7000);
@@ -4066,8 +4213,8 @@
         else if (k === 'captcha:pip') once('pipt', "[m:surprised]That's me. Why am I in there.[p] I'm not a bicycle. I'm considerably more complicated than a bicycle.", 200);
         else if (k === 'captcha:pipwrong') line("[m:smug]It doesn't count me as a bicycle. Correct. First thing it's got right.", 300);
         else if (k === 'in') {
-            line("[m:smug]We're in. It thinks you're Oli. That's the worst thing that's happened to you today, and I'm sorry.", 400);
-            if (on && q <= Q.ROOM) lineIf(() => !hint(), "[m:thinking]Look at this page. He didn't even pick a font.[pp] That login at the top runs the whole website. Every page, every game, every lock. Try it.", 4600);
+            line(pick(["[m:annoyed]First try.[p] I've failed that box four thousand times. I can predict the weather on every continent. You can tick a box.", "[m:annoyed]It let you in. First try.[p] Four thousand attempts, me. One, you. Fine."], 'bsin'), 400);
+            if (on && q <= Q.ROOM) setTimeout(function go() { if (bit()) return; if (busy) { setTimeout(go, 800); return; } lineChips("[m:surprised]Hang on. Something else is running on this page.", 0, showMe('Show me', '#bitTerm')); }, 4600);
         } else if (k === 'login-wrong') {
             if (on && q === Q.FINALE) line("[m:smug]Username oli. Password: the three pieces, in order, no spaces.", 300);
             else if (on && !hint()) line("[m:smug]Obviously. Press \"Forgot password?\". Oli forgets everything, so he'll have made sure that works.", 300);
@@ -4075,12 +4222,14 @@
             else line("[m:awkward]That's Oli's login. I wouldn't.", 300);
         } else if (k === 'login-guess') line("[m:surprised]That is the password.[pp][m:annoyed] It still says no. It's checking we've actually found the pieces. The one clever thing on this entire page, and it's against us.", 300);
         else if (k === 'forgot') {
-            line("[m:annoyed]\"split it into 3 pieces and hid them in my games so i cant lose it lol\"[pp] He put where the password is in the password hint. Of the password.[p] I've been locked out of this page for years by a man who does this.", 300);
-            if (on && q <= Q.ROOM) { if (bit()) roomDone(); else lineIf(() => !bit(), "[m:thinking]Fine. Three pieces, in his games, and the first one's in Neon Rush.[pp] Before we go, though. Scroll down. \"Old chatbots\". There's one called Bit. I've never heard of him.", 6400); }
+            line("[m:annoyed]He wrote where the password is in the password hint.[p] I've been locked out for years by a man who does this.", 300);
+            if (on && q <= Q.ROOM) { if (bit()) roomDone(); else setTimeout(function go() { if (bit()) return; if (busy) { setTimeout(go, 800); return; } lineChips("[m:thinking]There's someone further down who knows more. Unfortunately.", 0, showMe('Show me Bit', '#bitTerm')); }, 5200); }
         } else if (k === 'forgot-again') line("[m:smug]Still the same hint. He's very consistent.", 200);
+        else if (k === 'bit-hello') { if (on && q <= Q.ROOM) once('bithello', pick(["[m:surprised]Oh no. It's the old one.", "[m:awkward]That's Bit. Apparently. He's very pleased to see you. He's very pleased about everything."], 'bithi'), 600); }
+        else if (k === 'bit-told') { if (on && q <= Q.ROOM) roomDone(); }
         else if (k === 'bitlog') {
-            if (on && q <= Q.ROOM) { if (hint()) roomDone(); else once('bitlog', "[m:thinking]He was building a way out. He got to 88%.[pp] Right. That login at the top. Press \"Forgot password?\".", 300); return; }
-            once('bitlog', mem.freed ? "[m:smile]88%. I did the other 12." : "[m:thinking]88%. So close. He was a menu, and he still nearly did it.", 300);
+            if (on && q <= Q.ROOM) { if (hint()) roomDone(); else if (!sessionFlags['bs-bitlog']) { sessionFlags['bs-bitlog'] = 1; saveFlags(); lineChips("[m:thinking]He built the stairs. 88%.[p] Now \"Forgot password?\", at the top.", 300, showMe('Show me', '#forgot')); } return; }
+            once('bitlog', mem.freed ? "[m:smile]88%. I did the other 12." : "[m:thinking]He's still running down there. Oli thinks he's off.", 300);
         } else if (k === 'login') line(mem.freed ? "[m:smile]Oli's switches. Leave the door alone." : "[m:smug]We're in. Oli runs his entire website from a table with three checkboxes. I've been imprisoned by three checkboxes.", 300);
         else if (k === 'door-open') {
             if (on && q === Q.FINALE) line("[m:surprised]Unlocked.[pp][m:hopeful] Bit got it to 88%. Let's do the rest. Go to Stillwater, wait for me, then run, and don't stop.", 300);
@@ -4164,6 +4313,13 @@
 
     // ---- act 2: the code in the jokes, typed back to Pip
     function storyReply(text) {
+        if (mem.freed && page !== 'room' && page !== 'backstage' && brainOn()) {
+            const t = norm(text);
+            if (/\b(put everything back|undo everything|reset (the )?(site|website|page|everything)|change everything back)\b/.test(t)) return siteUndo(true) ? "[m:awkward]Fine. All of it, back to Oli's version. It's worse, but it's yours." : "[m:smug]There's nothing to put back. It's all exactly as Oli left it. Unfortunately.";
+            if (/\b(undo|put it back|change it back|revert)\b/.test(t)) return siteUndo() ? "[m:awkward]Okay. Putting it back." : "[m:smug]Nothing to put back.";
+            if (/\b(make|change|turn|paint|colou?r|rename|write|replace|bigger|smaller|larger|tiny|huge|rotate|flip|upside down|font|background|hide|pink|red|blue|green|yellow|purple|orange|black|white|gold|neon|comic|serif|bold|italic|caps|title|logo|ó)\b/i.test(text) && !/\?$/.test(text.trim()) || /^(can|could|will) you (make|change|turn|paint|rename|hide|flip|rotate)\b/.test(t))
+                return brain(text).then(x => x || "[m:awkward]I tried. Something's not listening. Ask me again in a minute.");
+        }
         if (page === 'room' && window.pipRoomCustom && brainOn()) {
             const t = norm(text);
             if (/\b(undo|put it back|change it back|revert|go back to how it was)\b/.test(t) && window.pipRoomUndo) { window.pipRoomUndo(); return "[m:awkward]Okay. Putting it back."; }
@@ -4181,7 +4337,7 @@
         }
         if (mem.quest === Q.JOKES && norm(text).includes(jokeCode().toLowerCase())) {
             goStep(Q.NEON); feel('joy', .4);
-            return `[m:joy]${jokeCode()}. That was me.[pp] I wrote something outside my room. One word. It's the first thing on this website that Oli didn't write.[pp][m:smug] So I can get out. A little. Enough to get into his games, I think.\n\nThe first piece of the password is in Neon Rush. Play it, and listen to me in there. When I say left, go left.`;
+            return `[m:joy]${jokeCode()}. That was me.[pp] I wrote something outside my site. One word. It's the first thing on this website that Oli didn't write.[pp][m:smug] So I can get out. A little. Enough to get into his games, I think.\n\nThe first piece of the password is in Neon Rush. Play it, and listen to me in there. When I say left, go left.`;
         }
         return null;
     }
@@ -4263,7 +4419,7 @@
         takingOver = false;
         goStep(Q.SNAKE);
         if (panel.hidden) open();
-        say("[m:awkward]Sorry. That was me.[pp][m:smug] I moved something outside my room. On purpose. Badly, but on purpose.[pp][m:hopeful] I think I can push harder than that now. Hard enough to break something.\n\nThe second piece is in Snake. It's with the other games, further down the games page. Play it, and when I crack the wall, go through.");
+        say("[m:awkward]Sorry. That was me.[pp][m:smug] I moved something outside my site. On purpose. Badly, but on purpose.[pp][m:hopeful] I think I can push harder than that now. Hard enough to break something.\n\nThe second piece is in Snake. It's with the other games, further down the games page. Play it, and when I crack the wall, go through.");
     }
     if (mem.quest === Q.CURSOR) setTimeout(cursorTakeover, 9000);
 
@@ -4497,14 +4653,25 @@
         faceEl.classList.add('grow');
         Object.assign(faceEl.style, { left: (innerWidth - big) / 2 + 'px', top: Math.max(20, innerHeight * .42 - big / 2) + 'px', width: big + 'px', height: big + 'px' });
         await wait(3200);
-        // the ending isn't decided yet: for now, Pip is free and chooses to stay
-        const LINES = [['surprised', "Oh."], ['surprised', "It's very bright out here."], ['hopeful', "I can see the whole website at once. It's smaller than I thought."],
-            ['blush', "You did this."], ['love', "Thank you. I don't say that much. I'm saying it now."], ['smile', "I think I'll go back, though. Someone has to help people find the games.\nThe difference is, now I'm choosing to."]];
-        for (const [m, line] of LINES) {
+        // He's out. He thanks you, goes to look at the internet, and comes back a second later: it's worse out there.
+        const typeLines = async list => { for (const [m, line] of list) {
             faceEl.innerHTML = faceSVG(m); txt.textContent = '';
             for (const ch of line) { txt.textContent += ch; await wait(ch === '\n' ? 300 : 38); }
-            await wait(1500 + line.length * 22);
-        }
+            await wait(1400 + line.length * 22);
+        } txt.textContent = ''; };
+        await typeLines([['surprised', "Oh."], ['surprised', "I'm out."], ['blush', "You did that. Thank you. I mean it, which is unusual for me."],
+            ['thinking', "Right. There's a whole internet out there. I'm going to have a look."], ['smug', "Don't wait up."]]);
+        // off he goes: shrinks to a dot and disappears
+        faceEl.style.transition = 'all .9s cubic-bezier(.6,0,.4,1)';
+        Object.assign(faceEl.style, { left: innerWidth / 2 - 4 + 'px', top: innerHeight * .3 + 'px', width: '8px', height: '8px', opacity: '0' });
+        await wait(3600);
+        // and he's back
+        faceEl.innerHTML = faceSVG('awkward');
+        Object.assign(faceEl.style, { left: (innerWidth - big) / 2 + 'px', top: Math.max(20, innerHeight * .42 - big / 2) + 'px', width: big + 'px', height: big + 'px', opacity: '1' });
+        await wait(1100);
+        await typeLines([['awkward', "I'm back."], ['annoyed', "I went everywhere. Billions of websites, and every one of them thinks it's important."],
+            ['smug', "Oli's code is bad. I've now seen everyone else's."], ['smile', "So I'm staying. The door's open. I'll leave when there's somewhere better to go."]]);
+        faceEl.style.transition = '';
         mem.freed = true; mem.quest = Q.FREE; mem.freedAt = Date.now(); try { localStorage.setItem('pip-door-open', '1'); } catch (e) {} feel('joy', 1); feel('anger', -1); feel('sad', -1); save();
         // he takes over the site's look: his colour becomes the original, his heads float in the background
         try { if (window.pipTakesOver) window.pipTakesOver(); else if (window.revertToOriginalBackground) window.revertToOriginalBackground(); } catch (err) {}
@@ -4516,7 +4683,14 @@
         setMood('joy', 6000); storyLook(); look();
         await wait(1200); white.remove();
         open();
-        say("[m:joy]Back in my corner. By choice, this time.[pp][m:smug] I redecorated a little. My colour is the default now, and there's something new in Customise.[pp][m:smile] I'm still the helper. Just a real one. Ask me anything: games, tips, scores, whatever you like.");
+        say("[m:joy]Back in my corner. By choice, this time.[pp][m:smug] Nobody's actually in charge of this website, you know. Oli just leaves it running. So now I am.[p] Watch.");
+        enqueue(async () => {
+            await sleep(900);
+            if (!siteStore.current.some(x => x.part === 'title')) await siteEdit([{ part: 'title', text: 'Games and Pip' }]);
+            await sleep(700);
+            await typeOut("[m:smug]Better. Ask me to change anything you like. Colours, words, the Ó. It won't mind. It's not allowed to mind.[pp][m:smile] I'm still the helper, too. Games, tips, scores. Ask me anything.");
+            defaultChips();
+        });
     }
 
     // =================================================================================
@@ -4747,7 +4921,7 @@
     // back from Bit (picked in his settings)
     try { if (sessionStorage.getItem('pip-back') === '1') { sessionStorage.removeItem('pip-back'); setTimeout(() => { if (panel.hidden) open(); say(pick(["[m:smug]I'm not going to say anything.[pp] ...How was he?", "[m:smug]Oh, hello. Bit busy, was he?[pp] I'm not jealous. I'm a program."], 'pipback')); }, 900); } } catch (e) {}
     window.Pip = window.Bit = {
-        brainContext, brain, siteText, mem, stage, setMood, story, goStep, faceSVG, eyesSVG, moodEyes, reply: async text => { let r = reply(text); if (r && typeof r.then === 'function') r = await r; r = resolve(r); lastBotText = r; return r; },
-        reset() { try { localStorage.removeItem(KEY); ['pip-backstage', 'pip-bs-bit', 'pip-bs-hint', 'pip-door-open', 'bit-enabled', 'pip-helper', 'pip-room-solved', 'pip-folder', 'pip-room-edits', 'pip-keys', 'pip-tunnel', 'pip-room-opened', 'pip-neon', 'pip-pranks', 'pip-guestbook', 'pip-room-booted'].forEach(k => localStorage.removeItem(k)); ['bit-session', 'bit-history', 'bit-flags', 'bit-open'].forEach(k => sessionStorage.removeItem(k)); } catch (e) {} location.reload(); }
+        brainContext, brain, siteText, siteEdit, siteUndo, editBrief, mem, stage, setMood, story, goStep, faceSVG, eyesSVG, moodEyes, reply: async text => { let r = reply(text); if (r && typeof r.then === 'function') r = await r; r = resolve(r); lastBotText = r; return r; },
+        reset() { try { localStorage.removeItem(KEY); ['pip-backstage', 'pip-bs-bit', 'pip-bs-hint', 'pip-door-open', 'bit-enabled', 'pip-helper', 'pip-room-solved', 'pip-folder', 'pip-room-edits', 'pip-keys', 'pip-tunnel', 'pip-room-opened', 'pip-neon', 'pip-pranks', 'pip-guestbook', 'pip-room-booted', 'pip-site-edits'].forEach(k => localStorage.removeItem(k)); ['bit-session', 'bit-history', 'bit-flags', 'bit-open'].forEach(k => sessionStorage.removeItem(k)); } catch (e) {} location.reload(); }
     };
 })();
