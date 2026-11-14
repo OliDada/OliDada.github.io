@@ -169,7 +169,7 @@ async function loadProjects() {
     try {
         // fetch relative to the current page so the JSON loads correctly
         // whether the page is at the site root or in a subfolder
-        const res = await fetch('data/projects.json');
+        const res = await fetch('data/projects.json', { cache: 'no-cache' });
         if (!res.ok) throw new Error('Failed to load projects');
         return await res.json();
     } catch (err) {

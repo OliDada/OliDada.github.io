@@ -75,7 +75,7 @@
     // ---------------------------------------------------------------- chat
     const history = ss.get('bitp-history', []);
     let expect = null, misses = 0, games = null;
-    fetch('/data/projects.json').then(r => r.json()).then(d => { games = (Array.isArray(d) ? d : []).filter(g => g.title); }).catch(() => { games = []; });
+    fetch('/data/projects.json', { cache: 'no-cache' }).then(r => r.json()).then(d => { games = (Array.isArray(d) ? d : []).filter(g => g.title); }).catch(() => { games = []; });
     const scroll = () => { msgs.scrollTop = msgs.scrollHeight; };
     function addMsg(who, text, keep = true) {
         const m = document.createElement('div'); m.className = 'bitp-m ' + who; m.textContent = text; msgs.append(m); scroll();

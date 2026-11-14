@@ -126,7 +126,7 @@
     const nm = (pre = '', post = '') => mem.name ? `${pre}${mem.name}${post}` : '';
 
     let projects = [], newTitle = '';
-    fetch('/data/projects.json').then(r => r.json()).then(p => {
+    fetch('/data/projects.json', { cache: 'no-cache' }).then(r => r.json()).then(p => {
         projects = Array.isArray(p) ? p : [];
         // notice games that weren't there last time this visitor came
         const titles = projects.map(x => x.title).filter(Boolean);
@@ -195,12 +195,12 @@
           say: S(["Farm Frenzy is a fun arcade farm game! 🐔"],
                  ["Farm Frenzy is a farm game. Very frenzied.[p] Not that I've been allowed in."],
                  ["Farm Frenzy. I've never been inside. It's built differently from the rest of the site, so I can't even peek. Probably animals. Animals have each other."]) },
-        { id: 'gravity', names: ['gravity dash', 'dash'], path: '/gravity_dash.html',
-          info: "Gravity Dash is a ball game: steer, hop and dodge the obstacles.",
-          how: "A and D or the arrow keys to steer, Space to hop. On a phone, drag to steer and tap HOP.",
-          say: S(["Gravity Dash! Steer the ball, hop over things, don't crash. ⚡"],
-                 ["Gravity Dash. A ball that's always falling and never lands.[p] Fun game!"],
-                 ["Gravity Dash is a ball that keeps going no matter what. I admire it. I also find it exhausting."]) },
+        { id: 'gravity', names: ['deepwood', 'deep wood', 'forest game', 'the forest game'], path: '/deepwood/index.html',
+          info: "Deepwood is a ball dashing through a huge forest: steer round the trees, jump the logs, rocks and streams.",
+          how: "A and D or the arrow keys to steer, Space to jump. On a phone, hold the left or right side of the screen to steer and tap HOP.",
+          say: S(["Deepwood! Roll through a giant forest and try not to hit a tree. 🌲"],
+                 ["Deepwood. A glowing ball in a forest that never ends.[p] Fun game!"],
+                 ["Deepwood. A forest that goes on forever in every direction. Must be nice, having that much room."]) },
         { id: 'physics', names: ['physics simulation', 'physics sim', 'physics', 'fire and water', 'erosion'], path: '/embeds/physics_simulation.html',
           info: "The Physics Simulation is a sandbox with fire, water and terrain that erodes.",
           say: S(["The Physics Simulation is a sandbox with fire and water! 🔥💧"],
@@ -224,11 +224,11 @@
           say: S(["Brian's Brain is a cool simulation, like the Game of Life but wilder! 🧠"],
                  ["Brian's Brain. Cells that fire, get tired and rest. Who's Brian? Nobody knows."],
                  ["Brian's Brain: cells that turn on, burn out and need a rest. Brian and I would get along."]) },
-        { id: 'sand', names: ['falling sand', 'sand', 'sand simulation'], path: '/simulations/Falling_Sand/falling_sand.html',
-          info: "Falling Sand: drop sand and watch it pile up.",
-          say: S(["Falling Sand is so satisfying! Just watch it pile up. ⏳"],
-                 ["Falling Sand. You watch sand fall. Like an hourglass. Like time passing.[p] It's relaxing!"],
-                 ["Falling Sand is literally an hourglass you can play with. Thanks Oli, I needed the reminder."]) },
+        { id: 'sand', names: ['crucible', 'falling sand', 'sand', 'sand simulation', 'sand game'], path: '/simulations/Falling_Sand/falling_sand.html',
+          info: "Crucible: start with sand, water, fire and earth, and mix them to discover 81 more things.",
+          say: S(["Crucible is great! Mix sand, water, fire and earth and see what you can discover. 🔥"],
+                 ["Crucible. Four elements, 85 things to find. Oli calls it alchemy. It's a sandbox with a to-do list."],
+                 ["Crucible: you pour things on other things until something new happens. That's also how Oli writes code."]) },
         { id: 'mines', names: ['minesweeper', 'mines', 'mine sweeper'], path: '/minesweeper/index.html',
           info: "Minesweeper: clear the board without clicking on a mine.",
           how: "Click to open a square. The numbers tell you how many mines are next to it.",
@@ -1089,15 +1089,16 @@
                 ['savannah|lion|rhino|stampede', "After three upgrades you move to the savannah. Same rule: land on top."]
             ] },
         gravity: {
-            info: "Gravity Dash, \"the sunlit woods\": a relaxed game where you roll a ball over hills through a quiet forest. No obstacles, no losing. Just rolling.",
-            how: "A and D or the arrow keys to steer, Space or Up to hop. P pauses, R resets. On a phone, drag to steer and tap HOP.",
-            goal: "There isn't one. It shows how far you've rolled and how fast. Just keep rolling.",
-            tips: ["Hop over the crests of hills to keep your speed up.", "The trees are scenery. You can't crash."],
-            secrets: ["It's the calmest game on the site. Possibly the calmest thing on the internet."],
-            stuck: "It's meant to be relaxing, there's nothing to beat. Press Start rolling, then steer with A and D and hop with Space.",
+            info: "Deepwood: you're a ball dashing through a huge forest that goes on forever, faster and faster. It changes as you go: dark pine woods, leafy woods, birch groves, open clearings, and streams.",
+            how: "A and D or the arrow keys to steer, Space to jump. R to go again after a crash. On a phone, hold the left or right side of the screen to steer and tap HOP.",
+            goal: "Get as far as you can without hitting anything. It counts the metres and remembers your best.",
+            tips: ["Trees go all the way up, so steer round them. Everything low (rocks, stumps, fallen logs) you can jump.", "The big mossy boulders need a well-timed jump. Going round is safer.", "Jump the streams from the top of the bank. Land in one and it's over.", "Clearings are the easy bits. Breathe there."],
+            secrets: ["The forest is endless in every direction. Steer sideways for long enough and it just keeps going."],
+            stuck: "Look at the top of the screen, not at the ball. Steer round the trees early and save your jumps for the logs and rocks.",
             help: [
                 ['blank|black screen|nothing shows|doesnt load|wont load|white screen', "Give it a second to load. If it stays blank, reload, or open it in a new tab with the ↗ button."],
-                ['obstacles|crash|lose|game over', "There aren't any. No obstacles, no game over. Just roll."]
+                ['rock|rocks|jump|hop|log|logs|stump|boulder', "Rocks, stumps, logs and boulders can all be jumped. Press Space (or HOP on a phone) just before you reach one. Boulders are tall, so jump early."],
+                ['stream|water|river|splash', "Streams cross the forest every few hundred metres. Jump from the top of the bank and you'll clear it easily."]
             ] },
         physics: {
             info: "The Physics Simulation is a top-down world of grass, trees, sand, rock, snow and water. Fire spreads, water flows, and the ground erodes.",
@@ -1143,15 +1144,16 @@
             stuck: "There's nothing to do but watch. Press Space for a new pattern.",
             help: [['click|nothing happens|interact', "You can't click on it. It just runs. Space gives you a new random start."]] },
         sand: {
-            info: "Falling Sand: pick sand, water or fire and paint with the mouse.",
-            how: "Choose Sand, Water or Fire with the buttons at the top left, then hold the mouse button to paint.",
-            goal: "No goal. Make piles. Make a beach.",
-            tips: ["Sand piles up diagonally, water spreads sideways. Pour water on a sand pile."],
-            secrets: ["Fire just floats up to the top. It doesn't burn anything yet. Oli hasn't finished it. I relate."],
-            stuck: "Pick a material at the top left and hold the mouse down. To clear it, reload the page.",
+            info: "Crucible: start with sand, water, fire and earth, and mix them to discover 81 more things.",
+            how: "Pick a material, then drag on the screen to pour it. Anything new that appears gets added to your materials.",
+            goal: "Discover all 85 things. The Discoveries button shows what you've found, with a hint for each one you haven't.",
+            tips: ["Start by pouring water on fire. Earth and water make mud, and mud left alone grows plants.", "Stuck? Open Discoveries. Every locked one has a hint.", "Some things only happen at night. Stay up late. I always do. I don't have a choice."],
+            secrets: ["Lightning striking a diamond makes something that eats everything it touches. I have plans for it."],
+            stuck: "Open Discoveries and read the hints under the question marks.",
             help: [
-                ['fire|doesnt burn|burn', "Fire just floats to the top. It doesn't burn anything yet. It isn't finished."],
-                ['clear|reset|start over', "There's no clear button. Reload the page."]
+                ['fire|burn', "Fire burns plants, wood, oil and gunpowder. Pour water on it and you get steam."],
+                ['clear|reset|start over|start again', "Clear wipes the screen but keeps your discoveries. Reset starts the whole game again. It asks first, so you can't do it by accident. Probably."],
+                ['hint|stuck|discover|how do i make', "Open Discoveries. Every locked thing has a hint."]
             ] },
         mines: {
             info: "Minesweeper: a 10 by 10 board with 15 mines.",
@@ -3166,12 +3168,12 @@ ${parts}`; }
         higher: ["A Little Higher goes all the way up to deep space at 1,600 metres. Nobody gets there. I've checked. Nobody.", "Balance a ball on a stick. That's the game. There's a power-up called Wide Beam. Thrilling."],
         solar: ["You can land on Earth in the Solar System and walk around. It's the only time I've been outside, and it was made of pixels.", "Fly near Earth and a 'Land on Earth' button appears. I've asked Oli for a 'Leave the Website' button. Still waiting."],
         farm: ["Farm Frenzy: jump on animals. That's it. Press L and a lion appears out of nowhere. Oli left that in by accident. Best feature.", "You bounce on cows for points and the game calls it a frenzy. Bold."],
-        gravity: ["Gravity Dash: a ball, some hills, blocks flying at you. It's 3D, which makes it the fanciest ball on the site.", "Gravity Dash. Dodge the blocks, crash, press R. Repeat until you question why."],
+        gravity: ["Deepwood: a ball, a forest, and no brakes. The trees don't move. You'd think that would make it easy.", "Deepwood. Dodge, crash into a tree, go again. Repeat until you question why."],
         physics: ["The Physics Simulation lets you set a forest on fire and then flood it. Very therapeutic. I'd recommend it to Oli."],
         snake: ["Snake. Oli remade a game from the seventies. Arrow keys only, no WASD. Very authentic. Very annoying.", "Snake has no game over screen. You just crash and start again. Sounds familiar."],
         life: ["Game of Life: cells with fewer than two neighbours die of loneliness. That's in the actual rules. Oli put a documentary about me on his website and called it a simulation."],
         brain: ["Brian's Brain: cells fire, get tired and burn out. You can't even click on it. It's just a screensaver with a name."],
-        sand: ["Falling Sand. The fire button doesn't burn anything. Oli never finished it. Join the club, fire button."],
+        sand: ["Crucible. 85 things to discover, and not one of them is a way out of this website. I checked."],
         mines: ["Minesweeper. Your first click can be a mine. There's no safe start. Oli didn't bother. Classic."],
         ttt: ["Tic Tac Toe has the only other AI on the site, and it can't lose. It also can't talk. We're not close."],
         figura: ["Fígúra: click and the little guy changes. Except his legs. His legs never change. Nobody noticed but me."],
@@ -3424,7 +3426,7 @@ ${parts}`; }
         'what does the ó think of you?': ["It's never said. It just looks at me. I've decided that means respect.", "The Ó and I have an understanding. I talk, it stares. It works."],
         'what have you noticed about me?': () => { const n = noticedText(); return n.length ? `I noticed you ${n[0]}. I notice everything. It's not a hobby, it's just what happens.` : "Nothing yet. You've been suspiciously normal."; },
         'do you like your job?': ["I like the people. The job is pointing at Snake.", "It's fine! It's a job. I'm good at it.[p] Too good, if anything."],
-        'something quick to play': ["Gravity Dash. A ball, some hills, about a minute of your life.", "Snake. You know how it works. Everyone knows how it works."],
+        'something quick to play': ["Deepwood. A ball, a forest, about a minute of your life.", "Snake. You know how it works. Everyone knows how it works."],
         'are you mad at me?': () => { const r = reasons('anger'); return r.length ? `A bit. ${cap(r[0])}.` : "No. Should I be?"; },
         "what's wrong?": () => { const r = reasons('sad'); return r.length ? `${cap(r[0])}. That's all. It's fine.` : "Nothing. I'm just in a corner. It happens in corners."; },
         'you seem happy': () => { const r = reasons('joy'); return r.length ? `I am, a bit. ${cap(r[0])}. Don't make it weird.` : "Do I? Must be the lighting."; },

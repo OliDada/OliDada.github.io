@@ -32,6 +32,19 @@
     "featured": true
   },
   {
+    "title": "Crucible",
+    "description": "A falling sand game where you mix four elements to discover 81 more. Strike a diamond with lightning and it becomes a void that eats everything.",
+    "path": "/simulations/Falling_Sand/falling_sand.html",
+    "source": "/simulations/Falling_Sand/falling_sand.js",
+    "embed": "/embeds/falling_sand.html",
+    "aspect": "fill",
+    "thumbnail": "data/thumbnails/crucible-thumbnail.png",
+    "controls": [["Click / drag", "pour the selected material"], ["Discoveries", "see what you've found, with hints for the rest"]],
+    "kind": "creative",
+    "tags": ["game", "sandbox", "simulation"],
+    "featured": true
+  },
+  {
     "title": "Ever After",
     "path": "/zelda-game/index.html",
     "source": "/zelda-game/",
@@ -212,7 +225,7 @@
   },
   {
     "title": "Farm Frenzy",
-    "description": "Bounce off animals to build chains, grab coins, and pick perks as you run through six areas.",
+    "description": "Bounce off animals to build combos, grab coins, and pick perks as you run through different biomes.",
     "path": "/farm-frenzy/index.html",
     "source": "/farm-frenzy/main.js",
     "aspect": "16:9",
@@ -222,14 +235,13 @@
     "featured": true
   },
   {
-    "title": "Gravity Dash",
-    "description": "Guide a ball over hills and jump over obstacles.",
-    "path": "/gravity_dash.html",
-    "embed": "/embeds/gravity_dash.html",
-    "source": "/gravity_dash.js",
+    "title": "Deepwood",
+    "description": "Dash through a huge forest. Steer round the trees, jump over logs, rocks and rivers.",
+    "path": "/deepwood/index.html",
+    "source": "/deepwood/game.js",
     "controls": [["A / D or arrows", "steer"], ["Space", "jump"], ["R", "restart after a crash"]],
-    "aspect": "4:3",
-    "thumbnail": "data/thumbnails/gravity-dash-thumbnail.png",
+    "aspect": "fill",
+    "thumbnail": "data/thumbnails/deepwood-thumbnail.webp?v=3",
     "kind": "arcade",
     "tags": ["game", "physics"],
     "featured": true
@@ -245,6 +257,18 @@
     "kind": "experiment",
     "tags": ["simulation", "physics"],
     "featured": false
+  },
+  {
+    "title": "Gravity Dash",
+    "description": "Guide a ball over hills and jump over obstacles.",
+    "path": "/gravity_dash.html",
+    "embed": "/embeds/gravity_dash.html",
+    "source": "/gravity_dash.js",
+    "controls": [["A / D or arrows", "steer"], ["Space", "jump"], ["R", "restart after a crash"]],
+    "aspect": "4:3",
+    "thumbnail": "data/thumbnails/gravity-dash-thumbnail.png",
+    "kind": "arcade",
+    "tags": ["game", "physics"]
   },
   {
     "title": "Snake",
@@ -318,19 +342,6 @@
     "description": "A cellular simulation where cells switch between three states.",
     "kind": "experiment",
     "tags": ["simulation", "cellular automata", "p5"],
-    "featured": false
-  },
-  {
-    "title": "Falling Sand Simulation",
-    "description": "Drop sand and watch it fall and pile up.",
-    "path": "/simulations/Falling_Sand/falling_sand.html",
-    "source": "/simulations/Falling_Sand/falling_sand.js",
-    "embed": "/embeds/falling_sand.html",
-    "aspect": "1:1",
-    "playSize": { "width": 800, "height": 800 },
-    "thumbnail": "data/thumbnails/falling-sand-thumbnail.png",
-    "kind": "experiment",
-    "tags": ["simulation", "physics", "p5"],
     "featured": false
   },
   {

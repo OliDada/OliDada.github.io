@@ -16,6 +16,15 @@
     const AMOUNTS = [['few', 'A few'], ['some', 'Some'], ['loads', 'Loads']];
     const SPEEDS = [[0.35, 'Chill'], [1, 'Normal'], [2.6, 'Zoomy']];
     const FONTS = [['bubbly', 'Bubbly'], ['pixel', 'Pixel'], ['chunky', 'Chunky'], ['comic', 'Comic'], ['clean', 'Clean']];
+    // Themes: one tap sets the background, the floaties and the font together
+    const THEMES = [
+        ['night',  'Night',  { bg: '#1e1645', font: 'clean',  fl: { shape: 'sparkles', amount: 'loads', speed: 0.35, color: '#ffffff' } }],
+        ['candy',  'Candy',  { bg: '#ffc8dd', font: 'bubbly', fl: { shape: 'bubbles',  amount: 'some',  speed: 1,    color: '#ff6fb1' } }],
+        ['ocean',  'Ocean',  { bg: '#38b6ff', font: 'bubbly', fl: { shape: 'bubbles',  amount: 'loads', speed: 0.35, color: '#ffffff' } }],
+        ['arcade', 'Arcade', { bg: '#1d1a2b', font: 'pixel',  fl: { shape: 'cubes',    amount: 'some',  speed: 1,    color: '#ffe14d' } }],
+        ['winter', 'Winter', { bg: '#9be7ff', font: 'clean',  fl: { shape: 'snow',     amount: 'loads', speed: 0.35, color: '#ffffff' } }],
+        ['lava',   'Lava',   { bg: '#ff5436', font: 'chunky', fl: { shape: 'cubes',    amount: 'loads', speed: 2.6,  color: '#ffe14d' } }]
+    ];
     const FLOATIE_COLORS = ['#ffffff', '#1d1a2b', '#ffe14d', '#ff6fb1', '#9be7ff'];
 
     const $ = (sel, root) => (root || document).querySelector(sel);
@@ -112,6 +121,10 @@
                 </button>
             </div>
             <div>
+                <p class="label">Themes</p>
+                <div class="row">${THEMES.map(([k, label, t]) => `<button type="button" class="pill" data-theme="${k}" aria-pressed="false"><span class="dot" style="background:${t.bg}"></span>${label}</button>`).join('')}</div>
+            </div>
+            <div>
                 <p class="label">Background</p>
                 <div class="row">
                     ${pipFree()
@@ -165,6 +178,11 @@
             const b = e.target.closest('button');
             if (!b) return;
             if (b.hasAttribute('data-close')) return togglePanel(false);
+            if (b.dataset.theme) {
+                const t = (THEMES.find(x => x[0] === b.dataset.theme) || [])[2];
+                if (t) { setBg(t.bg); setFloaties(t.fl); setFont(t.font); poke(); }
+                return;
+            }
             if (b.dataset.bg) {
                 if (b.dataset.bg === 'original') { if (window.revertToOriginalBackground) window.revertToOriginalBackground(); applyInk(); syncPanel(); }
                 else setBg(b.dataset.bg);
@@ -217,6 +235,8 @@
         const hx = $('[data-bghex]', p);
         if (hx && document.activeElement !== hx) hx.value = hexToRgb(bg) ? (bg.length === 4 ? '#' + bg.slice(1).split('').map(c => c + c).join('') : bg) : '';
         const font = store.get('site-font', 'bubbly');
+        p.querySelectorAll('[data-theme]').forEach(b => { const t = (THEMES.find(x => x[0] === b.dataset.theme) || [])[2];
+            b.setAttribute('aria-pressed', String(!!t && !isOriginal && t.bg === bg && t.font === font && Object.keys(t.fl).every(k => String(t.fl[k]) === String(floaties[k])))); });
         p.querySelectorAll('[data-shape]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.shape === floaties.shape)));
         p.querySelectorAll('[data-amount]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.amount === floaties.amount)));
         p.querySelectorAll('[data-speed]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.speed === +floaties.speed)));
@@ -264,7 +284,7 @@
         const featureEl = $('#feature'), gridEl = $('#gameGrid'), shelfEl = $('#shelfGrid');
         if (!featureEl && !gridEl && !shelfEl) return;
         let projects = [];
-        try { projects = await (await fetch('data/projects.json')).json(); } catch (e) { console.warn('Could not load projects.json', e); }
+        try { projects = await (await fetch('data/projects.json', { cache: 'no-cache' })).json(); } catch (e) { console.warn('Could not load projects.json', e); }
         projects = projects.filter(p => !p.daily); // daily games live on /daily.html (the home page links there instead)
         projects = projects.filter(p => !p.page);  // pages of their own (the Studio) have their own strip on the home page
         const featured = projects.filter(p => p.featured);

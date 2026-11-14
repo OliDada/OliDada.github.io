@@ -69,6 +69,7 @@ img { max-width: 100%; }
   border: 2px solid var(--ink); border-radius: 999px; padding: 8px 14px; min-height: 44px; cursor: pointer;
 }
 .pill[aria-pressed="true"] { background: var(--ink); color: var(--cream); }
+.pill .dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; vertical-align: -2px; margin-right: 7px; }
 .sw { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--ink); padding: 0; cursor: pointer; background-size: cover; }
 .sw[aria-pressed="true"] { outline: 3px solid var(--ink); outline-offset: 3px; }
 .sw-input { width: 44px; height: 44px; border: 2px solid var(--ink); border-radius: 12px; padding: 0; background: var(--cream); cursor: pointer; }
@@ -491,11 +492,9 @@ body.terminal-player.is-playing:has(.player-area:not(.fullscreen)) { overflow: a
 .duo .daily-banner-body { width: auto; flex: 1 1 0; min-width: 0; gap: 6px; }
 .duo .daily-banner-title { font-size: 30px; }
 .duo .daily-banner-text { font-size: 15px; }
-/* the three thumbnails overlap like a hand of cards, so each one can be about twice as wide as when they sat side by side */
-.duo .daily-banner-art { flex: 0 0 58%; max-width: none; margin: 0; gap: 0; display: flex; align-items: center; }
-.duo .daily-banner-art img { flex: 0 0 46%; width: 46%; min-width: 0; border-radius: 8px; box-shadow: 2px 2px 0 var(--ink); }
-.duo .daily-banner-art img + img { margin-left: -19%; }
-.duo .daily-banner-art img:nth-child(2) { transform: translateY(-7px); }
+/* the three thumbnails side by side, none covering another; they take most of the banner's width */
+.duo .daily-banner-art { flex: 0 0 60%; max-width: none; margin: 0; gap: 10px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; }
+.duo .daily-banner-art img { width: 100%; border-radius: 8px; box-shadow: 2px 2px 0 var(--ink); }
 .duo .studio-strip { gap: 6px; padding: 0 20px 0 0; min-height: 0; }
 .duo .studio-strip-art { flex: 0 0 36%; width: 36%; align-self: center; height: auto; max-height: 150px; min-height: 0; margin-left: 18px; object-fit: contain; object-position: 50% 50%;
   -webkit-mask-image: none; mask-image: none; }
