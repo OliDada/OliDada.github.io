@@ -1,0 +1,53 @@
+/* Title screen and unobtrusive world dialogue. */
+#start{align-items:center;justify-content:center;padding:24px;background:rgba(6,12,9,.24);overflow:auto;}
+#start .card.title-menu{width:100%;max-width:560px;padding:0;background:none;border:0;box-shadow:none;clip-path:none;backdrop-filter:none;text-align:center;color:#f3dfaa;}
+#start .title-menu h1{font-family:ValleyPixel,monospace;font-size:clamp(40px,7vw,72px);line-height:1.25;font-weight:400;letter-spacing:0;margin:0 0 64px;color:#e5ca88;text-shadow:3px 0 #30251b,-3px 0 #30251b,0 -3px #30251b,0 3px #30251b,5px 6px #0a100d;}
+#start .title-menu h1 span{display:block;font-size:20px;line-height:1.6;margin-bottom:10px;color:#f7e7be;}
+.menu-options{display:flex;flex-direction:column;align-items:center;gap:14px;}
+#start .title-menu button,#start .title-menu #vgOver{position:relative;display:block;width:max-content;margin:0 auto!important;padding:9px 16px!important;border:0;background:none!important;box-shadow:none!important;color:#ede2c7!important;font:400 14px/1.5 ValleyPixel,monospace!important;text-decoration:none!important;text-shadow:2px 2px #111b13;cursor:pointer;}
+#start .title-menu button:before{content:'';position:absolute;left:-10px;top:50%;transform:translateY(-50%);border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:7px solid #f4cf72;opacity:0;}
+#start .title-menu button:hover,#start .title-menu button:focus-visible{color:#ffdb7d!important;outline:none;}
+#start .title-menu button:hover:before,#start .title-menu button:focus-visible:before{opacity:1;}
+#menuControls{margin:24px auto 0;padding:16px 20px;max-width:430px;background:#111c17f2;border:2px solid #998861;box-shadow:3px 3px #09100b;color:#e9dfc7;}
+#menuControls[hidden]{display:none;}
+#start .title-menu .keys{font:15px/1.8 Georgia,serif;color:#e9dfc7;margin:0 0 12px;}
+#start:has(#menuControls:not([hidden])) h1{margin-bottom:20px;}
+body:has(#start:not([style*="display: none"])) #devBtn{display:none;}
+/* No backdrop and no scroll, rods, status labels or action cards over the NPC. */
+#vgWrap.talking{inset:auto 0 max(18px,env(safe-area-inset-bottom));padding:0 16px;align-items:flex-end;background:none;pointer-events:none;}
+#vgWrap.talking #vg.dialogue{display:block;width:min(640px,100%);max-height:32dvh;overflow:auto;padding:12px 18px 10px;background:rgba(12,20,16,.88);border:1px solid #8b806057;box-shadow:none;filter:none;color:#f0e6cf;pointer-events:auto;touch-action:pan-y;}
+#vg.dialogue .dialogue-head{display:flex;align-items:center;justify-content:space-between;gap:16px;}
+#vg.dialogue h2{font:normal 15px/1.3 Georgia,serif;color:#d6b777;margin:0;}
+#vg.dialogue .conversation{font:normal 17px/1.5 Georgia,serif;margin:7px 0 10px;}
+#vg.dialogue .topics{display:flex;flex-wrap:wrap;gap:3px 16px;}
+#vg.dialogue button{font:normal 13px/1.4 Georgia,serif;padding:3px 0;margin:0;min-width:0;background:none;border:0;border-bottom:1px solid transparent;color:#c5bba2;box-shadow:none;transform:none;}
+#vg.dialogue button:hover,#vg.dialogue button:focus-visible{color:#ffe0a3;border-bottom-color:#b79b62;outline:none;}
+#vg.dialogue button small{font-size:10px;opacity:.65;margin-left:4px;}
+body:has(#vgWrap.talking[style*="display: flex"]) :is(#hint,#talkBtn,#jump,#swing,#vgSneak){visibility:hidden;}
+@media(max-width:600px){#start .title-menu h1{font-size:48px;margin-bottom:48px;}#vgWrap.talking{padding:0 9px;bottom:max(8px,env(safe-area-inset-bottom));}#vgWrap.talking #vg.dialogue{padding:10px 12px;max-height:35dvh;}#vg.dialogue .conversation{font-size:16px;}#vg.dialogue .topics{gap:3px 15px;}#vg.dialogue button{padding:6px 0;}}
+@media(max-height:550px){#start{align-items:flex-start;}#start .title-menu h1{font-size:40px;margin-bottom:22px;}#start .title-menu h1 span{font-size:14px;margin-bottom:2px;}.menu-options{gap:2px;}#vgWrap.talking #vg.dialogue{max-height:42dvh;}}
+
+#vg.dialogue:focus{outline:none;}
+/* A small weathered dialogue strip, using the world's parchment texture and palette. */
+#vgWrap.talking #vg.dialogue{width:min(690px,100%);padding:12px 17px 11px;background-color:#2b2118;background-image:linear-gradient(#30271ae8,#211b14ed),var(--parch);background-size:auto,128px 128px;border:2px solid #9f8854;border-right-color:#59472c;border-bottom-color:#59472c;box-shadow:0 0 0 2px #1a160f, inset 0 0 0 1px #b99f5b25;color:#efdfb9;}
+#vg.dialogue h2{color:#dfbf78;font-size:15px;text-shadow:1px 1px #1a140d;}
+#vg.dialogue .conversation{color:#f1e3c2;font-size:17px;line-height:1.4;margin:8px 0 11px;}
+#vg.dialogue .topics{display:grid;grid-template-columns:1fr 1fr;gap:3px 20px;border-top:1px solid #a48b4e40;padding-top:6px;}
+#vg.dialogue .topics button{display:flex;align-items:baseline;gap:9px;text-align:left;color:#d3bd8c;font-size:14px;line-height:1.35;min-height:26px;}
+#vg.dialogue .topics button:hover,#vg.dialogue .topics button:focus-visible{color:#ffe5a3;border-bottom-color:transparent;text-shadow:1px 1px #100b04;}
+#vg.dialogue .dialog-key{font:10px/1.4 ValleyPixel,monospace;color:#b3985b;flex-shrink:0;}
+#vg.dialogue .topics button:hover .dialog-key,#vg.dialogue .topics button:focus-visible .dialog-key{color:#ffe5a3;}
+@media(max-width:600px){#vgWrap.talking #vg.dialogue{padding:10px 12px;}#vg.dialogue .topics{gap:2px 12px;}#vg.dialogue .topics button{font-size:13px;min-height:34px;}#vg.dialogue .conversation{font-size:16px;}}
+@media(max-width:380px){#vg.dialogue .topics{grid-template-columns:1fr;}}
+
+/* Crisp, inset RPG message window. The world remains visible around it. */
+#vgWrap.talking #vg.dialogue{width:min(760px,100%);padding:14px 18px 12px;background:#18231f;background-image:none;border:2px solid #c2b384;border-right-color:#746c50;border-bottom-color:#746c50;border-radius:0;box-shadow:0 0 0 2px #101611,inset 0 0 0 2px #35443a,4px 4px 0 2px #101611;color:#e6dfbf;scrollbar-color:#8e8966 #18231f;scrollbar-width:thin;}
+#vg.dialogue h2{font:400 11px/1.6 ValleyPixel,monospace;color:#e1c780;text-shadow:2px 2px #0b130f;}
+#vg.dialogue .conversation{font:400 11px/1.85 ValleyPixel,monospace;color:#eee5c9;margin:10px 0 12px;text-shadow:1px 1px #080f0b;}
+#vg.dialogue button{font:400 9px/1.8 ValleyPixel,monospace;}
+#vg.dialogue .topics{border-top:2px solid #435044;gap:4px 20px;padding-top:8px;}
+#vg.dialogue .topics button{font:400 9px/1.8 ValleyPixel,monospace;min-height:28px;color:#bfc5a9;gap:10px;}
+#vg.dialogue .dialog-key{font-size:9px;color:#bba66c;}
+#vg.dialogue .topics button:hover,#vg.dialogue .topics button:focus-visible{color:#ffe4a1;background:#26372b;outline:1px solid #536044;}
+#vg.dialogue button small{font:8px/1.5 ValleyPixel,monospace;}
+@media(max-width:600px){#vgWrap.talking #vg.dialogue{padding:10px 12px;}#vg.dialogue .conversation{font-size:10px;line-height:1.8;}#vg.dialogue .topics{grid-template-columns:1fr;gap:2px;}#vg.dialogue .topics button{font-size:9px;min-height:32px;}}

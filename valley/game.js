@@ -32,6 +32,7 @@ const ITEMS={
   ring:{n:'Gold ring',v:30},
   purse:{n:'Coin purse',v:10},
   pelt:{n:'Wolf pelt',v:12},
+  mutton:{n:'Mutton',v:6,heal:18,use:'Eat',said:'Tough, and it tastes of somebody else\'s flock.'},
   pick:{n:'Lockpick',v:4}
 };
 const ORDER=Object.keys(ITEMS);
@@ -56,6 +57,7 @@ const PIX={
   ring:[[5,8,6,1,'#f2c860'],[4,9,2,4,'#e0a838'],[10,9,2,4,'#b88420'],[5,13,6,1,'#b88420'],[6,5,4,3,'#c83838'],[7,5,1,1,'#f08070'],[5,9,1,1,'#fff0b0']],
   purse:[[6,3,4,1,'#5a3820'],[5,4,6,1,'#c8a040'],[5,5,6,2,'#7a5030'],[4,7,8,6,'#8a5c34'],[5,13,6,1,'#5a3820'],[5,8,2,3,'#a87848'],[11,8,1,4,'#5a3820']],
   pelt:[[3,5,10,8,'#6a6660'],[2,7,12,4,'#7c7870'],[4,4,2,2,'#56524c'],[10,4,2,2,'#56524c'],[4,13,2,2,'#56524c'],[10,13,2,2,'#56524c'],[6,7,4,3,'#948e84'],[7,13,2,2,'#4a4640']],
+  mutton:[[3,6,8,6,'#a84a40'],[4,5,6,1,'#c06a5a'],[4,12,6,1,'#7a2e28'],[5,7,3,2,'#d08a78'],[10,8,3,2,'#e8dcc0'],[12,7,2,4,'#f4ecd8'],[13,6,1,1,'#f4ecd8'],[13,11,1,1,'#f4ecd8']],
   pick:[[2,12,3,2,'#8a909c'],[4,10,3,2,'#9aa0aa'],[6,8,3,2,'#b0b6c2'],[8,6,3,2,'#b0b6c2'],[10,4,3,2,'#c8ccd4'],[12,3,2,2,'#d8dce4'],[13,5,1,2,'#8a909c'],[1,13,2,2,'#5a3820']],
   coin:[[5,3,6,1,'#c89030'],[4,4,8,8,'#f2c860'],[5,12,6,1,'#a87420'],[3,5,1,6,'#c89030'],[12,5,1,6,'#a87420'],[6,6,1,4,'#fff0b0'],[8,5,1,6,'#c89030']]
 };
@@ -65,7 +67,7 @@ for(const k in PIX){const c=document.createElement('canvas');c.width=c.height=16
 /* ================= state and saving ================= */
 const KEY='valley.save.1';
 const MAXHP=100;
-const fresh=()=>({jailed:false,evidence:{},hp:MAXHP,coins:5,inv:{},hot:{},bounty:0,picked:{},boots:false,pos:null,tod:null});   // hot: how many of each thing you carry are stolen
+const fresh=()=>({jailed:false,evidence:{},hp:MAXHP,coins:5,inv:{},hot:{},bounty:0,picked:{},boots:false,pos:null,tod:null,sheathed:true,boat:'pier'});   // hot: how many of each thing you carry are stolen
 let S=fresh(),hadSave=false;
 try{const raw=localStorage.getItem(KEY);if(raw){const d=JSON.parse(raw);if(d&&typeof d.coins==='number'){S=Object.assign(fresh(),d);hadSave=true;}}}catch(e){}
 function save(){if(V.started){S.pos=[+P.x.toFixed(2),+P.z.toFixed(2),+P.yaw.toFixed(3)];S.tod=+V.DN.tod.toFixed(4);}
@@ -115,7 +117,7 @@ function place(kind,x,z,sc,y,owned){const sp=new THREE.Sprite(mat(kind));sp.cent
   // on the table in every home
   for(const f of V.FLOORS){if(!f.seats||f.seats.length!==2||f.inn||f.upper)continue;const mx=(f.seats[0][0]+f.seats[1][0])/2,mz=(f.seats[0][1]+f.seats[1][1])/2,c=Math.cos(f.ry),s=Math.sin(f.ry);
     const rich=V.inCourt(f.x,f.z),k=rnd()<.55?2:1,sd=rnd()<.5?1:-1;
-    for(let i=0;i<k;i++){const u=(i?-.45:.4)*sd;place(pickW(rich?RICH:COMMON),mx+u*c,mz-u*s,.3,f.y+.86,true);}}
+    for(let i=0;i<k;i++){const u=(i?-.45:.4)*sd;place(pickW(rich?RICH:COMMON),mx+u*c,mz-u*s,.3,f.y+.86,true);PICK[PICK.length-1].home=f;}}
   // on the counters of the market stalls (same order as the stalls are built in the courtyard)
   const STALLS=[[-34,22,['bread','honeycake','bread']],[-24,23,['apple','cheese','apple']],[-14,22.5,['cloth','cloth']],[22,22,['candle','candle','candle']]];
   for(const [lx,lz,g] of STALLS){const [x,z]=V.cw(lx,lz-.65/V.CS);g.forEach((kind,i)=>place(kind,x+(i-(g.length-1)/2)*(g.length===2?1.2:.6),z,.3,V.CTOP+1.12,true));}   // each sits on one of the stall's crates
@@ -208,7 +210,7 @@ const css=document.createElement('style');css.textContent=`
 document.head.appendChild(css);
 const hud=document.createElement('button');hud.id='vgHud';hud.type='button';hud.setAttribute('aria-label','Open your bag');
 const toast=document.createElement('div');toast.id='vgToast';
-const wrap=document.createElement('div');wrap.id='vgWrap';const box=document.createElement('div');box.id='vg';box.setAttribute('role','dialog');wrap.appendChild(box);
+const wrap=document.createElement('div');wrap.id='vgWrap';const box=document.createElement('div');box.id='vg';box.setAttribute('role','dialog');box.setAttribute('aria-modal','true');box.setAttribute('aria-label','Valley conversation and inventory');box.tabIndex=-1;wrap.appendChild(box);
 const fade=document.createElement('div');fade.id='vgFade';
 const eye=document.createElement('div');eye.id='vgEye';
 const sneakBtn=document.createElement('button');sneakBtn.id='vgSneak';sneakBtn.type='button';sneakBtn.textContent='Sneak';
@@ -223,9 +225,21 @@ function tell(k,text){const d=document.createElement('div');d.innerHTML=(k?img(k
   setTimeout(()=>{d.style.opacity=0;setTimeout(()=>d.remove(),900);},2600);}
 
 {const t=V.talkBox.style;t.background='none';t.border='0';t.padding='0 1rem';t.textShadow='0 1px 4px #000,0 0 12px #000,0 0 3px #000';}   // speech is just words over the world
-let view=null,shopNPC=null,note='';
-function open(v,npc){view=v;shopNPC=npc||null;note='';G.modal=true;wrap.style.display='flex';if(document.pointerLockElement)document.exitPointerLock();for(const k in V.keys)V.keys[k]=false;V.talkBox.style.opacity=0;draw();}
-function close(){if(!view)return;if(view==='arrest'&&shopNPC){if(caught){S.bounty+=5;shopNPC.stun=2.5;tell(null,'Resisting arrest. Fine: '+S.bounty);}else shopNPC.stun=8;}view=null;shopNPC=null;G.modal=false;wrap.style.display='none';save();
+let view=null,shopNPC=null,note='',speechTimer=0,finishSpeech=null;
+function animateSpeech(){
+ clearTimeout(speechTimer);const el=box.querySelector('.conversation');if(!el)return;
+ const text=el.textContent;finishSpeech=null;
+ if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+ el.style.minHeight=el.offsetHeight+'px';el.setAttribute('aria-label',text);
+ const ink=document.createElement('span');ink.setAttribute('aria-hidden','true');el.replaceChildren(ink);let i=0;
+ finishSpeech=()=>{clearTimeout(speechTimer);ink.textContent=text;finishSpeech=null;};
+ function next(){if(view!=='person'||!el.isConnected)return;ink.textContent=text.slice(0,++i);if(i<text.length)speechTimer=setTimeout(next,/[.!?]/.test(text[i-1])?220:/[,;:]/.test(text[i-1])?110:22);else finishSpeech=null;}
+ next();el.onclick=()=>finishSpeech?.();
+}
+box.addEventListener('keydown',e=>{if(view==='person'&&e.code==='Space'&&finishSpeech&&e.target===box){e.preventDefault();finishSpeech();}});
+
+function open(v,npc){if(view==='person'&&v!=='person'&&G.social)G.social.end();view=v;shopNPC=npc||null;note='';G.modal=v!=='person';wrap.style.display='flex';if(document.pointerLockElement)document.exitPointerLock();for(const k in V.keys)V.keys[k]=false;V.talkBox.style.opacity=0;draw();box.focus();}
+function close(){clearTimeout(speechTimer);if(!view)return;if(G.social)G.social.end();if(view==='arrest'&&shopNPC){if(caught){S.bounty+=5;shopNPC.stun=2.5;tell(null,'Resisting arrest. Fine: '+S.bounty);}else shopNPC.stun=8;}view=null;shopNPC=null;G.modal=false;wrap.style.display='none';save();
   if(!V.coarse&&V.canvas.requestPointerLock){try{const p=V.canvas.requestPointerLock();if(p&&p.catch)p.catch(()=>{});}catch(e){}}}
 function bagRows(shop){let h='';for(const k of ORDER){const n=count(k);if(!n)continue;const it=ITEMS[k],st=hot(k),clean=n-st;
     if(!shop){h+='<div class="row">'+img(k)+'<span class="nm">'+it.n+(n>1?'<small>×'+n+'</small>':'')+(st?'<small class="hot">'+(st===n?'stolen':st+' stolen')+'</small>':'')+'</span><span class="pr">worth '+it.v+'</span>'+(it.use?'<button type="button" data-use="'+k+'">'+it.use+'</button>':'')+'</div>';continue;}
@@ -233,7 +247,7 @@ function bagRows(shop){let h='';for(const k of ORDER){const n=count(k);if(!n)con
     if(st){h+='<div class="row">'+img(k)+'<span class="nm">'+it.n+(st>1?'<small>×'+st+'</small>':'')+'<small class="hot">stolen</small></span>'+(shop.fence?'<span class="pr">'+fenced(k)+'</span><button type="button" data-sell="'+k+'" data-hot="1">Sell</button>'+(st>1?'<button type="button" class="alt" data-sellall="'+k+'" data-hot="1">All</button>':''):'<span class="pr">will not buy</span>')+'</div>';}}
   if(S.boots&&!shop)h+='<div class="row">'+img('boots')+'<span class="nm">Walking boots<small>worn</small></span><span class="pr">a quicker stride</span></div>';
   return h||'<div class="none">'+(shop?'You have nothing to sell.':'Nothing but lint. Mushrooms, berries, herbs and flowers grow wild in the valley.')+'</div>';}
-function draw(){if(!view)return;const shop=view==='shop'?SHOPS[shopNPC.shop]:null;box.className=shop?'':'one';
+function draw(){if(!view)return;const talking=view==='person';wrap.classList.toggle('talking',talking);box.setAttribute('aria-modal',String(!talking));if(talking&&G.social){box.className='dialogue';box.innerHTML=G.social.panel(shopNPC);animateSpeech();return;}const shop=view==='shop'?SHOPS[shopNPC.shop]:null;box.className=shop?'':'one';
   if(view==='lock'&&PK){const L=PK.L,n=count('pick'),name=L.kind==='chest'?'Chest lock':L.kind==='evidence'?'Evidence chest':L.kind==='cell'?'Cell door':'Door lock';let pins='';for(let i=0;i<L.pins;i++)pins+=i<PK.set?'●':'○';
     box.innerHTML='<div class="rod"></div><div class="sheet"><div class="top"><h2>'+name+'</h2><div class="purse">'+img('pick')+n+(n===1?' pick':' picks')+'</div></div><p class="hello">Set each pin while it sits in the notch. Miss, and the pick snaps.</p>'
       +'<div id="vgPins">'+pins+'</div><div id="vgLock"><i style="left:'+PK.a*100+'%;width:'+PK.w*100+'%"></i><b style="left:'+PK.pos*100+'%"></b></div>'
@@ -249,8 +263,11 @@ function draw(){if(!view)return;const shop=view==='shop'?SHOPS[shopNPC.shop]:nul
   else h+='<h3>Carrying</h3>'+bagRows(null);
   h+='<div class="foot"><span class="note">'+note+'</span><button type="button" class="alt" data-close="1">'+(V.coarse?'Close':'Close (Esc)')+'</button></div>';
   const top=box.querySelector('.sheet'),y=top?top.scrollTop:0;box.innerHTML='<div class="rod"></div><div class="sheet">'+h+'</div><div class="rod"></div>';box.querySelector('.sheet').scrollTop=y;drawHud();}
+box.addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='Enter')e.stopPropagation();});
 box.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.disabled)return;const d=b.dataset,shop=shopNPC&&SHOPS[shopNPC.shop];
   if(d.close){close();return;}
+  if(d.topic&&view==='person'){G.social.topic(shopNPC,d.topic);draw();(box.querySelector('[data-topic="'+d.topic+'"]')||box).focus();return;}
+  if(d.trade&&view==='person'&&shop){if(!G.sheathed){G.social.topic(shopNPC,'hello');draw();return;}if(S.bounty>0&&!shop.fence){tell(null,'Settle your fine with the watch first.');return;}if(!G.social.willTrade(shopNPC)){tell(null,'They do not trust you enough to trade.');return;}view='shop';G.modal=true;draw();return;}
   if(d.set){lockTry();return;}
   if(d.fine){if(S.coins<S.bounty)return;S.coins-=S.bounty;forfeit();view='paid';close();standDown();V.say('Fine paid','Your name is clear again.');drawHud();return;}
   if(d.jail){jail();return;}
@@ -258,6 +275,7 @@ box.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.dis
   else if((d.sell||d.sellall)&&shop){const k=d.sell||d.sellall,st=!!d.hot,have=st?hot(k):count(k)-hot(k),n=d.sellall?have:1;if(have<1||(st&&!shop.fence))return;const c=(st?fenced(k):offer(shop,k))*n;take(k,n,st);S.coins+=c;note='Sold for '+c+(c===1?' coin.':' coins.');}
   else if(d.use){const it=ITEMS[d.use];if(!count(d.use))return;take(d.use,1,hot(d.use)>0);note=it.said;if(it.heal&&S.hp<MAXHP){S.hp=Math.min(MAXHP,S.hp+it.heal);note+=' You feel better.';drawHp();}}
   else if(d.bed&&shop){if(S.coins<shop.bed)return;S.coins-=shop.bed;sleep();return;}
+  if(shop&&(d.buy||d.sell||d.sellall)&&G.social)G.social.trade(shopNPC);
   save();draw();});
 // --- fine or cells ---
 const nightsFor=b=>Math.max(1,Math.ceil(b/30));
@@ -271,10 +289,12 @@ function jail(beaten){const nights=nightsFor(S.bounty),loot=ORDER.some(k=>hot(k)
     else{forfeit();V.DN.tod=.3;let x=V.GATEW.x-10,z=V.GATEW.z;if(!V.allowed(x,z)){x=V.GATEW.x-14;}P.x=x;P.z=z;P.y=V.groundH(x,z);P.yaw=Math.PI/2;P.pitch=.02;
       V.say(beaten?'Beaten and dragged off':'Released',(nights===1?'A night':nights+' nights')+' in the castle cells.'+(loot?' What you stole was taken back.':''));}
     save();fade.style.opacity=0;G.modal=false;shopNPC=null;drawHud();},1500);}
-function sleep(){fade.style.opacity=1;view=null;wrap.style.display='none';
+function sleep(){if(G.social)G.social.end();fade.style.opacity=1;view=null;wrap.style.display='none';
   setTimeout(()=>{V.DN.tod=.27;S.hp=MAXHP;drawHp();save();fade.style.opacity=0;G.modal=false;shopNPC=null;V.say('Morning','You slept soundly at the inn.');drawHud();},1300);}
 hud.addEventListener('click',()=>{if(!V.started)return;if(view)close();else open('bag');});
 addEventListener('keydown',e=>{if(!V.started)return;
+  if(view==='person'&&!V.coarse&&!e.altKey&&!e.ctrlKey&&!e.metaKey&&/^(Digit|Numpad)[1-9]$/.test(e.code)){e.preventDefault();if(!e.repeat)box.querySelector('[data-dialog-key="'+e.code.slice(-1)+'"]')?.click();return;}
+  if(e.code==='Tab'&&view){e.preventDefault();const buttons=[...box.querySelectorAll('button:not(:disabled)')];if(buttons.length){const i=buttons.indexOf(document.activeElement);buttons[(i+(e.shiftKey?-1:1)+buttons.length)%buttons.length].focus();}return;}
   if(e.code==='Tab'||e.code==='KeyI'||e.code==='KeyB'){e.preventDefault();if(e.repeat)return;if(view==='bag')close();else if(!G.modal)open('bag');}
   else if(view==='lock'&&(e.code==='Space'||e.code==='Enter')){e.preventDefault();if(!e.repeat)lockTry();}
   else if(e.code==='Escape'&&view)close();});
@@ -344,6 +364,138 @@ function canSee(n,light){if(n.sleep||n.down)return false;const dx=P.x-n.x,dz=P.z
 function look(){const light=daylight();watchers=[];for(const n of PEOPLE){const far=Math.abs(n.x-P.x)>28||Math.abs(n.z-P.z)>28;n.sees=!far&&canSee(n,light);if(n.sees)watchers.push(n);}}
 function speak(n,line){V.talkBox.innerHTML='<b style="font-weight:400;color:var(--accent)">'+n.name+'</b><br>'+line;V.talkBox.style.opacity=1;speakT=3.5;}
 const CRIES=['Thief! Stop, thief!','Put that back! Guards!','I saw that! Thief!','Hands off! That is not yours!'];
+
+/* ================= people who see what you do ================= */
+// Nothing is a crime until someone tells the watch. A guard who sees it is the watch. Anyone else has to reach a guard, or be close
+// enough to shout for one - and a witness who is knocked out first tells nobody. Who does what depends on who they are:
+// the bold and hot-tempered go for you, owners and family most of all; the rest run for help.
+const REPORTS=[],AV=[],DEAD=[],STAG=[];
+const OWNCRY=['Thief! In my own house!','That is mine! Put it down!','Out! Get out of my house!'],KINCRY=['Leave them be, you animal!','Get away from them!'],FLOCK=['My flock! You butcher!','That is my sheep, you devil!','Touch another and I will break this staff on you!'];
+function sendHome(m){if(m.fleeS){m.speed=m.fleeS;m.fleeS=0;}const day=V.DN.tod>=.27&&V.DN.tod<.77;if(m.homeF&&!day){halt(m);m.phaseR=null;}else if(m.home&&Math.hypot(m.x-m.home[0],m.z-m.home[1])>(m.radius||4)+2){go(m,m.home[0],m.home[1],2,q=>{halt(q);q.phaseR=null;});m.ghost=true;}else{halt(m);m.phaseR=null;}}
+function crime(label,fine,o){o=o||{};look();
+  const ws=watchers.filter(w=>!w.foe&&!w.down&&w!==o.victim);
+  for(const e of [o.self,o.owner])if(e&&!e.down&&!e.sleep&&!ws.includes(e))ws.push(e);
+  if(G.social)G.social.crime(ws,o);
+  if(!ws.length&&!o.known)return false;
+  const C={label,fine,done:false,n:0,violent:!!o.violent},near=ws.length?ws.reduce((a,b)=>Math.hypot(a.x-P.x,a.z-P.z)<Math.hypot(b.x-P.x,b.z-P.z)?a:b):null,law=ws.find(LAW);
+  let spoke=false;
+  if(o.known||law){S.bounty+=fine;C.done=true;if(law&&!o.known){law.face=Math.atan2(P.x-law.x,P.z-law.z);speak(law,HALT[(Math.random()*HALT.length)|0]);spoke=true;}raiseAlarm();
+    tell(null,label+(law&&!o.known?' — seen by '+law.name:'')+'. Fine: '+S.bounty);}
+  else tell(null,label+' — seen by '+near.name+(ws.length>1?' and '+(ws.length-1)+' more':'')+'.');
+  ws.sort((a,b)=>(b===o.owner||b===o.self?1:0)-(a===o.owner||a===o.self?1:0));
+  for(const w of ws){if(LAW(w))continue;
+    const own=(o.home&&w.homeF===o.home)||o.owner===w,self=w===o.self,kin=!self&&o.victim&&(G.social?G.social.related(w,o.victim):(o.victim.homeF&&w.homeF===o.victim.homeF));
+    const response=G.social?G.social.reaction(w,{violent:o.violent,own:!!own,kin:!!kin,self}):null;
+    if(response==='ignore')continue;
+    w.face=Math.atan2(P.x-w.x,P.z-w.z);
+    if(!spoke){const L=self?YELP:own?(o.ownCry||OWNCRY):kin?KINCRY:o.violent?YELP:CRIES;speak(w,L[(Math.random()*L.length)|0]);spoke=true;}
+    if(response){if(response==='defend')avenge(w,C);else if(response==='flee')flee(w);else tattle(w,C);continue;}
+    if(w.role!=='child'&&(own?(w.bold||w.hot):kin?true:self?(w.bold&&w.hot):(o.violent&&w.bold&&w.hot)))avenge(w,C);else tattle(w,C);}
+  return true;}
+function tattle(w,C){w.sit=false;
+  if(C.done){if(C.violent)flee(w);return;}
+  let g=null,gd=220;for(const q of WATCH){if(q.down||q.sleep)continue;const d=Math.hypot(q.x-w.x,q.z-w.z);if(d<gd&&Math.abs(q.y-w.y)<14){gd=d;g=q;}}
+  if(!g||(gd>=26&&w.fixedY!==undefined)){if(C.violent)flee(w);else w.phaseR=null;return;}
+  const r={w,C,g,shout:gd<26,t:gd<26?1.8:50};C.n++;REPORTS.push(r);w.rep=r;
+  if(!r.shout){w.route=null;w.routeGo=0;if(!w.fleeS)w.fleeS=w.speed;w.speed=w.role==='child'?4.9:4.3;go(w,g.x,g.z,3.5);}}
+function reports(dt){for(let i=REPORTS.length-1;i>=0;i--){const r=REPORTS[i],w=r.w,C=r.C,g=r.g;
+  const end=()=>{REPORTS.splice(i,1);w.rep=null;if(!w.down&&!w.avenge)sendHome(w);};
+  if(C.done){end();continue;}
+  if(w.down){end();C.n--;if(C.n<=0&&clockT-quietT>3){quietT=clockT;tell(null,'No one is left to tell of it.');}continue;}
+  if(g.down||g.sleep){end();C.n--;tattle(w,C);continue;}
+  r.t-=dt;
+  if(r.shout?r.t<=0:Math.hypot(w.x-g.x,w.z-g.z)<4.5){C.done=true;S.bounty+=C.fine;speak(w,r.shout?'Guard! Guard! Over here!':'That one — there! I saw it all!');tell(null,w.name+' told the watch. Fine: '+S.bounty);
+    if(Math.hypot(g.x-P.x,g.z-P.z)<80)hunt(g,false);raiseAlarm();drawHud();save();end();continue;}
+  if(r.shout)continue;
+  if(r.t<=0){end();C.n--;continue;}
+  if(!w.drive)go(w,g.x,g.z,3.5);w.goal=[g.x,g.z];}}
+// someone who would rather settle it themselves
+function avenge(w,C){if(w.avenge)return;if(w.fixedY!==undefined){tattle(w,C);return;}w.sit=false;w.route=null;w.routeGo=0;if(w.hp===undefined)w.hp=w.maxhp=40;w.dmg=w.dmg||(w.role==='shepherd'?8:5);
+  if(!w.fleeS)w.fleeS=w.speed;w.speed=5.1;w.avenge={t:20,C};AV.push(w);go(w,P.x,P.z,1.5);}
+function avengers(dt){for(let i=AV.length-1;i>=0;i--){const w=AV[i],a=w.avenge,d=Math.hypot(w.x-P.x,w.z-P.z);a.t-=dt;
+  if(w.down||a.t<=0||d>45||dying||S.jailed||w.hp<w.maxhp*.45){AV.splice(i,1);w.avenge=null;unwind(w);if(!w.down){if(a.C.done){if(w.hp<w.maxhp*.45&&!dying)flee(w);else sendHome(w);}else tattle(w,a.C);}continue;}
+  if(!w.drive)go(w,P.x,P.z,1.5);w.goal=[P.x,P.z];w.stop=1.5;w.ghost=false;if(d<1.7)w.face=Math.atan2(P.x-w.x,P.z-w.z);strike(w,d,dt);}}
+// --- a drawn sword, a face they have learned to fear, a stranger in the house ---
+const NERV=['Please... I want no trouble.','Mind where you point that.','Is there need for a sword here?','Easy, now. Easy.'],ANGRY=['Put that away before someone gets hurt!','Wave that about somewhere else!','Sheathe it, or I fetch the watch.'],KID=['He has a sword! A real one!','Is that sharp?'];
+let hinted=false,lastSword=0,quietT=-9;
+function setSheath(v){if(!V.started||G.modal||dying)return;G.sheathed=v;S.sheathed=v;lastSword=clockT;}
+G.draw=()=>setSheath(false);G.sheathed=!!S.sheathed;G.sheathK=G.sheathed?1:0;
+addEventListener('keydown',e=>{if(e.code==='KeyX'&&!e.repeat)setSheath(!G.sheathed);});
+function mood(){if(S.jailed||dying||G.modal)return;
+  for(const w of watchers){if(w.foe||w.down||w.rep||w.avenge||w.drive||!w.fear||w.fearT>clockT)continue;if(Math.hypot(w.x-P.x,w.z-P.z)<12){w.fearT=clockT+15;if(speakT<=0)speak(w,'Keep away from me!');flee(w);}}
+  const fl=V.floorH(P.x,P.z)>-1e8;
+  if(fl)for(const w of watchers){const f=w.homeF;if(!f||w.drive||w.rep||w.avenge||w.homeT>clockT||Math.hypot(P.x-f.x,P.z-f.z)>f.r||Math.abs(f.y-P.y)>1.5||Math.hypot(w.x-P.x,w.z-P.z)>8)continue;
+    w.homeT=clockT+18;if(speakT<=0){w.face=Math.atan2(P.x-w.x,P.z-w.z);speak(w,G.social?G.social.homeLine(w):(w.bold?'This is my house. Out with you.':'What are you doing in here?'));}}
+  if(G.sheathed)return;
+  if(!(V.inVillage(P.x,P.z)||Math.hypot(P.x-V.TOWN_C[0],P.z-V.TOWN_C[1])<95||V.inCourt(P.x,P.z)||Math.hypot(P.x-V.INN[0],P.z-V.INN[1])<28||fl))return;
+  for(const w of watchers){if(w.foe||w.down||w.rep||w.avenge||w.drive||w.hunt)continue;const d=Math.hypot(w.x-P.x,w.z-P.z);if(d>9)continue;
+    const hint=()=>{if(!hinted){hinted=true;tell(null,V.coarse?'People are uneasy at a drawn sword. Leave it be a while and it goes back in its sheath.':'People are uneasy at a drawn sword. Press X to sheathe it.');}};
+    if(LAW(w)){if(S.bounty>0)continue;
+      if(!(w.warnT>clockT-45)){w.warnT=clockT;w.fined=false;w.face=Math.atan2(P.x-w.x,P.z-w.z);speak(w,'Sheathe that blade. I will not ask twice.');hint();}
+      else if(clockT-w.warnT>9&&!w.fined){w.fined=true;S.bounty+=5;speak(w,'I warned you. Bare steel in the street is a fine.');tell(null,'Bare steel in town. Fine: '+S.bounty);drawHud();}
+      continue;}
+    if(w.nervT>clockT)continue;w.nervT=clockT+14;w.face=Math.atan2(P.x-w.x,P.z-w.z);const stern=w.bold&&w.hot&&w.role!=='child';
+    if(speakT<=0){const L=w.role==='child'?KID:stern?ANGRY:NERV;speak(w,G.social?G.social.weaponLine(w):L[(Math.random()*L.length)|0]);}hint();
+    if(!stern&&w.fixedY===undefined&&!w.sit&&!w.shop&&!w.route&&w.type!=='work'){const a=Math.atan2(w.x-P.x,w.z-P.z),k=w.role==='child'?9:w.bold?3:6;if(!w.fleeS)w.fleeS=w.speed;w.speed=w.role==='child'?4.4:2.4;go(w,w.x+Math.sin(a)*k,w.z+Math.cos(a)*k,.5,sendHome);w.driveT=4;}}}
+/* ================= blood ================= */
+const BLOOD=(function(){const c=document.createElement('canvas');c.width=c.height=4;const g=c.getContext('2d');g.fillStyle='#6e0e0c';g.fillRect(0,0,4,4);g.fillStyle='#96180f';g.fillRect(1,0,2,2);
+  const t=new THREE.CanvasTexture(c);t.magFilter=t.minFilter=THREE.NearestFilter;const mat=new THREE.SpriteMaterial({map:t,fog:true}),parts=[],pools=[];
+  for(let i=0;i<40;i++){const s=new THREE.Sprite(mat);const k=.035+Math.random()*.04;s.scale.set(k,k,1);s.visible=false;V.scene.add(s);parts.push({s,v:new THREE.Vector3(),t:9});}
+  const pg=new THREE.CircleGeometry(1,16);pg.rotateX(-Math.PI/2);
+  for(let i=0;i<10;i++){const m=new THREE.Mesh(pg,new THREE.MeshBasicMaterial({color:0x5a0c0a,transparent:true,opacity:.85,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4}));m.visible=false;V.scene.add(m);pools.push({m,n:null,k:0,r:.8});}
+  return {parts,pools,mat};})();
+function burst(x,y,z,k){let n=0;for(const p of BLOOD.parts){if(p.t<1)continue;p.t=0;p.s.visible=true;p.s.position.set(x,y,z);p.v.set((Math.random()-.5)*2.6,.6+Math.random()*2.4,(Math.random()-.5)*2.6);if(++n>=k)break;}}
+function pool(n){if(BLOOD.pools.some(p=>p.n===n))return;const p=BLOOD.pools.find(q=>!q.n)||BLOOD.pools[0];p.n=n;p.k=0;p.r=n.anim==='person'?.9:.6;p.m.visible=true;p.m.material.opacity=.85;p.m.position.set(n.x,n.y+.05,n.z);p.m.scale.set(.01,1,.01);}
+function gory(dt){const day=V.NPCS[0]&&V.NPCS[0].sp.material.color;if(day)BLOOD.mat.color.copy(day);
+  for(const p of BLOOD.parts){if(p.t>=1){p.s.visible=false;continue;}p.t+=dt*1.5;p.v.y-=9*dt;p.s.position.addScaledVector(p.v,dt);}
+  for(const p of BLOOD.pools){if(!p.n)continue;const n=p.n;if(day)p.m.material.color.setRGB(.36,.05,.04).multiply(day);
+    if(n.down||n.dead){p.k=Math.min(1,p.k+dt*.3);p.m.scale.set(p.r*(.25+.75*p.k),1,p.r*(.2+.6*p.k));}
+    else{p.m.material.opacity-=dt*.12;if(p.m.material.opacity<=0){p.n=null;p.m.visible=false;}}}
+  for(let i=STAG.length-1;i>=0;i--){const n=STAG[i];n.stag-=dt;n.flash=Math.max(0,n.flash-dt*2.2);if(n.stag>0&&!n.down&&!n.dead)n.sp.material.rotation=n.stagS*.38*(n.stag/.3);if(n.stag<=0&&n.flash<=0)STAG.splice(i,1);}}
+// cuts that stay on them until they have mended
+function wound(n){const c=n.t.image,g=c.getContext('2d'),person=n.anim==='person',cols=person?6:4,rows=person?3:1,cw=c.width/cols,ch=c.height/rows;
+  if(!n.skin0){const b=document.createElement('canvas');b.width=c.width;b.height=c.height;b.getContext('2d').drawImage(c,0,0);n.skin0=b;}
+  const u=Math.random(),v=Math.random(),len=person?5+Math.random()*9:2+Math.random()*3,x0=person?22+u*20:9+u*13,y0=person?(Math.random()<.25?9+v*8:36+v*26):8+v*6;
+  g.globalCompositeOperation='source-atop';
+  for(let r=0;r<rows;r++)for(let q=0;q<cols;q++){const x=(q*cw+x0)|0,y=(r*ch+y0)|0;g.fillStyle='#7a100c';g.fillRect(x,y,person?3:2,len|0);g.fillStyle='#b4241a';g.fillRect(x,y,person?2:1,person?3:1);g.fillStyle='#7a100c';g.fillRect(x+(person?4:2),y+1,1,(len*.5)|0);}
+  g.globalCompositeOperation='source-over';n.t.needsUpdate=true;}
+function heal(n){if(n.skin0){const g=n.t.image.getContext('2d');g.clearRect(0,0,n.t.image.width,n.t.image.height);g.drawImage(n.skin0,0,0);n.t.needsUpdate=true;}n.hurtT=0;}
+function gore(n,k){burst(n.x,n.y+(n.anim==='person'?1.15:.55),n.z,k);n.flash=.75;n.stag=.3;n.stagS=Math.random()<.5?1:-1;if(!STAG.includes(n))STAG.push(n);wound(n);}
+// an animal that has been killed lies where it fell for a while, then is gone; another takes its place in time
+function corpse(n,back){halt(n);unwind(n);const b=n.bs||(n.bs=[n.sp.scale.x,n.sp.scale.y]);n.dead=true;n.deadT=45;n.back=back;n.type0=n.type;n.type='stand';n.rr=n.r;n.r=-1;n.route=null;n.routeGo=0;n.sp.scale.set(b[0],b[1]*.55,1);n.tint0=n.tint;n.tint=true;pool(n);DEAD.push(n);}
+function fallen(dt){for(let i=DEAD.length-1;i>=0;i--){const n=DEAD[i];
+  if(n.dead){n.deadT-=dt;if(n.deadT<=0){n.dead=false;n.gone=true;n.goneT=n.back;n.sp.visible=false;}continue;}
+  n.goneT-=dt;if(n.goneT<=0&&Math.hypot(n.home[0]-P.x,n.home[1]-P.z)>90){n.gone=false;n.hp=n.maxhp;n.r=n.rr;n.type=n.type0;n.tint=n.tint0;n.sp.scale.set(n.bs[0],n.bs[1],1);heal(n);n.angry=false;if(n.foe)n.speed=n.walk;n.x=n.home[0]+R(-4,4);n.z=n.home[1]+R(-4,4);n.sp.visible=true;DEAD.splice(i,1);}}}
+// --- somebody's sheep ---
+function scare(m,d){if(m.dead||m.gone||m.drive)return;const a=Math.atan2(m.x-P.x,m.z-P.z)+(Math.random()-.5);m.sp0=m.sp0||m.speed;m.speed=4.2;go(m,m.x+Math.sin(a)*d,m.z+Math.cos(a)*d,1,q=>{q.speed=q.sp0;halt(q);});m.driveT=5;}
+function livestock(n){const dead=n.hp<=0,o=n.owner&&!n.owner.down&&!n.owner.sleep&&Math.hypot(n.owner.x-n.x,n.owner.z-n.z)<45?n.owner:null;
+  if(dead){corpse(n,600);give('mutton');S.hot.mutton=(S.hot.mutton||0)+1;}else scare(n,16);
+  for(const m of SHEEP)if(m!==n&&Math.hypot(m.x-n.x,m.z-n.z)<16)scare(m,12);
+  if(!crime(dead?'A sheep killed':'A sheep struck',dead?18:8,{violent:true,owner:o,ownCry:FLOCK}))tell(dead?'mutton':null,dead?'+1 Mutton — not yours. No one saw.':'The flock scatters. No one saw.');
+  else if(dead)tell('mutton','+1 Mutton');}
+/* ================= the boat ================= */
+const BOAT=(function(){if(!V.PIER||!V.ISLE)return null;const K=V.kit(),B=V.boxUV,g=new THREE.Group();
+  K.add(B(3.1,.4,1.25,1),'wood',0,.12,0);K.add(B(.9,.38,.9,1),'wood',1.55,.13,0,Math.PI/4);
+  for(const sd of [-1,1]){K.add(B(3.1,.16,.09,1),'wood',0,.38,sd*.6);K.add(B(2.3,.05,.12,1),'wood',-.2,.44,sd*.95,sd*.35);}
+  for(const x of [-.9,.3])K.add(B(.32,.06,1.2,1),'wood',x,.36,0);
+  K.build(V.M,g);V.scene.add(g);
+  let shore=V.ISLE.x+V.ISLE.rx;for(let x=V.ISLE.x;x<V.ISLE.x+90;x+=.5)if(V.terrainH(x,V.ISLE.z)<V.LAKEY+.3){shore=x;break;}
+  const b={g,at:S.boat==='isle'?'isle':'pier',pier:[V.PIER.x0-V.PIER.len+7,V.PIER.z+2.3,0],isle:[shore+1.4,V.ISLE.z,0],land:[shore-2.4,V.ISLE.z]};
+  b.put=()=>{const p=b[b.at];g.position.set(p[0],V.LAKEY-.02,p[1]);g.rotation.y=b.at==='pier'?0:.5;};b.put();return b;})();
+function row(){const to=BOAT.at==='pier'?'isle':'pier';fade.style.opacity=1;G.modal=true;
+  setTimeout(()=>{BOAT.at=to;S.boat=to;BOAT.put();if(to==='isle'){P.x=BOAT.land[0];P.z=BOAT.land[1];P.yaw=Math.PI/2;}else{P.x=BOAT.pier[0];P.z=V.PIER.z;P.yaw=-Math.PI/2;}P.y=V.groundH(P.x,P.z);P.pitch=.02;
+    standDown(true);save();fade.style.opacity=0;G.modal=false;V.say(to==='isle'?'The island':'The pier',to==='isle'?'The boat grounds on the shingle.':'');},1300);}
+/* ================= who they are ================= */
+// Everyone with a home gets a name and a household. Families share a surname, stand up for each other, and know what is theirs.
+let named=false;
+function nameAll(){named=true;
+  const FAM=['Holt','Aldery','Marsh','Tanner','Wick','Fenn','Barrow','Sedge','Rook','Thorne','Ashby','Cobb','Dunmore','Elwood','Garrick','Hale','Ivers','Kettle','Lark','Mallow','Nance','Orrin','Pell','Quill','Rudd','Stile','Tolly','Underhay','Vane','Wren','Yarrow','Brock','Calder','Dray','Esk','Furze','Gorse','Heron','Inch','Jessop','Kell','Loam','Merrow','Nettle','Oakes','Pike','Reeve','Shaw'],
+   M=['Aldric','Bram','Cuthbert','Dunstan','Edric','Godwin','Hob','Ives','Jory','Kenric','Leof','Merek','Osric','Piers','Rowan','Sewal','Tobias','Wat','Wilmot','Gareth'],
+   F=['Ada','Beatrix','Cecily','Edith','Elswyth','Gunnild','Hilda','Isolde','Joan','Maud','Mabel','Nesta','Odila','Rohese','Sibyl','Tilda','Wynn','Agnes','Marta','Linnet'],
+   K=['Tam','Pip','Nell','Robin','Wren','Kit','Bess','Jem'];let fi=0;
+  for(const n of PEOPLE){const f=n.homeF;if(!f||n.foe||LAW(n))continue;if(!f.fam){f.fam=FAM[fi++%FAM.length];f.folk=[];}
+    const L=n.role==='child'?K:/woman|queen/.test(n.role)?F:M;let nm=L[(rnd()*L.length)|0];for(let k=0;k<6&&f.folk.some(m=>m.first===nm);k++)nm=L[(rnd()*L.length)|0];
+    n.first=nm;n.title=n.name;n.name=nm+' '+f.fam;f.folk.push(n);}}
 /* ================= fighting ================= */
 let dying=false,clockT=0,lastHurt=-99,regenT=0,prevSw=-1,blockHeld=false;
 addEventListener('mousedown',e=>{if(e.button===2)blockHeld=true;});addEventListener('mouseup',e=>{if(e.button===2)blockHeld=false;});
@@ -355,7 +507,7 @@ function hurt(dmg,src){if(dying||!V.started)return;
   if(G.block){const dx=src.x-P.x,dz=src.z-P.z,d=Math.hypot(dx,dz)||1;if((-Math.sin(P.yaw)*dx-Math.cos(P.yaw)*dz)/d>.2)dmg=Math.ceil(dmg*.25);}
   S.hp-=dmg;lastHurt=clockT;hurtFx.style.transition='none';hurtFx.style.opacity=Math.min(1,.45+dmg/30);requestAnimationFrame(()=>{hurtFx.style.transition='';hurtFx.style.opacity=0;});drawHp();
   if(S.hp<=0)die(src);}
-function die(src){dying=true;if(view){view=null;shopNPC=null;wrap.style.display='none';}G.modal=true;
+function die(src){dying=true;if(G.social)G.social.end();if(view){view=null;shopNPC=null;wrap.style.display='none';}G.modal=true;
   if(LAW(src)){jail(true);return;}
   fade.style.opacity=1;
   setTimeout(()=>{const lost=Math.floor(S.coins/3);S.coins-=lost;S.hp=50;calmAll();standDown(true);G.sneak=false;wear();sneakBtn.classList.remove('on');V.DN.tod=.3;
@@ -399,8 +551,7 @@ function strike(n,d,dt){if(G.modal||dying)return;const b=n.bs||(n.bs=[n.sp.scale
 const THREAT=['Your purse, or your blood!','Wrong woods to wander in, friend.','Hold still. This will not take long.'];
 function foes(dt){const night=V.DN.tod<.25||V.DN.tod>.8;
   for(const n of FOES){
-    if(n.gone){n.sp.visible=false;n.goneT-=dt;if(n.goneT<=0&&Math.hypot(n.home[0]-P.x,n.home[1]-P.z)>90){n.gone=false;n.hp=n.maxhp;n.r=n.r0;n.type='wander';n.x=n.home[0]+R(-4,4);n.z=n.home[1]+R(-4,4);n.sp.visible=true;}continue;}
-    if(n.down)continue;
+    if(n.gone||n.dead||n.down)continue;
     const d=Math.hypot(n.x-P.x,n.z-P.z),hd=Math.hypot(n.x-n.home[0],n.z-n.home[1]);
     if(!n.angry){if(d>40||G.modal||dying||hd>60||S.jailed)continue;
       const sense=n.foe==='wolf'?d<(night?24:13)*(G.sneak?.6:1):(n.sees||d<4);
@@ -409,36 +560,40 @@ function foes(dt){const night=V.DN.tod<.25||V.DN.tod>.8;
     if(!n.drive)go(n,P.x,P.z,1.5);n.goal=[P.x,P.z];n.stop=1.5;n.ghost=false;if(d<1.7)n.face=Math.atan2(P.x-n.x,P.z-n.z);
     strike(n,d,dt);}
   for(const g of WATCH)if(g.fight&&g.hunt&&!g.down)strike(g,Math.hypot(g.x-P.x,g.z-P.z),dt);
-  for(const n of PEOPLE)if(n.down){n.state='idle';n.timer=9;n.route=null;n.downT-=dt;if(n.downT<=0){n.down=false;n.looted=false;n.hp=n.maxhp;n.angry=false;if(n.foe)n.speed=n.walk;}}}
+  for(const n of PEOPLE)if(n.down){n.state='idle';n.timer=9;n.route=null;n.downT-=dt;if(n.downT<=0){n.down=false;n.looted=false;n.hp=n.maxhp;n.angry=false;if(n.foe)n.speed=n.walk;heal(n);if(n.homeF)n.phaseR=null;}}
+    else if(n.hurtT>0){n.hurtT-=dt;if(n.hurtT<=0){n.hp=n.maxhp;heal(n);}}}
 // --- your sword ---
 const puff=(()=>{const c=document.createElement('canvas');c.width=c.height=16;const g=c.getContext('2d');g.fillStyle='#fff6d8';for(const [x,y,w,h] of [[7,1,2,14],[1,7,14,2],[4,4,2,2],[10,4,2,2],[4,10,2,2],[10,10,2,2]])g.fillRect(x,y,w,h);
   const t=new THREE.CanvasTexture(c);t.magFilter=t.minFilter=THREE.NearestFilter;const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthTest:false,fog:false}));sp.visible=false;V.scene.add(sp);return {sp,t:0};})();
-const HITTABLE=PEOPLE.filter(n=>n.role!=='child').concat(FOES.filter(n=>n.foe==='wolf'));
+const SHEEP=V.NPCS.filter(n=>n.anim==='sheep'&&!n.foe);
+const HITTABLE=PEOPLE.filter(n=>n.role!=='child').concat(FOES.filter(n=>n.foe==='wolf'),SHEEP);
+// two traits each: bold or timid, hot-tempered or mild. Shepherds will always stand up for the flock.
+for(const n of PEOPLE){const a=rnd(),b=rnd();n.bold=LAW(n)||!!n.foe||n.role==='shepherd'||(n.role!=='child'&&a<(/smith|woodcutter|farmer|soldier/.test(n.role)?.7:.3));n.hot=n.role==='shepherd'||b<.35;}
+for(const s of SHEEP){let o=null,od=50;for(const p of PEOPLE)if(p.role==='shepherd'){const d=Math.hypot(p.x-s.x,p.z-s.z);if(d<od){od=d;o=p;}}s.owner=o;}
 const YELP=['Help! Help!','Murder! Guards!','Stop! Please!','Somebody help me!'];
-function flee(n){if(n.fixedY!==undefined||n.sit||n.drive)return;const dx=n.x-P.x,dz=n.z-P.z,d=Math.hypot(dx,dz)||1;
-  if(!n.fleeS)n.fleeS=n.speed;n.speed=4.6;go(n,n.x+dx/d*24,n.z+dz/d*24,1,m=>{halt(m);m.speed=m.fleeS;m.fleeS=0;});n.driveT=7;}
-function attack(){const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw);let n=null,bd=2.7;
-  for(const m of HITTABLE){if(m.gone||m.down||m.sleep)continue;const dx=m.x-P.x,dz=m.z-P.z;if(dx>3||dx<-3||dz>3||dz<-3)continue;const d=Math.hypot(dx,dz);
+function flee(n){if(n.fixedY!==undefined||n.drive)return;n.sit=false;n.route=null;n.routeGo=0;const dx=n.x-P.x,dz=n.z-P.z,d=Math.hypot(dx,dz)||1;
+  if(!n.fleeS)n.fleeS=n.speed;n.speed=4.6;go(n,n.x+dx/d*24,n.z+dz/d*24,1,sendHome);n.driveT=7;}
+function attack(){const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw);let n=null,bd=2.7;lastSword=clockT;
+  for(const m of HITTABLE){if(m.gone||m.down||m.sleep||m.dead)continue;const dx=m.x-P.x,dz=m.z-P.z;if(dx>3||dx<-3||dz>3||dz<-3)continue;const d=Math.hypot(dx,dz);
     if(d>=bd||Math.abs(m.y-P.y)>1.8||(d>.9&&(dx*fx+dz*fz)/d<.45))continue;n=m;bd=d;}
   if(!n)return;
-  look();const person=n.anim==='person',unseen=person&&!n.sees,seen=watchers.length>0,dmg=unseen?50:25,law=LAW(n);
+  look();const person=n.anim==='person',unseen=person&&!n.sees,dmg=unseen?50:25,law=LAW(n);
   puff.sp.position.set(n.x-fx*.3,n.y+(person?1.2:.6),n.z-fz*.3);puff.sp.scale.set(.9,.9,1);puff.sp.visible=true;puff.t=.16;
   if(n.fixedY===undefined&&!n.sit){const x=n.x+fx*.6,z=n.z+fz*.6;if(!V.wallHit(x,z,.4)&&!V.castleBlocked(x,z)){n.x=x;n.z=z;}}
-  if(n.hp===undefined){n.hp=n.maxhp=law?90:40;n.dmg=12;}
-  n.hp-=dmg;
+  if(n.hp===undefined){n.hp=n.maxhp=person?(law?90:40):30;if(person)n.dmg=n.dmg||(law?12:5);}
+  n.hp-=dmg;gore(n,n.hp<=0?18:9);
   if(n.foe){n.angry=true;n.speed=n.run;
     if(n.hp>0)return;
-    if(n.foe==='wolf'){halt(n);unwind(n);n.gone=true;n.goneT=300;n.angry=false;n.route=null;n.routeGo=0;n.type='stand';n.r=-1;n.sp.visible=false;give('pelt');tell('pelt','+1 Wolf pelt');}
-    else{const c=8+((Math.random()*13)|0);halt(n);unwind(n);n.down=true;n.downT=180;n.angry=false;S.coins+=c;tell('coin','+'+c+' coins from the bandit');if(Math.random()<.6){give('pick');tell('pick','+1 Lockpick');}}
+    if(n.foe==='wolf'){n.angry=false;corpse(n,300);give('pelt');tell('pelt','+1 Wolf pelt');}
+    else{const c=8+((Math.random()*13)|0);halt(n);unwind(n);n.down=true;n.downT=180;n.angry=false;pool(n);S.coins+=c;tell('coin','+'+c+' coins from the bandit');if(Math.random()<.6){give('pick');tell('pick','+1 Lockpick');}}
     drawHud();save();return;}
-  // someone who was minding their own business: that is assault, if anyone knows it was you
-  const out=n.hp<=0,known=seen||!unseen||!out;
-  if(out){if(n.hunt){n.speed=n.hunt.speed;n.hunt=null;}if(n.fleeS){n.speed=n.fleeS;n.fleeS=0;}halt(n);unwind(n);n.down=true;n.looted=false;n.downT=law?60:90;n.route=null;n.routeGo=0;n.sit=false;n.fight=false;}
-  if(known){S.bounty+=(law?25:20)+(out?15:0);
-    if(!out){if(law)speak(n,'To arms! To arms!');else{speak(n,YELP[(Math.random()*YELP.length)|0]);flee(n);}}
-    raiseAlarm();if(law)for(const g of WATCH)if(!g.down&&Math.hypot(g.x-P.x,g.z-P.z)<30){hunt(g,false);g.fight=true;}
-    tell(null,(out?n.name+' is out cold. ':'')+'Assault. Fine: '+S.bounty);}
-  else tell(null,n.name+' is out cold. No one saw.');
+  if(!person){livestock(n);drawHud();save();return;}
+  // someone who was minding their own business: that is assault, if anyone lives to tell the watch it was you
+  const out=n.hp<=0;
+  if(out){if(n.hunt){n.speed=n.hunt.speed;n.hunt=null;}if(n.fleeS){n.speed=n.fleeS;n.fleeS=0;}halt(n);unwind(n);n.down=true;n.looted=false;n.downT=law?60:90;n.route=null;n.routeGo=0;n.sit=false;n.fight=false;n.fear=!law;pool(n);}
+  else n.hurtT=150;
+  if(law&&!out){crime('You struck the watch',25,{victim:n,violent:true,known:true});speak(n,'To arms! To arms!');for(const g of WATCH)if(!g.down&&Math.hypot(g.x-P.x,g.z-P.z)<30){hunt(g,false);g.fight=true;}}
+  else if(!crime(out?n.name+' struck down':'Assault',(law?25:20)+(out?15:0),{victim:n,self:out?null:n,violent:true}))tell(null,n.name+' is out cold. No one saw.');
   drawHud();save();}
 /* ================= locks ================= */
 // Homes shut their doors at night. Chests are always locked. A lockpick and a steady hand open both; being seen at it is a crime.
@@ -450,22 +605,31 @@ function bar(L,shut){L.shut=shut;L.mesh.visible=shut;const w=L.seg;for(let i=0;i
 {const geo=new THREE.BoxGeometry(1.4,2.3,.1);
  for(const f of V.FLOORS){if(!f.door||f.inn||f.upper||!f.bed)continue;const c=Math.cos(f.ry),s=Math.sin(f.ry),lz=f.hd-.3,cx=f.x+lz*s,cz=f.z+lz*c;
   const m=new THREE.Mesh(geo,V.M.door);m.position.set(cx,f.y+1.15,cz);m.rotation.y=f.ry;V.scene.add(m);
-  const L={kind:'door',x:cx,z:cz,y:f.y,nx:s,nz:c,seg:mkSeg(cx-.8*c,cz+.8*s,cx+.8*c,cz-.8*s),mesh:m,pins:pinsFor(cx,cz),forced:false,reach:1.8};bar(L,false);LOCKS.push(L);
-  if(f.chest)LOCKS.push({kind:'chest',id:'k'+LOCKS.length,x:f.chest[0],z:f.chest[1],y:f.y,pins:pinsFor(cx,cz),rich:V.inCourt(cx,cz),reach:1.7});}}
+  const L={kind:'door',x:cx,z:cz,y:f.y,nx:s,nz:c,seg:mkSeg(cx-.8*c,cz+.8*s,cx+.8*c,cz-.8*s),mesh:m,pins:pinsFor(cx,cz),forced:false,reach:1.8,home:f};bar(L,false);LOCKS.push(L);
+  if(f.chest)LOCKS.push({kind:'chest',id:'k'+LOCKS.length,x:f.chest[0],z:f.chest[1],y:f.y,pins:pinsFor(cx,cz),rich:V.inCourt(cx,cz),reach:1.7,home:f});}}
 // --- the gaol: a stone lock-up outside the castle gate, with a barred door and a chest for what they take off you ---
 const J=(function gaol(){let best=null,bs=1e9;
-  for(let i=0;i<600;i++){const x=V.GATEW.x-R(14,60),z=V.GATEW.z+R(-45,45);let lo=1e9,hi=-1e9,ok=true;
-    for(const [a,b] of [[-3.2,-2.8],[3.2,-2.8],[-3.2,4.6],[3.2,4.6],[0,0],[0,4.6]]){const px=x+a,pz=z+b;if(!V.allowed(px,pz)||V.floorH(px,pz)>-1e8||V.roadDist(px,pz)<5){ok=false;break;}const h=V.terrainH(px,pz);lo=Math.min(lo,h);hi=Math.max(hi,h);}
-    if(ok)for(let a=-2.6;a<=2.6;a+=.65)for(let b=-2.4;b<=3;b+=.6)hi=Math.max(hi,V.terrainH(x+a,z+b));
-    if(!ok||V.trees.some(t=>Math.abs(t[0]-x)<5+t[2]&&Math.abs(t[1]-z)<6+t[2]))continue;
-    const sc=hi-lo+V.roadDist(x,z)*.01;if(sc<bs){bs=sc;best=[x,z,hi];}}
-  if(!best||bs>1.6)return null;
+  // Find a clear courtyard plot large enough for the whole guardhouse.
+  for(let lx=-35;lx<=35;lx+=5)for(let lz=-20;lz<=30;lz+=5){const p=V.cw(lx,lz),x=p[0],z=p[1];let ok=true;
+   for(let dx=-7;dx<=7;dx+=2)for(let dz=-4;dz<=11;dz+=2){const xx=x+dx,zz=z+dz;if(!V.inCourt(xx,zz)||!V.allowed(xx,zz)||V.floorH(xx,zz)>-1e8||V.wallHit(xx,zz,.5))ok=false;}
+   if(!ok)continue;const score=Math.hypot(x-V.GATEW.x,z-V.GATEW.z);if(score<bs){bs=score;best=[x,z,V.CTOP];}}
+  if(!best){console.warn('No clear courtyard plot for the guardhouse');return null;}
   const [x,z,hi]=best,y=hi+.45,K=V.kit(),B=V.boxUV;
   K.add(B(5,2.6,4.2,2),'stone',x,y-1.36,z);
   K.add(B(4.9,2.6,.3,2),'ashlar',x,y+1.3,z-1.95);for(const sd of [-1,1]){K.add(B(.3,2.6,4.2,2),'ashlar',x+sd*2.3,y+1.3,z);K.add(B(1.75,2.6,.3,2),'ashlar',x+sd*1.425,y+1.3,z+1.95);}
   K.add(B(1.1,.5,.3,2),'ashlar',x,y+2.35,z+1.95);K.add(B(5.5,.25,4.8,2),'slate',x,y+2.72,z);
   K.add(B(1.9,.22,.9,1),'thatch',x-1.15,y+.05,z-1.3);
   const cx=x+1.75,cz=z+2.6,cy=V.terrainH(cx,cz);K.add(B(.9,.55,.5,1),'wood',cx,cy+.27,cz);K.add(B(.94,.08,.54,1),'iron',cx,cy+.5,cz);
+  // The cell occupies the rear of a larger barracks, with a desk and bunks in front.
+  K.add(B(13,.45,15,1),'stone',x,y-.25,z+3.5);
+  K.add(B(13,4.5,.4,1),'ashlar',x,y+2.25,z-4);
+  for(const sd of [-1,1]){K.add(B(.4,4.5,15,1),'ashlar',x+sd*6.5,y+2.25,z+3.5);K.add(B(5.5,4.5,.4,1),'ashlar',x+sd*3.75,y+2.25,z+11);
+   mkSeg(x+sd*6.5,z-4,x+sd*6.5,z+11);mkSeg(x+sd,z+11,x+sd*6.5,z+11);
+   for(const zz of [4,7]){K.add(B(2,.5,1.1,1),'wood',x+sd*4.7,y+.25,z+zz);K.add(B(1.9,.15,1,1),'thatch',x+sd*4.7,y+.6,z+zz);}}
+  mkSeg(x-6.5,z-4,x+6.5,z-4);K.add(B(2,1.7,.4,1),'ashlar',x,y+3.65,z+11);
+  V.roofOn(K,13,15,4.5,3,'slate','ashlar',.6,0,x,y,z+3.5);
+  K.add(B(2.2,.18,1,1),'wood',x+3,y+1,z+2.8);
+  V.FLOORS.push({x,z:z+3.5,ry:0,hw:6.5,hd:7.5,y,r:11});
   K.build(V.M,V.scene);V.trees.push([cx,cz,.45]);
   const g=new THREE.Group(),K2=V.kit();for(let i=0;i<6;i++)K2.add(new THREE.BoxGeometry(.07,2.1,.07),'iron',-.5+i*.2,1.05,0);for(const h of [.25,1.1,1.95])K2.add(new THREE.BoxGeometry(1.1,.07,.07),'iron',0,h,0);
   K2.build(V.M,g);g.position.set(x,y,z+1.95);V.scene.add(g);
@@ -474,11 +638,10 @@ const J=(function gaol(){let best=null,bs=1e9;
   const door={kind:'cell',x,z:z+1.95,y,nx:0,nz:1,seg:mkSeg(x-.55,z+1.95,x+.55,z+1.95),mesh:g,pins:4,forced:false,reach:1.7};bar(door,true);
   LOCKS.push(door,{kind:'straw',x:x-1.15,z:z-1.2,y,reach:1.7},{kind:'evidence',x:cx,z:cz,y:cy,pins:3,reach:1.7});
   return {x,z,y,door,out:[x,z+3.7]};})();
-function crime(label,fine){if(!watchers.length)return false;const w=watchers.reduce((a,b)=>Math.hypot(a.x-P.x,a.z-P.z)<Math.hypot(b.x-P.x,b.z-P.z)?a:b);S.bounty+=fine;
-  w.face=Math.atan2(P.x-w.x,P.z-w.z);speak(w,CRIES[(Math.random()*CRIES.length)|0]);raiseAlarm();tell(null,label+' — seen by '+w.name+'. Fine: '+S.bounty);return true;}
+if(J){const places=document.getElementById('devPlaces');if(places){const b=document.createElement('button');b.textContent='Barracks and cells';b.onclick=()=>V.tp(J.x,J.z+9,0,.02);places.appendChild(b);}}
 // --- picking: a pin slides back and forth; set it while it sits in the notch. Miss and the pick snaps. ---
 function newPin(){const L=PK.L,w=Math.max(.09,.25-.035*PK.set-.025*(L.pins-2));PK.w=w;PK.a=.04+Math.random()*(.92-w);PK.v=.7+.2*PK.set+.12*(L.pins-2);}
-function startPick(L){if(!count('pick')){tell(null,'You need a lockpick.');return;}look();if(crime('Lockpicking',10)){drawHud();save();return;}
+function startPick(L){if(!count('pick')){tell(null,'You need a lockpick.');return;}if(crime('Lockpicking',10,{home:L.home})){drawHud();save();return;}
   PK={L,set:0,pos:Math.random(),dir:1,t:0};newPin();open('lock');requestAnimationFrame(lockLoop);}
 function lockLoop(ts){if(view!=='lock'||!PK)return;const dt=PK.t?Math.min(.05,(ts-PK.t)/1000):0;PK.t=ts;PK.pos+=PK.dir*PK.v*dt;if(PK.pos>1){PK.pos=2-PK.pos;PK.dir=-1;}if(PK.pos<0){PK.pos=-PK.pos;PK.dir=1;}
   const m=box.querySelector('#vgLock b');if(m)m.style.left=PK.pos*100+'%';requestAnimationFrame(lockLoop);}
@@ -491,19 +654,21 @@ function unlock(L){
   if(L.kind==='door'||L.kind==='cell'){L.forced=true;bar(L,false);tell(null,'The lock gives.');}
   else if(L.kind==='chest'){S.picked[L.id]=Date.now();const c=(8+((Math.random()*18)|0))*(L.rich?2:1);S.coins+=c;let got='+'+c+' coins';
     if(Math.random()<.6){let t=0;for(const e of LOOT)t+=e[1];let r=Math.random()*t,k=LOOT[0][0];for(const e of LOOT){r-=e[1];if(r<0){k=e[0];break;}}if(L.rich&&Math.random()<.4)k='ring';give(k);S.hot[k]=(S.hot[k]||0)+1;got+=', '+ITEMS[k].n.toLowerCase();}
-    look();if(!crime(got,15))tell('coin',got+' — stolen. No one saw.');}
-  else if(L.kind==='evidence'){let n=0;for(const k in S.evidence){give(k,S.evidence[k]);S.hot[k]=(S.hot[k]||0)+S.evidence[k];n+=S.evidence[k];}S.evidence={};look();if(!crime('Your things, taken back',15))tell(null,'You take back what they took from you.');}
+    if(!crime(got,15,{home:L.home}))tell('coin',got+' — stolen. No one saw.');}
+  else if(L.kind==='evidence'){let n=0;for(const k in S.evidence){give(k,S.evidence[k]);S.hot[k]=(S.hot[k]||0)+S.evidence[k];n+=S.evidence[k];}S.evidence={};if(!crime('Your things, taken back',15))tell(null,'You take back what they took from you.');}
   drawHud();save();}
 function useLock(L){
-  if(L.kind==='body'){const n=L.n;n.looted=true;const c=2+((Math.random()*9)|0);S.coins+=c;look();if(!crime('+'+c+' coins',10))tell('coin','+'+c+' coins from '+n.name+'. No one saw.');drawHud();save();return;}
+  if(L.kind==='body'){const n=L.n;n.looted=true;const c=2+((Math.random()*9)|0);S.coins+=c;if(!crime('+'+c+' coins',10,{victim:n}))tell('coin','+'+c+' coins from '+n.name+'. No one saw.');drawHud();save();return;}
+  if(L.kind==='boat'){row();return;}
   if(L.kind==='straw'){serve();return;}
   if(L.kind==='door'&&(P.x-L.x)*L.nx+(P.z-L.z)*L.nz<0){L.forced=true;bar(L,false);return;}   // from inside, a house door just opens
   startPick(L);}
-function lockHint(L){if(L.kind==='body')return 'search '+L.n.name;if(L.kind==='straw')return 'sleep off your sentence';if(L.kind==='chest')return 'pick the chest lock';if(L.kind==='evidence')return 'pick the evidence chest';
+function lockHint(L){if(L.kind==='boat')return BOAT.at==='pier'?'row out to the island':'row back to the pier';if(L.kind==='body')return 'search '+L.n.name;if(L.kind==='straw')return 'sleep off your sentence';if(L.kind==='chest')return 'pick the chest lock';if(L.kind==='evidence')return 'pick the evidence chest';
   if(L.kind==='door'&&(P.x-L.x)*L.nx+(P.z-L.z)*L.nz<0)return 'open the door';return 'pick the lock';}
 function findLock(){let best=null,bd=9;for(const L of LOCKS){const dx=L.x-P.x,dz=L.z-P.z;if(dx>2||dx<-2||dz>2||dz<-2||Math.abs(L.y-P.y)>1.5)continue;const d=Math.hypot(dx,dz);if(d>L.reach||d>=bd)continue;
     if((L.kind==='door'||L.kind==='cell')&&!L.shut)continue;if(L.kind==='chest'&&S.picked[L.id])continue;if(L.kind==='straw'&&!S.jailed)continue;if(L.kind==='evidence'&&!Object.keys(S.evidence).length)continue;best=L;bd=d;}
   if(!best)for(const n of PEOPLE){if(!n.down||n.looted||n.foe)continue;const d=Math.hypot(n.x-P.x,n.z-P.z);if(d<1.9&&Math.abs(n.y-P.y)<1.5){best={kind:'body',n};break;}}
+  if(!best&&BOAT){const b=BOAT[BOAT.at];if(Math.hypot(b[0]-P.x,b[1]-P.z)<3.6&&Math.abs(P.y-V.LAKEY)<2.5)best={kind:'boat'};}
   return best;}
 function doors(){const night=isNight();for(const L of LOCKS){if(L.kind==='chest'&&S.picked[L.id]&&Date.now()-S.picked[L.id]>RESTOCK)delete S.picked[L.id];if(L.kind!=='door')continue;if(!night)L.forced=false;const want=night&&!L.forced;
     if(want!==L.shut&&!(want&&Math.hypot(P.x-L.x,P.z-L.z)<1.4))bar(L,want);}}
@@ -518,26 +683,31 @@ G.use=function(npc){
   if(G.modal)return true;
   if(nearItem){const p=nearItem,it=ITEMS[p.kind];S.picked[p.id]=Date.now();p.sp.visible=false;nearItem=null;
     let got='+1 '+it.n;if(p.kind==='purse'){const c=6+((p.x*7+p.z*13)&7);S.coins+=c;got='+'+c+' coins';}else{give(p.kind);if(p.owned)S.hot[p.kind]=(S.hot[p.kind]||0)+1;}
-    if(p.owned){look();if(watchers.length){const w=watchers.reduce((a,b)=>Math.hypot(a.x-P.x,a.z-P.z)<Math.hypot(b.x-P.x,b.z-P.z)?a:b),fine=it.v+5;S.bounty+=fine;
-        w.face=Math.atan2(P.x-w.x,P.z-w.z);speak(w,CRIES[(Math.random()*CRIES.length)|0]);raiseAlarm();tell(p.kind,got+' — seen by '+w.name+'. Fine: '+S.bounty);}
-      else tell(p.kind,got+' — stolen. No one saw.');}
+    if(p.owned){if(!crime(got,it.v+5,{home:p.home}))tell(p.kind,got+' — stolen. No one saw.');}
     else tell(p.kind,got);
     drawHud();save();return true;}
   if(nearLock){useLock(nearLock);return true;}
   if(LAW(npc)&&S.bounty>0&&!S.jailed){caught=false;open('arrest',npc);return true;}
+  if(npc&&npc.fear&&!G.sheathed){speak(npc,'Stay back. Put the weapon away.');return true;}
+  if(npc&&G.social&&!npc.sleep&&!npc.down&&!npc.foe&&!npc.hunt&&!npc.avenge&&!npc.rep){G.social.init();G.social.meet(npc);open('person',npc);return true;}
+  if(npc&&npc.shop&&!npc.sleep&&!G.sheathed){speak(npc,'Put the sword away, and then we can talk business.');return true;}
   if(npc&&npc.shop&&!npc.sleep){const shop=SHOPS[npc.shop];if(S.bounty>0&&!shop.fence){speak(npc,'I do not trade with thieves. Settle up with the guard first.');return true;}open('shop',npc);return true;}
   return false;};
 G.tick=function(dt,T){
   if(!V.started)return;
+  if(view==='person'&&shopNPC&&(Math.hypot(P.x-shopNPC.x,P.z-shopNPC.z)>4.5||shopNPC.down||shopNPC.hunt||shopNPC.avenge||shopNPC.rep||shopNPC.sleep))close();
   const now=Date.now();
   pace=pace*.8+.2*Math.hypot(P.x-lpx,P.z-lpz)/Math.max(dt,1e-3);lpx=P.x;lpz=P.z;
   G.duck+=((G.sneak?.62:0)-G.duck)*Math.min(1,dt*9);
   if(speakT>0){speakT-=dt;if(speakT<=0)V.talkBox.style.opacity=0;}
   clockT+=dt;
-  {const b=(blockHeld||V.keys.KeyV)&&!G.modal&&!dying;if(b!==G.block){G.block=b;wear();}G.blockK=(G.blockK||0)+((b?1:0)-(G.blockK||0))*Math.min(1,dt*14);}
+  if(!named&&window._homed)nameAll();
+  G.sheathK+=((G.sheathed?1:0)-G.sheathK)*Math.min(1,dt*7);
+  if(V.coarse&&!G.sheathed&&clockT-lastSword>30&&!FOES.some(f=>f.angry)&&!WATCH.some(g=>g.hunt))setSheath(true);
+  {const b=(blockHeld||V.keys.KeyV)&&!G.modal&&!dying&&!G.sheathed;if(b)lastSword=clockT;if(b!==G.block){G.block=b;wear();}G.blockK=(G.blockK||0)+((b?1:0)-(G.blockK||0))*Math.min(1,dt*14);}
   {const sw=V.swingT;if(prevSw<.38&&sw>=.38)attack();prevSw=sw;}
   if(puff.t>0){puff.t-=dt;if(puff.t<=0)puff.sp.visible=false;}
-  foes(dt);
+  foes(dt);gory(dt);reports(dt);avengers(dt);fallen(dt);
   if(S.hp<MAXHP&&!dying&&clockT-lastHurt>12){regenT+=dt;if(regenT>5){regenT=0;S.hp++;drawHp();}}
   chaseT-=dt;if(chaseT<=0){watch(.25+chaseT);chaseT=.25;}
   nearLock=G.modal?null:findLock();
@@ -547,14 +717,15 @@ G.tick=function(dt,T){
     const c=V.NPCS[0]&&V.NPCS[0].sp.material.color;if(c)for(const k in MATS)MATS[k].color.copy(c);}
   nearItem=null;let bd=2.3;const cx=Math.floor(P.x/CELL),cz=Math.floor(P.z/CELL);
   for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){const l=grid.get((cx+a)+','+(cz+b));if(!l)continue;for(const p of l){if(S.picked[p.id])continue;const d=Math.hypot(p.x-P.x,p.z-P.z);if(d<bd&&Math.abs(p.sp.position.y-P.y)<2){bd=d;nearItem=p;}}}
-  sightT-=dt;if(sightT<=0){sightT=.2;look();
+  sightT-=dt;if(sightT<=0){sightT=.2;look();mood();
     let h='';if(S.jailed)h+='<div class="bad">In the cells</div>';else if(S.bounty>0)h+='<div class="bad">Wanted. Fine: '+S.bounty+'</div>';
+    if(REPORTS.length){const r=REPORTS[0];h+='<div class="bad">'+r.w.name+(r.shout?' is calling for the watch':' is running for the watch')+'</div>';}
     if(G.sneak||(nearItem&&nearItem.owned)||(nearLock&&nearLock.pins))h+='<div>'+(watchers.length?'Seen by '+watchers[0].name+(watchers.length>1?' and '+(watchers.length-1)+' more':''):(G.sneak?'Hidden':'Unseen'))+'</div>';
     if(eye.innerHTML!==h)eye.innerHTML=h;eye.style.display=h?'flex':'none';}
   const npc=V.near,H=V.talkHint,B=V.talkBtn;H.style.color='';
-  if(G.modal){H.style.opacity=0;B.style.display='none';}
+  if(G.modal||view==='person'){H.style.opacity=0;B.style.display='none';}
   else if(nearItem){const nm=ITEMS[nearItem.kind].n.toLowerCase();H.textContent=V.coarse?'':'Press E to '+(nearItem.owned?'steal ':'pick ')+nm;if(nearItem.owned)H.style.color='#ffb4a0';H.style.opacity=1;B.textContent=nearItem.owned?'Steal':'Take';if(V.coarse)B.style.display='block';}
-  else if(nearLock){H.textContent=V.coarse?'':'Press E to '+lockHint(nearLock);H.style.opacity=1;B.textContent=nearLock.kind==='body'?'Search':nearLock.kind==='straw'?'Sleep':'Open';if(V.coarse)B.style.display='block';}
+  else if(nearLock){H.textContent=V.coarse?'':'Press E to '+lockHint(nearLock);H.style.opacity=1;B.textContent=nearLock.kind==='boat'?'Row':nearLock.kind==='body'?'Search':nearLock.kind==='straw'?'Sleep':'Open';if(V.coarse)B.style.display='block';}
   else{const tr=npc&&npc.shop,law=LAW(npc)&&S.bounty>0&&!S.jailed;H.textContent=V.coarse?'':(law?'Press E to give yourself up':tr?'Press E to trade':'Press E to talk');B.textContent=law?'Yield':tr?'Trade':'Talk';}
   if(hudT>0&&!V.coarse){hudT-=dt;if(hudT<=0&&!G.modal)hud.classList.add('rest');}
   saveT+=dt;if(saveT>10){saveT=0;save();}
@@ -564,7 +735,8 @@ G.begin=function(){hud.style.display='flex';drawHud();if(!(S.hp>0))S.hp=50;drawH
   if(typeof S.tod==='number')V.DN.tod=S.tod;};
 
 // the start card: continue where you left off, or start over
-if(hadSave&&S.pos){const go=$('#go');if(go){go.textContent='Continue';const o=document.createElement('button');o.id='vgOver';o.type='button';o.textContent='Start over';
-  o.addEventListener('click',()=>{try{localStorage.removeItem(KEY);}catch(e){}S=fresh();G.sneak=false;wear();o.remove();go.textContent='Start walking';});go.after(o);}}
-G.foes=FOES;G.hurt=hurt;G.locks=LOCKS;G.gaol=J;G.jail=jail;G.pk=()=>PK;G.state=()=>S;G.items=ITEMS;G.picks=PICK;G.watchers=()=>watchers;
+if(hadSave&&S.pos){const go=$('#go');if(go){go.textContent='Continue';const o=document.createElement('button');o.id='vgOver';o.type='button';o.textContent='New game';
+  o.addEventListener('click',()=>{try{localStorage.removeItem(KEY);}catch(e){}S=fresh();G.sneak=false;wear();o.remove();go.textContent='New game';G.sheathed=true;G.sheathK=1;});go.after(o);}}
+G.socialAccess={save,count,hot,take,go,halt,ambient(n,line){if(view||speakT>0||S.jailed||!G.sheathed)return false;speak(n,line);return true;}};
+G.reports=REPORTS;G.attack=attack;G.crime=crime;G.setSheath=setSheath;G.boat=BOAT;G.row=row;G.people=PEOPLE;G.sheep=SHEEP;G.foes=FOES;G.hurt=hurt;G.locks=LOCKS;G.gaol=J;G.jail=jail;G.pk=()=>PK;G.state=()=>S;G.items=ITEMS;G.picks=PICK;G.watchers=()=>watchers;
 })();

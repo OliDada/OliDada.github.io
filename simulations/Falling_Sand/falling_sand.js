@@ -261,8 +261,12 @@ let pending = {}; // key -> how it first appeared (not counted as found until th
 const queued = new Set(); // found, but its pop-up hasn't been shown yet
 const toastQ = [];
 let toastBusy = false;
-let cat = 'powder', tabbed = false; // toolbar tab
-const newCats = new Set(); // tabs with something new in them
+// the material list: one list in folding categories, plus a search box once there are lots
+const FOLDS = 'olid-sand-folds-v1';
+let grouped = false, query = '';
+let folds = new Set(); // categories that are folded shut
+try { folds = new Set(JSON.parse(localStorage.getItem(FOLDS)) || []); } catch (e) {}
+const saveFolds = () => { try { localStorage.setItem(FOLDS, JSON.stringify([...folds])); } catch (e) {} };
 
 const SAND_A = [242, 202, 121], SAND_B = [242, 161, 80];
 const COLOR_CYCLE = 600;
@@ -1206,10 +1210,36 @@ function buildUI() {
     .fs-ui button.on{background:rgba(255,255,255,.92);color:#111;box-shadow:0 0 0 2px var(--c,#fff),0 0 18px -2px var(--c,#fff)}
     .fs-ui button.plain{padding:6px 12px;color:#bbb}
     .fs-ui button.new{animation:fsPop .6s ease 2}
-    .fs-ui button.tab{padding:5px 11px;color:#bbb}
-    .fs-ui button.tab.on{background:rgba(255,255,255,.22);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)}
-    .fs-ui button.tab small{font:inherit;font-weight:500;opacity:.55}
-    .fs-ui button.tab u{width:6px;height:6px;border-radius:50%;background:#f2ca79;display:block;box-shadow:0 0 6px #f2ca79}
+
+    /* search */
+    .fs-find{position:relative;flex:none;width:min(230px,100%);pointer-events:auto}
+    .fs-find input{width:100%;box-sizing:border-box;border:0;outline:0;border-radius:999px;padding:5px 30px 5px 30px;margin:0;
+      font:500 16px/1.25 system-ui,-apple-system,sans-serif;color:#eee;background:rgba(20,20,40,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);transition:box-shadow .15s,background .15s;-webkit-appearance:none;appearance:none}
+    .fs-find input::placeholder{color:#8a86a0}
+    .fs-find input:focus{box-shadow:inset 0 0 0 1.5px #f2ca79,0 0 14px -4px #f2ca79}
+    .fs-find>svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;opacity:.55;pointer-events:none;z-index:1}
+    .fs-find kbd{position:absolute;right:9px;top:50%;transform:translateY(-50%);font:600 11px system-ui,sans-serif;color:#8a86a0;
+      border:1px solid rgba(255,255,255,.14);border-radius:5px;padding:0 5px;pointer-events:none;z-index:1}
+    @media (hover:none){.fs-find kbd{display:none}}
+    .fs-find.typing kbd,.fs-find input:focus~kbd{display:none}
+    .fs-ui .fs-find button.x{z-index:1;position:absolute;right:4px;top:50%;transform:translateY(-50%);display:none;padding:2px 7px;font-size:15px;line-height:1;
+      background:none;box-shadow:none;color:#aaa;backdrop-filter:none}
+    .fs-ui .fs-find button.x:hover{color:#fff}
+    .fs-find.typing button.x{display:block}
+    .fs-none{margin:6px 4px;color:#8a86a0;font:500 12.5px system-ui,sans-serif;white-space:normal;pointer-events:auto}
+
+    /* folding categories (top bar: inline chips in the one scrolling row) */
+    .fs-sec,.fs-grid{display:contents}
+    .fs-sec.shut .fs-grid{display:none}
+    .fs-ui button.fs-sh{padding:6px 9px 6px 7px;gap:5px;background:none;box-shadow:none;backdrop-filter:none;color:#8a86a0;
+      font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+    .fs-ui button.fs-sh em{width:0;height:0;border:4px solid transparent;border-top-color:currentColor;border-bottom:0;margin-top:1px;transition:transform .15s}
+    .fs-sec.shut button.fs-sh em{transform:rotate(-90deg)}
+    .fs-ui button.fs-sh small{font:inherit;opacity:.6}
+    .fs-ui button.fs-sh b{display:none;width:7px;height:7px;border-radius:50%;background:var(--c,#fff);box-shadow:0 0 6px var(--c,#fff)}
+    .fs-sec.shut button.fs-sh.holds b{display:block}
+    .fs-ui button.fs-sh:hover{color:#ddd}
     .fs-ui .book s{display:none}
     .fs-ui button.clock i{width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 40% 40%,#fff4c4,#ffc44a);box-shadow:0 0 8px #ffc44a}
     .fs-ui button.clock.moon i{background:transparent;box-shadow:inset -4px -2px 0 0 #ebe6d6}
@@ -1239,11 +1269,19 @@ function buildUI() {
     body.side .fs-ui .book s::after{content:'';position:absolute;inset:0;width:var(--p);border-radius:3px;background:linear-gradient(90deg,#ffd27a,#ff7a4a)}
     body.side .fs-ui .book:hover{background:rgba(255,255,255,.09)}
     body.side .fs-row{max-width:none;overflow:visible;flex-wrap:wrap}
-    body.side .fs-cats{gap:5px}
-    body.side .fs-ui button.tab{padding:4px 9px;font-size:12px;background:rgba(255,255,255,.05)}
-    body.side .fs-ui button.tab.on{background:rgba(255,255,255,.16)}
-    body.side .fs-mats{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-content:start;flex:1;min-height:0;overflow-y:auto;
+    body.side .fs-find{width:100%;margin-bottom:-4px}
+    body.side .fs-find input{border-radius:10px;font-size:14px;padding:7px 30px;background:rgba(255,255,255,.06);backdrop-filter:none;-webkit-backdrop-filter:none}
+    @media (hover:none){body.side .fs-find input{font-size:16px}}
+    body.side .fs-mats{display:flex;flex-direction:column;flex-wrap:nowrap;gap:6px;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;
       margin:0 -4px;padding:3px 4px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.15) transparent}
+    body.side .fs-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;flex:none}
+    body.side .fs-sec{display:flex;flex-direction:column;gap:6px;flex:none}
+    body.side .fs-sec+.fs-sec{margin-top:2px}
+    body.side .fs-sec.shut .fs-grid{display:none}
+    body.side .fs-mats button.fs-sh{position:sticky;top:-3px;z-index:1;width:100%;justify-content:flex-start;border-radius:8px;padding:6px 6px 5px;
+      background:#1d1534;box-shadow:0 1px 0 rgba(255,255,255,.06);font-size:11px;color:#8a86a0;transform:none}
+    body.side .fs-mats button.fs-sh:hover{background:#251c40;color:#ddd;transform:none}
+    body.side .fs-mats button.fs-sh small{margin-left:auto}
     body.side .fs-mats button,body.side .fs-tools button{border-radius:10px;padding:7px 8px;font-size:12.5px;min-width:0;
       background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);backdrop-filter:none}
     body.side .fs-mats button i,body.side .fs-tools button i{width:18px;height:18px;border-radius:5px}
@@ -1266,9 +1304,11 @@ function buildUI() {
       body.side .fs-ui .book span{display:none}
       body.side .fs-ui .book b{grid-column:1/3;text-align:right}
       body.side .fs-ui .book s{height:3px}
-      body.side .fs-cats{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -8px;padding:0 8px}
-      body.side .fs-cats::-webkit-scrollbar{display:none}
-      body.side .fs-ui button.tab{padding:3px 8px;font-size:11px}
+      body.side .fs-find input{padding:4px 26px 4px 28px}
+      body.side .fs-find{margin-bottom:0}
+      body.side .fs-find kbd{display:none}
+      body.side .fs-mats button.fs-sh{padding:4px 6px 3px;font-size:10px}
+      body.side .fs-grid,body.side .fs-sec,body.side .fs-mats{gap:5px}
       body.side .fs-mats button,body.side .fs-tools button{padding:5px 6px;font-size:11.5px;gap:6px}
       body.side .fs-mats button i,body.side .fs-tools button i{width:14px;height:14px;border-radius:4px}
       body.side .fs-tools{padding-top:6px}
@@ -1328,10 +1368,29 @@ function buildUI() {
   ui.trow = ui.head.firstChild;
   ui.clock = mkBtn('', 'plain clock', () => { clockOn = !clockOn; updateClock(true); });
   ui.clock.title = 'Time of day. Click to stop or start the clock.';
-  ui.cats = document.createElement('div'); ui.cats.className = 'fs-row fs-cats';
+  ui.find = document.createElement('label'); ui.find.className = 'fs-find';
+  ui.find.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5"/></svg>'
+    + '<input type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" aria-label="Search your discoveries">'
+    + '<kbd>/</kbd><button type="button" class="x" aria-label="Clear search">&times;</button>';
+  ui.findIn = ui.find.querySelector('input');
+  ui.findIn.oninput = () => { query = ui.findIn.value; buildMaterialRow(); };
+  ui.findIn.onkeydown = (e) => {
+    if (e.key === 'Enter') { // pick the best match and go back to the full list with it showing
+      const first = ui.mats.querySelector('.fs-grid button');
+      const id = first ? +first.dataset.id : null;
+      clearSearch(); ui.findIn.blur();
+      if (id !== null) { selectBrush(id); revealBrush(id); }
+    } else if (e.key === 'Escape') { e.stopPropagation(); clearSearch(); ui.findIn.blur(); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); const b = ui.mats.querySelector('.fs-grid button'); if (b) b.focus(); }
+  };
+  ui.find.querySelector('.x').onclick = (e) => { e.preventDefault(); clearSearch(); ui.findIn.focus(); };
+  addEventListener('keydown', (e) => {
+    if (e.key !== '/' || ui.find.style.display === 'none' || /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    e.preventDefault(); ui.findIn.focus(); ui.findIn.select();
+  });
   ui.mats = document.createElement('div'); ui.mats.className = 'fs-row fs-mats';
   ui.tools = document.createElement('div'); ui.tools.className = 'fs-row fs-tools';
-  root.append(ui.head, ui.cats, ui.mats, ui.tools);
+  root.append(ui.head, ui.find, ui.mats, ui.tools);
   document.body.appendChild(root);
 
   ui.book = mkBtn('', 'plain book', openBook);
@@ -1396,42 +1455,110 @@ function swatch(m) {
 const sw = (m) => `background-image:url(${swatch(m)})`;
 
 let lastNew = null;
+const have = (m) => findable(m) && found[m.key] && !queued.has(m.key);
+const esc = (t) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// how well a discovery matches the search: name first, then words in the name, then how it was made
+function matchRank(m, q) {
+  const n = m.name.toLowerCase();
+  if (n.startsWith(q)) return 0;
+  if (n.split(/[\s-]+/).some((w) => w.startsWith(q))) return 1;
+  if (n.includes(q)) return 2;
+  if ((found[m.key] || '').toLowerCase().includes(q)) return 3;
+  return -1;
+}
+
 function buildMaterialRow() {
   if (!ui.mats) return;
-  // once there are too many to see at once, materials are split into tabs
-  const was = tabbed;
-  tabbed = foundCount() > (side ? 14 : 8);
-  if (tabbed && !was && brush !== EMPTY) cat = MATS[brush].cat;
-  ui.cats.style.display = tabbed ? '' : 'none';
-  ui.cats.innerHTML = '';
-  if (tabbed) {
-    newCats.delete(cat);
-    for (const [key, label] of CATS) {
-      const n = MATS.filter((m) => findable(m) && m.cat === key && found[m.key] && !queued.has(m.key)).length;
-      if (!n) continue;
-      const dot = newCats.has(key) ? '<u></u>' : '';
-      ui.cats.appendChild(mkBtn(`${label} <small>${n}</small>${dot}`, 'tab' + (key === cat ? ' on' : ''), () => { cat = key; buildMaterialRow(); }));
-    }
-  }
+  // once there are too many to see at once, the list folds into categories and gets a search box
+  grouped = foundCount() > (side ? 14 : 8);
+  ui.find.style.display = grouped ? '' : 'none';
+  if (!grouped && query) clearSearch(true);
+  const n = foundCount(), total = totalFindable();
+  ui.findIn.placeholder = side && windowHeight < 520 ? `Search ${n}` : `Search ${n} discoveries`;
+  ui.find.classList.toggle('typing', !!query);
+
+  const keepTop = ui.mats.scrollTop, keepLeft = ui.mats.scrollLeft;
   ui.mats.innerHTML = '';
-  ui.matBtns = {};
-  for (const m of MATS) {
-    if (!findable(m) || !found[m.key] || queued.has(m.key) || (tabbed && m.cat !== cat)) continue;
+  ui.matBtns = {}; ui.secHeads = {};
+  const grid = () => { const g = document.createElement('div'); g.className = 'fs-grid'; return g; };
+  const addBtn = (m, into) => {
     const b = mkBtn(`<i style="${sw(m)}"></i><span>${m.name}</span>`, '', () => selectBrush(m.id));
     b.style.setProperty('--c', m.dot);
-    b.title = m.name;
+    b.dataset.id = m.id;
+    b.title = found[m.key] && found[m.key] !== 'Starting element' ? `${m.name}: ${found[m.key]}` : m.name;
     if (m.id === lastNew) b.classList.add('new');
-    ui.mats.appendChild(b); ui.matBtns[m.id] = b;
+    into.appendChild(b); ui.matBtns[m.id] = b;
+  };
+
+  const q = query.trim().toLowerCase();
+  if (q) {
+    const hits = [];
+    for (const m of MATS) { if (!have(m)) continue; const r = matchRank(m, q); if (r >= 0) hits.push([r, m]); }
+    hits.sort((a, b) => a[0] - b[0]);
+    const g = grid();
+    for (const [, m] of hits) addBtn(m, g);
+    ui.mats.appendChild(g);
+    if (!hits.length) ui.mats.insertAdjacentHTML('beforeend', `<p class="fs-none">Nothing you've found matches “${esc(query.trim())}” yet.</p>`);
+  } else if (grouped) {
+    for (const [key, label] of CATS) {
+      const list = MATS.filter((m) => have(m) && m.cat === key);
+      if (!list.length) continue;
+      const sec = document.createElement('div');
+      sec.className = 'fs-sec' + (folds.has(key) ? ' shut' : '');
+      const head = mkBtn(`<em></em><span>${label}</span><b></b><small>${list.length}</small>`, 'fs-sh', () => {
+        const shut = sec.classList.toggle('shut');
+        if (shut) folds.add(key); else folds.delete(key);
+        head.setAttribute('aria-expanded', !shut);
+        saveFolds();
+      });
+      head.setAttribute('aria-expanded', !folds.has(key));
+      head.title = `Show or hide ${label.toLowerCase()}`;
+      const g = grid();
+      for (const m of list) addBtn(m, g);
+      sec.append(head, g);
+      ui.mats.appendChild(sec); ui.secHeads[key] = head;
+    }
+  } else {
+    const g = grid();
+    for (const m of MATS) if (have(m)) addBtn(m, g);
+    ui.mats.appendChild(g);
   }
-  const n = foundCount(), total = totalFindable();
+  ui.mats.scrollTop = q ? 0 : keepTop; ui.mats.scrollLeft = q ? 0 : keepLeft;
+
   ui.book.innerHTML = `<span>Discoveries</span><b>${n}/${total}</b><s style="--p:${(n / total) * 100}%"></s>`;
   selectBrush(brush);
+}
+
+function clearSearch(quiet) {
+  query = ''; ui.findIn.value = '';
+  if (!quiet) buildMaterialRow();
+}
+
+// make sure a material's button can be seen: open its category and scroll to it
+function revealBrush(id) {
+  const m = MATS[id];
+  if (!m || id === EMPTY) return;
+  if (folds.has(m.cat)) {
+    folds.delete(m.cat); saveFolds();
+    const h = ui.secHeads[m.cat];
+    if (h) { h.parentNode.classList.remove('shut'); h.setAttribute('aria-expanded', true); }
+  }
+  const b = ui.matBtns[id];
+  if (b) requestAnimationFrame(() => b.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }));
 }
 
 function selectBrush(id) {
   brush = id;
   for (const k in ui.matBtns) ui.matBtns[k].classList.toggle('on', +k === id);
   ui.eraser.classList.toggle('on', id === EMPTY);
+  // a folded category still shows a dot when the selected material is inside it
+  const m = id !== EMPTY && MATS[id];
+  for (const k in ui.secHeads) {
+    const holds = !!m && m.cat === k;
+    ui.secHeads[k].classList.toggle('holds', holds);
+    if (holds) ui.secHeads[k].style.setProperty('--c', m.dot);
+  }
 }
 
 // first visit: say what the game is
@@ -1451,8 +1578,8 @@ function nextToast() {
   setTimeout(() => {
     queued.delete(m.key);
     lastNew = m.id;
-    if (m.cat !== cat) newCats.add(m.cat);
     buildMaterialRow();
+    if (!query) revealBrush(m.id); // a new discovery opens its category so you can see it
     const more = toastQ.length ? ` · ${toastQ.length} more coming` : '';
     ui.toast.innerHTML = `<b><span class="sw" style="${sw(m)}"></span>New discovery: ${m.name}</b>${found[m.key]}<br><small>${foundCount()} of ${totalFindable()} found${more}</small>`;
     ui.toast.classList.add('show');
@@ -1506,7 +1633,7 @@ function resetAll() {
   try { localStorage.removeItem(STORE); } catch (e) {}
   loadFound(); saveFound();
   type.fill(EMPTY); life.fill(0);
-  brush = M.sand; cat = 'powder'; tabbed = false; lastNew = null; newCats.clear();
+  brush = M.sand; grouped = false; lastNew = null; query = ''; ui.findIn.value = ''; folds.clear(); saveFolds();
   paused = false; ui.pause.textContent = 'Pause';
   dayT = 0.68; clockOn = true; updateTime(false); updateClock(true);
   ui.bookEl.classList.remove('open');

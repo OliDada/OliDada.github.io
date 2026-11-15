@@ -1,0 +1,17 @@
+Early GameBoy
+ASCII WOFF subset of zelda-game/assets/gb.ttf.
+
+0: Copyright LDEJRuff 2012
+8: http://fontstruct.com
+9: LDEJRuff
+13: Creative Commons Attribution Share Alike
+14: http://creativecommons.org/licenses/by-sa/3.0/
+0: Copyright LDEJRuff 2012
+8: http://fontstruct.com
+9: LDEJRuff
+13: Creative Commons Attribution Share Alike
+14: http://creativecommons.org/licenses/by-sa/3.0/
+
+License: Creative Commons Attribution-ShareAlike 3.0
+https://creativecommons.org/licenses/by-sa/3.0/
+The subset is distributed under the same license.
