@@ -33,7 +33,7 @@
   },
   {
     "title": "Crucible",
-    "description": "A falling sand game where you mix four elements to discover 81 more. Strike a diamond with lightning and it becomes a void that eats everything.",
+    "description": "Start with sand, water, fire and earth. Mix them to discover everything from flowers to fireworks.",
     "path": "/simulations/Falling_Sand/falling_sand.html",
     "source": "/simulations/Falling_Sand/falling_sand.js",
     "embed": "/embeds/falling_sand.html",
