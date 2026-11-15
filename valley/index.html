@@ -36,7 +36,7 @@ button:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
   <div class="card">
     <h1>The Valley</h1>
     <p>Walk out of the forest and down into the valley. Gather what grows wild, sell it at the castle market, and spend your coin as you please.</p>
-    <p class="keys" id="keys">WASD or arrow keys to walk. Mouse to look. Shift to run. Space to jump. Click or F to swing. Right-click or hold V to block. Q to raise your torch. C to sneak. E to talk, trade or take things. I opens your bag. Hold T to speed up time.</p>
+    <p class="keys" id="keys">WASD or arrow keys to walk. Mouse to look. Shift to run. Space to jump. Click or F to swing. Right-click or hold V to block. Q to raise your torch. C to sneak. E to talk, trade or take things. I opens your bag. M opens the map. Hold T to speed up time.</p>
     <button id="go" type="button">Start walking</button>
     <p id="err">The 3D library didn’t load. Check your connection and reload the page.</p>
   </div>
@@ -53,7 +53,7 @@ button:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
 "use strict";
 const $=s=>document.querySelector(s);
 const coarse=matchMedia('(pointer: coarse)').matches;
-if(coarse) $('#keys').textContent='Drag on the left to walk. Drag on the right to look. Push the stick far out to run. Tap Torch for light. Tap Jump to jump, Swing to swing, and hold Swing to block. Tap Bag to see what you carry.';
+if(coarse) $('#keys').textContent='Drag on the left to walk. Drag on the right to look. Push the stick far out to run. Tap Torch for light. Tap Jump to jump, Swing to swing, and hold Swing to block. Tap Bag to see what you carry, Map to see where you are.';
 if(typeof THREE==='undefined'){ $('#err').style.display='block'; $('#go').style.display='none'; return; }
 
 /* ================= helpers ================= */
@@ -102,6 +102,11 @@ const V=[16,-276];                                       // village square
 const LK={x:-1110,z:-410,rx:250,rz:170},TOWN_C=[-800,-392],RUIN=[-520,-326];
 const POND={x:-262,z:-302,rx:42,rz:24},CROSS=[-430,-357];let INN=[-446,-380];
 const CRAGS=[[-470,-600,34,105],[-430,-585,26,82]];          // twin rock pillars with towers on top, the landmark between the valley and the lake
+// the east: a hanging valley up in the hills holding the Old Wood: a stone circle, a witch's cottage, the Elder tree
+const OW={SC:[500,-300],WC:[642,-250],GT:[650,-342]};
+function eastW(x,z){return smooth(195,330,x)*(1-smooth(745,800,x))*smooth(-150,-205,z)*(1-smooth(-385,-440,z));}
+function oldW(x,z){return smooth(320,380,x)*(1-smooth(735,780,x))*smooth(-195,-222,z)*(1-smooth(-362,-392,z));}
+function owClear(x,z){return Math.min(Math.hypot(x-OW.SC[0],z-OW.SC[1])/30,Math.hypot(x-OW.WC[0],z-OW.WC[1])/24,Math.hypot(x-OW.GT[0],z-OW.GT[1])/22);}
 const FIELDS=[{c:V,r0:48,r1:150,a:.35},{c:TOWN_C,r0:55,r1:150,a:-.3}];
 function lowW(x,z){return smooth(-200,-420,x)*smooth(-1750,-1400,x)*smooth(-40,-150,z)*smooth(-820,-660,z);}
 const SUN=new THREE.Vector3(-.78,.40,.30).normalize();   // direction towards the sun: low, from the west
@@ -134,6 +139,9 @@ function rawH(x,z,noStream){
   if(m>0)h+=m*(90+520*mtn(x,z)+80*mtn(x*4.3+11,z*4.3-7));
   for(const p of PEAKS){const d2=(x-p[0])*(x-p[0])+(z-p[1])*(z-p[1]);if(d2<9*p[2]*p[2])h+=p[3]*Math.exp(-d2/(p[2]*p[2]))*(.8+.45*mtn(x*2.2,z*2.2)+.12*mtn(x*7,z*7));}
   h*=1-smooth(-4300,-4800,z);
+  {const ew=eastW(x,z);if(ew>0){let t=lerp(26,80,smooth(225,470,x))+9*(fbm(x*.017+11,z*.017+3)-.5);
+     t+=3.2*Math.exp(-((x-OW.SC[0])**2+(z-OW.SC[1])**2)/260);for(const p of [OW.WC,OW.GT])t=lerp(t,lerp(26,80,smooth(225,470,p[0])),smooth(30,14,Math.hypot(x-p[0],z-p[1])));
+     h=lerp(h,t,ew);}}
   for(const [cx,cz,r,ht] of CRAGS){const d=Math.hypot(x-cx,z-cz)+(vn(x*.12,z*.12)-.5)*9;if(d<r*2.2){const top=ht*smooth(r*1.05,r*.55,d),skirt=ht*.35*smooth(r*2.2,r,d);h+=Math.max(top+(vn(x*.3,z*.05)-.5)*6*smooth(r*1.1,r*.7,d),skirt);}}
   if(!noStream){const q=streamHash.near(x,z);if(q){const t=smooth(10,2.5,q[0]);if(t>0)h=lerp(h,Math.min(h,q[1]-.9),t);}}
   return h;
@@ -150,6 +158,9 @@ const ROAD_DEF={
   castle:[[16,-276],[-14,-296],[-52,-318],[-92,-344],[-128,-372],[-150,-402],[-100,-420],[-150,-440],[-100,-458],[-140,-476],[-106,-500],[-80,-498],[-60,-496.4]]
 };
 ROAD_DEF.west=[[-92,-344],[-140,-350],[-200,-362],[-270,-358],[-340,-348],[-420,-356],[-500,-366],[-580,-356],[-660,-350],[-730,-362],[-785,-380],[-815,-390]];
+ROAD_DEF.east=[[16,-276],[50,-286],[95,-292],[140,-293],[190,-287],[240,-276],[285,-262],[325,-258],[356,-274],[368,-302],[398,-321],[436,-319],[470,-307],[500,-300]];
+ROAD_DEF.owitch=[[500,-300],[540,-291],[578,-276],[612,-262],[636,-254]];
+ROAD_DEF.oelder=[[540,-291],[574,-304],[606,-322],[634,-336]];
 ROAD_DEF.track=[[-430,-357],[-408,-336],[-366,-319],[-308,-307]];
 const roads={},roadHash=makeHash(24);
 for(const k in ROAD_DEF){const pts=spline(ROAD_DEF[k],2.5),hs=pts.map(p=>rawH(p[0],p[1],true)),n=hs.length;
@@ -206,7 +217,8 @@ function forestD(x,z){
   {const n=(vn(x*.02,z*.02)-.5)*.35,n2=(vn(x*.02+5,z*.02+3)-.5)*.35;                 // the two golden woods either side of the west road
    d=Math.max(d,.9*smooth(1,.8,Math.hypot((x+590)/215,(z+462)/70)+n),.9*smooth(1,.8,Math.hypot((x+565)/240,(z+208)/75)+n2));}
   d=Math.max(d,.9*smooth(-700,-820,z)*smooth(.4,.52,fbm(x*.008+4,z*.008)));        // woods on the foothills
-  d=Math.max(d,.55*smooth(.6,.7,fbm(x*.014+11,z*.014+3))*smooth(-135,-165,z));     // groves in the meadows and up on the shelf
+  d=Math.max(d,.55*smooth(.6,.7,fbm(x*.014+11,z*.014+3))*smooth(-135,-165,z));
+  {const o=oldW(x,z);if(o>0)d=lerp(d,.96*smooth(.75,1.2,owClear(x,z)),o);}     // groves in the meadows and up on the shelf
   {// keep the fields, the inn, the pond and the crags clear; and an open line of sight from the lake town to the castle
    if(FIELDS&&fieldAt(x,z))d*=.05;if(Math.hypot(x-INN[0],z-INN[1])<26||pondD(x,z)<1.6)d=0;for(const c of CRAGS)if(Math.hypot(x-c[0],z-c[1])<c[2]*1.1)d=0;
    const ax=CX-TOWN_C[0],az=CZ-TOWN_C[1],L2=ax*ax+az*az,t=clamp(((x-TOWN_C[0])*ax+(z-TOWN_C[1])*az)/L2,0,1),dd=Math.hypot(x-TOWN_C[0]-ax*t,z-TOWN_C[1]-az*t);if(t>.1&&t<.85&&dd<26)d*=.1;}
@@ -404,6 +416,7 @@ function terrainColor(x,z,h,sl){
   {const lw=lowW(x,z);if(lw>0){const hth=smooth(.6,.7,fbm(x*.03+9,z*.03+4))*lw*(1-f);r=lerp(r,.66,lw*.3*(1-f));g=lerp(g,.6,lw*.15*(1-f));b=lerp(b,.24,lw*.1);
      r=lerp(r,.48,hth*.7);g=lerp(g,.32,hth*.7);b=lerp(b,.5,hth*.7);}
    const dl=lakeD(x,z);if(dl<1.08){const sand=smooth(.9,1.02,dl)*smooth(1.08,1.02,dl);r=lerp(r,.72,sand);g=lerp(g,.64,sand);b=lerp(b,.46,sand);if(dl<.98){r=.3;g=.32;b=.3;}}}
+  {const o=oldW(x,z);if(o>0){const k=o*.8;r=lerp(r,.2,k);g=lerp(g,.29,k);b=lerp(b,.14,k);}}
   {const fc=fieldAt(x,z);if(fc){const n2=vn(x*.6,z*.6)*.08,C=[null,[.82,.68,.3],[.66,.7,.32],[.46,.34,.22],[.56,.6,.3]][fc];const rowL=(fc===3&&(((x+z)*.9|0)%2))?.85:1;r=(C[0]+n2)*rowL;g=(C[1]+n2)*rowL;b=C[2]*rowL;}
    const dp=pondD(x,z);if(dp<1.1){if(dp<.98){r=.3;g=.32;b=.28;}else{r=lerp(r,.48,.6);g=lerp(g,.42,.6);b=lerp(b,.3,.6);}}}
   const dirt=smooth(6,3.2,roadDist(x,z))*.45;r=lerp(r,.5,dirt);g=lerp(g,.42,dirt);b=lerp(b,.26,dirt);
@@ -446,7 +459,7 @@ function ribbon(pts,hw,mat,lift,flow,vScale,hf,skip){
   const m=new THREE.Mesh(g,mat);m.frustumCulled=false;scene.add(m);return m;}
 const pathMat=new THREE.MeshLambertMaterial({map:pathTex,alphaTest:.5,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
 const onBridge=p=>{const [al,ac]=bridgeLocal(p[0],p[1]);return Math.abs(al)<BR.hl-.3&&Math.abs(ac)<5;};
-ribbon(roads.forest,1.9,pathMat,.2);ribbon(roads.meadow,2.1,pathMat,.2,false,3,terrainH,onBridge);ribbon(roads.castle,2.3,pathMat,.32,false,4);ribbon(roads.west,2.1,pathMat,.22,false,3.5);ribbon(roads.track,1.5,pathMat,.2,false,3);
+ribbon(roads.forest,1.9,pathMat,.2);ribbon(roads.meadow,2.1,pathMat,.2,false,3,terrainH,onBridge);ribbon(roads.castle,2.3,pathMat,.32,false,4);ribbon(roads.west,2.1,pathMat,.22,false,3.5);ribbon(roads.east,1.9,pathMat,.2,false,3.5);ribbon(roads.owitch,1.1,pathMat,.15,false,3);ribbon(roads.oelder,1.1,pathMat,.15,false,3);ribbon(roads.track,1.5,pathMat,.2,false,3);
 // the path across the bridge deck
 {const pts=[];for(let s=-BR.hl;s<=BR.hl+.01;s+=1)pts.push([BR.x+BR.ux*s,BR.z+BR.uz*s,BR.top-BR.k*s*s+.04]);ribbon(pts,2.2,pathMat,0,true,3);}
 // the lake
@@ -840,6 +853,7 @@ for(const f of [['hero',-19,-104,28,.92],['tall',9,-99,40,1],['tall',-12,-92,36,
     if(h>470+60*vn(x*.01,z*.01))continue;
     if(inVillage(x,z)||onCrag(x,z)||nearStream(x,z,7))continue;
     if(lakeD(x,z)<1.08||Math.hypot(x-TOWN_C[0],z-TOWN_C[1])<75||Math.hypot(x-RUIN[0],z-RUIN[1])<22)continue;
+    if(oldW(x,z)>.3)continue;
     if(lowW(x,z)>.25&&x>-1300){if(rd<9)continue;const r=rnd(),sh=lerp(.9,1.05,rnd());   // golden woods
       if(r<.38)addTree(x,z,'birch',R(14,25),sh);else if(r<.58)addTree(x,z,'aut',R(13,24),sh);else if(r<.74)addTree(x,z,'gold',R(12,22),sh);else if(r<.95)addTree(x,z,'oak',R(14,27),sh);else addTree(x,z,'pine',R(16,26),sh);n++;continue;}
     if(z>-125&&Math.abs(x)<240){                       // the forest: a clear corridor along the path, dense outside
@@ -861,6 +875,11 @@ for(const f of [['hero',-19,-104,28,.92],['tall',9,-99,40,1],['tall',-12,-92,36,
     }
     n++;
   }
+  // the Old Wood: ancient, dark and close, with the clearings left open
+  for(let i=0,k=0;i<9000&&k<2600;i++){const x=R(320,780),z=R(-395,-190),o=oldW(x,z);if(o<.3||rnd()>o)continue;
+    const cl=owClear(x,z),rd=roadDist(x,z);if(cl<1||rd<5.5||(cl<1.25&&rnd()<.6)||nearStream(x,z,7))continue;
+    const sh=lerp(.5,.78,rnd()),r=rnd();
+    if(r<.34)addTree(x,z,'tall',R(30,52),sh);else if(r<.6)addTree(x,z,'oak',R(24,40),sh*.95);else if(r<.82)addTree(x,z,'dark',R(16,28),sh);else if(r<.94)addTree(x,z,'pine',R(18,30),sh);else addTree(x,z,'birch',R(16,24),sh*1.1);k++;}
   // pines and birches clinging to the broken edge of the shelf
   for(let i=0,k=0;i<6000&&k<260;i++){const x=R(-280,330),z=edgeZ(x)-R(0,1)*edgeW(x);
     if(inCastle(x,z,.25)||roadDist(x,z)<7||nearStream(x,z,7)||fbm(x*.03,z*.03)<.42||inVista(x,z)&&rnd()<.6)continue;addTree(x,z,rnd()<.72?'pine':'birch',R(9,19),.95);k++;}
@@ -1205,6 +1224,110 @@ const onDoorPath=(x,z,pad)=>{for(const r of RAMPS){const dx=x-r.x,dz=z-r.z,u=dx*
   for(const f of FLOORS){if(!f.door)continue;const ox=f.x+Math.sin(f.ry)*(f.hd+1.5),oz=f.z+Math.cos(f.ry)*(f.hd+1.5);if(Math.hypot(x-ox,z-oz)<2.2+pad)return true;}return false;};
 for(let i=trees.length-1;i>=0;i--){const t=trees[i];if(onDoorPath(t[0],t[1],t[2]))trees.splice(i,1);}
 for(let i=bb.length-1;i>=0;i--){const t=bb[i];if(onDoorPath(t[0],t[2],t[3]*.3))bb.splice(i,1);}
+/* ================= the Old Wood (east) ================= */
+// up the east road, a hanging valley holds an ancient wood: a stone circle in a clearing, a witch's cottage, the Elder tree
+const OWD={wisps:[],glow:[],shafts:[],runes:null,shroom:null};
+(function(){const K=kit();
+  const GLOWM=new THREE.MeshBasicMaterial({color:0x9ef0d8,transparent:true,opacity:.9,fog:true});
+  const RUNEM=new THREE.MeshBasicMaterial({color:0x8ad8ff,transparent:true,opacity:.0,fog:true,side:THREE.DoubleSide});
+  OWD.shroom=GLOWM;OWD.runes=RUNEM;
+  const barkC=(()=>{const [c,g]=mk(32,64);g.fillStyle='#3a3026';g.fillRect(0,0,32,64);
+    for(let x=0;x<32;x+=3){const col=pick(['#4a3e30','#2e261e','#54473a','#3e3428']);g.fillStyle=col;for(let y=0;y<64;y++){const w=1+((vn(x*.7,y*.15)*2)|0);g.fillRect(x+((vn(x,y*.1)*2)|0),y,w,1);}}
+    for(let i=0;i<40;i++){g.fillStyle=pick(['#4e6a34','#5e7a3a','#3e5a2c']);g.fillRect((rnd()*32)|0,40+((rnd()*24)|0),2,1+(rnd()*2|0));}
+    return c;})();
+  M.bark=new THREE.MeshLambertMaterial({map:tex(barkC,true),side:THREE.DoubleSide});
+  M.moss=new THREE.MeshLambertMaterial({color:0x4e6630});
+  M.oldstone=new THREE.MeshLambertMaterial({map:tex((()=>{const [c,g]=mk(32,32);g.fillStyle='#6e6c64';g.fillRect(0,0,32,32);
+    for(let i=0;i<260;i++){g.fillStyle=pick(['#76746a','#646258','#5a5850','#7e7b70']);g.fillRect((rnd()*32)|0,(rnd()*32)|0,2,2);}
+    for(let i=0;i<40;i++){g.fillStyle=pick(['#8a9a4a','#a8a85a','#5e7a3a','#c8c070']);g.fillRect((rnd()*32)|0,(rnd()*32)|0,1+(rnd()*3|0),1+(rnd()*2|0));}
+    for(let x=0;x<32;x+=5){g.fillStyle='rgba(30,30,24,.35)';g.fillRect(x+((rnd()*3)|0),0,1,32);}return c;})(),true)});
+  const mush=(x,z,s)=>{const y=terrainH(x,z);const st=new THREE.Mesh(new THREE.CylinderGeometry(.04*s,.06*s,.22*s,5),new THREE.MeshLambertMaterial({color:0xd8d0b8}));st.position.set(x,y+.11*s,z);scene.add(st);
+    const cap=new THREE.Mesh(new THREE.SphereGeometry(.16*s,7,4,0,6.283,0,1.4),GLOWM);cap.position.set(x,y+.2*s,z);scene.add(cap);};
+
+  // ---- the stone circle: thirteen old stones on a low mound, runes that wake at night ----
+  {const [cx,cz]=OW.SC,cy=terrainH(cx,cz),n=13,r=11;
+   for(let i=0;i<n;i++){const a=i/n*6.283+.2,x=cx+Math.sin(a)*r,z=cz+Math.cos(a)*r,y=terrainH(x,z),h=R(3.4,4.8),lean=R(-.08,.08);
+     K.add(boxUV(1.5,h,.95,2),'oldstone',x,y+h/2-.4,z,a,lean,R(-.05,.05));trees.push([x,z,.9]);
+     const rp=new THREE.Mesh(new THREE.PlaneGeometry(.55,1.3),RUNEM);rp.position.set(x-Math.sin(a)*.49,y+h*.5,z-Math.cos(a)*.49);rp.rotation.y=a+Math.PI;scene.add(rp);
+     if(i%4===0){const b=(i+1)%n,a2=b/n*6.283+.2,x2=cx+Math.sin(a2)*r,z2=cz+Math.cos(a2)*r;}}
+   for(const k of [0,4,8]){const a=(k+.5)/n*6.283+.2;K.add(boxUV(4.2,.9,1.1,2),'oldstone',cx+Math.sin(a)*r,terrainH(cx+Math.sin(a)*r,cz+Math.cos(a)*r)+4.1,cz+Math.cos(a)*r,a+Math.PI/2);}
+   K.add(boxUV(3.2,.7,1.8,2),'oldstone',cx,cy+.2,cz,.4);trees.push([cx,cz,1.4]);
+   for(let i=0;i<22;i++){const a=rnd()*6.283,d=R(4,8.5);mush(cx+Math.sin(a)*d,cz+Math.cos(a)*d,R(.8,1.4));}
+   LIGHTS.push({world:[cx,cy+1.6,cz],size:9,col:[.45,.85,1],kind:0,flick:0,pool:14});
+   OWD.glow.push([cx,cy+2.5,cz]);}
+
+  // ---- the Elder: a vast old tree, hollow at the foot, roots you walk between ----
+  {const [gx,gz]=OW.GT,gy=terrainH(gx,gz),R0=4.4,H=30,door=Math.atan2(OW.SC[0]-gx,OW.SC[1]-gz)+.35,gap=.42;
+   K.add(new THREE.CylinderGeometry(R0*.82,R0,3.6,18,1,true,door+gap,6.283-2*gap),'bark',gx,gy+1.4,gz);
+   K.add(new THREE.CylinderGeometry(R0*.62,R0*.82,5.6,18,1,true),'bark',gx,gy+5.99,gz);
+   K.add(new THREE.CylinderGeometry(R0*.55,R0*.62,H-8.5,16,1,true),'bark',gx,gy+8.5+(H-8.5)/2-.4,gz);
+   K.add(new THREE.CylinderGeometry(R0*.62,R0*.62,.6,18),'bark',gx,gy+8.6,gz);   // the roof of the hollow
+   {const f=new THREE.CircleGeometry(R0*.9,18);f.rotateX(-Math.PI/2);K.add(f,'moss',gx,gy+.06,gz);}
+   for(let i=0;i<9;i++){const a=door+gap+.3+i*(6.283-2*gap-.6)/8,L=R(7,10),t=R(.95,1.15),cr=R0*.85+L/2*Math.sin(t),cyy=gy+2.8-L/2*Math.cos(t);K.add(new THREE.CylinderGeometry(1.4,.4,L,7),'bark',gx+Math.sin(a)*cr,cyy,gz+Math.cos(a)*cr,a,-t,0);
+     trees.push([gx+Math.sin(a)*(R0+2.6),gz+Math.cos(a)*(R0+2.6),.9]);}
+   for(let i=0;i<7;i++){const a=i/7*6.283+R(-.3,.3),L=R(12,17),y0=gy+R(17,24),tilt=R(.75,1.05);
+     K.add(new THREE.CylinderGeometry(.45,1.1,L,7),'bark',gx+Math.sin(a)*Math.sin(tilt)*L*.5,y0+Math.cos(tilt)*L*.5,gz+Math.cos(a)*Math.sin(tilt)*L*.5,a,tilt,0);
+     const ex=gx+Math.sin(a)*Math.sin(tilt)*L,ez=gz+Math.cos(a)*Math.sin(tilt)*L,ey=y0+Math.cos(tilt)*L;
+     for(let k=0;k<3;k++)bb.push([ex+R(-3,3),ey-R(6,10),ez+R(-3,3),R(18,24),R(15,20),pick(R_DARK),R(.5,.62),.35]);}
+   for(let k=0;k<6;k++)bb.push([gx+R(-4,4),gy+H-R(6,10),gz+R(-4,4),R(22,28),R(18,24),k%2?R_HERO:pick(R_OAK),R(.5,.6),.3]);
+   // the walls of the hollow stop you; the gap lets you in
+   const segs=24;for(let i=0;i<segs;i++){const a0=i/segs*6.283,a1=(i+1)/segs*6.283,mid=(a0+a1)/2,dd=Math.atan2(Math.sin(mid-door),Math.cos(mid-door));if(Math.abs(dd)<gap)continue;
+     indexWall([gx+Math.sin(a0)*R0*.95,gz+Math.cos(a0)*R0*.95,gx+Math.sin(a1)*R0*.95,gz+Math.cos(a1)*R0*.95]);}
+   // inside: a stone basin, glowing fungus up the walls, a nest of moss
+   K.add(new THREE.CylinderGeometry(.5,.35,.8,8),'rock',gx-Math.sin(door)*1.6,gy+.4,gz-Math.cos(door)*1.6);
+   for(let i=0;i<14;i++){const a=rnd()*6.283,yy=R(.2,5);const m=new THREE.Mesh(new THREE.SphereGeometry(R(.08,.16),6,3,0,6.283,0,1.5),GLOWM);m.position.set(gx+Math.sin(a)*R0*.88,gy+yy,gz+Math.cos(a)*R0*.88);scene.add(m);}
+   for(let i=0;i<18;i++){const a=rnd()*6.283,d=R(R0+1,R0+7);mush(gx+Math.sin(a)*d,gz+Math.cos(a)*d,R(.8,1.6));}
+   LIGHTS.push({world:[gx,gy+1.5,gz],size:5,col:[.55,1,.8],kind:0,flick:0,pool:8});
+   OWD.glow.push([gx,gy+3,gz]);OWD.elder=[gx,gz,door];}
+
+  // ---- the witch's cottage: a low thatched house, a cauldron over a fire, a herb garden ----
+  {const [wx,wz]=OW.WC,toPath=[612-wx,-262-wz],rot=Math.atan2(toPath[0],toPath[1]);
+   const grp=house(wx,wz,rot,{w:6.4,d:7.4,h:4.4,roof:'thatch'});
+   const c=Math.cos(rot),s=Math.sin(rot),Wp=(lx,lz)=>[wx+lx*c+lz*s,wz-lx*s+lz*c];
+   {const [x,z]=Wp(3.4,5.2),y=terrainH(x,z);K.add(new THREE.CylinderGeometry(.55,.4,.7,10,1,true),'iron',x,y+.55,z);K.add(new THREE.CylinderGeometry(.5,.5,.04,10),'moss',x,y+.85,z);
+     for(const sd of [-1,1])K.add(new THREE.BoxGeometry(.08,1.6,.08),'wood',x+sd*.8*c,y+.8,z-sd*.8*s);K.add(new THREE.BoxGeometry(1.8,.08,.08),'wood',x,y+1.6,z,rot);
+     const f=flameSprite(.7,.6);f.position.set(x,y+.15,z);scene.add(f);LIGHTS.push({world:[x,y+.6,z],size:3,col:[1,.6,.3],kind:0,flick:1,pool:6});trees.push([x,z,.8]);OWD.cauldron=[x,y+1,z];}
+   for(let i=0;i<5;i++){const [x,z]=Wp(-4.6,-2+i*1.2),y=terrainH(x,z);K.add(boxUV(1.2,.25,.9,1),'wood',x,y+.12,z,rot);for(let k=0;k<3;k++)bb.push([x+R(-.4,.4),y+.2,z+R(-.4,.4),.9,.6,pick(R_FERN),.8,.3]);}
+   for(let i=0;i<10;i++){const [x,z]=Wp(R(-5,5),R(-6,-4.5));mush(x,z,R(.8,1.3));}
+   {const [x,z]=Wp(0,-5.6);K.add(boxUV(.3,1.6,.3,1),'wood',x,terrainH(x,z)+.8,z);}
+   OWD.witch=Wp(2.2,5.4);OWD.witchRot=rot;}
+
+  // ---- fallen logs and boulders thick with moss along the way ----
+  for(let i=0,k=0;i<400&&k<26;i++){const x=R(340,760),z=R(-380,-200);if(oldW(x,z)<.6||roadDist(x,z)<6||owClear(x,z)<1.2)continue;const y=terrainH(x,z),L=R(5,10),a=rnd()*3.14;
+    K.add(new THREE.CylinderGeometry(.45,.6,L,8),'bark',x,y+.35,z,a,Math.PI/2,0);K.add(boxUV(L*.8,.12,.7,1),'moss',x,y+.82,z,a+Math.PI/2);trees.push([x,z,.8]);k++;}
+
+  // ---- the ford where the east road crosses the stream: stepping stones ----
+  {const q=OWD.ford||[118,-291];for(let k=-3;k<=3;k++){const x=q[0]+k*1.5,z=q[1]+R(-.3,.3);const sq=streamHash.near(x,z);K.add(boxUV(1,.5,.9,1),'rock',x,(sq?Math.max(sq[1]+.05,terrainH(x,z)):terrainH(x,z))+.05,z,rnd());}}
+
+  K.build(M,scene,{});
+
+  // ---- wisps: little drifting lights that keep their distance ----
+  const wc=(()=>{const [c,g]=mk(32,32);const gr=g.createRadialGradient(16,16,0,16,16,16);gr.addColorStop(0,'rgba(240,255,250,1)');gr.addColorStop(.25,'rgba(160,240,230,.8)');gr.addColorStop(1,'rgba(80,180,200,0)');g.fillStyle=gr;g.fillRect(0,0,32,32);return c;})();
+  const wmat=new THREE.SpriteMaterial({map:new THREE.CanvasTexture(wc),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,fog:false});
+  const homes=[OW.SC,OW.GT,OW.WC,[560,-300],[420,-320],[600,-330],[690,-300],[470,-250],[380,-300]];
+  for(let i=0;i<46;i++){const h=homes[i%homes.length],x=h[0]+R(-18,18),z=h[1]+R(-18,18);const sp=new THREE.Sprite(wmat);sp.scale.set(.45,.45,1);scene.add(sp);
+    OWD.wisps.push({sp,hx:x,hz:z,x,z,y:terrainH(x,z)+R(1,3.2),ph:rnd()*99,sp0:R(.3,.7)});}
+  // ---- shafts of light through the canopy by day ----
+  const sc=(()=>{const [c,g]=mk(16,64);const gr=g.createLinearGradient(0,0,0,64);gr.addColorStop(0,'rgba(255,240,190,0)');gr.addColorStop(.3,'rgba(255,240,190,.55)');gr.addColorStop(1,'rgba(255,240,190,0)');g.fillStyle=gr;g.fillRect(0,0,16,64);
+    const gx=g.getImageData(0,0,16,64);for(let y=0;y<64;y++)for(let x=0;x<16;x++){const k=(y*16+x)*4,e=Math.sin(x/15*Math.PI);gx.data[k+3]*=e;}g.putImageData(gx,0,0);return c;})();
+  const smat=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(sc),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,opacity:.5,fog:true});
+  for(let i=0,k=0;i<300&&k<34;i++){const x=R(350,750),z=R(-375,-210);if(oldW(x,z)<.6||(owClear(x,z)>1.6&&roadDist(x,z)>14))continue;const y=terrainH(x,z),w=R(2.5,5),h=R(16,24);
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),smat);m.position.set(x+SUN.x*h*.35,y+h*.42,z+SUN.z*h*.35);m.rotation.set(0,Math.atan2(SUN.x,SUN.z)+Math.PI/2+R(-.4,.4),0);m.rotateX(-.45);scene.add(m);OWD.shafts.push(m);k++;}
+  OWD.smat=smat;OWD.wmat=wmat;
+})();
+// keep the clearings, the roads and the cottage garden free of the wood's undergrowth
+for(let i=bb.length-1;i>=0;i--){const t=bb[i];if(oldW(t[0],t[2])>.2&&t[4]>3&&(owClear(t[0],t[2])<.95||roadDist(t[0],t[2])<4.5))bb.splice(i,1);}
+function updateEast(dt,T){
+  const night=1-smooth(-.1,.08,SUN.y),near=Math.hypot(P.x-560,P.z+295)<330;
+  OWD.runes.opacity=night*(.55+.25*Math.sin(T*1.3));OWD.shroom.color.setRGB(.35+.5*night,.55+.45*night,.5+.35*night);
+  OWD.smat.opacity=.32*(1-night)*smooth(.0,.25,SUN.y);for(const m of OWD.shafts)m.visible=near&&SUN.y>0;
+  for(const w of OWD.wisps){w.sp.visible=near;if(!near)continue;
+    const dx=w.x-P.x,dz=w.z-P.z,d=Math.hypot(dx,dz);
+    if(d<7&&d>.01){w.x+=dx/d*dt*3.2;w.z+=dz/d*dt*3.2;}else{w.x+=(w.hx-w.x)*dt*.05;w.z+=(w.hz-w.z)*dt*.05;}
+    const t=T*w.sp0+w.ph;w.sp.position.set(w.x+Math.sin(t)*1.6,w.y+Math.sin(t*1.7)*.5,w.z+Math.cos(t*.8)*1.6);
+    w.sp.material.opacity=1;const s=.28+.22*night+.06*Math.sin(t*5);w.sp.scale.set(s,s,1);}
+  OWD.wmat.opacity=.35+.65*night;}
+
 buildBillboards();
 // windmill on the rise west of the village
 const mill=(()=>{let best=null,bs=-1e9;for(let i=0;i<400;i++){const x=R(-90,-25),z=R(-330,-280),rd=roadDist(x,z);if(rd<16)continue;let ok=true;for(const p of housePos)if(Math.hypot(p[0]-x,p[1]-z)<14)ok=false;for(const f of FLOORS)if(f.door&&Math.hypot(f.door[0]-x,f.door[1]-z)<9)ok=false;if(!ok)continue;const sc=terrainH(x,z)-Math.abs(rd-22)*.2;if(sc>bs){bs=sc;best={x,z};}}return best||{x:-70,z:-300};})();const sails=new THREE.Group();
@@ -1425,7 +1548,7 @@ $('#swing').addEventListener('click',swing);$('#jump').addEventListener('touchst
 function begin(){started=true;$('#start').style.display='none';if(coarse){$('#swing').style.display='block';$('#jump').style.display='block';}
   if(!coarse&&canvas.requestPointerLock)canvas.requestPointerLock();
   hint.textContent=coarse?'Drag on the left to walk, on the right to look.':'Click to grab the mouse, then click to swing. Esc lets go.';
-  hint.style.opacity=1;setTimeout(()=>hint.style.opacity=0,6000);if(GAME.begin)GAME.begin();}
+  hint.style.opacity=1;setTimeout(()=>hint.style.opacity=0,6000);if(GAME.begin)GAME.begin();if(coarse)WMAP.btn.style.display='block';}
 $('#go').addEventListener('click',begin);
 
 /* ================= the throne room, inside the keep ================= */
@@ -1813,6 +1936,7 @@ function lookOf(role){
     case 'queenlady':return B({top:pick(['#8a3e5e','#3e6a5e','#a8763e']),dress:true,long:true,hat:'kerchief',capC:'#f0e8d8',blush:true,legs:'#3a2a20'});
     case 'royalguard':return B({chain:true,tabard:'#2a3a8a',hat:'helm',spear:true,plume:true,legs:'#2a2a36',boots:'#1a1618',mustache:rnd()<.5});
     case 'herald':return B({top:'#c89a30',tabard:'#9e1a26',hat:'cap',capC:'#2a3a8a',feather:true,legs:'#2a2a3a',hose:true});
+    case 'witch':return B({top:'#3e3248',dress:true,hat:'hood',hood:'#2a2234',legs:'#2a2234',blush:false});
     case 'bandit':return B({top:'#3a3430',hat:'hood',hood:'#2a2622',cape:'#2a2622',tool:'sword',beard:rnd()<.6,legs:'#2e2a26',boots:'#1a1612'});
     case 'jester':return B({top:'#c83a3a',vest:'#e8c040',hat:'cap',capC:'#3a7a3a',feather:true,legs:'#3a5ac8',hose:true,blush:true});
     case 'fisher':return B({top:'#5e6a52',hat:'straw',beard:rnd()<.6});
@@ -1830,16 +1954,32 @@ function sheepSheet(){const [c,g]=mk(128,24);const P=(x,y,w,h,col)=>{g.fillStyle
     for(let i=0;i<70;i++){const a=rnd()*6.283,r=Math.sqrt(rnd());P(o+14+Math.cos(a)*r*11|0,10+Math.sin(a)*r*6|0,2,2,i<30?'#c8c0ae':i<60?'#e6e0d0':'#f6f2e6');}
     if(graze){P(o+24,12,5,5,'#3a3430');P(o+27,15,2,2,'#3a3430');}else{P(o+24,4,5,6,'#3a3430');P(o+28,6,2,2,'#3a3430');P(o+23,4,2,2,'#2a2420');}}
   return c;}
+function deerSheet(stag){const [c,g]=mk(128,32);const P=(x,y,w,h,col)=>{g.fillStyle=col;g.fillRect(x,y,w,h);};
+  for(let f=0;f<4;f++){const o=f*32,graze=f===3,st=f===1?2:f===2?-2:0,B='#8a5a34',D='#6a4428',L='#4a3020';
+    P(o+6+st,18,2,13,L);P(o+9-st,18,2,13,D);P(o+20+st,18,2,13,L);P(o+23-st,18,2,13,D);
+    P(o+5,12,20,8,B);P(o+6,11,18,2,B);P(o+7,18,16,2,'#c8a882');P(o+3,12,3,3,'#f0e6d6');
+    if(graze){P(o+23,15,4,6,B);P(o+25,20,5,4,D);P(o+29,22,1,1,'#1a1410');}
+    else{P(o+22,5,4,9,B);P(o+23,2,6,5,B);P(o+28,4,2,2,'#2a1e14');P(o+22,1,2,2,D);P(o+25,5,1,1,'#1a1410');
+      if(stag){g.fillStyle='#d8c8a8';for(const [x,y,w,h] of [[22,-2,1,4],[20,-4,3,1],[24,-4,1,4],[25,-6,2,1],[23,-5,1,1]])P(o+x,y+3,w,h,'#d8c8a8');}}}
+  return c;}
+function foxSheet(){const [c,g]=mk(128,16);const P=(x,y,w,h,col)=>{g.fillStyle=col;g.fillRect(x,y,w,h);};
+  for(let f=0;f<4;f++){const o=f*32,st=f===1?1:f===2?-1:0,B='#c8642a',D='#8a3e1a';
+    P(o+9+st,10,2,6,'#2a1a10');P(o+12-st,10,2,6,'#2a1a10');P(o+19+st,10,2,6,'#2a1a10');P(o+22-st,10,2,6,'#2a1a10');
+    P(o+8,6,16,5,B);P(o+9,10,14,1,'#f0e0c8');P(o+1,5,8,3,B);P(o,4,3,2,'#f4ecdc');
+    if(f===3){P(o+23,8,5,4,B);P(o+27,10,3,2,'#f4ecdc');}else{P(o+23,3,5,5,B);P(o+27,5,4,2,'#f4ecdc');P(o+23,1,2,2,D);P(o+26,1,2,2,D);P(o+31,5,1,1,'#1a1410');}}
+  return c;}
 function birdSheet(){const [c,g]=mk(32,8);g.fillStyle='#2a2630';g.fillRect(6,4,4,2);g.fillRect(1,1,5,2);g.fillRect(10,1,5,2);g.fillRect(22,4,4,2);g.fillRect(17,5,5,2);g.fillRect(26,5,5,2);return c;}
 const TOWN={x:0,z:0};
 function spawn(role,x,z,o){o=o||{};
-  const anim=o.anim||'person',canvas=anim==='person'?personSheet(lookOf(role)):anim==='chicken'?chickenSheet(rnd()<.5):anim==='sheep'?sheepSheet():birdSheet();
+  const anim=o.anim||'person',canvas=anim==='person'?personSheet(lookOf(role)):anim==='chicken'?chickenSheet(rnd()<.5):anim==='sheep'?sheepSheet():anim==='deer'?deerSheet(o.stag):anim==='fox'?foxSheet():birdSheet();
   const t=new THREE.CanvasTexture(canvas);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.NearestFilter;t.generateMipmaps=false;
   const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t,alphaTest:.5,fog:true,color:o.tint||0xf4ece0}));
   const sc=o.scale||1;
   if(anim==='person'){sp.scale.set(1.08*sc,2.16*sc,1);t.repeat.set(1/6,1/3);}
   else if(anim==='chicken'){sp.scale.set(.55,.55,1);t.repeat.set(1/3,1);}
   else if(anim==='sheep'){sp.scale.set(1.3,1,1);t.repeat.set(1/4,1);}
+  else if(anim==='deer'){sp.scale.set(1.9,1.9,1);t.repeat.set(1/4,1);}
+  else if(anim==='fox'){sp.scale.set(1.2,.6,1);t.repeat.set(1/4,1);}
   else{sp.scale.set(.7,.18,1);t.repeat.set(1/2,1);}
   sp.center.set(.5,0);scene.add(sp);
   const n=Object.assign({role,sp,t,anim,x,z,home:[x,z],face:o.face===undefined?R(0,6.28):o.face,state:'idle',timer:R(0,3),phase:R(0,4),speed:1.2,r:anim==='person'?.35*sc:.25,talk:anim==='person'},o);
@@ -1864,6 +2004,7 @@ const LINES={
   queen:['Welcome. Mind the King, he is gruffer than he means to be.','The glass in the rose window came all the way from the coast. Every pane in one piece.','When you pass through the lake town, try the honey cakes.'],
   royalguard:['Stand aside of the carpet, if you please.','Eyes front. Always eyes front.','I have stood here so long I could tell you every crack in that floor.'],
   herald:['Hear ye! Their Majesties are holding court. Petitions are heard at the third bell.','You will address him as Your Majesty. Not as "Sir". It happened once. Once.'],
+  witch:['The wood was old when the castle was a pile of stones in a field.','The stones sing at night. Most folk call it the wind.','Mind the little lights. They like to be followed, and they never wait.','Bring me mushrooms from the circle and I will make you something worth the walk.'],
   jester:['Why did the knight cross the courtyard? Because the moat was full!','I juggle, I sing, I insult the nobility. Two of those I am paid for.','The King laughed at me once. I have been chasing that laugh for nine years.'],
   courtier:['Have you seen the new tapestries? Dreadfully expensive.','One hears the Duke of the eastern march is unhappy again.','Do not stand so close to the braziers, you will smell of smoke at supper.'],
   fisher:['Bites are slow today. They always are when you are watching.','The lake is deeper than it looks. My grandfather said there is a sunken chapel out there.'],
@@ -1885,6 +2026,11 @@ const LINES={
    spawn(pick(['villager','woman','merchant']),x1,z1,{type:'stand',face:Math.atan2(x2-x1,z2-z1),name:'Townsfolk'});spawn(pick(['villager','woman','soldier']),x2,z2,{type:'stand',face:Math.atan2(x1-x2,z1-z2),name:'Townsfolk'});}
  {const [x,z]=cw(-6,18.2);spawn('woman',x,z,{type:'work',face:0,name:'Townsfolk'});}
  // the throne room: the king and queen, royal guards along the carpet, a herald, courtiers, a jester
+ // the Old Wood: the witch at her cauldron, deer in the glades and the valley, foxes, crows
+ {const [x,z]=OWD.witch;spawn('witch',x,z,{type:'stand',face:OWD.witchRot+Math.PI*.6,name:'Old Wenna'});}
+ for(const [hx,hz,k] of [[300,-262,4],[560,-300,3],[470,-345,2],[690,-290,3],[410,-245,2]])for(let i=0;i<k;i++)spawn('deer',hx+R(-8,8),hz+R(-8,8),{anim:'deer',stag:i===0&&rnd()<.7,type:'wander',radius:22,home:[hx,hz],speed:.9,talk:false,r:.7});
+ for(const [hx,hz] of [[520,-260],[630,-300],[400,-330]])spawn('fox',hx,hz,{anim:'fox',type:'wander',radius:26,home:[hx,hz],speed:1.6,talk:false,r:.4});
+ for(let i=0;i<4;i++){const p=[OW.SC,OW.WC,OW.GT,OW.SC][i];spawn('bird',0,0,{anim:'bird',fly:true,talk:false,cx:p[0]+R(-10,10),cz:p[1]+R(-10,10),cr:R(14,30),cy:terrainH(p[0],p[1])+R(26,40),w:R(.2,.35)*(rnd()<.5?1:-1),a0:R(0,6.28),tint:0x302830});}
  {const t=THRONE,W=(x,z)=>t.toW(x,z),ty=t.y0+.9;
   {const [x,z]=W(0,t.tz+.9);const k=spawn('king',x,z,{type:'stand',face:0,fixedY:ty+.06,name:'King Aldric',court:true});k.sit=true;k.sitFace=0;}
   {const [x,z]=W(2.6,t.tz+1.05);const q=spawn('queen',x,z,{type:'stand',face:0,fixedY:ty+.04,name:'Queen Maren',court:true,scale:.94});q.sit=true;q.sitFace=0;}
@@ -2016,7 +2162,7 @@ function updateNPCs(dt){
         if(n.sparks&&k<.05&&!n.hit){n.hit=true;for(const s of sparks){if(s.t<1)continue;s.t=0;s.s.visible=true;s.s.position.set(n.sparks[0],CTOP+1,n.sparks[1]);s.v.set(R(-2,2),R(2,4),R(-2,2));}}if(k>.05)n.hit=false;}
       if(n.sit)f=5;n.t.repeat.set(mir?-1/6:1/6,1/3);n.t.offset.set(mir?(f+1)/6:f/6,1-(row+1)/3);}
     else if(n.anim==='chicken'){const mir=Math.sin(rel)<0;const f=walking?(Math.floor(n.phase)%2):(n.peck?2:0);n.t.repeat.set(mir?-1/3:1/3,1);n.t.offset.set(mir?(f+1)/3:f/3,0);}
-    else if(n.anim==='sheep'){const mir=Math.sin(rel)<0;const f=walking?1+(Math.floor(n.phase)%2):(Math.sin(T*.4+n.phase)>0?3:0);n.t.repeat.set(mir?-1/4:1/4,1);n.t.offset.set(mir?(f+1)/4:f/4,0);}
+    else if(n.anim==='sheep'||n.anim==='deer'||n.anim==='fox'){const mir=Math.sin(rel)<0;const f=walking?1+(Math.floor(n.phase)%2):(Math.sin(T*.4+n.phase)>0?3:0);n.t.repeat.set(mir?-1/4:1/4,1);n.t.offset.set(mir?(f+1)/4:f/4,0);}
   }
   for(const s of sparks){if(s.t>=1){s.s.visible=false;continue;}s.t+=dt*1.8;s.v.y-=9*dt;s.s.position.addScaledVector(s.v,dt);s.s.material.opacity=1-s.t;}
   // who can you talk to?
@@ -2201,6 +2347,11 @@ const DEV={noclip:false,open:false};
     ...HALLIN.map(h=>{const p=h.kind==='feast'?h.toWd(h.iw/2-3,0):h.toWd(0,h.id/2-2);return [h.kind==='feast'?'Great hall':'Chapel',...p,yawTo(...p,...h.toWd(-h.iw/2,0))];}),
     ['Watchtower door',TOWER_DOOR[0],TOWER_DOOR[1],TOWER_DOOR[2]],
     ['Watchtower top',HELIXES[0].x+HELIXES[0].r1+.6,HELIXES[0].z,yawTo(HELIXES[0].x,HELIXES[0].z,0,-60),HELIXES[0].top+.08],
+    ['East road (ford)',100,-289,yawTo(100,-289,140,-293)],
+    ['East valley',300,-262,yawTo(300,-262,500,-300)],
+    ['Stone circle',OW.SC[0]-24,OW.SC[1]+4,yawTo(OW.SC[0]-24,OW.SC[1]+4,...OW.SC)],
+    ["Witch's cottage",612,-262,yawTo(612,-262,...OW.WC)],
+    ['Elder tree',OWD.elder[0]+Math.sin(OWD.elder[2])*16,OWD.elder[1]+Math.cos(OWD.elder[2])*16,yawTo(OWD.elder[0]+Math.sin(OWD.elder[2])*16,OWD.elder[1]+Math.cos(OWD.elder[2])*16,OWD.elder[0],OWD.elder[1])],
     ['Fish pond',POND.x-60,POND.z-4,yawTo(POND.x-60,POND.z-4,POND.x,POND.z)],
     ['Inn',ip[0],ip[1],yawTo(ip[0],ip[1],INN[0],INN[1])],
     ['Ruined watchtower',RUIN[0]+20,RUIN[1]+18,yawTo(RUIN[0]+20,RUIN[1]+18,RUIN[0],RUIN[1])],
@@ -2235,6 +2386,85 @@ const DEV={noclip:false,open:false};
   window.updateDev=()=>{if(!DEV.open)return;tr.value=DN.tod;const h=(DN.tod*24),hh=Math.floor(h),mm=Math.floor((h-hh)*60);
     pos.textContent='x '+P.x.toFixed(1)+'  z '+P.z.toFixed(1)+'  y '+P.y.toFixed(1)+'\ntime '+String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');};
 })();
+
+/* ================= the world map (M) ================= */
+const WMAP=(function(){
+  const X0=-1330,X1=830,Z0=-720,Z1=150,PITCH=.95,RW=2400;
+  const mcam=new THREE.OrthographicCamera(-1,1,1,-1,10,20000);let RH=1200;
+  let base=null,open=false,raf=0;
+  const css=document.createElement('style');css.textContent=`
+#wmap{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(10,8,14,.72);z-index:40;padding:14px}
+#wmap .frame{position:relative;background:#e6d4a8;padding:10px;border:3px solid #5a4028;box-shadow:0 0 0 2px #c8a868,0 10px 40px rgba(0,0,0,.6)}
+#wmap canvas{display:block;image-rendering:pixelated}
+#wmap .hint{position:absolute;left:0;right:0;bottom:-30px;text-align:center;color:#f6ecd6;font-size:1rem;opacity:.85}
+#mapBtn{display:none;position:fixed;right:calc(176px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 120px);width:64px;height:64px;margin:0;padding:0;border-radius:50%;font-size:.95rem;background:rgba(22,20,34,.55);color:var(--fg);border:2px solid var(--line);touch-action:none;font-family:inherit}`;
+  document.head.appendChild(css);
+  const wrap=document.createElement('div');wrap.id='wmap';wrap.innerHTML='<div class="frame"><canvas></canvas><div class="hint">M or tap to close</div></div>';document.body.appendChild(wrap);
+  const cv=wrap.querySelector('canvas'),g=cv.getContext('2d');
+  const btn=document.createElement('button');btn.id='mapBtn';btn.type='button';btn.textContent='Map';document.body.appendChild(btn);
+  // the map is a picture of the world itself, taken from high above at noon: change the world and the map follows
+  function paint(){
+    const cx=(X0+X1)/2,cz=(Z0+Z1)/2,cy=60,dir=new THREE.Vector3(0,-Math.sin(PITCH),-Math.cos(PITCH));
+    mcam.position.set(cx,cy,cz).addScaledVector(dir,-6000);mcam.up.set(0,1,0);mcam.lookAt(cx,cy,cz);mcam.updateMatrixWorld();
+    // fit the frame to the corners of the area
+    let l=1e9,r=-1e9,b=1e9,t=-1e9;const v=new THREE.Vector3(),inv=mcam.matrixWorldInverse;
+    for(const x of [X0,X1])for(const z of [Z0,Z1])for(const y of [-20,420]){v.set(x,y,z).applyMatrix4(inv);l=Math.min(l,v.x);r=Math.max(r,v.x);b=Math.min(b,v.y);t=Math.max(t,v.y);}
+    for(const x of [X0,X1])for(const z of [Z0,Z1]){v.set(x,anyH(x,z),z).applyMatrix4(inv);}
+    {v.set(cx,0,Z1).applyMatrix4(inv);b=v.y-20;v.set(cx,300,Z0).applyMatrix4(inv);t=Math.max(v.y,b+10);}
+    mcam.left=l;mcam.right=r;mcam.bottom=b;mcam.top=t;mcam.updateProjectionMatrix();RH=Math.round(RW*(t-b)/(r-l));
+    const rt=new THREE.WebGLRenderTarget(RW,RH,{depthBuffer:true});
+    // noon, no fog, no sky, nothing that follows the player
+    const tod=DN.tod;DN.tod=.5;updateDayNight(0,false);const fd=scene.fog.density;scene.fog.density=0;const bd=bbMat.uniforms.density.value;bbMat.uniforms.density.value=0;
+    const hid=[sky,cloudCyl,...mists.map(m=>m[0])].filter(o=>o&&o.visible);hid.forEach(o=>o.visible=false);const bg=scene.background;scene.background=new THREE.Color(0xe6d4a8);
+    const tp=TORCH_U.i.value;TORCH_U.i.value=0;
+    renderer.setRenderTarget(rt);renderer.setClearColor(0xe6d4a8,1);renderer.clear();renderer.render(scene,mcam);
+    const px=new Uint8Array(RW*RH*4);renderer.readRenderTargetPixels(rt,0,0,RW,RH,px);renderer.setRenderTarget(null);rt.dispose();
+    hid.forEach(o=>o.visible=true);scene.background=bg;scene.fog.density=fd;bbMat.uniforms.density.value=bd;TORCH_U.i.value=tp;DN.tod=tod;updateDayNight(0,false);
+    const c=document.createElement('canvas');c.width=RW;c.height=RH;const cg=c.getContext('2d'),img=cg.createImageData(RW,RH);
+    for(let y=0;y<RH;y++)img.data.set(px.subarray((RH-1-y)*RW*4,(RH-y)*RW*4),y*RW*4);
+    for(let k=3;k<img.data.length;k+=4)img.data[k]=255;
+    cg.putImageData(img,0,0);
+    const vg=cg.createRadialGradient(RW/2,RH/2,RH*.4,RW/2,RH/2,RW*.62);vg.addColorStop(0,'rgba(40,30,20,0)');vg.addColorStop(1,'rgba(40,30,20,.35)');cg.fillStyle=vg;cg.fillRect(0,0,RW,RH);
+    return c;}
+  const LABELS=[
+    ['The Castle',CX,CZ-90,'castle',0],['The Village',V[0]+70,V[1]+30,'town',0],['The Forest',150,60,null],['The Inn',INN[0],INN[1],'house',-2.1],
+    ['Lake Town',TOWN_C[0]+20,TOWN_C[1]+70,'town',0],['The Lake',LK.x,LK.z,null],['Ruined tower',RUIN[0],RUIN[1],'ruin'],['The Crags',(CRAGS[0][0]+CRAGS[1][0])/2,CRAGS[0][1]-40,null],
+    ['Golden Woods',-590,-462,null],['Fish pond',POND.x,POND.z+30,null],['The Old Wood',470,-212,null],['Stone circle',OW.SC[0],OW.SC[1],'stones'],
+    ['The Elder',OW.GT[0],OW.GT[1],'tree'],["Witch's cottage",OW.WC[0],OW.WC[1],'house'],['The Mountains',-560,-660,null]];
+  function draw(){
+    const vw=innerWidth-60,vh=innerHeight-90,sc0=Math.min(vw/RW,vh/RH),W=Math.floor(RW*sc0),H=Math.floor(RH*sc0);
+    if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H;}
+    const pv=new THREE.Vector3(),proj=(x,z)=>{pv.set(x,groundH(x,z),z).project(mcam);return [(pv.x+1)/2*W,(1-pv.y)/2*H];};
+    const mx=x=>0,mz=z=>0;
+    g.imageSmoothingEnabled=true;g.drawImage(base,0,0,W,H);
+    // icons and names
+    const fs=Math.max(11,Math.round(W/95));g.textAlign='center';g.textBaseline='middle';
+    for(const [name,x,z,ic,dy] of LABELS){const [px,pz]=proj(x,z);g.fillStyle='#3a2414';g.strokeStyle='#3a2414';g.lineWidth=1.4;
+      if(ic==='castle'||ic==='town'){}
+      else if(false){const s=fs*.9;g.fillRect(px-s*.8,pz+fs*.2,s*1.6,s*.9);for(const o of [-.8,-.2,.4])g.fillRect(px+o*s,pz-s*.25,s*.4,s*.5);g.fillRect(px-s*.2,pz-s*.8,s*.4,s);}
+      else if(ic==='house'){const n=1;for(let i=0;i<n;i++){const ox=(i-(n-1)/2)*fs*.55,s=fs*.42;g.fillRect(px+ox-s/2,pz-s*.1,s,s*.7);g.beginPath();g.moveTo(px+ox-s*.65,pz-s*.1);g.lineTo(px+ox,pz-s*.75);g.lineTo(px+ox+s*.65,pz-s*.1);g.fill();}}
+      else if(ic==='stones'){for(let i=0;i<9;i++){const a=i/9*6.283;g.fillRect(px+Math.sin(a)*fs*.45-1.5,pz+Math.cos(a)*fs*.45-2,3,4);}}
+      else if(ic==='tree'){g.fillStyle='#24361c';g.beginPath();g.arc(px,pz-fs*.25,fs*.45,0,6.283);g.fill();g.fillStyle='#3a2414';g.fillRect(px-2,pz,4,fs*.4);}
+      else if(ic==='ruin'){g.fillRect(px-fs*.25,pz-fs*.3,fs*.5,fs*.6);g.clearRect(px-fs*.25,pz-fs*.3,fs*.18,fs*.2);}
+      const ty=dy?pz+fs*dy:ic?pz+fs*1.05:pz;g.font=(ic?'':'italic ')+fs+'px "IM Fell English",Georgia,serif';
+      g.lineWidth=3;g.strokeStyle='rgba(236,222,186,.85)';g.strokeText(name,px,ty);g.fillStyle=ic?'#2e1c10':'rgba(46,28,16,.8)';g.fillText(name,px,ty);}
+    // title and compass
+    g.font='italic '+Math.round(fs*1.7)+'px "IM Fell English",Georgia,serif';g.textAlign='left';g.lineWidth=4;g.strokeStyle='rgba(236,222,186,.9)';g.strokeText('The Valley',fs,fs*1.6);g.fillStyle='#2e1c10';g.fillText('The Valley',fs,fs*1.6);
+    {const cx=W-fs*2.4,cy=fs*2.6,r=fs*1.4;g.strokeStyle='#3a2414';g.lineWidth=1.5;g.beginPath();g.moveTo(cx,cy-r);g.lineTo(cx+r*.25,cy);g.lineTo(cx,cy+r);g.lineTo(cx-r*.25,cy);g.closePath();g.stroke();
+     g.fillStyle='#3a2414';g.beginPath();g.moveTo(cx,cy-r);g.lineTo(cx+r*.25,cy);g.lineTo(cx-r*.25,cy);g.fill();g.textAlign='center';g.font=fs+'px "IM Fell English",Georgia,serif';g.fillText('N',cx,cy-r-fs*.6);}
+    // you are here
+    {const [px,pz]=proj(P.x,P.z),[ax,az]=proj(P.x-Math.sin(P.yaw)*20,P.z-Math.cos(P.yaw)*20),a=Math.atan2(az-pz,ax-px),s=Math.max(7,fs*.75),pulse=1+.25*Math.sin(performance.now()/250);
+     g.fillStyle='rgba(200,40,30,.25)';g.beginPath();g.arc(px,pz,s*1.6*pulse,0,6.283);g.fill();
+     g.save();g.translate(px,pz);g.rotate(a);g.fillStyle='#c0281c';g.strokeStyle='#fff4dc';g.lineWidth=1.5;g.beginPath();g.moveTo(s,0);g.lineTo(-s*.7,s*.65);g.lineTo(-s*.35,0);g.lineTo(-s*.7,-s*.65);g.closePath();g.fill();g.stroke();g.restore();}
+  }
+  function loop(){if(!open)return;draw();raf=requestAnimationFrame(loop);}
+  function show(v){if(v===open)return;open=v;
+    if(v){base=paint();wrap.style.display='flex';if(document.exitPointerLock&&document.pointerLockElement)document.exitPointerLock();GAME.modal=true;loop();}
+    else{wrap.style.display='none';cancelAnimationFrame(raf);GAME.modal=false;}}
+  addEventListener('keydown',e=>{if(!started)return;if(e.code==='KeyM'&&!e.repeat){if(!open&&GAME.modal)return;show(!open);e.preventDefault();}else if(open&&e.code==='Escape')show(false);});
+  wrap.addEventListener('click',()=>show(false));
+  btn.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();show(!open);},{passive:false});btn.addEventListener('click',()=>show(!open));
+  return {show,btn,isOpen:()=>open};})();
 
 /* ================= loop ================= */
 const msg=$('#msg'),msgT=$('#msgT'),msgS=$('#msgS');let msgTimer=0,saidEdge=false,saidVillage=false,saidBar=0;
@@ -2291,7 +2521,7 @@ function frame(){
   swordG.visible=started;
   if(started&&!saidEdge&&P.z<-95){saidEdge=true;say('The Valley','');}
   if(started&&!saidVillage&&inVillage(P.x,P.z)){saidVillage=true;say('The village','');}
-  updateNPCs(dt);if(GAME.tick)GAME.tick(dt,T);updateDayNight(dt,started&&keys.KeyT);updateHands(dt,hx,hy,D,vs,m2,br,sway);updateDev();
+  updateNPCs(dt);if(GAME.tick)GAME.tick(dt,T);updateEast(dt,T);updateDayNight(dt,started&&keys.KeyT);updateHands(dt,hx,hy,D,vs,m2,br,sway);updateDev();
   renderer.setRenderTarget(rt);renderer.autoClear=true;renderer.render(scene,camera);
   renderer.autoClear=false;renderer.clearDepth();renderer.render(viewScene,viewCam);
   renderer.setRenderTarget(null);renderer.autoClear=true;renderer.render(postScene,postCam);
