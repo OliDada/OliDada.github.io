@@ -35,8 +35,8 @@ button:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
 <div class="ov" id="start">
   <div class="card">
     <h1>The Valley</h1>
-    <p>Walk out of the forest and down to the village. The castle road isn’t open yet.</p>
-    <p class="keys" id="keys">WASD or arrow keys to walk. Mouse to look. Shift to run. Space to jump. Click or F to swing. Q to raise your torch. Hold T to speed up time.</p>
+    <p>Walk out of the forest and down into the valley. Gather what grows wild, sell it at the castle market, and spend your coin as you please.</p>
+    <p class="keys" id="keys">WASD or arrow keys to walk. Mouse to look. Shift to run. Space to jump. Click or F to swing. Right-click or hold V to block. Q to raise your torch. C to sneak. E to talk, trade or take things. I opens your bag. Hold T to speed up time.</p>
     <button id="go" type="button">Start walking</button>
     <p id="err">The 3D library didn’t load. Check your connection and reload the page.</p>
   </div>
@@ -53,7 +53,7 @@ button:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
 "use strict";
 const $=s=>document.querySelector(s);
 const coarse=matchMedia('(pointer: coarse)').matches;
-if(coarse) $('#keys').textContent='Drag on the left to walk. Drag on the right to look. Push the stick far out to run. Tap Torch for light. Tap Jump to jump, Swing to swing.';
+if(coarse) $('#keys').textContent='Drag on the left to walk. Drag on the right to look. Push the stick far out to run. Tap Torch for light. Tap Jump to jump, Swing to swing, and hold Swing to block. Tap Bag to see what you carry.';
 if(typeof THREE==='undefined'){ $('#err').style.display='block'; $('#go').style.display='none'; return; }
 
 /* ================= helpers ================= */
@@ -178,7 +178,7 @@ function bridgeH(x,z){const [al,ac]=bridgeLocal(x,z);if(Math.abs(al)<BR.hl&&Math
 function castleD(x,z){const ex=(x-CX)/96,ez=(z-CZ)/(z>CZ?70:82);return Math.hypot(ex,ez);}
 function finalH(x,z){let h=rawH(x,z);const q=roadHash.near(x,z);if(q){const t=smooth(13,4,q[0]);if(t>0)h=lerp(h,q[1]-.15,t);}
   const dv=Math.hypot(x-V[0],z-V[1]);if(dv<46)h=lerp(h,roads.meadow[roads.meadow.length-1][2]+(dv>14?(dv-14)*.06*(fbm(x*.05,z*.05)):0),smooth(46,22,dv));
-  const dc=castleD(x,z);if(dc<1.3)h=lerp(h,CTOP,smooth(1.25,1.0,dc));if(dc<2)h=Math.min(h,lerp(CTOP-.4,Math.max(h,CTOP),smooth(1.35,2,dc)));   // nothing rises above the castle's footing
+  const dc=castleD(x,z);if(dc<1.3)h=lerp(h,CTOP,smooth(1.25,1.0,dc));if(dc<2)h=Math.min(h,lerp(CTOP+.02,Math.max(h,CTOP),smooth(1.35,2,dc)));   // nothing rises above the castle's footing
   {const dp=Math.hypot((x-POND.x)/POND.rx,(z-POND.z)/POND.rz)+(vn(x*.08,z*.08)-.5)*.12;if(dp<1.02)h=Math.min(h,PONDY-.4-2.5*smooth(1.02,.5,dp));else if(dp<1.5)h=lerp(h,clamp(h,PONDY+.4,PONDY+.4+(dp-1)*12),smooth(1.5,1.05,dp));}
   {const dl=lakeD(x,z);if(dl<1.02)h=Math.min(h,LAKEY-.6-7*smooth(1.02,.55,dl));else if(dl<1.6)h=lerp(h,clamp(h,LAKEY+.6,LAKEY+.6+(dl-1)*55),smooth(1.6,1.08,dl));}   // gentle banks round the lake
   const s=streamHash.near(x,z);if(s){const t=smooth(9,2.5,s[0]);if(t>0)h=lerp(h,Math.min(h,s[1]-.9),t);}
@@ -191,10 +191,13 @@ const HG=new Float32Array(N1.nx*N1.nz);
 for(let j=0;j<N1.nz;j++)for(let i=0;i<N1.nx;i++)HG[j*N1.nx+i]=finalH(N1.x0+i*N1.cell,N1.z0+j*N1.cell);
 function terrainH(x,z){const fx=clamp((x-N1.x0)/N1.cell,0,N1.nx-1.001),fz=clamp((z-N1.z0)/N1.cell,0,N1.nz-1.001),i=fx|0,j=fz|0,u=fx-i,v=fz-j,k=j*N1.nx+i;
   return (HG[k]*(1-u)+HG[k+1]*u)*(1-v)+(HG[k+N1.nx]*(1-u)+HG[k+N1.nx+1]*u)*v;}
-var FLOORS=[],RAMPS=[];
-function rampH(x,z){for(const r of RAMPS){const dx=x-r.x,dz=z-r.z,u=dx*r.ux+dz*r.uz,v=-dx*r.uz+dz*r.ux;if(u>=-.05&&u<=r.L&&Math.abs(v)<r.hw)return r.y0-(r.y0-r.y1)*u/r.L;}return -1e9;}
+var FLOORS=[],RAMPS=[],HELIXES=[],FREF=null;
+function pickLevel(hs){if(!hs.length)return -1e9;if(FREF===null)return Math.min(...hs);let b=-1e9;for(const h of hs)if(h<=FREF+1.2&&h>b)b=h;return b;}
+function rampH(x,z){const hs=[];for(const r of RAMPS){const dx=x-r.x,dz=z-r.z,u=dx*r.ux+dz*r.uz,v=-dx*r.uz+dz*r.ux;if(u>=-.05&&u<=r.L&&Math.abs(v)<r.hw)hs.push(r.y0-(r.y0-r.y1)*clamp(u,0,r.L)/r.L);}return pickLevel(hs);}
+function helixH(x,z){const hs=[];for(const h of HELIXES){const dx=x-h.x,dz=z-h.z,d=Math.hypot(dx,dz);if(d<h.r0||d>h.r1)continue;let p=Math.atan2(dx,dz)-h.a0;p=((p%6.2832)+6.2832)%6.2832;
+  for(let y=h.base+p*h.rr+.06;y<=h.top+.01;y+=6.2832*h.rr)hs.push(Math.min(y,h.top));}return pickLevel(hs);}
 function pierH(x,z){return (x<PIER.x0&&x>PIER.x0-PIER.len&&Math.abs(z-PIER.z)<1.5)?LAKEY+.75:-1e9;}
-function groundH(x,z){return Math.max(terrainH(x,z),bridgeH(x,z),pierH(x,z),FLOORS.length?floorH(x,z):-1e9,RAMPS.length?rampH(x,z):-1e9);}
+function groundH(x,z){return Math.max(terrainH(x,z),bridgeH(x,z),pierH(x,z),FLOORS.length?floorH(x,z):-1e9,RAMPS.length?rampH(x,z):-1e9,HELIXES.length?helixH(x,z):-1e9);}
 function anyH(x,z){return z<-1400||x<-1410||x>990?rawH(x,z):terrainH(x,z);}
 function forestD(x,z){
   let d=smooth(-118,-92,z)*smooth(330,240,Math.abs(x));             // the forest you start in
@@ -567,6 +570,13 @@ const M={
     g.fillStyle='#d8b060';g.fillRect(0,4,16,2);g.fillRect(0,56,16,2);g.fillRect(6,20,4,14);g.fillRect(3,24,10,4);g.fillStyle='#6e161a';for(let x=0;x<16;x+=4)g.fillRect(x,60,2,4);return tex(c,false,true);})(),side:THREE.DoubleSide}),
 };
 
+// soft cobbles: small rounded setts, low contrast, mipmapped so they don't shimmer
+var COBTEX=(function(){const [c,g]=mk(64,64);g.fillStyle='#7a7060';g.fillRect(0,0,64,64);
+  for(let y=0;y<64;y+=8){let x=-((rnd()*8)|0);while(x<64){const w=R(7,11)|0,col=pick(['#968b78','#9c917d','#8f8572','#a19682','#938874']);
+    for(const ox of [0,64]){g.fillStyle=col;g.fillRect(x+1+ox,y+1,w-2,6);g.fillRect(x+2+ox,y,w-4,8);g.fillStyle='rgba(255,248,230,.10)';g.fillRect(x+2+ox,y+1,w-4,2);g.fillStyle='rgba(60,50,40,.10)';g.fillRect(x+2+ox,y+5,w-4,2);}x+=w;}}
+  for(let i=0;i<60;i++){g.fillStyle='rgba(120,110,90,.35)';g.fillRect((rnd()*64)|0,(rnd()*64)|0,2,1);}
+  const t=tex(c,true,false);t.anisotropy=4;return t;})();
+
 /* ================= the castle =================
    On the lip of the shelf. Square and round towers mixed, low roofs, rough curtain walls with
    corbelled parapets, buttresses, arrow slits and a timber hoarding; a square keep, a tall round
@@ -577,7 +587,7 @@ const flagMat=new THREE.MeshLambertMaterial({color:0xb02a2e,side:THREE.DoubleSid
 const castleSmoke=[];
 const RING=[[-46,28],[44,30],[50,-8],[38,-40],[-30,-44],[-50,-22]];   // the curtain wall, local x,z
 const GATE=[-49.2,-4];                                                 // gate in the west wall
-const OBST=[],CTORCH=[];   // things you bump into inside and around the castle, local units
+const OBST=[],CTORCH=[],TTORCH=[],HALLS=[],TOWER_DOOR=[];   // things you bump into inside and around the castle, local units
 let saidCastle=false;
 const KEEP={kx:-10,kz:-10,kw:20,kd:18,th:1.4,gw:3.6,gh:6};
 const castleG=new THREE.Group();castleG.position.set(CX,CTOP,CZ);castleG.scale.setScalar(CS);scene.add(castleG);
@@ -602,9 +612,13 @@ const castleG=new THREE.Group();castleG.position.set(CX,CTOP,CZ);castleG.scale.s
         for(let i=0;i<Math.round(w/1.2);i++){const t=(i+.5)/Math.round(w/1.2)-.5;K.add(boxUV(.4,.8,.5,T),'ashlar',x+sx*(w/2+.35)+(sz?t*w:0),h-.4,z+sz*(w/2+.35)+(sx?t*w:0));}}
       if(o.flag!==false)flags.push([x,h+5,z,1]),K.add(new THREE.CylinderGeometry(.1,.1,4,4),'iron',x,h+3,z);}
   }
-  function rTower(x,z,r,h,o){o=o||{};const y0=o.y0===undefined?Y0:o.y0,seg=12;if(o.y0===undefined)OBST.push({t:'c',x,z,r:r+.9});
-    K.add(suv(new THREE.CylinderGeometry(r,r*1.04,h-y0,seg,1,true),2*Math.PI*r/T,(h-y0)/T),'ashlar',x,(h+y0)/2,z);
-    if(o.y0===undefined)K.add(suv(new THREE.CylinderGeometry(r+.5,r+.9,3,seg,1,true),2*Math.PI*r/T,.6),'rubble',x,-.5,z);
+  function rTower(x,z,r,h,o){o=o||{};const y0=o.y0===undefined?Y0:o.y0,seg=o.gap!==undefined?32:12;if(o.y0===undefined&&o.gap===undefined)OBST.push({t:'c',x,z,r:r+.9});
+    if(o.gap!==undefined){const g=o.gapW/r,dh=o.gapH;
+      K.add(suv(new THREE.CylinderGeometry(r,r*1.04,dh-y0,seg,1,true,o.gap+g,6.283-2*g),2*Math.PI*r/T,(dh-y0)/T),'ashlar',x,(dh+y0)/2,z);
+      K.add(suv(new THREE.CylinderGeometry(r,r,h-dh,seg,1,true),2*Math.PI*r/T,(h-dh)/T),'ashlar',x,(h+dh)/2,z);
+      K.add(suv(new THREE.CylinderGeometry(r+.5,r+.9,3,seg,1,true,o.gap+g*1.3,6.283-2.6*g),2*Math.PI*r/T,.6),'rubble',x,-.5,z);}
+    else{K.add(suv(new THREE.CylinderGeometry(r,r*1.04,h-y0,seg,1,true),2*Math.PI*r/T,(h-y0)/T),'ashlar',x,(h+y0)/2,z);
+    if(o.y0===undefined)K.add(suv(new THREE.CylinderGeometry(r+.5,r+.9,3,seg,1,true),2*Math.PI*r/T,.6),'rubble',x,-.5,z);}
     K.add(suv(new THREE.CylinderGeometry(r*1.15,r,1.3,seg,1,true),2*Math.PI*r/T,.4),'ashlar',x,h-.6,z);
     for(let i=0;i<seg;i++){const a=i/seg*6.283;K.add(boxUV(.45,.9,.5,T),'ashlar',x+Math.cos(a)*r*1.06,h-1.6,z+Math.sin(a)*r*1.06,-a);}
     if(o.cone){K.add(suv(new THREE.CylinderGeometry(r*1.15,r*1.15,1,seg,1,true),2*Math.PI*r/T,.3),'ashlar',x,h+.5,z);
@@ -613,7 +627,7 @@ const castleG=new THREE.Group();castleG.position.set(CX,CTOP,CZ);castleG.scale.s
     else{K.add(suv(new THREE.CylinderGeometry(r*1.15,r*1.15,1.6,seg,1,true),2*Math.PI*r/T,.4),'ashlar',x,h+.8,z);
       for(let i=0;i<seg;i+=1){if(i%2)continue;const a=(i+.5)/seg*6.283;K.add(boxUV(1.1,1.1,.7,T),'ashlar',x+Math.cos(a)*r*1.12,h+2.15,z+Math.sin(a)*r*1.12,-a+Math.PI/2);}
       if(o.flag!==false){K.add(new THREE.CylinderGeometry(.1,.1,4,4),'iron',x,h+3,z);flags.push([x,h+5,z,o.flag||1]);}}
-    const nw=Math.max(2,Math.round(h/8));for(let i=0;i<nw;i++){const a=R(-.6,2.2),y=lerp(3,h-3,(i+.5)/nw),big=y>h*.55;
+    const nw=Math.max(2,Math.round(h/8));for(let i=0;i<nw;i++){const a=R(-.6,2.2),y=lerp(3,h-3,(i+.5)/nw),big=y>h*.55;if(o.gap!==undefined&&Math.abs(Math.atan2(Math.sin(a-o.gap),Math.cos(a-o.gap)))<.6&&y<o.gapH+3)continue;
       K.add(new THREE.PlaneGeometry(big?.9:.35,big?1.8:1.3),rnd()<(big?.4:.1)?'lit':'win',x+Math.cos(Math.PI/2-a)*(r+.05),y,z+Math.sin(Math.PI/2-a)*(r+.05),a);}}
   function wall(a,b,h,th,o){o=o||{};const dx=b[0]-a[0],dz=b[1]-a[1],L=Math.hypot(dx,dz),ry=Math.atan2(dx,dz)-Math.PI/2,mx=(a[0]+b[0])/2,mz=(a[1]+b[1])/2;
     const nx=-dz/L,nz=dx/L;   // outward for a clockwise ring
@@ -629,15 +643,24 @@ const castleG=new THREE.Group();castleG.position.set(CX,CTOP,CZ);castleG.scale.s
     if(o.hoard){K.add(boxUV(L-4,2.6,1.8,2),'wood',mx+nx*(th/2+1.1),h+1.5,mz+nz*(th/2+1.1),ry);K.add(prism(L-3,3.4,1.4,2),'brown',mx+nx*(th/2+.9),h+2.8,mz+nz*(th/2+.9),ry);
       for(let i=0;i<L/2.5;i++){const t=(i+.5)/Math.ceil(L/2.5);K.add(new THREE.BoxGeometry(.2,1.8,.2),'wood',a[0]+dx*t+nx*(th/2+1.9),h-.6,a[1]+dz*t+nz*(th/2+1.9),ry);}}
   }
-  function hall(x,z,L,Wd,h,roofH,ry,roof,o){o=o||{};OBST.push({t:'r',x,z,hw:L/2+.4,hd:Wd/2+.4,ry});
-    K.add(new THREE.PlaneGeometry(1.4,2.6),'wood',x+Math.sin(ry)*(Wd/2+.08),1.3,z+Math.cos(ry)*(Wd/2+.08),ry);
-    K.add(boxUV(L,h-Y0*.5,Wd,T),'ashlar',x,(h+Y0*.5)/2,z,ry);
+  function hall(x,z,L,Wd,h,roofH,ry,roof,o){o=o||{};
+    const c0=Math.cos(ry),s0=Math.sin(ry),HL=(lx,lz)=>[x+lx*c0+lz*s0,z-lx*s0+lz*c0];
+    if(!o.hollow){OBST.push({t:'r',x,z,hw:L/2+.4,hd:Wd/2+.4,ry});K.add(new THREE.PlaneGeometry(1.4,2.6),'wood',x+Math.sin(ry)*(Wd/2+.08),1.3,z+Math.cos(ry)*(Wd/2+.08),ry);K.add(boxUV(L,h-Y0*.5,Wd,T),'ashlar',x,(h+Y0*.5)/2,z,ry);}
+    else{const t=.5,y0=Y0*.5,dw=1.4,dh=4;const wb=(lx,lz,wl,wd,hh,yb)=>{const [px,pz]=HL(lx,lz);K.add(boxUV(wl,hh,wd,T),'ashlar',px,yb+hh/2,pz,ry);};
+      wb(0,-Wd/2+t/2,L,t,h-y0,y0);wb(-L/2+t/2,0,t,Wd,h-y0,y0);wb(L/2-t/2,0,t,Wd,h-y0,y0);
+      const sw=(L-2*dw)/2;wb(-(dw+sw/2),Wd/2-t/2,sw,t,h-y0,y0);wb(dw+sw/2,Wd/2-t/2,sw,t,h-y0,y0);wb(0,Wd/2-t/2,2*dw,t,h-dh,dh);
+      {const [px,pz]=HL(0,Wd/2+.05);K.add(new THREE.TorusGeometry(dw,.25,4,10,Math.PI),'ashlar',px,dh-dw*0,pz,ry);for(const sd of [-1,1]){const [qx,qz]=HL(sd*(dw+.3),Wd/2+.1);K.add(boxUV(.4,dh,.4,T),'ashlar',qx,dh/2,qz,ry);}
+       const [dx2,dz2]=HL(-dw+.1,Wd/2+1);K.add(new THREE.BoxGeometry(.1,dh-.2,1.4),'door',dx2,(dh-.2)/2,dz2,ry);}
+      const segW=(a,b)=>OBST.push({t:'s',a:HL(a[0],a[1]),b:HL(b[0],b[1]),w:t/2+.08});
+      segW([-L/2,-Wd/2],[L/2,-Wd/2]);segW([-L/2,-Wd/2],[-L/2,Wd/2]);segW([L/2,-Wd/2],[L/2,Wd/2]);segW([-L/2,Wd/2],[-dw,Wd/2]);segW([dw,Wd/2],[L/2,Wd/2]);
+      HALLS.push({x,z,L,Wd,h,ry,kind:o.hollow,t,dw,dh,HL});
+      FLOORS.push({x:CX+x*CS,z:CZ+z*CS,ry,hw:(L/2-t)*CS,hd:(Wd/2-t)*CS+.3,y:CTOP+.25,r:Math.hypot(L,Wd)/2*CS+1});}
     roofOn(K,Wd,L,h,roofH,roof,'ashlar',.7,ry-Math.PI/2,x,0,z);
     const c=Math.cos(ry),s=Math.sin(ry),nwin=o.win||Math.floor(L/4);
     for(let i=0;i<nwin;i++){const t=(i+.5)/nwin-.5,lx=t*(L-3);
       for(const side of [1,-1]){const lz=side*(Wd/2+.06);K.add(new THREE.PlaneGeometry(1.1,2.8),rnd()<.45?'lit':'win',x+lx*c+lz*s,h*.55,z-lx*s+lz*c,ry+(side<0?Math.PI:0));
         K.add(new THREE.CircleGeometry(.55,6,0,Math.PI),'win',x+lx*c+lz*s,h*.55+1.4,z-lx*s+lz*c,ry+(side<0?Math.PI:0));
-        if(i<nwin-1){const bx=lx+(L-3)/nwin/2;K.add(boxUV(.9,h*.8,1.2,T),'ashlar',x+bx*c+(lz+side*.5)*s,h*.4,z-bx*s+(lz+side*.5)*c,ry);}}}
+        if(i<nwin-1){const bx=lx+(L-3)/nwin/2;if(o.hollow&&side>0&&Math.abs(bx)<2.2)continue;K.add(boxUV(.9,h*.8,1.2,T),'ashlar',x+bx*c+(lz+side*.5)*s,h*.4,z-bx*s+(lz+side*.5)*c,ry);}}}
     if(o.chim)for(const t of o.chim){const wx=x+t*L*c,wz=z-t*L*s;K.add(boxUV(1.4,roofH+3,1.4,T),'ashlar',wx,h+roofH*.5+1,wz,ry);castleSmoke.push([wx,h+roofH+2.6,wz]);}
   }
   // curtain wall (gap where the gatehouse goes)
@@ -694,20 +717,42 @@ const castleG=new THREE.Group();castleG.position.set(CX,CTOP,CZ);castleG.scale.s
     K.add(new THREE.PlaneGeometry(1.1,2.4),rnd()<.3?'lit':'win',kx-kw/2-.06,7+j*9.5,kz-kd/2+3+i*4,-Math.PI/2);}
   for(const bx of [-5,5])K.add(new THREE.PlaneGeometry(2.4,10),'banner',kx+bx,kh-8,kz+kd/2+.12);
   // the watchtower: tall, round, with a gallery and a spire, and a stair turret beside it
-  rTower(18,-20,5,52,{flag:false});
-  rTower(18,-20,3.6,62,{cone:12,y0:52,flag:3});
-  rTower(23,-16,1.8,56,{cone:5});
+  {const tx=18,tz=-20,r=5,H=52,door=Math.atan2(1,1),RT=12,NT=64;
+   rTower(tx,tz,r,H,{flag:false,gap:door,gapW:1.3,gapH:4.2});
+   rTower(tx,tz,3.6,62,{cone:12,y0:H,flag:3});
+   const ri=4.78;
+   K.add(suv(new THREE.CylinderGeometry(ri,ri,H-4.2,32,1,true),2*Math.PI*ri/T,(H-4.2)/T),'towerIn',tx,(H+4.2)/2,tz);
+   K.add(suv(new THREE.CylinderGeometry(ri,ri,4.2,32,1,true,door+.28,6.283-.56),2*Math.PI*ri/T,4.2/T),'towerIn',tx,2.1,tz);
+   K.add(suv(new THREE.CylinderGeometry(r*1.14,r*1.14,1.6,32,1,true),2*Math.PI*r/T,.4),'towerIn',tx,H+.8,tz);
+   K.add(suv(new THREE.CylinderGeometry(3.6,3.6,H,24,1,true),2*Math.PI*3.6/T,H/T),'ashlar',tx,H/2,tz);   // the newel
+   {const rg=new THREE.RingGeometry(3.6,r*1.14,32);rg.rotateX(-Math.PI/2);K.add(rg,'towerFloor',tx,H+.05,tz);
+    const fg=new THREE.CircleGeometry(ri,32);fg.rotateX(-Math.PI/2);K.add(fg,'towerFloor',tx,.05,tz);}
+   for(const sd of [-1,1]){K.add(boxUV(.6,4.4,.9,T),'ashlar',tx+Math.sin(door+sd*.27)*(r+.1),2.2,tz+Math.cos(door+sd*.27)*(r+.1),door);}
+   K.add(new THREE.TorusGeometry(1.35,.3,4,10,Math.PI),'ashlar',tx+Math.sin(door)*(r+.15),4.2,tz+Math.cos(door)*(r+.15),door);
+   const total=Math.ceil(H/RT*NT);
+   for(let i=0;i<total;i++){const a=door+.45+i*6.283/NT,top=Math.min(H,(i+1)*RT/NT);
+     K.add(boxUV(.5,.45,1.12,T),i%2?'ashlar':'towerIn',tx+Math.sin(a)*4.2,top-.22,tz+Math.cos(a)*4.2,a);
+     if(i%32===16){TTORCH.push([tx+Math.sin(a)*4.62,top+2.4,tz+Math.cos(a)*4.62]);K.add(new THREE.BoxGeometry(.2,.3,.2),'iron',tx+Math.sin(a)*4.62,top+2.2,tz+Math.cos(a)*4.62);}}
+   OBST.push({t:'c',x:tx,z:tz,r:3.62});
+   const segs=40;for(let i=0;i<segs;i++){const a0=i/segs*6.283,a1=(i+1)/segs*6.283,mid=(a0+a1)/2,dd=Math.atan2(Math.sin(mid-door),Math.cos(mid-door));if(Math.abs(dd)<.22)continue;
+     OBST.push({t:'s',a:[tx+Math.sin(a0)*4.95,tz+Math.cos(a0)*4.95],b:[tx+Math.sin(a1)*4.95,tz+Math.cos(a1)*4.95],w:.12});
+     OBST.push({t:'s',a:[tx+Math.sin(a0)*5.62,tz+Math.cos(a0)*5.62],b:[tx+Math.sin(a1)*5.62,tz+Math.cos(a1)*5.62],w:.1});}
+   const wc=[CX+tx*CS,CZ+tz*CS];
+   HELIXES.push({x:wc[0],z:wc[1],r0:3.6*CS,r1:4.8*CS,base:CTOP,a0:door+.45,rr:RT*CS/6.283,top:CTOP+H*CS});
+   FLOORS.push({x:wc[0],z:wc[1],ry:0,hw:5*CS,hd:5*CS,y:CTOP+.08,r:8*CS});
+   FLOORS.push({x:wc[0],z:wc[1],ry:0,hw:5.6*CS,hd:5.6*CS,y:CTOP+H*CS+.08,r:9*CS});
+   TOWER_DOOR.push(wc[0]+Math.sin(door)*(r+3)*CS,wc[1]+Math.cos(door)*(r+3)*CS,door);}
   // great hall, chapel, stables
-  hall(22,9,26,11,14,8,0,'red',{chim:[-.32,.28]});
-  hall(-28,13,16,10,12,7,Math.PI/2,'slate',{win:3});
+  hall(22,9,26,11,14,8,0,'red',{chim:[-.32,.28],hollow:'feast'});
+  hall(-28,13,16,10,12,7,Math.PI/2,'slate',{win:3,hollow:'chapel'});
   rTower(-28,22,1.7,20,{cone:6});
   hall(8,-34,22,8,8,5,0,'brown',{win:4,chim:[.3]});
   // --- the courtyard ---
   const m=v=>v/CS;   // props are sized in metres
   const prop=(x,z,r)=>OBST.push({t:'c',x,z,r:r});
   // well
-  K.add(suv(new THREE.CylinderGeometry(m(1.5),m(1.6),m(1.1),12,1,true),2,.4),'ashlar',-6,m(.55),20);for(const sd of [-1,1])K.add(new THREE.BoxGeometry(m(.22),m(2.6),m(.22)),'wood',-6+sd*m(1.3),m(1.3),20);
-  roofOn(K,m(2),m(2.4),m(2.5),m(1),'red','wood',m(.4),0,-6,0,20);prop(-6,20,m(2));
+  K.add(suv(new THREE.CylinderGeometry(m(1.5),m(1.6),m(1.1),12,1,true),2,.4),'ashlar',-10,m(.55),14);for(const sd of [-1,1])K.add(new THREE.BoxGeometry(m(.22),m(2.6),m(.22)),'wood',-10+sd*m(1.3),m(1.3),14);
+  roofOn(K,m(2),m(2.4),m(2.5),m(1),'red','wood',m(.4),0,-10,0,14);prop(-10,14,m(2));
   // market stalls along the front wall
   const stripe=new THREE.MeshLambertMaterial({map:(()=>{const [c,g]=mk(16,16);for(let i=0;i<4;i++){g.fillStyle=i%2?'#efe2c4':'#b23a32';g.fillRect(i*4,0,4,16);}return tex(c,true,true);})(),side:THREE.DoubleSide});M.stripe=stripe;
   for(const [x,z,ry] of [[-34,22,0],[-24,23,.08],[-14,22.5,-.05],[22,22,0]]){const w=m(3.2),d=m(2.2);
@@ -716,17 +761,17 @@ const castleG=new THREE.Group();castleG.position.set(CX,CTOP,CZ);castleG.scale.s
     K.add(new THREE.BoxGeometry(w,m(.9),m(.9)),'wood',x,m(.45),z-d/2+m(.45),ry);
     for(let i=0;i<5;i++)K.add(new THREE.BoxGeometry(m(.35),m(.25),m(.35)),pick(['red','thatch','lit','brown']),x-w/2+m(.4)+i*m(.6),m(1),z-d/2+m(.45),ry);prop(x,z,m(2.2));}
   // barrels and crates by the hall and the stables
-  for(const [x,z] of [[10,4],[11.4,3],[9.6,2.4],[30,-1],[31,0.6],[-2,-27],[-3.4,-26],[20,-27.5],[34,24],[35.3,23]]){K.add(new THREE.CylinderGeometry(m(.45),m(.4),m(1),10),'wood',x,m(.5),z);K.add(new THREE.CylinderGeometry(m(.47),m(.47),m(.08),10),'iron',x,m(.8),z);prop(x,z,m(.6));}
-  for(const [x,z,ry] of [[12,1,.3],[28,1.5,-.2],[1,-26.5,.5],[-38,10,.2],[-37,8.6,-.4]]){K.add(boxUV(m(1),m(1),m(1),m(1)),'crate',x,m(.5),z,ry);prop(x,z,m(.8));}
+  for(const [x,z] of [[33,16],[34.3,16.8],[32.6,17.4],[30,-6],[31.2,-4.8],[-5,-31],[-6.4,-30],[21,-35],[30,27],[31.3,27]]){K.add(new THREE.CylinderGeometry(m(.45),m(.4),m(1),10),'wood',x,m(.5),z);K.add(new THREE.CylinderGeometry(m(.47),m(.47),m(.08),10),'iron',x,m(.8),z);prop(x,z,m(.6));}
+  for(const [x,z,ry] of [[12,-6,.3],[26,-6,-.2],[-5,-33,.5],[-43.5,15,.2],[-43,13.4,-.4]]){K.add(boxUV(m(1),m(1),m(1),m(1)),'crate',x,m(.5),z,ry);prop(x,z,m(.8));}
   M.crate=new THREE.MeshLambertMaterial({map:(()=>{const [c,g]=mk(16,16);g.fillStyle='#8a6038';g.fillRect(0,0,16,16);g.fillStyle='#5a3a1e';g.fillRect(0,0,16,2);g.fillRect(0,14,16,2);g.fillRect(0,0,2,16);g.fillRect(14,0,2,16);for(let i=0;i<14;i++)g.fillRect(1+i,1+i,2,1);return tex(c,false,true);})()});
   // hay by the stables, a cart by the gate
-  for(const [x,z] of [[14,-27.6],[16.2,-27.4]]){K.add(boxUV(m(1.6),m(1),m(1),m(1)),'thatch',x,m(.5),z);prop(x,z,m(1));}
-  {const cx=-38,cz=-2;K.add(boxUV(m(1.6),m(.5),m(2.8),m(1)),'wood',cx,m(1),cz);for(const sd of [-1,1]){const wg=new THREE.CylinderGeometry(m(.6),m(.6),m(.12),10);K.add(wg,'wood',cx+sd*m(.9),m(.6),cz,0,0,Math.PI/2);}
+  for(const [x,z] of [[22.5,-31],[22.5,-33]]){K.add(boxUV(m(1.6),m(1),m(1),m(1)),'thatch',x,m(.5),z);prop(x,z,m(1));}
+  {const cx=-38,cz=-20;K.add(boxUV(m(1.6),m(.5),m(2.8),m(1)),'wood',cx,m(1),cz);for(const sd of [-1,1]){const wg=new THREE.CylinderGeometry(m(.6),m(.6),m(.12),10);K.add(wg,'wood',cx+sd*m(.9),m(.6),cz,0,0,Math.PI/2);}
    K.add(new THREE.BoxGeometry(m(.1),m(.1),m(2)),'wood',cx,m(.9),cz+m(2.3));K.add(boxUV(m(1.3),m(.6),m(1.8),m(1)),'thatch',cx,m(1.5),cz);prop(cx,cz,m(1.8));}
   // training yard: dummies and a weapon rack
-  for(const [x,z] of [[36,-12],[40,-18],[33,-20]]){K.add(new THREE.BoxGeometry(m(.15),m(1.9),m(.15)),'wood',x,m(.95),z);K.add(new THREE.BoxGeometry(m(1.1),m(.12),m(.12)),'wood',x,m(1.4),z);
+  for(const [x,z] of [[28,-10],[31,-13],[34,-9]]){K.add(new THREE.BoxGeometry(m(.15),m(1.9),m(.15)),'wood',x,m(.95),z);K.add(new THREE.BoxGeometry(m(1.1),m(.12),m(.12)),'wood',x,m(1.4),z);
     K.add(new THREE.SphereGeometry(m(.32),6,5),'thatch',x,m(1.9),z);K.add(new THREE.CylinderGeometry(m(.32),m(.28),m(.8),8),'thatch',x,m(1.3),z);prop(x,z,m(.5));}
-  K.add(boxUV(m(2.4),m(1.6),m(.3),m(1)),'wood',44,m(.8),-14,Math.PI/2);for(let i=0;i<4;i++)K.add(new THREE.BoxGeometry(m(.06),m(1.6),m(.06)),'iron',43.7,m(1.1),-14.8+i*m(.5));prop(44,-14,m(1.4));
+  K.add(boxUV(m(2.4),m(1.6),m(.3),m(1)),'wood',24,m(.8),-6,0);for(let i=0;i<4;i++)K.add(new THREE.BoxGeometry(m(.06),m(1.6),m(.06)),'iron',23.2+i*m(.5),m(1.1),-6.2);prop(24,-6,m(1.4));
   // lean-to sheds against the inside of the walls
   for(const [x,z,ry,L] of [[30,-36,Math.atan2(-12,-32),12],[-42,-14,Math.PI/2+.1,10]]){const c=Math.cos(ry),s2=Math.sin(ry);
     for(let i=0;i<3;i++){const t=(i/2-.5)*L;K.add(new THREE.BoxGeometry(m(.2),m(2.6),m(.2)),'wood',x+t*c+m(1.6)*s2,m(1.3),z-t*s2+m(1.6)*c,ry);}
@@ -735,7 +780,10 @@ const castleG=new THREE.Group();castleG.position.set(CX,CTOP,CZ);castleG.scale.s
   for(let i=0;i<RING.length;i++){const a=RING[i],b=RING[(i+1)%RING.length],dx=b[0]-a[0],dz=b[1]-a[1],L=Math.hypot(dx,dz),nx=dz/L,nz=-dx/L,ry=Math.atan2(dx,dz)-Math.PI/2+Math.PI;
     for(let k=1;k<L/12;k++){const t=k/Math.ceil(L/12),x=a[0]+dx*t+nx*1.6,z=a[1]+dz*t+nz*1.6;K.add(new THREE.BoxGeometry(.25,.3,.25),'iron',x,4.75,z);CTORCH.push([x,5,z]);K.add(new THREE.BoxGeometry(.12,.6,.5),'iron',x-nx*.2,4.6,z-nz*.2,ry);
       if(k%2)K.add(new THREE.PlaneGeometry(1.6,5.5),'banner',x,8.5,z,ry);}}
+  M.towerIn=new THREE.MeshLambertMaterial({map:tex(stoneDarkC,true),color:0xa89c8c,side:THREE.BackSide});
+  M.towerFloor=new THREE.MeshLambertMaterial({map:tex(stoneC,true),color:0x9a9284});
   K.build(M,castleG,{weather:{keys:['ashlar','rubble'],y0:-14,y1:22}});
+  for(const [x,y,z] of TTORCH){const f=flameSprite(.4/CS,.65/CS);f.position.set(x,y,z);castleG.add(f);}
   // cobbled courtyard floor
   {const [cc,cg]=mk(64,64);cg.fillStyle='#5e7e36';cg.fillRect(0,0,64,64);wrapDabs(cg,64,500,['#6e8e3e','#4e6e2e','#7e9a46','#58782e','#8aa04c'],2,2);
 
@@ -743,7 +791,7 @@ const castleG=new THREE.Group();castleG.position.set(CX,CTOP,CZ);castleG.scale.s
    const fg=new THREE.ShapeGeometry(sh);fg.rotateX(-Math.PI/2);const fu=fg.attributes.uv;for(let i=0;i<fu.count;i++)fu.setXY(i,fu.getX(i)/2.5,fu.getY(i)/2.5);
    const ct=tex(cc,true);const fl=new THREE.Mesh(fg,new THREE.MeshLambertMaterial({map:ct,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));fl.position.y=.05;castleG.add(fl);
    const pg=new THREE.PlaneGeometry(16,6);pg.rotateX(-Math.PI/2);const pu=pg.attributes.uv;for(let i=0;i<pu.count;i++)pu.setXY(i,pu.getX(i)*16/2.5,pu.getY(i)*6/2.5);
-   const pm=new THREE.Mesh(pg,fl.material);pm.position.set(-55,.06,-4);castleG.add(pm);}
+   const pm=new THREE.Mesh(pg,new THREE.MeshLambertMaterial({map:COBTEX,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));pm.position.set(-55,.06,-4);castleG.add(pm);}
 })();
 const flagMeshes=flags.map(([x,y,z,k])=>{const g=new THREE.PlaneGeometry(k===3?6:3.4,k===3?2:1.2,6,1);g.translate(k===3?3:1.7,0,0);
   const m=new THREE.Mesh(g,flagMat);m.position.set(x,y,z);castleG.add(m);return m;});
@@ -754,8 +802,9 @@ function toCastle(x,z){return [(x-CX)/CS,(z-CZ)/CS];}
 function inPoly(x,z,poly){let c=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if(((a[1]>z)!==(b[1]>z))&&(x<(b[0]-a[0])*(z-a[1])/(b[1]-a[1])+a[0]))c=!c;}return c;}
 function inCastle(x,z,pad){const [lx,lz]=toCastle(x,z),s=1+(pad||0);return inPoly(lx/s,lz/s,RING)||(lx>-60&&lx<-46&&lz>-16&&lz<8);}
 function inCourt(x,z){const [lx,lz]=toCastle(x,z);return inPoly(lx,lz,RING)||(lx>-62&&lx<-44&&lz>-7&&lz<-1);}
+function inHallW(x,z,pad){const [qx,qz]=toCastle(x,z);for(const H of HALLS){const dx=qx-H.x,dz=qz-H.z,c=Math.cos(H.ry),s=Math.sin(H.ry);if(Math.abs(dx*c-dz*s)<H.L/2+pad&&Math.abs(dx*s+dz*c)<H.Wd/2+pad)return true;}return Math.hypot(qx-18,qz+20)<5.5+pad;}
 function castleBlocked(x,z){const [lx,lz]=toCastle(x,z);if(lx<-75||lx>65||lz<-60||lz>45)return false;const pr=.42/CS;
-  for(const o of OBST){if(o.t==='c'){if(Math.hypot(lx-o.x,lz-o.z)<o.r+pr)return true;}
+  for(const o of OBST){if(o.y0!==undefined){const fy=FREF===null?CTOP+.5:FREF;if(fy<o.y0-.6||fy>o.y1)continue;}if(o.t==='c'){if(Math.hypot(lx-o.x,lz-o.z)<o.r+pr)return true;}
     else if(o.t==='r'){const dx=lx-o.x,dz=lz-o.z,c=Math.cos(o.ry),s=Math.sin(o.ry),u=dx*c-dz*s,v=dx*s+dz*c;if(Math.abs(u)<o.hw+pr&&Math.abs(v)<o.hd+pr)return true;}
     else{const ax=o.b[0]-o.a[0],az=o.b[1]-o.a[1],t=clamp(((lx-o.a[0])*ax+(lz-o.a[1])*az)/(ax*ax+az*az),0,1),d=Math.hypot(lx-o.a[0]-ax*t,lz-o.a[1]-az*t);if(d<o.w+pr)return true;}}
   return false;}
@@ -871,10 +920,8 @@ const wallGrid=new Map();function wkey(x,z){return ((Math.floor(x/12)+999)<<11)|
 function indexWall(w){const L=Math.hypot(w[2]-w[0],w[3]-w[1]),n=Math.max(1,Math.ceil(L/4));const seen=new Set();for(let i=0;i<=n;i++){const x=w[0]+(w[2]-w[0])*i/n,z=w[1]+(w[3]-w[1])*i/n;for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){const k=wkey(x+a*12,z+b*12);if(seen.has(k))continue;seen.add(k);let l=wallGrid.get(k);if(!l)wallGrid.set(k,l=[]);l.push(w);}}}
 function wallHit(x,z,r){const l=wallGrid.get(wkey(x,z));if(!l)return null;for(const w of l){const [d,px,pz]=segD(x,z,w);if(d<r)return [d,px,pz];}return null;}
 function pushWalls(x,z,r){for(let it=0;it<3;it++){const l=wallGrid.get(wkey(x,z));if(!l)break;let moved=false;for(const w of l){const [d,px,pz]=segD(x,z,w);if(d<r&&d>1e-5){x=px+(x-px)/d*r;z=pz+(z-pz)/d*r;moved=true;}}if(!moved)break;}return [x,z];}
-FLOORS.length=0;
-var FREF=null;   // the height of whoever is asking; picks the right storey
 function floorH(x,z){let best=-1e9,low=1e9;for(const f of FLOORS){const dx=x-f.x,dz=z-f.z;if(Math.abs(dx)>f.r||Math.abs(dz)>f.r)continue;const c=Math.cos(f.ry),s=Math.sin(f.ry),u=dx*c-dz*s,v=dx*s+dz*c;if(Math.abs(u)>=f.hw||Math.abs(v)>=f.hd)continue;
-  if(FREF===null){if(f.y<low)low=f.y;}else if(f.y<=FREF+.75&&f.y>best)best=f.y;}return FREF===null?(low<1e9?low:-1e9):best;}
+  if(FREF===null){if(f.y<low)low=f.y;}else if(f.y<=FREF+1.2&&f.y>best)best=f.y;}return FREF===null?(low<1e9?low:-1e9):best;}
 // --- interiors are painted: textures with grain and wear, and light baked into every vertex ---
 // cf = fire light + a little ambient (flickers), cw = daylight from the windows (fades at night). Both include darkening in corners.
 const LIGHTS=[];   // world-space glows: [x,y,z,size,r,g,b,kind]  kind 0 = always, 1 = night only
@@ -924,7 +971,7 @@ function house(x,z,rot,o){o=o||{};const K=kit(),I=kit();
      for(let k=0;k<n2;k++){const tt=(k+.5)/n2,hh=y-(y-g1)*tt;K.add(boxUV(1.8,hh-g1+.6,L2/n2+.05,2),'stone',0,((hh-y)+(g1-.6-y))/2,d/2+tt*L2);}
      RAMPS.push({x:ox,z:oz,ux:s,uz:c,L:L2,hw:1,y0:y,y1:g1});}
    else K.add(boxUV(1.8,.25,.9,2),'stone',0,-.18,d/2+.55);}
-  const iw=w-2*t,id=d-2*t,wins=[],fires=[],lit=rnd()<.6,two=!!o.two&&wh>=6.8,sx0=-iw/2,sx1=-iw/2+1.1,z0=id/2-1.5,z1=z0-Math.min(5.2,id-3),uy=ih+.12;
+  const iw=w-2*t,id=d-2*t,wins=[],fires=[],lit=rnd()<.6,two=!!o.two&&wh>=6.8,sx0=-iw/2,sx1=-iw/2+1.35,z0=id/2-1.5,z1=z0-Math.min(5.2,id-3),uy=ih+.12;
   // walls with real openings: front (door + 2 windows), back (1), left (1), right (1)
   const WIN={front:[{u:0,v0:0,v1:dh,hw:dw/2,door:1},{u:-w/4,v0:1.05,v1:2.05,hw:.45},{u:w/4,v0:1.05,v1:2.05,hw:.45}],back:[{u:-w/4,v0:1.1,v1:2.05,hw:.42}],left:[{u:0,v0:1.05,v1:2.2,hw:.55}],right:[{u:d*.04,v0:1.1,v1:2.15,hw:.5}]};
   const WALLDEF=[['front',w,0,d/2-t/2,true,1],['back',w,0,-d/2+t/2,true,-1],['left',d,-w/2+t/2,0,false,-1],['right',d,w/2-t/2,0,false,1]];
@@ -958,7 +1005,7 @@ function house(x,z,rot,o){o=o||{};const K=kit(),I=kit();
    else{for(const up of [0,1]){const yy=up?uy:ih;ceil((sx1+iw/2)/2,0,iw/2-sx1,id,yy,up);ceil((sx0+sx1)/2,(z0+id/2)/2,sx1-sx0,id/2-z0,yy,up);ceil((sx0+sx1)/2,(z1-id/2)/2,sx1-sx0,z1+id/2,yy,up);}
      for(let k=1;k<4;k++)I.add(boxUV(iw/2-sx1,.3,.3,1),'beams',(sx1+iw/2)/2,ih-.15,-d/2+k*d/4);
      // the stair: solid treads climbing towards the back along the left wall, a rail, a stringer
-     const n=Math.ceil(ih/.24),run=(z0-z1)/n;for(let k=0;k<n;k++){const hh=(k+1)*uy/n;I.add(boxUV(1.05,hh,run+.02,1),k%2?'furn':'furnD',(sx0+sx1)/2,hh/2,z0-(k+.5)*run);}
+     const n=Math.ceil(ih/.24),run=(z0-z1)/n;for(let k=0;k<n;k++){const hh=(k+1)*uy/n;I.add(boxUV(sx1-sx0-.05,hh,run+.02,1),k%2?'furn':'furnD',(sx0+sx1)/2,hh/2,z0-(k+.5)*run);}
      for(let k=0;k<=4;k++){const zz=lerp(z1,z0,k/4);I.add(boxUV(.08,.95,.08,1),'beams',sx1+.04,uy+.47,zz);}I.add(boxUV(.1,.08,z0-z1,1),'beams',sx1+.04,uy+.95,(z0+z1)/2);
      // upstairs: plaster walls, a bed, a chest, a candle, a rug
      for(const [px,pz,pw,ry] of [[0,-id/2+.02,iw,0],[0,id/2-.02,iw,Math.PI],[-iw/2+.02,0,id,Math.PI/2],[iw/2-.02,0,id,-Math.PI/2]])I.add(suv(new THREE.PlaneGeometry(pw,wh-uy-.1,Math.ceil(pw),3),pw/2,(wh-uy)/2),'plaster',px,uy+(wh-uy)/2,pz,ry);
@@ -1003,14 +1050,14 @@ function house(x,z,rot,o){o=o||{};const K=kit(),I=kit();
     // the inn's hanging lamp outside the door
     K.add(new THREE.BoxGeometry(.1,.1,.9),'wood',dw/2+.6,2.6,d/2+.45);K.add(new THREE.BoxGeometry(.28,.36,.28),'lit',dw/2+.6,2.35,d/2+.85);LIGHTS.push({local:[dw/2+.6,2.35,d/2+.9],grp,size:3,col:[1,.7,.35],kind:1,flick:1,pool:7});
   } else {
-    table(-w/4+.3,d*.08,1.6,.9,true);
+    if(two)table(w/4-.4,d*.2,1.6,.9,true);else table(-w/4+.3,d*.08,1.6,.9,true);
     const bx=-w/2+t+.6,bz=-d/2+t+1.15;if(!two){I.add(boxUV(1.1,.35,2.1,1),'furnD',bx,.32,bz);I.add(boxUV(1.1,.5,.12,1),'furnD',bx,.4,bz-1.05);I.add(boxUV(1,.18,1.8,1),'straw',bx,.55,bz+.1);I.add(boxUV(1.02,.12,1.3,1),pick(['cloth','cloth2','cloth3']),bx,.68,bz+.35);I.add(boxUV(.7,.14,.35,1),'candle',bx,.67,bz-.7);sol(bx,bz,.9);}
     if(!two)I.add(boxUV(.9,.55,.5,1),'furn',bx+.1,.28,bz+1.6);I.add(boxUV(.95,.06,.55,1),'beams',bx+.1,.58,bz+1.6);if(!two)sol(bx+.1,bz+1.6,.5);     // chest
     if(!two){I.add(boxUV(.4,1.8,1.2,1),'furn',-w/2+t+.2,.9,d*.28);for(let k=0;k<3;k++){I.add(boxUV(.42,.05,1.2,1),'beams',-w/2+t+.2,.5+k*.55,d*.28);I.add(new THREE.CylinderGeometry(.1,.08,.2,6),k%2?'pot':'pot2',-w/2+t+.25,.64+k*.55,d*.28-.3+k*.25);}sol(-w/2+t+.3,d*.28,.6);}
     I.add(boxUV(.35,.08,1.6,1),'beams',w/2-t-.2,1.7,d*.28);for(let k=0;k<4;k++)I.add(new THREE.CylinderGeometry(.11,.08,.22,6),k%2?'pot':'pot2',w/2-t-.2,1.85,d*.28-.6+k*.4);
     I.add(new THREE.CylinderGeometry(.35,.32,.8,10),'furnD',w/2-t-.45,.4,d/2-t-.55);sol(w/2-t-.45,d/2-t-.55,.4);
-    for(let k=0;k<4;k++)I.add(new THREE.BoxGeometry(.1,.4,.1),'herb',-w/6+k*.3,ih-.45,-d/4+.1);     // herbs drying from a beam
-    const rug=new THREE.PlaneGeometry(1.6,2.2);rug.rotateX(-Math.PI/2);I.add(rug,pick(['cloth','cloth2','cloth3']),w*.05,.03,-d*.12);
+    if(!two)for(let k=0;k<4;k++)I.add(new THREE.BoxGeometry(.1,.4,.1),'herb',-w/6+k*.3,ih-.45,-d/4+.1);     // herbs drying from a beam
+    const rug=new THREE.PlaneGeometry(1.6,2.2);rug.rotateX(-Math.PI/2);I.add(rug,pick(['cloth','cloth2','cloth3']),two?w*.15:w*.05,.03,-d*.12);
   }
   K.build(M,grp);const ig=new THREE.Group();I.build(IM,ig);bake(ig,{w:iw+.1,d:id+.1,ih,fires,wins});grp.add(ig);scene.add(grp);
   // chimney + smoke
@@ -1019,10 +1066,10 @@ function house(x,z,rot,o){o=o||{};const K=kit(),I=kit();
   for(const [a,b] of [[0,1],[1,2],[3,0]])indexWall([C[a][0],C[a][1],C[b][0],C[b][1]]);
   {const L=W(-dw/2,d/2),Rr=W(dw/2,d/2);indexWall([C[3][0],C[3][1],L[0],L[1]]);indexWall([Rr[0],Rr[1],C[2][0],C[2][1]]);}
   for(const [lx,lz,r] of solid){const [px,pz]=W(lx,lz);trees.push([px,pz,r]);}
-  FLOORS.push({x,z,ry:rot,hw:w/2+.05,hd:d/2+.15,y,r:Math.hypot(w,d)/2+1,door:W(0,d/2+2.5),doorIn:W(0,d/2-1.2),seats:o.inn?[]:[W(-w/4+.3,d*.08+.9),W(-w/4+.3,d*.08-.9)],seatFace:[rot+Math.PI,rot],bed:o.inn?null:two?W(iw/2-.7,-id/2+1.3):W(-w/2+t+.6,-d/2+t+1.3),bedY:two?y+uy+.62:y+.62,occ:0,inn:!!o.inn});
+  FLOORS.push({x,z,ry:rot,hw:w/2+.05,hd:d/2+.15,y,r:Math.hypot(w,d)/2+1,door:W(0,d/2+2.5),doorIn:W(0,d/2-1.2),chest:o.inn||two?null:W(-w/2+t+.7,-d/2+t+2.75),seats:o.inn?[]:two?[W(w/4-.4,d*.2+.9),W(w/4-.4,d*.2-.9)]:[W(-w/4+.3,d*.08+.9),W(-w/4+.3,d*.08-.9)],seatFace:[rot+Math.PI,rot],bed:o.inn?null:two?W(iw/2-.7,-id/2+1.3):W(-w/2+t+.6,-d/2+t+1.3),bedY:two?y+uy+.62:y+.62,occ:0,inn:!!o.inn});
   if(two){const up=y+uy,rect=(cx,cz,hw,hd)=>{const [px,pz]=W(cx,cz);FLOORS.push({x:px,z:pz,ry:rot,hw,hd,y:up,r:Math.hypot(hw,hd)+1,upper:true});};
     rect((sx1+iw/2)/2,0,(iw/2-sx1)/2,id/2);rect((sx0+sx1)/2,(z0+id/2)/2,(sx1-sx0)/2,(id/2-z0)/2);rect((sx0+sx1)/2,(z1-id/2)/2,(sx1-sx0)/2,(z1+id/2)/2);
-    const [rx,rz]=W((sx0+sx1)/2,z0);RAMPS.push({x:rx,z:rz,ux:-s,uz:-c,L:z0-z1,hw:.5,y0:y,y1:up});
+    const [rx,rz]=W((sx0+sx1)/2,z0);RAMPS.push({x:rx,z:rz,ux:-s,uz:-c,L:z0-z1,hw:.62,y0:y,y1:up});
     const [ax,az]=W(sx1+.06,z0),[bx,bz]=W(sx1+.06,z1);indexWall([ax,az,bx,bz]);}
   housePos.push([x,z]);grp.userData={w,d,y,W};return grp;}
 function tryHouse(x,z,rot,o){if(roadDist(x,z)<9)return false;{const h0=terrainH(x,z);for(const [dx,dz] of [[5,5],[-5,5],[5,-5],[-5,-5]])if(Math.abs(terrainH(x+dx,z+dz)-h0)>1.2)return false;}for(const p of housePos)if(Math.hypot(p[0]-x,p[1]-z)<(o&&o.gap||13))return false;house(x,z,rot,o);return true;}
@@ -1122,16 +1169,15 @@ const millWheel=new THREE.Group();
   const SW=STREETS.map(st=>spline(st.map(p=>L(p[0],p[1])),2));
   const streetD=(x,z)=>{let b=1e9;for(const st of SW)for(const p of st){const d=(p[0]-x)**2+(p[1]-z)**2;if(d<b)b=d;}return Math.sqrt(b);};
   const nearestSt=(x,z)=>{let b=1e9,q=null;for(const st of SW)for(const p of st){const d=(p[0]-x)**2+(p[1]-z)**2;if(d<b){b=d;q=p;}}return q;};
-  const cob=new THREE.MeshLambertMaterial({map:(()=>{const [c,g]=mk(32,32);g.fillStyle='#4a4238';g.fillRect(0,0,32,32);for(let y=0;y<32;y+=5){let x=-((rnd()*5)|0);while(x<32){const w=R(4,8)|0;g.fillStyle=pick(['#8e8472','#9e927c','#7e7464','#a89c86','#857b6a']);for(const ox of [0,32])g.fillRect(x+1+ox,y+1,w-1,4);g.fillStyle='rgba(255,250,230,.25)';for(const ox of [0,32])g.fillRect(x+1+ox,y+1,w-1,1);x+=w;}}
-    for(let i=0;i<32;i++){g.fillStyle='#5a7a34';g.fillRect((rnd()*32)|0,((rnd()*7)|0)*5,2,1);}return tex(c,true,true);})(),alphaTest:.5,polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-3});
+  const cob=new THREE.MeshLambertMaterial({map:COBTEX,alphaTest:.5,polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-3});
   cob.map.wrapS=THREE.RepeatWrapping;
   const flat=()=>CTOP+.13;
   for(const st of SW)ribbon(st,2.6,cob,0,false,3,flat);
   {const p=L(4,16.5),g=new THREE.CircleGeometry(9.5,24);g.rotateX(-Math.PI/2);const ua=g.attributes.uv;for(let q=0;q<ua.count;q++)ua.setXY(q,ua.getX(q)*6,ua.getY(q)*6);const m=new THREE.Mesh(g,cob);m.position.set(p[0],CTOP+.12,p[1]);scene.add(m);}
-  {const p=L(-10,5),g=new THREE.PlaneGeometry(28,14);g.rotateX(-Math.PI/2);const ua=g.attributes.uv;for(let q=0;q<ua.count;q++)ua.setXY(q,ua.getX(q)*9,ua.getY(q)*4.5);const m=new THREE.Mesh(g,cob);m.position.set(p[0],CTOP+.12,p[1]);scene.add(m);}
+  for(const [lx,lz,pw,pd] of [[-10,5.5,28*CS,13*CS],[-41,-4,18*CS,10*CS]]){const p=L(lx,lz),g=new THREE.PlaneGeometry(pw,pd);g.rotateX(-Math.PI/2);const ua=g.attributes.uv;for(let q=0;q<ua.count;q++)ua.setXY(q,ua.getX(q)*pw/3,ua.getY(q)*pd/3);const m=new THREE.Mesh(g,cob);m.position.set(p[0],CTOP+.12,p[1]);scene.add(m);}
   const KEEPR=(x,z,pad)=>{const lx=(x-CX)/CS,lz=(z-CZ)/CS;return lx>KEEP.kx-KEEP.kw/2-pad&&lx<KEEP.kx+KEEP.kw/2+pad&&lz>KEEP.kz-KEEP.kd/2-pad&&lz<KEEP.kz+KEEP.kd/2+pad;};
   const inYard=(x,z)=>inPoly((x-CX)/CS,(z-CZ)/CS,shrink);
-  const free=(x,z,r)=>{if(!inYard(x,z)||KEEPR(x,z,r/CS+5))return false;const F=L(4,16.5),Wl=L(-6,20);if(Math.hypot(x-F[0],z-F[1])<r+12||Math.hypot(x-Wl[0],z-Wl[1])<r+5)return false;
+  const free=(x,z,r)=>{if(!inYard(x,z)||KEEPR(x,z,r/CS+5)||inHallW(x,z,r/CS+3))return false;const F=L(4,16.5),Wl=L(-10,14);if(Math.hypot(x-F[0],z-F[1])<r+12||Math.hypot(x-Wl[0],z-Wl[1])<r+5)return false;
     for(let a=0;a<6.28;a+=.52){if(castleBlocked(x+Math.cos(a)*r,z+Math.sin(a)*r))return false;}return !castleBlocked(x,z);};
   // houses along the streets, both sides, facing the street
   const placed=[];
@@ -1145,7 +1191,7 @@ const millWheel=new THREE.Group();
   // grass, flowers, bushes and trees on everything that isn't street, house or building
   const spots=[];
   for(let i=0;i<26000;i++){const lx=R(-50,50),lz=R(-44,31),[x,z]=L(lx,lz);if(!inPoly(lx,lz,RING)||KEEPR(x,z,.5)||streetD(x,z)<3.4||castleBlocked(x,z)||floorH(x,z)>-1e8||wallHit(x,z,1.2))continue;
-    const F=L(4,16.5);if(Math.hypot(x-F[0],z-F[1])<10)continue;const r=rnd();
+    const F=L(4,16.5);if(Math.hypot(x-F[0],z-F[1])<10||inHallW(x,z,1))continue;if((lx>-25&&lx<5&&lz>-2.5&&lz<13)||(lx<-34&&Math.abs(lz+4)<9)||Math.hypot(lx-18,lz+20)<10||(Math.abs(lx-22)<4&&lz>13&&lz<21)||(lx>-24&&lx<-16&&Math.abs(lz-13)<3.5))continue;const r=rnd();
     if(r<.5)bb.push([x,CTOP+.08,z,R(1.1,1.8),R(.6,1.1),pick(R_GRASS),1,.8]);else if(r<.8)bb.push([x,CTOP+.08,z,R(1,1.6),R(.55,.95),pick(R_FLOW),1,.7]);else if(r<.86)bb.push([x,CTOP+.08,z,R(2,3.2),R(1.2,1.9),pick(R_BUSH),1,.3]);
     if(i%40===0&&streetD(x,z)>6&&!placed.some(p=>Math.hypot(p[0]-x,p[1]-z)<9))spots.push([x,z]);}
   let nt=0;for(const [x,z] of spots){if(nt>=18||rnd()<.4)continue;if(spots.some(q=>q[2]&&Math.hypot(q[0]-x,q[1]-z)<10))continue;
@@ -1298,7 +1344,7 @@ const swordG=new THREE.Group();viewScene.add(swordG);
  const pommel=new THREE.Mesh(new THREE.SphereGeometry(.03,10,8),ironMat);pommel.position.y=-.11;
  swordG.add(new THREE.Mesh(bg2,steelMat),guard,k1,k2,new THREE.Mesh(new THREE.CylinderGeometry(.017,.018,.18,8),gripMat),pommel,makeFist());}
 let swingT=-1,started=false;
-function swing(){if(started&&swingT<0)swingT=0;}
+function swing(){if(started&&swingT<0&&!GAME.modal&&!GAME.block)swingT=0;}
 const ease=k=>k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
 function swingPose(s){if(s<0)return [0,0,0,0,0];
   if(s<.28){const k=ease(s/.28);return [.03*k,.06*k,.03*k,.35*k,-.3*k];}
@@ -1338,9 +1384,12 @@ const BAR=[1e6,1e6];   // a barrier across the castle road, just past the villag
 if(false)(function(){const K=kit(),a=roads.castle[14],b=roads.castle[18],ry=Math.atan2(b[0]-a[0],b[1]-a[1])+Math.PI/2,y=terrainH(BAR[0],BAR[1]);
   K.add(new THREE.BoxGeometry(.25,1.4,.25),'wood',BAR[0]+Math.sin(ry)*2.8,y+.6,BAR[1]+Math.cos(ry)*2.8);K.add(new THREE.BoxGeometry(.25,1.4,.25),'wood',BAR[0]-Math.sin(ry)*2.8,y+.6,BAR[1]-Math.cos(ry)*2.8);
   K.add(new THREE.BoxGeometry(6.6,.3,.15),'wood',BAR[0],y+1.1,BAR[1],ry);K.add(new THREE.BoxGeometry(6.6,.3,.15),'red',BAR[0],y+.6,BAR[1],ry);K.build(M,scene);})();
+// you may wander anywhere within a few hundred metres of a road or a settlement; cliffs, water and walls still stop you
+const ROAM=[];for(const k in roads)for(let i=0;i<roads[k].length;i+=8)ROAM.push(roads[k][i]);
+function roamOK(x,z){if(x<N1.x0+40||z<N1.z0+40||x>N1.x0+N1.cell*(N1.nx-1)-40||z>N1.z0+N1.cell*(N1.nz-1)-40)return false;for(const p of ROAM){const dx=x-p[0],dz=z-p[1];if(dx<260&&dx>-260&&dz<260&&dz>-260&&dx*dx+dz*dz<67600)return true;}return false;}
 function allowed(x,z){const q=walkHash.near(x,z);const dr=q?q[0]:99;
   if(Math.hypot(x-BAR[0],z-BAR[1])<5)return false;
-  if(dr>(lowW(x,z)>.2?60:32)&&!inVillage(x,z)&&!inCourt(x,z)&&Math.hypot(x-TOWN_C[0],z-TOWN_C[1])>80&&Math.hypot(x-RUIN[0],z-RUIN[1])>45&&pierH(x,z)<-1e8)return false;
+  if(!roamOK(x,z)&&!inCourt(x,z)&&pierH(x,z)<-1e8)return false;
   if(pierH(x,z)<-1e8&&lakeD(x,z)<1.15&&terrainH(x,z)<LAKEY-.35)return false;
   if(pondD(x,z)<1.0)return false;
   if(castleBlocked(x,z))return false;
@@ -1352,14 +1401,15 @@ addEventListener('keyup',e=>{keys[e.code]=false;});
 addEventListener('blur',()=>{for(const k in keys)keys[k]=false;});
 const look=(dx,dy,k)=>{P.yaw-=dx*k;P.pitch=clamp(P.pitch-dy*k,-1.2,1.2);};
 let dragging=false,lx=0,ly=0;
-canvas.addEventListener('mousedown',e=>{if(!started)return;if(document.pointerLockElement===canvas){swing();return;}if(canvas.requestPointerLock&&!coarse)canvas.requestPointerLock();dragging=true;lx=e.clientX;ly=e.clientY;});
+const GAME={modal:false};   // game.js plugs in here: bag, pickups, trading
+canvas.addEventListener('mousedown',e=>{if(!started||GAME.modal)return;if(document.pointerLockElement===canvas){if(e.button===0)swing();return;}if(canvas.requestPointerLock&&!coarse)canvas.requestPointerLock();dragging=true;lx=e.clientX;ly=e.clientY;});
 addEventListener('mouseup',()=>dragging=false);
-addEventListener('mousemove',e=>{if(!started)return;
+addEventListener('mousemove',e=>{if(!started||GAME.modal)return;
   if(document.pointerLockElement===canvas)look(e.movementX,e.movementY,.0022);
   else if(dragging){look(e.clientX-lx,e.clientY-ly,.004);lx=e.clientX;ly=e.clientY;}});
 const joy={x:0,y:0};let joyId=null,jox=0,joy0=0,lookId=null,tlx=0,tly=0;
 const ring=$('#ring'),knob=$('#knob');
-canvas.addEventListener('touchstart',e=>{if(!started)return;e.preventDefault();
+canvas.addEventListener('touchstart',e=>{if(!started||GAME.modal)return;e.preventDefault();
   for(const t of e.changedTouches){
     if(t.clientX<innerWidth*.45&&joyId===null){joyId=t.identifier;jox=t.clientX;joy0=t.clientY;ring.style.display='block';ring.style.left=jox+'px';ring.style.top=joy0+'px';knob.style.transform='';}
     else if(lookId===null){lookId=t.identifier;tlx=t.clientX;tly=t.clientY;}}},{passive:false});
@@ -1375,16 +1425,18 @@ $('#swing').addEventListener('click',swing);$('#jump').addEventListener('touchst
 function begin(){started=true;$('#start').style.display='none';if(coarse){$('#swing').style.display='block';$('#jump').style.display='block';}
   if(!coarse&&canvas.requestPointerLock)canvas.requestPointerLock();
   hint.textContent=coarse?'Drag on the left to walk, on the right to look.':'Click to grab the mouse, then click to swing. Esc lets go.';
-  hint.style.opacity=1;setTimeout(()=>hint.style.opacity=0,6000);}
+  hint.style.opacity=1;setTimeout(()=>hint.style.opacity=0,6000);if(GAME.begin)GAME.begin();}
 $('#go').addEventListener('click',begin);
 
 /* ================= the throne room, inside the keep ================= */
 const FOUNTAIN=[];
+function HOLEP(IW,ID){return [[0,-1.2,IW,ID-2.4],[(-IW/2-11.5)/2,ID/2-1.2,IW/2-11.5,2.4],[(IW/2-1)/2,ID/2-1.2,IW/2+1,2.4]];}
 const THRONE=(function(){
   const k=KEEP,c=castleG.localToWorld(new THREE.Vector3(k.kx,0,k.kz)),IW=(k.kw-2*k.th)*CS-.1,ID=(k.kd-2*k.th)*CS-.1,IH=15,y0=CTOP+.45;
   const G=new THREE.Group();G.position.set(c.x,y0,c.z);scene.add(G);
   const toW=(x,z)=>[c.x+x,c.z+z],toL=(x,z)=>[(c.x+x-CX)/CS,(c.z+z-CZ)/CS];
   const ob=(x,z,r)=>{const [lx,lz]=toL(x,z);OBST.push({t:'c',x:lx,z:lz,r:r/CS});};
+  const ob0=OBST.length;const obS=(ax,az,bx,bz,ya,yb)=>{const a=toL(ax,az),b=toL(bx,bz);OBST.push({t:'s',a,b,w:.12/CS,y0:y0+ya,y1:y0+yb});},obY=(x,z,r,ya,yb)=>{const [lx,lz]=toL(x,z);OBST.push({t:'c',x:lx,z:lz,r:r/CS,y0:y0+ya,y1:y0+yb});};
   const obR=(x,z,hw,hd)=>{const [lx,lz]=toL(x,z);OBST.push({t:'r',x:lx,z:lz,hw:hw/CS,hd:hd/CS,ry:0});};
   // textures for the hall
   const TX=(w,h,f)=>{const [cv,g]=mk(w,h);f(g,w,h);return cv;};
@@ -1401,7 +1453,7 @@ const THRONE=(function(){
   ITEX.redban=TX(16,64,g=>{g.fillStyle='#9e1a26';g.fillRect(0,0,16,64);g.fillStyle='#d8b060';g.fillRect(0,2,16,2);g.fillRect(6,18,4,16);g.fillRect(2,23,12,4);g.fillStyle='#6e0e18';for(let x=0;x<16;x+=4)g.fillRect(x,60,2,4);dabs(g,30,0,0,16,58,['#b02a34','#82141e'],2,2);});
   ITEX.steel=TX(16,16,g=>{g.fillStyle='#8a909a';g.fillRect(0,0,16,16);g.fillStyle='#c8ced8';g.fillRect(0,0,16,2);g.fillRect(0,0,2,16);g.fillStyle='#5a606a';g.fillRect(0,14,16,2);dabs(g,10,0,0,16,16,['#aab0ba','#6a707a'],2,1);});
   const HM={floor:imat('flag'),wall:imat('ashl'),beams:imat('beam'),carpet:imat('carpet'),gold:imat('gold'),velvet:imat('velvet'),tap:imat('tapestry'),ban:imat('redban'),steel:imat('steel'),wood:imat('wood'),stone:imat('stone'),candle:imat('plain',0xfff0c8),
-    plate:imat('gold',0xd0d0d0),cloth:imat('plain',0xe8e0cc),flame:M.flame,glass:null};
+    plate:imat('gold',0xd0d0d0),planks:imat('planks'),cloth:imat('plain',0xe8e0cc),plain:imat('plain',0x9ab0c8),flame:M.flame,glass:null};
   // stained glass: leaded panes, lit by the sky
   const glassC=TX(32,64,g=>{g.fillStyle='#1a1410';g.fillRect(0,0,32,64);const cols=['#c83a3a','#3a5ac8','#e8c040','#3a9a5a','#8a3ac0','#e8e0c0'];
     for(let y=2;y<62;y+=6)for(let x=2;x<30;x+=6){const dx=x-14,dy=y-20;g.fillStyle=Math.hypot(dx,dy)<9?pick(['#e8c040','#c83a3a','#e8e0c0']):pick(cols);g.fillRect(x,y,5,5);}
@@ -1411,8 +1463,8 @@ const THRONE=(function(){
   const P=(w,h,sx,sy)=>suv(new THREE.PlaneGeometry(w,h,Math.max(1,Math.ceil(w/1.2)),Math.max(1,Math.ceil(h/1.2))),w/(sx||2),h/(sy||2));
   // floor, ceiling, walls
   {const f=P(IW,ID,2.4,2.4);f.rotateX(-Math.PI/2);I.add(f,'floor',0,0,0);
-   const ce=P(IW,ID,3,3);ce.rotateX(Math.PI/2);I.add(ce,'beams',0,IH,0);
-   for(let i=-4;i<=4;i++)I.add(boxUV(IW,.6,.6,1.5),'beams',0,IH-.3,i*ID/9);for(const sx of [-1,1])I.add(boxUV(.7,.7,ID,1.5),'beams',sx*(IW/2-4.5),IH-.95,0);
+   for(const [cx,cz,cw,cd] of HOLEP(IW,ID)){const ce=P(cw,cd,3,3);ce.rotateX(Math.PI/2);I.add(ce,'beams',cx,IH,cz);}
+   for(let i=-4;i<=3;i++)I.add(boxUV(IW,.6,.6,1.5),'beams',0,IH-.3,i*ID/9);for(const sx of [-1,1])I.add(boxUV(.7,.7,ID-2.6,1.5),'beams',sx*(IW/2-4.5),IH-.95,0);
    I.add(P(IW,IH,3,3),'wall',0,IH/2,-ID/2+.01);I.add(P(ID,IH,3,3),'wall',-IW/2+.01,IH/2,0,Math.PI/2);I.add(P(ID,IH,3,3),'wall',IW/2-.01,IH/2,0,-Math.PI/2);
    const dw=k.gw*CS,dh=k.gh*CS;for(const [u0,u1,v0,v1] of holeRects(-IW/2,IW/2,IH,[{u:0,v0:0,v1:dh,hw:dw/2}]))I.add(P(u1-u0,v1-v0,3,3),'wall',(u0+u1)/2,(v0+v1)/2,ID/2-.01,Math.PI);
    // a skirting of darker stone and a cornice
@@ -1450,20 +1502,20 @@ const THRONE=(function(){
   {const rw=new THREE.CircleGeometry(2.4,20);I.add(rw,'glass',0,IH-3.2,dz0+.05);I.add(new THREE.TorusGeometry(2.45,.25,4,20),'wall',0,IH-3.2,dz0+.1);wins.push([0,IH-3.2,dz0+1]);}
   // tapestries and banners along the side walls; stained glass between
   for(const sx of [-1,1]){const wx=sx*(IW/2-.06),ry=sx>0?-Math.PI/2:Math.PI/2;
-    for(const z of [-3,2,6.8]){I.add(P(2.2,5.6,2.2,5.6),'glass',wx,9.2,z,ry);I.add(boxUV(.3,6,.3,1),'stone',wx-sx*.1,9.2,z-1.25);I.add(boxUV(.3,6,.3,1),'stone',wx-sx*.1,9.2,z+1.25);I.add(boxUV(.4,.4,2.8,1),'stone',wx-sx*.1,6.1,z);wins.push([wx-sx*1.5,9.2,z]);}
+    for(const z of [-3,2,6.8]){I.add(P(2.2,3.4,2.2,3.4),'glass',wx,12.7,z,ry);I.add(boxUV(.3,3.8,.3,1),'stone',wx-sx*.1,12.7,z-1.25);I.add(boxUV(.3,3.8,.3,1),'stone',wx-sx*.1,12.7,z+1.25);I.add(boxUV(.4,.4,2.8,1),'stone',wx-sx*.1,10.85,z);wins.push([wx-sx*1.5,9.2,z]);}
     for(const z of [-8,-.5+2.5*0,4.5+0]){}
-    for(const z of [-5.5+2.5,4.5-2.2]){I.add(P(3,6.5,3,6.5),'tap',wx-sx*.05,3.9,z+.2,ry);}
-    for(const z of [-8.2,9.6]){I.add(P(1.8,6,1.8,6),'ban',wx-sx*.05,4.2,z,ry);}}
+    }
+  for(const sx of [-1,1]){I.add(P(3,6.5,3,6.5),'tap',sx*9.6,4.4,-ID/2+.06);I.add(P(1.8,6,1.8,6),'ban',sx*12.2,4.2,-ID/2+.06);}
   // chandeliers: wheels of candles on chains
   for(const z of [-3,3,8.5]){const yy=IH-5.5;I.add(new THREE.TorusGeometry(1.5,.09,5,16),'steel',0,yy,z,0,Math.PI/2);I.add(new THREE.TorusGeometry(.8,.07,5,12),'steel',0,yy+.35,z,0,Math.PI/2);
     for(let i=0;i<4;i++){const a=i/4*6.283;const ch=new THREE.BoxGeometry(.04,IH-yy,.04);I.add(ch,'steel',Math.cos(a)*.7,yy+(IH-yy)/2,z+Math.sin(a)*.7);}
     for(let i=0;i<12;i++){const a=i/12*6.283;I.add(new THREE.CylinderGeometry(.05,.05,.22,5),'candle',Math.cos(a)*1.5,yy+.18,z+Math.sin(a)*1.5);I.add(boxUV(.07,.1,.07,1),'flame',Math.cos(a)*1.5,yy+.34,z+Math.sin(a)*1.5);}
     fires.push([0,yy,z,1.8]);LIGHTS.push({world:[c.x,y0+yy+.3,c.z+z],size:4.5,col:[1,.78,.45],kind:0,flick:1});}
   // braziers at the corners of the dais and by the door
-  for(const [bx,bz] of [[-6.8,dz0+5.6],[6.8,dz0+5.6],[-4,ID/2-2.5],[4,ID/2-2.5]]){I.add(new THREE.CylinderGeometry(.12,.3,1.1,8),'steel',bx,.55,bz);I.add(new THREE.CylinderGeometry(.6,.3,.45,10),'gold',bx,1.3,bz);
+  for(const [bx,bz] of [[-6.8,dz0+5.6],[6.8,dz0+5.6]]){I.add(new THREE.CylinderGeometry(.12,.3,1.1,8),'steel',bx,.55,bz);I.add(new THREE.CylinderGeometry(.6,.3,.45,10),'gold',bx,1.3,bz);
     {const f=flameSprite(.9,1.3);f.position.set(bx,1.45,bz);G.add(f);}fires.push([bx,2.1,bz,1.9]);ob(bx,bz,.8);LIGHTS.push({world:[c.x+bx,y0+2,c.z+bz],size:5,col:[1,.6,.25],kind:0,flick:1});}
   // banquet tables in the side aisles, with plates, goblets and candlesticks
-  for(const sx of [-1,1]){const x=sx*(IW/2-2.4);for(const z0 of [-3.2,5.8]){const L=6.5;I.add(boxUV(1.6,.12,L,1),'wood',x,.86,z0);I.add(P(1.8,L+.2,1.8,1.8).rotateX(-Math.PI/2),'cloth',x,.93,z0);
+  for(const sx of [-1,1]){const x=sx*5;for(const z0 of [-.5,6.3]){const L=6.5;I.add(boxUV(1.6,.12,L,1),'wood',x,.86,z0);I.add(P(1.8,L+.2,1.8,1.8).rotateX(-Math.PI/2),'cloth',x,.93,z0);
       for(const [a,b] of [[-1,-1],[1,-1],[-1,1],[1,1]])I.add(boxUV(.14,.86,.14,1),'wood',x+a*.65,.43,z0+b*(L/2-.3));
       for(const sd of [-1,1])I.add(boxUV(.35,.48,L,1),'wood',x+sd*1.15,.24,z0);
       for(let i=0;i<6;i++){const zz=z0-L/2+.6+i*1.05;for(const sd of [-1,1]){I.add(new THREE.CylinderGeometry(.2,.16,.04,10),'plate',x+sd*.45,.96,zz);I.add(new THREE.CylinderGeometry(.06,.04,.2,6),'gold',x+sd*.2,1.04,zz+.3);}}
@@ -1474,10 +1526,111 @@ const THRONE=(function(){
     I.add(boxUV(.9,.25,.6,1),'stone',x,.12,z,ry);A(.18,.9,.2,.7,0,-.16);A(.18,.9,.2,.7,0,.16);A(.55,.8,.32,1.55);A(.5,.12,.34,1.12,'gold');A(.36,.4,.36,2.18);A(.4,.08,.4,2.42,'gold');A(.14,.75,.16,1.5,0,-.36);A(.14,.75,.16,1.5,0,.36);
     I.add(new THREE.CylinderGeometry(.03,.03,2.6,5),'wood',x+.5*Math.cos(ry),1.4,z-.5*Math.sin(ry));I.add(new THREE.ConeGeometry(.12,.4,4),'steel',x+.5*Math.cos(ry),2.85,z-.5*Math.sin(ry));ob(x,z,.6);};
   armour(-3.4,ID/2-1.2,0);armour(3.4,ID/2-1.2,0);armour(-6.6,dz0+1.2,0);armour(6.6,dz0+1.2,0);
+  for(let i=ob0;i<OBST.length;i++)if(OBST[i].y0===undefined){OBST[i].y0=y0-1;OBST[i].y1=y0+8.3;}
+  // --- the gallery over the door, two grand stairs up the side walls, a flight on to the royal floor ---
+  const GY=10.5,GD=5,SW2=2.6,zs0=-10,zs1=ID/2-GD;
+  {I.add(boxUV(IW,.45,GD,1.5),'stone',0,GY-.22,ID/2-GD/2);const gf=P(IW,GD,2.4,2.4);gf.rotateX(-Math.PI/2);I.add(gf,'floor',0,GY+.01,ID/2-GD/2);
+   I.add(boxUV(IW,.5,.4,1),'gold',0,GY-.45,ID/2-GD+.2);
+   for(let x=-IW/2+SW2+.2;x<=IW/2-SW2-.2;x+=.75){I.add(boxUV(.14,.9,.14,1),'stone',x,GY+.45,zs1+.1);}I.add(boxUV(IW-2*SW2,.14,.24,1),'gold',0,GY+.95,zs1+.1);}
+  for(const sx of [-1,1]){const xc=sx*(IW/2-SW2/2),run=zs1-zs0,n=Math.ceil(GY/.25),st=run/n,ang=Math.atan2(GY,run),len=Math.hypot(GY,run);
+    for(let k=0;k<n;k++){const hh=(k+1)*GY/n;I.add(boxUV(SW2,.28,st+.03,1),k%2?'stone':'floor',xc,hh-.14,zs0+(k+.5)*st);}
+    I.add(boxUV(SW2,.5,len,1.5),'stone',xc,GY/2-.45,(zs0+zs1)/2,0,-ang);
+    const rx=xc-sx*(SW2/2-.08);for(let k=0;k<=12;k++){const t=k/12,zz=zs0+t*run,yy=t*GY;I.add(boxUV(.14,1,.14,1),'stone',rx,yy+.5,zz);}
+    I.add(boxUV(.16,.14,len,1),'gold',rx,GY/2+1,(zs0+zs1)/2,0,-ang);I.add(boxUV(.5,1.3,.5,1),'stone',rx,.65,zs0);I.add(new THREE.SphereGeometry(.28,8,6),'gold',rx,1.5,zs0);
+    RAMPS.push({x:c.x+xc,z:c.z+zs0,ux:0,uz:1,L:run,hw:SW2/2,y0:y0,y1:y0+GY});obS(sx*(IW/2-SW2-.05),zs0+1.6,sx*(IW/2-SW2-.05),zs1,-1,GY+1.5);}
+  obS(-IW/2+SW2,zs1+.1,IW/2-SW2,zs1+.1,GY-1,GY+1.5);
+  {const x0=-1,x1=-11.6,zc=ID/2-1.2,run=x0-x1,rise=IH+.15-GY,n=Math.ceil(rise/.25),st=run/n,len=Math.hypot(run,rise);
+    for(let k=0;k<n;k++)I.add(boxUV(st+.03,.28,2.3,1),k%2?'stone':'floor',x0-(k+.5)*st,GY+(k+1)*rise/n-.14,zc);
+    I.add(boxUV(len,.45,2.3,1.5),'stone',(x0+x1)/2,GY+rise/2-.4,zc,0,0,-Math.atan2(rise,run));
+    for(let k=0;k<=8;k++){const t=k/8;I.add(boxUV(.12,1,.12,1),'stone',x0-t*run,GY+t*rise+.5,zc-1.1);}I.add(boxUV(len,.12,.18,1),'gold',(x0+x1)/2,GY+rise/2+1,zc-1.1,0,0,-Math.atan2(rise,run));
+    RAMPS.push({x:c.x+x0,z:c.z+zc,ux:-1,uz:0,L:run+.1,hw:1.15,y0:y0+GY,y1:y0+IH+.15});obS(x0-1.6,zc-1.15,x1,zc-1.15,GY-.5,IH+1.5);obS(x1-.05,zc-1.15,x1-.05,zc+1.2,GY-.5,GY+2.5);}
+  FLOORS.push({x:c.x,z:c.z+ID/2-GD/2,ry:0,hw:IW/2,hd:GD/2,y:y0+GY,r:IW});
   I.build(HM,G);bake(G,{w:IW,d:ID,ih:IH,fires,wins});
+  // --- the royal floor above the hall ---
+  const UY=IH+.15,UH=5.6,G2=new THREE.Group();G2.position.set(c.x,y0+UY,c.z);scene.add(G2);const U=kit(),f2=[],w2=[];
+  for(const [cx,cz,cw,cd] of HOLEP(IW,ID)){const fl=P(cw,cd,1.6,1.6);fl.rotateX(-Math.PI/2);U.add(fl,'planks',cx,.01,cz);FLOORS.push({x:c.x+cx,z:c.z+cz,ry:0,hw:cw/2,hd:cd/2,y:y0+UY,r:Math.hypot(cw,cd)});}
+  {const ce=P(IW,ID,3,3);ce.rotateX(Math.PI/2);U.add(ce,'beams',0,UH,0);for(let i=-4;i<=4;i++)U.add(boxUV(IW,.4,.4,1.5),'beams',0,UH-.2,i*ID/9);
+   U.add(P(IW,UH,3,3),'wall',0,UH/2,-ID/2+.01);U.add(P(IW,UH,3,3),'wall',0,UH/2,ID/2-.01,Math.PI);U.add(P(ID,UH,3,3),'wall',-IW/2+.01,UH/2,0,Math.PI/2);U.add(P(ID,UH,3,3),'wall',IW/2-.01,UH/2,0,-Math.PI/2);
+   for(let x=-11.5;x<=-1;x+=.7)U.add(boxUV(.12,1,.12,1),'stone',x,.5,ID/2-2.45);U.add(boxUV(10.6,.12,.2,1),'gold',-6.25,1,ID/2-2.45);
+   // rugs, a four-poster bed, chests, a wardrobe, a writing desk, a fireplace, tapestries, windows
+   {const r=P(6,4.5,6,4.5);r.rotateX(-Math.PI/2);U.add(r,'carpet',0,.03,-1);const r2=P(3,7,3,7);r2.rotateX(-Math.PI/2);U.add(r2,'carpet',8,.03,2);}
+   const bz=-ID/2+2.4;U.add(boxUV(3.6,.6,4.2,1),'wood',0,.45,bz);U.add(boxUV(3.4,.35,4,1),'cloth',0,.92,bz+.05);U.add(boxUV(3.45,.2,2.6,1),'velvet',0,1.12,bz+.75);
+   for(const sx of [-1,1])U.add(boxUV(1.2,.3,.6,1),'cloth',sx*.8,1.15,bz-1.6);U.add(boxUV(3.8,1.8,.25,1),'gold',0,1.4,bz-2.1);
+   for(const [px,pz] of [[-1.8,bz-2.1],[1.8,bz-2.1],[-1.8,bz+2.1],[1.8,bz+2.1]])U.add(new THREE.CylinderGeometry(.1,.12,3.8,8),'gold',px,1.9,pz);
+   U.add(boxUV(4,.15,4.6,1),'velvet',0,3.85,bz);for(const [vx,vz,vw,r] of [[0,bz+2.3,4,0],[-1.95,bz,4.6,Math.PI/2],[1.95,bz,4.6,Math.PI/2]])U.add(boxUV(vw,.6,.06,1),'velvet',vx,3.5,vz,r);
+   U.add(boxUV(2.2,.8,.9,1),'wood',0,.4,bz+2.8);U.add(boxUV(2.3,.08,1,1),'gold',0,.82,bz+2.8);
+   U.add(boxUV(1.8,3,.9,1),'wood',-IW/2+1.2,1.5,-4);U.add(boxUV(.06,2.6,.06,1),'gold',-IW/2+1.2,1.5,-3.54);
+   U.add(boxUV(2,.1,1,1),'wood',IW/2-1.6,.95,4);for(const [a,b] of [[-1,-1],[1,-1],[-1,1],[1,1]])U.add(boxUV(.1,.9,.1,1),'wood',IW/2-1.6+a*.9,.45,4+b*.4);U.add(boxUV(.5,.06,.4,1),'plate',IW/2-1.6,1.03,4);
+   U.add(new THREE.CylinderGeometry(.04,.04,.25,5),'candle',IW/2-1.2,1.13,3.8);f2.push([IW/2-1.2,1.4,3.8,.5]);
+   const hx=IW/2-.6;U.add(boxUV(1.2,.5,2.6,1),'stone',hx,.25,-2);U.add(boxUV(1,UH-1.6,2.2,1),'stone',hx+.1,1.6+(UH-1.6)/2,-2);U.add(boxUV(1.3,.3,2.7,1),'gold',hx-.05,1.65,-2);
+   {const fl=flameSprite(.8,1.1);fl.position.set(hx-.1,.5,-2);G2.add(fl);}f2.push([hx-.6,.9,-2,1.6]);
+   for(const z of [-6,6])U.add(P(3,4,3,4),'tap',-IW/2+.05,2.4,z,Math.PI/2);U.add(P(3,4,3,4),'tap',IW/2-.05,2.4,6,-Math.PI/2);
+   for(const z of [-8,0,8]){for(const sx of [-1,1]){U.add(P(1.2,1.8,1.2,1.8),'glass',sx*(IW/2-.03),2.6,z,sx>0?-Math.PI/2:Math.PI/2);w2.push([sx*(IW/2-1),2.6,z]);}}
+   U.add(new THREE.TorusGeometry(1,.06,4,12),'steel',0,UH-1.6,2,0,Math.PI/2);for(let i=0;i<8;i++){const a=i/8*6.283;U.add(new THREE.CylinderGeometry(.04,.04,.18,5),'candle',Math.cos(a),UH-1.45,2+Math.sin(a));}f2.push([0,UH-1.5,2,1.2]);
+   U.add(boxUV(1.2,.7,.7,1),'wood',-IW/2+1,.35,4);U.add(boxUV(1.2,.7,.7,1),'wood',-IW/2+1,.35,5.2);
+   const uy=UY-.5,uy1=UY+3;obY(0,bz,2.3,uy,uy1);obY(-IW/2+1.2,-4,1.1,uy,uy1);obY(IW/2-1.6,4,1.1,uy,uy1);obY(hx,-2,1.3,uy,uy1);obY(-IW/2+1,4.6,.9,uy,uy1);
+   obS(-11.5,ID/2-2.45,-1,ID/2-2.45,uy,uy1);obS(-1,ID/2-2.45,-1,ID/2,uy+.4,uy1);}
+  U.build(HM,G2);bake(G2,{w:IW,d:ID,ih:UH,fires:f2,wins:w2});
   // the hall's floor
   FLOORS.push({x:c.x,z:c.z+1.2,ry:0,hw:IW/2,hd:ID/2+1.2,y:y0,r:Math.hypot(IW,ID)+3});
-  return {c,y0,IW,ID,IH,tz,dz0,toW,G};})();
+  // --- inside the great hall and the chapel ---
+  window.HALLIN=[];
+  for(const H of HALLS){const iw=(H.L-2*H.t)*CS,id=(H.Wd-2*H.t)*CS,ih=(H.h-.6)*CS,cx=CX+H.x*CS,cz=CZ+H.z*CS,cy=CTOP+.25,c0=Math.cos(H.ry),s0=Math.sin(H.ry);
+    const HG=new THREE.Group();HG.position.set(cx,cy,cz);HG.rotation.y=H.ry;scene.add(HG);const J=kit(),fh=[],wh=[];
+    const toWd=(lx,lz)=>[cx+lx*c0+lz*s0,cz-lx*s0+lz*c0];
+    const hob=(lx,lz,hw,hd)=>{const [wx,wz]=toWd(lx,lz),[qx,qz]=[(wx-CX)/CS,(wz-CZ)/CS];OBST.push({t:'r',x:qx,z:qz,hw:hw/CS,hd:hd/CS,ry:H.ry});};
+    const dw=H.dw*CS,dh=H.dh*CS;
+    {const f=P(iw,id,2.4,2.4);f.rotateX(-Math.PI/2);J.add(f,'floor',0,0,0);const ce=P(iw,id,3,3);ce.rotateX(Math.PI/2);J.add(ce,'beams',0,ih,0);
+     for(let x=-iw/2+2;x<iw/2;x+=4)J.add(boxUV(.6,.6,id,1.5),'beams',0+x,ih-.3,0);
+     J.add(P(iw,ih,3,3),'wall',0,ih/2,-id/2+.02);J.add(P(id,ih,3,3),'wall',-iw/2+.02,ih/2,0,Math.PI/2);J.add(P(id,ih,3,3),'wall',iw/2-.02,ih/2,0,-Math.PI/2);
+     const sw=(iw-2*dw)/2;for(const sd of [-1,1])J.add(P(sw,ih,3,3),'wall',sd*(dw+sw/2),ih/2,id/2-.02,Math.PI);J.add(P(2*dw,ih-dh,3,3),'wall',0,dh+(ih-dh)/2,id/2-.02,Math.PI);
+     const nwin=H.kind==='chapel'?3:Math.floor(H.L/4);
+     for(let i=0;i<nwin;i++){const lx=((i+.5)/nwin-.5)*(H.L-3)*CS,wy=H.h*.55*CS;for(const sd of [-1,1]){J.add(P(1.6,4.2,1.6,4.2),'glass',lx,wy,sd*(id/2-.05),sd>0?Math.PI:0);wh.push([lx,wy,sd*(id/2-1.5),0,-sd]);}}
+     J.add(boxUV(iw,.5,.3,1),'stone',0,.25,-id/2+.15);}
+    if(H.kind==='feast'){
+      // two long trestle tables and a high table on a step at the far end
+      for(const tz2 of [-3.4,3.4]){const L2=iw-14;J.add(boxUV(L2,.12,1.5,1),'wood',2,.9,tz2);for(let k=-3;k<=3;k++)for(const sd of [-1,1])J.add(boxUV(.14,.86,.14,1),'wood',2+k*L2/6.4,.43,tz2+sd*.6);
+        for(const sd of [-1,1])J.add(boxUV(L2,.45,.35,1),'wood',2,.23,tz2+sd*1.1);
+        for(let k=0;k<18;k++){const xx=2-L2/2+.8+k*(L2-1.6)/17;for(const sd of [-1,1]){J.add(new THREE.CylinderGeometry(.2,.16,.04,8),'plate',xx,.97,tz2+sd*.45);if(k%3===0)J.add(new THREE.CylinderGeometry(.05,.04,.18,6),'gold',xx+.25,1.05,tz2+sd*.4);}}
+        for(let k=0;k<4;k++){const xx=2-L2/2+3+k*(L2-6)/3;J.add(new THREE.CylinderGeometry(.05,.09,.45,6),'gold',xx,1.18,tz2);J.add(new THREE.CylinderGeometry(.04,.04,.2,5),'candle',xx,1.5,tz2);J.add(boxUV(.07,.12,.07,1),'flame',xx,1.66,tz2);fh.push([xx,1.7,tz2,.9]);}
+        J.add(boxUV(1.2,.5,.8,1),'gold',2,1.2,tz2);hob(2,tz2,L2/2,1.4);}
+      {const hx=-iw/2+3.2;J.add(boxUV(4,.3,id-2,1),'stone',hx,.15,0);J.add(boxUV(1.4,.12,id-5,1),'wood',hx,1.2,0);J.add(boxUV(1.5,.9,id-5.2,1),'velvet',hx+.1,.75,0);
+        for(let k=0;k<5;k++){const zz=-(id-6)/2+k*(id-6)/4;J.add(boxUV(.8,1.6,.8,1),'wood',hx-1.1,1.1,zz);J.add(boxUV(.85,.15,.85,1),'velvet',hx-1.05,.92,zz);J.add(new THREE.CylinderGeometry(.2,.16,.04,8),'plate',hx,1.28,zz);}
+        J.add(P(3.4,5,3.4,5),'tap',-iw/2+.06,5,0,Math.PI/2);for(const sd of [-1,1])J.add(P(1.8,6,1.8,6),'ban',-iw/2+.06,5.5,sd*4.5,Math.PI/2);hob(hx,0,1.9,(id-2)/2);}
+      // two great hearths on the back wall, under the chimneys
+      for(const hx of [-.32*H.L*CS,.28*H.L*CS]){const bz=-id/2+.9;J.add(boxUV(4,.5,1.8,1),'stone',hx,.25,bz);for(const sd of [-1,1])J.add(boxUV(.6,3,1.6,1),'stone',hx+sd*1.9,1.5,bz);J.add(boxUV(4.6,.6,1.9,1),'stone',hx,3.2,bz);J.add(boxUV(3.2,ih-3.5,1.2,1),'stone',hx,3.5+(ih-3.5)/2,-id/2+.6);
+        for(let k=0;k<3;k++)J.add(new THREE.CylinderGeometry(.14,.14,1.8,6),'wood',hx+(k-1)*.3,.65,bz,0,0,Math.PI/2);
+        {const fl=flameSprite(1.6,1.9);const [wx,wz]=toWd(hx,bz);fl.position.set(wx,cy+1.4,wz);scene.add(fl);}fh.push([hx,1.4,bz+.6,2.6]);
+        J.add(new THREE.CylinderGeometry(.05,.05,1.6,5),'steel',hx,1.6,bz+.5,0,0,Math.PI/2);hob(hx,bz,2.4,1.2);
+        {const [wx,wz]=toWd(hx,bz+.8);LIGHTS.push({world:[wx,cy+1.5,wz],size:6,col:[1,.6,.25],kind:0,flick:1});}}
+      // chandeliers, barrels and a dresser of plate by the door
+      for(const x of [-8,4,14]){const yy=ih-7;J.add(new THREE.TorusGeometry(1.6,.09,5,16),'steel',x,yy,0,0,Math.PI/2);J.add(boxUV(.05,ih-yy,.05,1),'steel',x,yy+(ih-yy)/2,0);
+        for(let i=0;i<10;i++){const a=i/10*6.283;J.add(new THREE.CylinderGeometry(.05,.05,.22,5),'candle',x+Math.cos(a)*1.6,yy+.18,Math.sin(a)*1.6);J.add(boxUV(.07,.1,.07,1),'flame',x+Math.cos(a)*1.6,yy+.34,Math.sin(a)*1.6);}
+        fh.push([x,yy,0,2]);{const [wx,wz]=toWd(x,0);LIGHTS.push({world:[wx,cy+yy+.3,wz],size:4.5,col:[1,.78,.45],kind:0,flick:1});}}
+      for(const [bx,bz] of [[iw/2-1,-id/2+1],[iw/2-2.2,-id/2+1],[iw/2-1,-id/2+2.2],[iw/2-1,id/2-1.2]]){J.add(new THREE.CylinderGeometry(.5,.45,1.1,10),'wood',bx,.55,bz);J.add(new THREE.TorusGeometry(.5,.04,4,12),'steel',bx,.8,bz,0,Math.PI/2);hob(bx,bz,.6,.6);}
+      {const dx=iw/2-.6;J.add(boxUV(1,2.6,4,1),'wood',dx,1.3,0);for(let k=0;k<4;k++)J.add(new THREE.CylinderGeometry(.25,.25,.04,10),'plate',dx-.3,2.2,-1.4+k*.9,0,0,Math.PI/2);hob(dx,0,.6,2.1);}
+      for(const sd of [-1,1])for(const x of [-12,12])J.add(P(1.8,5,1.8,5),'ban',x,7,sd*(id/2-.08),sd>0?Math.PI:0);
+    } else {
+      // the chapel: an altar under a rose window at the far end, pews either side of an aisle
+      const ax=-iw/2;J.add(boxUV(4.4,.35,id-1,1),'stone',ax+2.2,.17,0);J.add(boxUV(2.6,.3,id-3,1),'stone',ax+1.6,.5,0);
+      J.add(boxUV(1.3,1.1,3.2,1),'stone',ax+1.6,1.2,0);J.add(boxUV(1.4,.06,3.4,1),'cloth',ax+1.6,1.78,0);J.add(boxUV(1.45,.6,.9,1),'velvet',ax+2.27,1.3,0);
+      J.add(boxUV(.16,2.4,.16,1),'gold',ax+1.3,3,0);J.add(boxUV(.16,.16,1.3,1),'gold',ax+1.3,3.5,0);
+      for(const sd of [-1,1]){J.add(new THREE.CylinderGeometry(.06,.1,.5,6),'gold',ax+1.6,2.05,sd*1.2);J.add(new THREE.CylinderGeometry(.05,.05,.3,5),'candle',ax+1.6,2.45,sd*1.2);J.add(boxUV(.07,.12,.07,1),'flame',ax+1.6,2.66,sd*1.2);fh.push([ax+1.9,2.7,sd*1.2,1.2]);
+        for(let k=0;k<3;k++){J.add(new THREE.CylinderGeometry(.06,.06,1.4+k*.2,6),'gold',ax+.8,.7+k*.1,sd*(3+k*.6));J.add(new THREE.CylinderGeometry(.06,.06,.3,5),'candle',ax+.8,1.55+k*.2,sd*(3+k*.6));J.add(boxUV(.07,.12,.07,1),'flame',ax+.8,1.76+k*.2,sd*(3+k*.6));}
+        fh.push([ax+1,2,sd*3.6,1.3]);}
+      {const rw=P(5,5,5,5);J.add(rw,'glass',ax+.06,ih*.6,0,Math.PI/2);J.add(new THREE.TorusGeometry(2.6,.25,5,20),'stone',ax+.1,ih*.6,0,Math.PI/2);wh.push([ax+2,ih*.6,0,1,0]);
+        J.add(P(2,6.5,2,6.5),'glass',ax+.06,ih*.6-5.2,-3.2,Math.PI/2);J.add(P(2,6.5,2,6.5),'glass',ax+.06,ih*.6-5.2,3.2,Math.PI/2);}
+      hob(ax+1.6,0,.9,1.8);
+      for(let row=0;row<7;row++){const px=ax+6+row*2;if(Math.abs(px)<2.4)continue;for(const sd of [-1,1]){const pz=sd*3.6,pl=4.2;J.add(boxUV(.5,.08,pl,1),'wood',px,.5,pz);J.add(boxUV(.08,.6,pl,1),'wood',px+.27,.8,pz);for(const e of [-1,1])J.add(boxUV(.55,.95,.08,1),'wood',px,.47,pz+e*pl/2);J.add(boxUV(.2,.08,pl,1),'wood',px-.45,.25,pz);hob(px,pz,.35,pl/2+.05);}}
+      {const cp=P(iw-5,2.2,2.2,2.2);cp.rotateX(-Math.PI/2);J.add(cp,'carpet',2.5,.03,0);const cq=P(2.4,id/2,2.4,2.4);cq.rotateX(-Math.PI/2);J.add(cq,'carpet',0,.025,id/4);}
+      for(const sd of [-1,1])for(const x of [-5,5]){J.add(P(1.8,5,1.8,5),'ban',x,5.5,sd*(id/2-.08),sd>0?Math.PI:0);}
+      // a font by the door
+      {const fx=4.2,fz=id/2-2.2;J.add(new THREE.CylinderGeometry(.6,.4,.9,10),'stone',fx,.45,fz);J.add(new THREE.CylinderGeometry(.5,.5,.04,10),'plain',fx,.92,fz);hob(fx,fz,.7,.7);}
+      {const [wx,wz]=toWd(ax+2,0);LIGHTS.push({world:[wx,cy+2.5,wz],size:5,col:[1,.8,.5],kind:0,flick:1});}
+    }
+    J.build(HM,HG);bake(HG,{w:iw,d:id,ih,fires:fh,wins:wh});
+    HALLIN.push({kind:H.kind,toWd,iw,id,cy,ry:H.ry});}
+  return {c,y0,IW,ID,IH,tz,dz0,toW,G,UY,GY};})();
 // --- the courtyard: a fountain with benches round it ---
 (function(){const F=kit(),p=castleG.localToWorld(new THREE.Vector3(4,0,16.5)),y=CTOP+.08;
   F.add(suv(new THREE.CylinderGeometry(3.2,3.4,.8,20,1,true),8,1),'stone',p.x,y+.4,p.z);F.add(new THREE.TorusGeometry(3.25,.2,4,20),'stone',p.x,y+.8,p.z,0,Math.PI/2);
@@ -1660,6 +1813,7 @@ function lookOf(role){
     case 'queenlady':return B({top:pick(['#8a3e5e','#3e6a5e','#a8763e']),dress:true,long:true,hat:'kerchief',capC:'#f0e8d8',blush:true,legs:'#3a2a20'});
     case 'royalguard':return B({chain:true,tabard:'#2a3a8a',hat:'helm',spear:true,plume:true,legs:'#2a2a36',boots:'#1a1618',mustache:rnd()<.5});
     case 'herald':return B({top:'#c89a30',tabard:'#9e1a26',hat:'cap',capC:'#2a3a8a',feather:true,legs:'#2a2a3a',hose:true});
+    case 'bandit':return B({top:'#3a3430',hat:'hood',hood:'#2a2622',cape:'#2a2622',tool:'sword',beard:rnd()<.6,legs:'#2e2a26',boots:'#1a1612'});
     case 'jester':return B({top:'#c83a3a',vest:'#e8c040',hat:'cap',capC:'#3a7a3a',feather:true,legs:'#3a5ac8',hose:true,blush:true});
     case 'fisher':return B({top:'#5e6a52',hat:'straw',beard:rnd()<.6});
     case 'woodcutter':return B({top:'#8a3e2e',beard:true,tool:'axe'});
@@ -1724,7 +1878,7 @@ const LINES={
  {const [x,z]=cw(36,-15.6);spawn('soldier',x,z,{type:'work',face:0,name:'Soldier'});}
  for(const [lx,lz] of [[-34,22.8],[-24,23.8],[-14,23.3],[22,22.8]]){const [x,z]=cw(lx,lz);spawn('merchant',x,z,{type:'stand',face:Math.PI,name:'Merchant'});}
  {const [x,z]=cw(-7,4.5);spawn('noble',x,z,{type:'stand',face:0,name:'Steward'});}
- {const [x,z]=cw(-20.5,13);spawn('priest',x,z,{type:'stand',face:Math.PI/2,name:'Priest'});}
+ {const [x,z]=cw(-19,18.5);spawn('priest',x,z,{type:'stand',face:Math.PI/2,name:'Priest'});}
  // customers at the stalls, people chatting in pairs, someone at the well
  for(const [lx,lz] of [[-34,22],[-24,23],[-14,22.5],[22,22]]){const n=1+(rnd()<.6);for(let k=0;k<n;k++){const [x,z]=cw(lx+R(-1.2,1.2),lz-2.6-R(0,1));spawn(pick(['woman','villager','noble','woman']),x,z,{type:'stand',face:0,name:'Townsfolk'});}}
  for(const [lx,lz] of [[-2,6],[8,14],[-20,0],[14,-10],[-30,-4],[2,-18]]){const a=R(0,6.28),d=.5;const [x1,z1]=cw(lx+Math.cos(a)*d,lz+Math.sin(a)*d),[x2,z2]=cw(lx-Math.cos(a)*d,lz-Math.sin(a)*d);
@@ -1732,13 +1886,24 @@ const LINES={
  {const [x,z]=cw(-6,18.2);spawn('woman',x,z,{type:'work',face:0,name:'Townsfolk'});}
  // the throne room: the king and queen, royal guards along the carpet, a herald, courtiers, a jester
  {const t=THRONE,W=(x,z)=>t.toW(x,z),ty=t.y0+.9;
-  {const [x,z]=W(0,t.tz+.62);const k=spawn('king',x,z,{type:'stand',face:0,fixedY:ty+.06,name:'King Aldric',court:true});k.sit=true;k.sitFace=0;}
-  {const [x,z]=W(2.6,t.tz+.78);const q=spawn('queen',x,z,{type:'stand',face:0,fixedY:ty+.04,name:'Queen Maren',court:true,scale:.94});q.sit=true;q.sitFace=0;}
+  {const [x,z]=W(0,t.tz+.9);const k=spawn('king',x,z,{type:'stand',face:0,fixedY:ty+.06,name:'King Aldric',court:true});k.sit=true;k.sitFace=0;}
+  {const [x,z]=W(2.6,t.tz+1.05);const q=spawn('queen',x,z,{type:'stand',face:0,fixedY:ty+.04,name:'Queen Maren',court:true,scale:.94});q.sit=true;q.sitFace=0;}
   for(const z of [t.dz0+7.5,t.dz0+12,t.dz0+16.5])for(const sd of [-1,1]){const [x,zz]=W(sd*2.5,z);spawn('royalguard',x,zz,{type:'stand',face:-sd*Math.PI/2,name:'Royal guard',court:true});}
   for(const sd of [-1,1]){const [x,z]=W(sd*4.6,t.dz0+2.4);spawn('royalguard',x,z,{type:'stand',face:0,fixedY:t.y0+.9,name:'Royal guard',court:true});}
   {const [x,z]=W(-2.2,t.dz0+6.6);spawn('herald',x,z,{type:'stand',face:Math.PI/4,name:'Herald',court:true});}
-  for(let i=0;i<5;i++){const [x,z]=W(R(-6,6),R(0,8));spawn(pick(['noble','noble','queenlady']),x,z,{type:'wander',court:true,radius:6,home:W(0,4),name:'Courtier'});}
-  {const [x,z]=W(4,t.dz0+8);spawn('jester',x,z,{type:'wander',court:true,radius:4,home:W(3,t.dz0+8),speed:1.8,name:'Jester'});}}
+  // courtiers at the banquet tables either side of the carpet, the nave left clear
+  for(const sx of [-1,1])for(const z0 of [-.5,6.3])for(const [side,dz] of [[1,-1.6],[1,.5],[1,2.6],[-1,-.6],[-1,1.6]]){if(rnd()<.18)continue;
+    const [x,z]=W(sx*(5+side*1.15),z0+dz);const n=spawn(pick(['noble','noble','queenlady','noble']),x,z,{type:'stand',face:0,fixedY:t.y0+.5,name:'Courtier',court:true});n.sit=true;n.sitFace=side>0?-sx*Math.PI/2:sx*Math.PI/2;}
+  {const [x,z]=W(-7.4,t.dz0+5.2);spawn('jester',x,z,{type:'stand',face:.6,court:true,name:'Jester'});}
+  // a steward on the gallery, a maid in the royal bedchamber
+  {const [x,z]=W(4,t.ID/2-3);spawn('noble',x,z,{type:'stand',face:Math.PI,fixedY:t.y0+t.GY,name:'Steward',court:true});}
+  {const [x,z]=W(-3,-2);spawn('woman',x,z,{type:'stand',face:2.2,fixedY:t.y0+t.UY,name:'Chambermaid',court:true});}
+  // diners in the great hall, a priest and the faithful in the chapel
+  for(const h of HALLIN){const fw=(lx,lz)=>h.toWd(lx,lz);
+    if(h.kind==='feast'){for(const tz2 of [-3.4,3.4])for(let k=0;k<7;k++){if(rnd()<.3)continue;const sd=k%2?1:-1,lx=-8+k*3.2+R(-.4,.4),[x,z]=fw(lx,tz2+sd*1.1);const n=spawn(pick(['villager','soldier','noble','woman','guard','traveller']),x,z,{type:'stand',face:0,fixedY:h.cy+.47,name:'Diner',court:true});n.lines='drinker';n.sit=true;n.sitFace=h.ry+(sd>0?Math.PI:0);}
+      {const [x,z]=fw(4,0);spawn('woman',x,z,{type:'stand',face:h.ry+Math.PI/2,fixedY:h.cy,name:'Serving maid',court:true});}}
+    else{{const [x,z]=fw(-h.iw/2+2.9,0);spawn('priest',x,z,{type:'stand',face:h.ry+Math.PI/2,fixedY:h.cy+.35,name:'Father Osric',court:true});}
+      for(const [lx,lz] of [[-h.iw/2+8,-3],[-h.iw/2+10,4.2],[-h.iw/2+14,-4.4]]){const [x,z]=fw(lx+.1,lz);const n=spawn(pick(['woman','villager','farmer']),x,z,{type:'stand',face:0,fixedY:h.cy+.5,name:'Worshipper',court:true});n.sit=true;n.sitFace=h.ry-Math.PI/2;}}}}
  for(let i=0;i<10;i++){const [x,z]=cw(R(-30,20),R(5,20));spawn(pick(['villager','woman','villager','merchant']),x,z,{type:'wander',court:true,radius:24*CS,home:cw(-5,12),name:'Townsfolk'});}
  for(let i=0;i<2;i++){const [x,z]=cw(-6+R(-5,5),15);spawn('child',x,z,{type:'wander',court:true,radius:10*CS,home:cw(-6,14),speed:2.4,scale:1,name:'Child'});}
  // castle town folk, animals on the lawns
@@ -1818,12 +1983,14 @@ function updateNPCs(dt){
     if(n.fly){n.a0+=n.w*dt;n.x=n.cx+Math.cos(n.a0)*n.cr;n.z=n.cz+Math.sin(n.a0)*n.cr;n.y=n.cy+Math.sin(T*.7+n.cr)*4;n.face=n.a0+(n.w>0?Math.PI/2:-Math.PI/2);
       n.t.offset.set((Math.floor(T*6+n.cr)%2)/2,0);n.sp.position.set(n.x,n.y,n.z);continue;}
     if(n.homeF)routine(n);
-    const dp=Math.hypot(px-n.x,pz-n.z),near=n.talk&&dp<4&&!n.wall&&!n.route&&!n.sleep;
+    const dp=Math.hypot(px-n.x,pz-n.z),near=n.talk&&dp<4&&!n.wall&&!n.route&&!n.drive&&!n.sleep&&!n.down&&!(GAME.sneak&&!n.sees);
     let moving=false;
-    if(n.route){if(!n.routeGo){n.routeGo=1;n.tx=n.route[0][0];n.tz=n.route[0][1];}n.state='walk';moving=true;}
-    else if(n.sit||n.sleep){}
+    if(n.drive){GAME.drive(n,dt);}
+    else if(n.route){if(!n.routeGo){n.routeGo=1;n.tx=n.route[0][0];n.tz=n.route[0][1];}n.state='walk';moving=true;}
+    else if(n.sit||n.sleep||n.down){}
     else     if(!near&&n.type==='stand')n.face=n.face0;
     if(near&&!n.sit){n.face=Math.atan2(px-n.x,pz-n.z);if(n.state==='walk')n.state='idle',n.timer=2;}
+    else if(n.drive){}
     else if(n.type==='wander'){
       if(n.state==='idle'){n.timer-=dt;if(n.timer<0){for(let k=0;k<6;k++){const a=rnd()*6.28,r=Math.sqrt(rnd())*n.radius,tx=n.home[0]+Math.cos(a)*r,tz=n.home[1]+Math.sin(a)*r;if((n.court||Math.abs(groundH(tx,tz)-groundH(n.home[0],n.home[1]))<5)&&lineFree(n,tx,tz)){n.tx=tx;n.tz=tz;n.state='walk';break;}}n.timer=R(1.5,5);}
         if(n.anim==='chicken'&&n.state==='idle')n.peck=(Math.sin(T*3+n.phase)>.4);}
@@ -1838,12 +2005,12 @@ function updateNPCs(dt){
         if(n.type==='patrol'||n.route||npcFree(n,nx,nz)){n.x=nx;n.z=nz;n.face=Math.atan2(dx,dz);n.phase+=stp*(n.anim==='person'?1.6:3);}else{n.state='idle';n.timer=R(.5,2);}}}
     n.y=n.fixedY!==undefined?n.fixedY:groundH(n.x,n.z);
     if(n.sit){n.face=n.sitFace;}
-    if(n.sleep){n.y=n.homeF.bedY;}
-    n.sp.material.rotation=n.sleep?Math.PI/2:0;
+    if(n.sleep&&n.homeF){n.y=n.homeF.bedY;}
+    n.sp.material.rotation=n.sleep||n.down?Math.PI/2:0;
     n.sp.position.set(n.x,n.y,n.z);
     // which view, which frame
     const toCam=Math.atan2(camera.position.x-n.x,camera.position.z-n.z);let rel=n.face-toCam;rel=Math.atan2(Math.sin(rel),Math.cos(rel));
-    const walking=n.state==='walk'&&!near;
+    const walking=n.drive?!!n.driving:n.state==='walk'&&!near;
     if(n.anim==='person'){let row,mir=false;if(Math.abs(rel)<.8)row=0;else if(Math.abs(rel)>2.35)row=1;else{row=2;mir=rel<0;}
       let f=0;if(walking)f=[1,0,3,0][Math.floor(n.phase)%4];else if(n.type==='work'&&!near){const k=(T*1.6+n.home[0])%2;f=k<.35?4:0;
         if(n.sparks&&k<.05&&!n.hit){n.hit=true;for(const s of sparks){if(s.t<1)continue;s.t=0;s.s.visible=true;s.s.position.set(n.sparks[0],CTOP+1,n.sparks[1]);s.v.set(R(-2,2),R(2,4),R(-2,2));}}if(k>.05)n.hit=false;}
@@ -1853,7 +2020,7 @@ function updateNPCs(dt){
   }
   for(const s of sparks){if(s.t>=1){s.s.visible=false;continue;}s.t+=dt*1.8;s.v.y-=9*dt;s.s.position.addScaledVector(s.v,dt);s.s.material.opacity=1-s.t;}
   // who can you talk to?
-  let best=null,bd=3.2;for(const n of NPCS){if(!n.talk||n.wall||n.sleep)continue;const d=Math.hypot(px-n.x,pz-n.z);if(d<bd){bd=d;best=n;}}
+  let best=null,bd=3.2;for(const n of NPCS){if(!n.talk||n.wall||n.sleep||n.down)continue;const d=Math.hypot(px-n.x,pz-n.z);if(d<bd){bd=d;best=n;}}
   if(talkTo&&(!best||best!==talkTo)){talkTo=null;talkBox.style.opacity=0;}
   talkHint.style.opacity=best&&!talkTo&&started?1:0;talkBtn.style.display=best&&started&&coarse?'block':'none';
   nearNPC=best;}
@@ -1864,7 +2031,7 @@ talkHint.style.cssText='position:fixed;left:0;right:0;bottom:calc(env(safe-area-
 talkHint.textContent=coarse?'':'Press E to talk';
 talkBtn.textContent='Talk';talkBtn.type='button';talkBtn.style.cssText='display:none;position:fixed;right:calc(18px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 140px);width:70px;height:70px;margin:0;padding:0;border-radius:50%;font-size:1rem;background:rgba(22,20,34,.55);color:var(--fg);border:2px solid var(--line);touch-action:none';
 document.body.append(talkBox,talkHint,talkBtn);
-function talk(){if(!nearNPC)return;const L=LINES[nearNPC.lines||(nearNPC.name==='Courtier'?'courtier':nearNPC.role)]||LINES.villager;
+function talk(){if(GAME.use&&GAME.use(nearNPC))return;if(!nearNPC)return;const L=LINES[nearNPC.lines||(nearNPC.name==='Courtier'?'courtier':nearNPC.role)]||LINES.villager;
   if(talkTo!==nearNPC){talkTo=nearNPC;talkLine=nearNPC.lineI=(nearNPC.lineI===undefined?(rnd()*L.length)|0:nearNPC.lineI+1)%L.length;}
   else{talkLine=(talkLine+1)%L.length;nearNPC.lineI=talkLine;}
   talkBox.innerHTML='<b style="font-weight:400;color:var(--accent)">'+nearNPC.name+'</b><br>'+L[talkLine];talkBox.style.opacity=1;}
@@ -2026,9 +2193,14 @@ const DEV={noclip:false,open:false};
     ['Castle road (bottom)',roads.castle[10][0],roads.castle[10][1],yawTo(roads.castle[10][0],roads.castle[10][1],CX,CZ)],
     ['Castle road (top)',-120,-470,yawTo(-120,-470,GATEW.x,GATEW.z)],
     ['Castle gate',GATEW.x-14,GATEW.z,yawTo(GATEW.x-14,GATEW.z,GATEW.x,GATEW.z)],
-    ['Courtyard',...cwp(-30,6),yawTo(...cwp(-30,6),...cwp(10,10))],
+    ['Courtyard',...cwp(-40,-4),yawTo(...cwp(-40,-4),...cwp(10,10))],
     ['Fountain',fp[0],fp[1],yawTo(fp[0],fp[1],...cwp(4,16.5))],
     ['Throne room',thr[0],thr[1],0],
+    ['Throne gallery',...T0.toW(4,T0.ID/2-3),yawTo(...T0.toW(4,T0.ID/2-3),...T0.toW(0,T0.tz)),T0.y0+T0.GY],
+    ['Royal bedchamber',...T0.toW(6,4),yawTo(...T0.toW(6,4),...T0.toW(0,-T0.ID/2+2.4)),T0.y0+T0.UY],
+    ...HALLIN.map(h=>{const p=h.kind==='feast'?h.toWd(h.iw/2-3,0):h.toWd(0,h.id/2-2);return [h.kind==='feast'?'Great hall':'Chapel',...p,yawTo(...p,...h.toWd(-h.iw/2,0))];}),
+    ['Watchtower door',TOWER_DOOR[0],TOWER_DOOR[1],TOWER_DOOR[2]],
+    ['Watchtower top',HELIXES[0].x+HELIXES[0].r1+.6,HELIXES[0].z,yawTo(HELIXES[0].x,HELIXES[0].z,0,-60),HELIXES[0].top+.08],
     ['Fish pond',POND.x-60,POND.z-4,yawTo(POND.x-60,POND.z-4,POND.x,POND.z)],
     ['Inn',ip[0],ip[1],yawTo(ip[0],ip[1],INN[0],INN[1])],
     ['Ruined watchtower',RUIN[0]+20,RUIN[1]+18,yawTo(RUIN[0]+20,RUIN[1]+18,RUIN[0],RUIN[1])],
@@ -2051,8 +2223,8 @@ const DEV={noclip:false,open:false};
   pan.innerHTML='<h3>TELEPORT</h3><div id="devPlaces"></div><h3>TIME OF DAY</h3><div class="row"><button data-t=".27">Dawn</button><button data-t=".5">Noon</button><button data-t=".74">Dusk</button><button data-t=".95">Night</button></div><input id="devTime" type="range" min="0" max="1" step=".005"><h3>MOVEMENT</h3><label><input id="devClip" type="checkbox"> No-clip (walk through anything, 4× speed)</label><div id="devPos"></div>';
   document.body.append(btn,pan);
   const list=pan.querySelector('#devPlaces');
-  for(const [name,x,z,yaw] of PLACES){const b=document.createElement('button');b.type='button';b.textContent=name;b.onclick=()=>go(x,z,yaw);list.appendChild(b);}
-  function go(x,z,yaw){if(!started)begin();P.x=x;P.z=z;P.y=groundH(x,z);P.yaw=yaw;P.pitch=.02;P.air=false;P.vy=0;}
+  for(const [name,x,z,yaw,y] of PLACES){const b=document.createElement('button');b.type='button';b.textContent=name;b.onclick=()=>go(x,z,yaw,y);list.appendChild(b);}
+  function go(x,z,yaw,y){if(!started)begin();P.x=x;P.z=z;if(y!==undefined)FREF=y;P.y=groundH(x,z);FREF=null;P.yaw=yaw;P.pitch=.02;P.air=false;P.vy=0;}
   pan.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{DN.tod=+b.dataset.t;});
   const tr=pan.querySelector('#devTime');tr.oninput=()=>{DN.tod=+tr.value;};
   pan.querySelector('#devClip').onchange=e=>{DEV.noclip=e.target.checked;};
@@ -2071,10 +2243,11 @@ const clock=new THREE.Clock();let T=0;
 function frame(){
   const dt=Math.min(clock.getDelta(),.05);T+=dt;
   let f=0,s=0;
-  if(started){if(keys.KeyW||keys.ArrowUp)f+=1;if(keys.KeyS||keys.ArrowDown)f-=1;if(keys.KeyA)s-=1;if(keys.KeyD)s+=1;
+  if(GAME.modal){jumpReq=false;joy.x=joy.y=0;}
+  if(started&&!GAME.modal){if(keys.KeyW||keys.ArrowUp)f+=1;if(keys.KeyS||keys.ArrowDown)f-=1;if(keys.KeyA)s-=1;if(keys.KeyD)s+=1;
     if(keys.ArrowLeft)P.yaw+=1.9*dt;if(keys.ArrowRight)P.yaw-=1.9*dt;f+=joy.y;s+=joy.x;}
   const len=Math.hypot(f,s);if(len>1){f/=len;s/=len;}
-  const sp=(keys.ShiftLeft||keys.ShiftRight||joy.run?9.5:4.8)*(DEV.noclip?4:1);
+  const sp=((keys.ShiftLeft||keys.ShiftRight||joy.run)&&!GAME.sneak?9.5:4.8)*(DEV.noclip?4:1)*(GAME.speed||1);
   const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw),rx=Math.cos(P.yaw),rz=-Math.sin(P.yaw);
   let nx=P.x+(fx*f+rx*s)*sp*dt,nz=P.z+(fz*f+rz*s)*sp*dt;
   if(!DEV.noclip)for(const t of trees){const dx=nx-t[0],dz=nz-t[1];if(dx>8||dx<-8||dz>8||dz<-8)continue;const r=t[2]+.35,dd=Math.hypot(dx,dz);if(dd<r&&dd>1e-4){nx=t[0]+dx/dd*r;nz=t[1]+dz/dd*r;}}
@@ -2092,7 +2265,7 @@ function frame(){
   const mv=Math.min(1,len);moving=lerp(moving,mv>.05?mv:0,Math.min(1,dt*8));
   phase+=dt*sp*1.1*moving;
   yawVel=lerp(yawVel,(P.yaw-lastYaw)/Math.max(dt,1e-3),Math.min(1,dt*10));lastYaw=P.yaw;
-  camera.position.set(P.x,P.y+1.7+(P.air?0:Math.abs(Math.sin(phase))*.07*moving),P.z);
+  camera.position.set(P.x,P.y+1.7-(GAME.duck||0)+(P.air?0:Math.abs(Math.sin(phase))*.07*moving),P.z);
   camera.rotation.set(P.pitch,P.yaw,0);
   sky.position.copy(camera.position);
   if(!started){P.yaw+=Math.sin(T*.3)*.00015;}
@@ -2112,20 +2285,23 @@ function frame(){
   swordG.scale.setScalar(vs);
   if(swingT>=0){swingT+=dt/.42;if(swingT>=1)swingT=-1;}
   const sp2=swingPose(swingT);
-  swordG.position.set(hx+Math.cos(phase+Math.PI)*.014*m2+sway+sp2[0],hy+.01-Math.abs(Math.sin(phase+Math.PI/2))*.022*m2-br+sp2[1],-D+sp2[2]);
-  swordG.rotation.set(-.18+sp2[3],-.45,.1+sp2[4]);
+  const bk=GAME.blockK||0;   // raised across the body to block
+  swordG.position.set(hx*(1-bk*.75)+Math.cos(phase+Math.PI)*.014*m2+sway+sp2[0],bk*.1+hy+.01-Math.abs(Math.sin(phase+Math.PI/2))*.022*m2-br+sp2[1],-D+sp2[2]);
+  swordG.rotation.set(-.18+sp2[3],-.45+bk*.3,.1+sp2[4]+bk*1.15);
   swordG.visible=started;
   if(started&&!saidEdge&&P.z<-95){saidEdge=true;say('The Valley','');}
   if(started&&!saidVillage&&inVillage(P.x,P.z)){saidVillage=true;say('The village','');}
-  updateNPCs(dt);updateDayNight(dt,started&&keys.KeyT);updateHands(dt,hx,hy,D,vs,m2,br,sway);updateDev();
+  updateNPCs(dt);if(GAME.tick)GAME.tick(dt,T);updateDayNight(dt,started&&keys.KeyT);updateHands(dt,hx,hy,D,vs,m2,br,sway);updateDev();
   renderer.setRenderTarget(rt);renderer.autoClear=true;renderer.render(scene,camera);
   renderer.autoClear=false;renderer.clearDepth();renderer.render(viewScene,viewCam);
   renderer.setRenderTarget(null);renderer.autoClear=true;renderer.render(postScene,postCam);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-window.__valley={DN,torch(v){torchUp=v;torchK=v?1:0;},swing(t){swingT=t;},tp(x,z,yaw,pitch){P.x=x;P.z=z;P.y=groundH(x,z);if(yaw!==undefined)P.yaw=yaw;if(pitch!==undefined)P.pitch=pitch;},P,roads,terrainH,begin,count:()=>bb.length};
+window.__valley={DN,torch(v){torchUp=v;torchK=v?1:0;},swing(t){swingT=t;},tp(x,z,yaw,pitch){P.x=x;P.z=z;P.y=groundH(x,z);if(yaw!==undefined)P.yaw=yaw;if(pitch!==undefined)P.pitch=pitch;},P,roads,terrainH,begin,count:()=>bb.length,
+  GAME,NPCS,FLOORS,scene,groundH,allowed,roadDist,inVillage,inCourt,nearStream,trees,say,talkHint,talkBtn,talkBox,keys,canvas,coarse,V,TOWN_C,get INN(){return INN;},get torch(){return torchUp;},wallHit,castleBlocked,floorH,cw,CTOP,CS,spawn,GATEW,RUIN,M,kit,boxUV,indexWall,get swingT(){return swingT;},get started(){return started;},get near(){return nearNPC;}};
 })();
 </script>
+<script src="game.js"></script>
 </body>
 </html>
