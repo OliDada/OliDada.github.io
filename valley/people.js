@@ -110,7 +110,8 @@ function followup(n,t){const s=memory(n),d=dialogueState(n),p=n.person,k=relativ
  return null;
 }
 function choices(n){const d=dialogueState(n),s=memory(n),k=relative(n),friend=byId.get(n.person.friends[0]?.id);let opts;
- if(['work','background','ambition','private'].includes(topic))opts=[['background','How did you get into this work?'],['ambition','What would you like to change?'],['private','What do most people not know about you?'],['return','Ask about something else.']];
+ if(topic.startsWith('q:')&&G.quests)opts=G.quests.followups(n,topic);
+ else if(['work','background','ambition','private'].includes(topic))opts=[['background','How did you get into this work?'],['ambition','What would you like to change?'],['private','What do most people not know about you?'],['return','Ask about something else.']];
  else if(['family','kinstory','friends','friendstory'].includes(topic))opts=[...(k?.person?[['kinstory',`What are you and ${k.person.first} like together?`]]:[]),...(friend?[['friendstory',`How do you get along with ${friend.first}?`]]:[]),['listen','Thank you for telling me.'],['return','Ask about something else.']];
  else if(['thoughts','concern','listen'].includes(topic))opts=[['concern','Is something worrying you?'],['help','Is there anything I can do?'],['listen','I am happy to listen.'],['return','Ask about something else.']];
  else if(['help','promise','gift','release','more','apology'].includes(topic)){
@@ -121,10 +122,12 @@ function choices(n){const d=dialogueState(n),s=memory(n),k=relative(n),friend=by
  if(n.shop)opts.push(['trade','Show me what you have for sale.']);
  opts.push(['return','Ask about something else.']);
  }else opts=[['work','What do you do here?'],['family','Do you have family in the valley?'],['thoughts','How have things been lately?'],[n.shop?'more':'help',n.shop?'May we trade, or can I help?':'Can I do anything for you?']];
+ if(G.quests&&!topic.startsWith('q:')&&!['work','background','ambition','private','family','kinstory','friends','friendstory','thoughts','concern','listen','help','promise','gift','release','more','apology'].includes(topic)){const q=G.quests.options(n),lead=q.filter(o=>/^q:(ask|done|about|deliver)$/.test(o[0]));opts=lead.concat(q.filter(o=>!lead.includes(o)),opts);}
  return opts.filter(([key])=>key!==topic);
 }
 function choose(n,t){const d=dialogueState(n),giftedBefore=memory(n).lastGift;topic=t;
  if(!G.sheathed){line=greeting(n);A.save();return;}
+ if(t.startsWith('q:')&&G.quests){line=G.quests.choose(n,t);A.save();return;}
  const detailed=followup(n,t);line=detailed===null?answer(n,t):detailed;
  if(t==='gift'&&giftedBefore!==day()&&memory(n).lastGift===day()&&d.promise?.status==='open'){d.promise.status='kept';d.promise.at=data().time;memory(n).trust=Math.min(100,memory(n).trust+3);line+=' You remembered what you promised. Thank you.';}
  if(['background','ambition','private','kinstory','friendstory','concern'].includes(t)){
@@ -135,8 +138,13 @@ function choose(n,t){const d=dialogueState(n),giftedBefore=memory(n).lastGift;to
 
 function updatePromise(n){const s=memory(n),promise=s.dialogue?.promise;if(promise?.status==='open'&&!promise.overdue&&data().time-promise.at>1){promise.overdue=true;s.trust=Math.max(-100,s.trust-2);}}
 function meet(n){updatePromise(n);if(current)current.conversing=false;current=n;n.conversing=true;topic='hello';line=answer(n,topic);const s=memory(n);s.met=true;if(s.lastChat!==day()){s.lastChat=day();s.visits++;if(G.sheathed&&s.trust>=0&&s.trust<15)s.trust=Math.min(15,s.trust+1);}A.save();}
-function panel(n){if(current!==n)meet(n);const opts=choices(n);
- return '<div class="dialogue-head"><h2>'+esc(n.name)+'</h2><button type="button" data-close="1" aria-label="End conversation">Farewell'+(!V.coarse?' <small>Esc</small>':'')+'</button></div><p class="conversation" aria-live="polite">'+esc(line)+'</p><div class="topics" aria-label="Conversation choices">'+opts.map(([k,label],i)=>'<button type="button" '+(k==='trade'?'data-trade="1"':'data-topic="'+k+'"')+(!V.coarse?' data-dialog-key="'+(i+1)+'" aria-keyshortcuts="'+(i+1)+'"':'')+'>'+(!V.coarse?'<span class="dialog-key" aria-hidden="true">'+(i+1)+'</span>':'')+'<span>'+esc(label)+'</span></button>').join('')+'</div>';}
+const MOOD={afraid:'afraid of you',wary:'wary of you',fond:'fond of you',familiar:'knows you',welcoming:'friendly',reserved:'reserved'};
+// a portrait cut from the person's own sprite: the head of the first frame, in big pixels
+function face(n){if(n._face!==undefined)return n._face;n._face='';try{const src=n.skin0||(n.t&&n.t.image);if(!src||typeof document==='undefined')return '';
+  const fw=src.width/6,fh=src.height/3,sz=Math.round(fh*.42),c=document.createElement('canvas');c.width=c.height=sz;const g=c.getContext('2d');g.imageSmoothingEnabled=false;
+  g.drawImage(src,Math.round(fw/2-sz/2),0,sz,sz,0,0,sz,sz);n._face=c.toDataURL();}catch(e){}return n._face;}
+function panel(n){if(current!==n)meet(n);const opts=choices(n),f=face(n),mood=MOOD[C.disposition(n.person,memory(n))]||'';
+ return '<div class="dialogue-main">'+(f?'<div class="face"><img alt="" src="'+f+'"></div>':'')+'<div class="dialogue-body"><div class="dialogue-head"><div><h2>'+esc(n.name)+'</h2><span class="who">'+esc(n.person.job)+(mood?' · '+mood:'')+'</span></div><button type="button" data-close="1" aria-label="End conversation">Farewell'+(!V.coarse?' <small>Esc</small>':'')+'</button></div><p class="conversation" aria-live="polite">'+esc(line)+'</p></div></div><div class="topics" aria-label="Conversation choices">'+opts.map(([k,label],i)=>'<button type="button" '+(k==='trade'?'data-trade="1"':'data-topic="'+k+'"')+(/^q:(ask|yes|done|deliver)$/.test(k)?' class="gold"':'')+(!V.coarse?' data-dialog-key="'+(i+1)+'" aria-keyshortcuts="'+(i+1)+'"':'')+'>'+(!V.coarse?'<span class="dialog-key" aria-hidden="true">'+(i+1)+'</span>':'')+'<span>'+esc(label)+'</span></button>').join('')+'</div>';}
 
 function trade(n){if(!n?.person)return;const s=memory(n);if(s.lastTrade===day())return;s.lastTrade=day();event('trade',[n],{impact:2});}
 function socialize(){const d=data();for(const n of people){updatePromise(n);C.recover(n.person,memory(n),d.time);if(!safe(n))continue;
@@ -150,15 +158,15 @@ let greetingWait=10,deliveryWorkers=null;
 function passing(dt){greetingWait-=dt;if(greetingWait>0||current||!A.ambient)return;
  const n=people.find(n=>safe(n)&&!n.conversing&&distance(n,V.P)<7&&distance(n,V.P)>2&&(n.lastHail===undefined||data().time-n.lastHail>.08)&&n.person.traits.sociability>.35);
  if(!n)return;
- const text=n.errand?'I have a delivery for the castle. A long climb today.':memory(n).trust<0?'I remember you. Best keep moving.':memory(n).met?'Good to see you again.':tone(n,{kind:'Good day. There is room on the road for both of us.',blunt:'Morning. Mind your footing on the hill.',reserved:'Good day.',wry:'If you are climbing that hill, save your breath.',thoughtful:'A fine day to be out walking.'});
+ const text=n.errand?'I have a delivery for the castle. A long climb today.':memory(n).trust<0?'I remember you. Best keep moving.':memory(n).met?'Good to see you again.':tone(n,{kind:'Good day. There is room on the road for both of us.',blunt:'Mind your footing on the hill.',reserved:'Good day.',wry:'If you are climbing that hill, save your breath.',thoughtful:'A fine day to be out walking.'});
  if(A.ambient(n,text)){n.lastHail=data().time;greetingWait=18+C.hash(n.person.id)%17;n.face=Math.atan2(V.P.x-n.x,V.P.z-n.z);}
 }
 function deliveries(){if(!V.roads?.castle)return;
  const workers=deliveryWorkers||(deliveryWorkers=people.filter(n=>!n.court&&!n.shop&&!n.wall&&!n.foe&&n.fixedY===undefined&&n.type!=='patrol'&&Math.hypot(n.workplace[0]-V.V[0],n.workplace[1]-V.V[1])<100&&!/child|guard|soldier/.test(n.role)).slice(0,4));
  workers.forEach((n,i)=>{if(!safe(n)||n.conversing)return;
   const start=.32+i*.065,t=V.DN.tod;
-  if(!n.errand&&t>=start&&t<start+.035&&n.deliveryDay!==day()&&!n.drive&&!n.route){
-   n.sit=false;n.deliveryDay=day();n.errand={index:0,back:false,wait:0};n.deliveryReason=['delivering vegetables to the castle kitchen','taking repaired harness to the garrison','bringing clean linen to the great hall','collecting the kitchen’s empty baskets'][i];n.activity=n.deliveryReason;
+  if(!n.errand&&t>=start&&t<.64&&n.deliveryDay!==day()&&!n.drive&&!n.route){
+   n.sit=false;n.deliveryDay=day();n.errand={index:0,back:false,wait:0};n.deliveryReason=({farmer:'delivering vegetables to the castle kitchen',weaver:'bringing linen to the great hall',launderer:'collecting linen from the barracks',mender:'taking repaired clothes to the garrison',blacksmith:'delivering repaired tools to the castle',woodcutter:'bringing kindling to the castle kitchen',gardener:'collecting seeds from the castle garden'})[n.person.job]||'carrying supplies between the village and the castle';n.activity=n.deliveryReason;
   }
   const e=n.errand;if(!e||n.drive)return;
   if(e.wait&&data().time<e.wait)return;

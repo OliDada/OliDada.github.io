@@ -27,7 +27,7 @@ button:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
 #swing{display:none;position:fixed;right:calc(18px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 52px);width:76px;height:76px;margin:0;padding:0;border-radius:50%;font-size:1.05rem;background:rgba(22,20,34,.55);color:var(--fg);border:2px solid var(--line);touch-action:none}
 @media (prefers-reduced-motion: reduce){#hint,#msg{transition:none}}
 </style>
-<link rel="stylesheet" href="arrival.css?v=3">
+<link rel="stylesheet" href="arrival.css?v=4">
 </head>
 <body>
 <canvas id="view" aria-label="A first-person view from a forest path, looking out over a valley to a castle and mountains"></canvas>
@@ -39,7 +39,7 @@ button:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
       <button id="controlsToggle" type="button" aria-expanded="false" aria-controls="menuControls">Controls</button>
     </nav>
     <div id="menuControls" hidden>
-      <p class="keys" id="keys">WASD / arrows — Move<br>Mouse — Look · Shift — Run<br>E — Talk / take · I — Bag · M — Map<br>X — Draw / sheathe · F / click — Swing<br>V — Block · Space — Jump<br>Q — Torch · C — Sneak · Hold T — Wait</p>
+      <p class="keys" id="keys">WASD / arrows — Move<br>Mouse — Look · Shift — Run<br>E — Talk / take · I — Bag · M — Map<br>J — Journal<br>X — Draw / sheathe · F / click — Swing<br>V — Block · Space — Jump<br>Q — Torch · C — Sneak · Hold T — Wait</p>
       <button id="controlsBack" type="button">Back</button>
     </div>
     <p id="err" role="alert">The valley could not load. Check your connection and reload.</p>
@@ -1271,7 +1271,7 @@ const millWheel=new THREE.Group();
   for(const f of FLOORS){if(!f.door||!inYard(f.x,f.z)||KEEPR(f.x,f.z,0))continue;const q=nearestSt(f.door[0],f.door[1]);if(q)ribbon([[f.door[0],f.door[1]],[(f.door[0]+q[0])/2,(f.door[1]+q[1])/2],q],1.2,cob,0,false,3,()=>CTOP+.125);}
   // grass, flowers, bushes and trees on everything that isn't street, house or building
   const spots=[];
-  for(let i=0;i<26000;i++){const lx=R(-50,50),lz=R(-44,31),[x,z]=L(lx,lz);if(!inPoly(lx,lz,RING)||KEEPR(x,z,.5)||streetD(x,z)<3.4||castleBlocked(x,z)||floorH(x,z)>-1e8||wallHit(x,z,1.2))continue;
+  for(let i=0;i<44000;i++){const lx=R(-50,50),lz=R(-44,31),[x,z]=L(lx,lz);if(!inPoly(lx,lz,RING)||KEEPR(x,z,.5)||streetD(x,z)<3.4||castleBlocked(x,z)||floorH(x,z)>-1e8||wallHit(x,z,1.2))continue;
     const F=L(4,16.5);if(Math.hypot(x-F[0],z-F[1])<10||inHallW(x,z,1))continue;if((lx>-25&&lx<5&&lz>-2.5&&lz<13)||(lx<-34&&Math.abs(lz+4)<9)||Math.hypot(lx-18,lz+20)<10||(Math.abs(lx-22)<4&&lz>13&&lz<21)||(lx>-24&&lx<-16&&Math.abs(lz-13)<3.5))continue;const r=rnd();
     if(r<.5)bb.push([x,CTOP+.08,z,R(1.1,1.8),R(.6,1.1),pick(R_GRASS),1,.8]);else if(r<.8)bb.push([x,CTOP+.08,z,R(1,1.6),R(.55,.95),pick(R_FLOW),1,.7]);else if(r<.86)bb.push([x,CTOP+.08,z,R(2,3.2),R(1.2,1.9),pick(R_BUSH),1,.3]);
     if(i%40===0&&streetD(x,z)>6&&!placed.some(p=>Math.hypot(p[0]-x,p[1]-z)<9))spots.push([x,z]);}
@@ -1392,6 +1392,64 @@ function updateEast(dt,T){
 
 {const sv=seed;for(const f of FIELDS)for(let i=0;i<16000;i++){const x=f[0]+R(-1,1)*(f[2]+40),z=f[1]+R(-1,1)*(f[2]+40),w=R(2,2.8),h=R(1,1.35),q=rnd();if(fieldAt(x,z)!==1)continue;
     bb.push([x,terrainH(x,z)-.08,z,w,h,R_WHEAT[(q*3)|0],.95+q*.1,.9]);}seed=sv;}   // standing wheat in the yellow plots
+// Castle approach: a working cluster near the gate, and two places to stop on the climb.
+(function(){const savedSeed=seed;seed=19041;const K=kit(),road=roads.castle;
+ const farmPlot=(x,z)=>x>CX-110&&x<CX+80&&z>CZ+60&&z<CZ+145&&!inCastle(x,z,.02);
+ for(let i=bb.length-1;i>=0;i--)if(farmPlot(bb[i][0],bb[i][2]))bb.splice(i,1);
+ for(let i=trees.length-1;i>=0;i--)if(farmPlot(trees[i][0],trees[i][1]))trees.splice(i,1);
+ for(const frac of [.32,.60,.88]){const p=road[Math.floor((road.length-1)*frac)];let best=null,score=1e9;
+  for(let dx=-22;dx<=22;dx+=4)for(let dz=-16;dz<=16;dz+=4){const x=p[0]+dx,z=p[1]+dz,rd=roadDist(x,z);if(rd<9||rd>18||inCastle(x,z,.1)||nearStream(x,z,9))continue;
+   const y=terrainH(x,z),slope=Math.max(...[[4,4],[-4,4],[4,-4],[-4,-4]].map(([a,b])=>Math.abs(terrainH(x+a,z+b)-y)));
+   if(slope<score&&!trees.some(t=>Math.hypot(t[0]-x,t[1]-z)<5+t[2])){score=slope;best=[x,z];}}
+  if(!best||score>3)continue;const [x,z]=best,y=terrainH(x,z);
+  if(frac>.8)house(x,z,0,{w:7,d:8,h:4,roof:'brown'});
+  else {for(const dx of [-2.5,2.5])for(const dz of [-2,2])K.add(boxUV(.22,3,.22,1),'wood',x+dx,y+1.5,z+dz);roofOn(K,5,4,3,1.4,'thatch','wood',.6,0,x,y,z);
+   K.add(boxUV(3,.22,.7,1),'wood',x,y+.65,z);for(const dx of [-1,1])K.add(boxUV(.2,.6,.6,1),'wood',x+dx,y+.3,z);}
+  for(let i=0;i<3;i++)K.add(boxUV(.8,.8,.8,1),'timber',x+3.8,y+.4,z+i);
+ }
+ // Kitchen garden and supply shelter outside the southern curtain wall.
+ const x=CX,z=CZ+59*CS,y=terrainH(x,z);
+ M.garden=new THREE.MeshLambertMaterial({color:0x536b35});
+ house(CX-90,CZ+120,Math.PI,{w:9,d:11,h:4.2,roof:'brown'});
+ house(CX+55,CZ+128,Math.PI,{w:7,d:9,h:4,roof:'thatch'});
+ for(let i=0;i<9;i++){const xx=CX+32+(i%3)*9,zz=CZ+70+Math.floor(i/3)*9,yy=terrainH(xx,zz);K.add(boxUV(.35,3,.35,1),'wood',xx,yy+1.5,zz);K.add(new THREE.IcosahedronGeometry(2.5,1),'garden',xx,yy+3.7,zz);trees.push([xx,zz,.4]);}
+ for(let row=0;row<5;row++)for(let col=0;col<14;col++){const xx=x-6+col*.9,zz=z+row*1.6,yy=terrainH(xx,zz);K.add(boxUV(.92,.12,.65,1),'wood',xx,yy+.04,zz);K.add(new THREE.IcosahedronGeometry(.26,0),'garden',xx,yy+.3,zz);}
+ for(const dx of [-8,8])for(let k=0;k<5;k++)K.add(boxUV(.14,1,.14,1),'wood',x+dx,terrainH(x+dx,z+k*2)+.5,z+k*2);
+ K.build(M,scene);seed=savedSeed;})();
+// Flowering castle grounds: planted borders give way to loose drifts of wildflowers.
+// This runs after the working plots are cleared, so clearing trees never erases the gardens.
+(function(){const savedSeed=seed;seed=81629;
+ function clear(x,z){
+  if(inCastle(x,z,.015)||roadDist(x,z)<4.4||nearStream(x,z,6)||Math.hypot(x-GATEW.x,z-GATEW.z)<7)return false;
+  if(Math.abs(x-CX)<10&&z>CZ+92&&z<CZ+105)return false; // vegetables and their working aisle
+  for(const f of FLOORS){const dx=x-f.x,dz=z-f.z;if(Math.abs(dx)>f.r+4||Math.abs(dz)>f.r+4)continue;
+   const c=Math.cos(f.ry),sn=Math.sin(f.ry);if(Math.abs(dx*c-dz*sn)<f.hw+2&&Math.abs(dx*sn+dz*c)<f.hd+3)return false;
+   if(f.door&&Math.hypot(x-f.door[0],z-f.door[1])<5)return false;}
+  return true;
+ }
+ for(let i=0;i<44000;i++){
+  const x=CX+R(-190,180),z=CZ+R(-35,240);if(!clear(x,z))continue;
+  const y=terrainH(x,z),slope=Math.abs(terrainH(x+1,z)-y)+Math.abs(terrainH(x,z+1)-y);if(slope>1.3)continue;
+  const drift=fbm(x*.047+12,z*.047+8),border=roadDist(x,z)<11;
+  if(!border&&rnd()>.32+.65*smooth(.35,.65,drift))continue;
+  const color=vn(x*.023+7,z*.023+2),flower= color<.32?1:color<.58?3:color<.78?2:0;
+  const r=rnd();
+  if(r<.66){const h=R(.55,1.15);bb.push([x,y-.06,z,h*1.45,h,R_FLOW[flower],1,.7]);}
+  else if(r<.92){const h=R(.45,.95);bb.push([x,y-.06,z,h*1.6,h,pick(R_GRASS),.96,.8]);}
+  else if(drift>.47&&roadDist(x,z)>7){const h=R(.85,1.5);bb.push([x,y-.08,z,h*1.7,h,R_BUSH[color<.55?1:2],.98,.3]);}
+ }
+ // Dense, single-colour beds make the approach read as a garden from walking height.
+ for(const [dx,dz,color] of [[-28,120,1],[3,123,3],[-50,90,1],[18,84,2],[-65,142,0],[58,116,1],[-109,55,3],[-112,7,1]]){
+  for(let i=0;i<400;i++){const a=rnd()*Math.PI*2,r=Math.sqrt(rnd()),x=CX+dx+Math.cos(a)*r*11,z=CZ+dz+Math.sin(a)*r*4.5;
+   if(!clear(x,z))continue;const h=R(.8,1.35);bb.push([x,terrainH(x,z)-.04,z,h*1.6,h,R_FLOW[i%9===0?2:color],1,.65]);}
+ }
+ // Deliberate rose and pale-flowered shrub groups along the southern curtain.
+ for(const [dx,dz] of [[-72,76],[-42,82],[-15,72],[18,76],[66,76],[84,98],[-80,112]]){
+  for(let i=0;i<32;i++){const x=CX+dx+R(-5,5),z=CZ+dz+R(-3,3);if(!clear(x,z))continue;
+   const h=R(1.1,1.8);bb.push([x,terrainH(x,z)-.08,z,h*1.8,h,R_BUSH[dx<0?1:2],1,.35]);}
+ }
+ seed=savedSeed;
+})();
 buildBillboards();
 // windmill on the rise west of the village
 const mill=(()=>{let best=null,bs=-1e9;for(let i=0;i<400;i++){const x=R(-90,-25),z=R(-330,-280),rd=roadDist(x,z);if(rd<16)continue;let ok=true;for(const p of housePos)if(Math.hypot(p[0]-x,p[1]-z)<14)ok=false;for(const f of FLOORS)if(f.door&&Math.hypot(f.door[0]-x,f.door[1]-z)<9)ok=false;if(!ok)continue;const sc=terrainH(x,z)-Math.abs(rd-22)*.2;if(sc>bs){bs=sc;best={x,z};}}return best||{x:-70,z:-300};})();const sails=new THREE.Group();
@@ -1818,28 +1876,6 @@ const THRONE=(function(){
     J.build(HM,HG);bake(HG,{w:iw,d:id,ih,fires:fh,wins:wh});
     HALLIN.push({kind:H.kind,toWd,iw,id,cy,ry:H.ry});}
   return {c,y0,IW,ID,IH,tz,dz0,toW,G,UY,GY};})();
-// Castle approach: a working cluster near the gate, and two places to stop on the climb.
-(function(){const savedSeed=seed;seed=19041;const K=kit(),road=roads.castle;
- for(const frac of [.32,.60,.88]){const p=road[Math.floor((road.length-1)*frac)];let best=null,score=1e9;
-  for(let dx=-22;dx<=22;dx+=4)for(let dz=-16;dz<=16;dz+=4){const x=p[0]+dx,z=p[1]+dz,rd=roadDist(x,z);if(rd<9||rd>18||inCastle(x,z,.1)||nearStream(x,z,9))continue;
-   const y=terrainH(x,z),slope=Math.max(...[[4,4],[-4,4],[4,-4],[-4,-4]].map(([a,b])=>Math.abs(terrainH(x+a,z+b)-y)));
-   if(slope<score&&!trees.some(t=>Math.hypot(t[0]-x,t[1]-z)<5+t[2])){score=slope;best=[x,z];}}
-  if(!best||score>3)continue;const [x,z]=best,y=terrainH(x,z);
-  if(frac>.8)house(x,z,0,{w:7,d:8,h:4,roof:'brown'});
-  else {for(const dx of [-2.5,2.5])for(const dz of [-2,2])K.add(boxUV(.22,3,.22,1),'wood',x+dx,y+1.5,z+dz);roofOn(K,5,4,3,1.4,'thatch','wood',.6,0,x,y,z);
-   K.add(boxUV(3,.22,.7,1),'wood',x,y+.65,z);for(const dx of [-1,1])K.add(boxUV(.2,.6,.6,1),'wood',x+dx,y+.3,z);}
-  for(let i=0;i<3;i++)K.add(boxUV(.8,.8,.8,1),'timber',x+3.8,y+.4,z+i);
- }
- // Kitchen garden and supply shelter outside the southern curtain wall.
- const x=CX,z=CZ+59*CS,y=terrainH(x,z);
- M.garden=new THREE.MeshLambertMaterial({color:0x536b35});
- house(CX-90,CZ+120,Math.PI,{w:9,d:11,h:4.2,roof:'brown'});
- house(CX+55,CZ+128,Math.PI,{w:7,d:9,h:4,roof:'thatch'});
- for(let i=0;i<9;i++){const xx=CX+32+(i%3)*9,zz=CZ+70+Math.floor(i/3)*9,yy=terrainH(xx,zz);K.add(boxUV(.35,3,.35,1),'wood',xx,yy+1.5,zz);K.add(new THREE.IcosahedronGeometry(2.5,1),'garden',xx,yy+3.7,zz);trees.push([xx,zz,.4]);}
- for(let row=0;row<5;row++){K.add(boxUV(13,.12,.65,1),'wood',x,y+.03,z+row*1.6);
-  for(let col=0;col<14;col++)K.add(new THREE.IcosahedronGeometry(.26,0),'garden',x-6+col*.9,y+.25,z+row*1.6);}
- for(const dx of [-8,8])for(let k=0;k<5;k++)K.add(boxUV(.14,1,.14,1),'wood',x+dx,y+.5,z+k*2);
- K.build(M,scene);seed=savedSeed;})();
 // --- the courtyard: a fountain with benches round it ---
 (function(){const F=kit(),p=castleG.localToWorld(new THREE.Vector3(4,0,16.5)),y=CTOP+.08;
   F.add(suv(new THREE.CylinderGeometry(3.2,3.4,.8,20,1,true),8,1),'stone',p.x,y+.4,p.z);F.add(new THREE.TorusGeometry(3.25,.2,4,20),'stone',p.x,y+.8,p.z,0,Math.PI/2);
@@ -2441,7 +2477,7 @@ const DEV={noclip:false,open:false};
     ['Watermill',mp.x-14,mp.z+8,yawTo(mp.x-14,mp.z+8,mp.x,mp.z)],
     ['Windmill',mill.x+10,mill.z+12,yawTo(mill.x+10,mill.z+12,mill.x,mill.z)],
     ['Castle road (bottom)',roads.castle[10][0],roads.castle[10][1],yawTo(roads.castle[10][0],roads.castle[10][1],CX,CZ)],
-    ['Castle gardens',CX-20,CZ+155,yawTo(CX-20,CZ+155,CX,CZ)],
+    ['Castle gardens',CX-20,CZ+120,yawTo(CX-20,CZ+120,CX,CZ)],
     ['Castle road (top)',-146,CZ+40,yawTo(-146,CZ+40,GATEW.x,GATEW.z)],
     ['Castle gate',GATEW.x-14,GATEW.z,yawTo(GATEW.x-14,GATEW.z,GATEW.x,GATEW.z)],
     ['Courtyard',...cwp(-40,-4),yawTo(...cwp(-40,-4),...cwp(10,10))],
@@ -2494,17 +2530,19 @@ const DEV={noclip:false,open:false};
 
 /* ================= the world map (M) ================= */
 const WMAP=(function(){
-  const X0=-1400,X1=752,Z0=-960,Z1=150,PITCH=.95,RW=2400;
+  const X0=-1400,X1=752,Z0=-960,Z1=150,PITCH=.95,RW=matchMedia('(pointer:coarse)').matches?2400:3600;
   const mcam=new THREE.OrthographicCamera(-1,1,1,-1,10,20000);let RH=1200;
-  let base=null,open=false,raf=0;
+  let base=null,open=false,raf=0,ZM=1,ZU=0,ZV=0,Wc=1,Hc=1;   // zoom, and the top-left corner of the view (0..1 of the whole map)
   const css=document.createElement('style');css.textContent=`
 #wmap{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(10,8,14,.72);z-index:40;padding:14px}
 #wmap .frame{position:relative;background:#e6d4a8;padding:10px;border:3px solid #5a4028;box-shadow:0 0 0 2px #c8a868,0 10px 40px rgba(0,0,0,.6)}
-#wmap canvas{display:block;image-rendering:pixelated}
+#wmap canvas{display:block;touch-action:none;cursor:grab}
+#wmap .zb{position:absolute;right:18px;bottom:18px;display:flex;gap:6px}
+#wmap .zb button{width:34px;height:34px;margin:0;padding:0;font:20px/1 Georgia,serif;color:#f3e3bb;background:rgba(58,36,20,.85);border:1px solid #c8a868;cursor:pointer;touch-action:manipulation}
 #wmap .hint{position:absolute;left:0;right:0;bottom:-30px;text-align:center;color:#f6ecd6;font-size:1rem;opacity:.85}
 #mapBtn{display:none;position:fixed;right:calc(176px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 120px);width:64px;height:64px;margin:0;padding:0;border-radius:50%;font-size:.95rem;background:rgba(22,20,34,.55);color:var(--fg);border:2px solid var(--line);touch-action:none;font-family:inherit}`;
   document.head.appendChild(css);
-  const wrap=document.createElement('div');wrap.id='wmap';wrap.innerHTML='<div class="frame"><canvas></canvas><div class="hint">M or tap to close</div></div>';document.body.appendChild(wrap);
+  const wrap=document.createElement('div');wrap.id='wmap';wrap.innerHTML='<div class="frame"><canvas></canvas><div class="zb"><button type="button" data-z="in" aria-label="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out">−</button><button type="button" data-z="x" aria-label="Close the map">×</button></div><div class="hint"></div></div>';document.body.appendChild(wrap);
   const cv=wrap.querySelector('canvas'),g=cv.getContext('2d');
   const btn=document.createElement('button');btn.id='mapBtn';btn.type='button';btn.textContent='Map';document.body.appendChild(btn);
   // the map is a picture of the world itself, taken from high above at noon: change the world and the map follows
@@ -2538,10 +2576,10 @@ const WMAP=(function(){
     ['The Elder',OW.GT[0],OW.GT[1],'tree'],["Witch's cottage",OW.WC[0],OW.WC[1],'house'],['The Foothills',-760,-800,null],['The Beck',-610,-196,null],['The Gap',-395,60,null]];
   function draw(){
     const vw=innerWidth-60,vh=innerHeight-90,sc0=Math.min(vw/RW,vh/RH),W=Math.floor(RW*sc0),H=Math.floor(RH*sc0);
-    if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H;}
-    const pv=new THREE.Vector3(),proj=(x,z)=>{pv.set(x,groundH(x,z),z).project(mcam);return [(pv.x+1)/2*W,(1-pv.y)/2*H];};
-    const mx=x=>0,mz=z=>0;
-    g.imageSmoothingEnabled=true;g.drawImage(base,0,0,W,H);
+    const dpr=Math.min(2,window.devicePixelRatio||1);if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);cv.style.width=W+'px';cv.style.height=H+'px';}
+    Wc=W;Hc=H;g.setTransform(dpr,0,0,dpr,0,0);
+    const pv=new THREE.Vector3(),proj=(x,z)=>{pv.set(x,groundH(x,z),z).project(mcam);return [((pv.x+1)/2-ZU)*ZM*W,((1-pv.y)/2-ZV)*ZM*H];};
+    g.imageSmoothingEnabled=true;g.drawImage(base,ZU*RW,ZV*RH,RW/ZM,RH/ZM,0,0,W,H);
     // icons and names
     const fs=Math.max(11,Math.round(W/95));g.textAlign='center';g.textBaseline='middle';
     for(const [name,x,z,ic,dy] of LABELS){const [px,pz]=proj(x,z);g.fillStyle='#3a2414';g.strokeStyle='#3a2414';g.lineWidth=1.4;
@@ -2561,13 +2599,26 @@ const WMAP=(function(){
     {const [px,pz]=proj(P.x,P.z),[ax,az]=proj(P.x-Math.sin(P.yaw)*20,P.z-Math.cos(P.yaw)*20),a=Math.atan2(az-pz,ax-px),s=Math.max(7,fs*.75),pulse=1+.25*Math.sin(performance.now()/250);
      g.fillStyle='rgba(200,40,30,.25)';g.beginPath();g.arc(px,pz,s*1.6*pulse,0,6.283);g.fill();
      g.save();g.translate(px,pz);g.rotate(a);g.fillStyle='#c0281c';g.strokeStyle='#fff4dc';g.lineWidth=1.5;g.beginPath();g.moveTo(s,0);g.lineTo(-s*.7,s*.65);g.lineTo(-s*.35,0);g.lineTo(-s*.7,-s*.65);g.closePath();g.fill();g.stroke();g.restore();}
+    if(GAME.mapMarks)GAME.mapMarks(g,proj,fs,W,H);
   }
   function loop(){if(!open)return;draw();raf=requestAnimationFrame(loop);}
+  // zooming: wheel, pinch, + and −; drag to move about
+  function clampView(){ZM=Math.max(1,Math.min(6,ZM));ZU=Math.max(0,Math.min(1-1/ZM,ZU));ZV=Math.max(0,Math.min(1-1/ZM,ZV));}
+  function zoomAt(f,cx,cy){const u=ZU+cx/Wc/ZM,v=ZV+cy/Hc/ZM;ZM*=f;clampView();ZU=u-cx/Wc/ZM;ZV=v-cy/Hc/ZM;clampView();}
+  cv.addEventListener('wheel',e=>{e.preventDefault();const r=cv.getBoundingClientRect();zoomAt(e.deltaY<0?1.2:1/1.2,e.clientX-r.left,e.clientY-r.top);},{passive:false});
+  {const pts=new Map();let pinch=0;
+   cv.addEventListener('pointerdown',e=>{try{cv.setPointerCapture(e.pointerId);}catch(_){}pts.set(e.pointerId,[e.clientX,e.clientY]);pinch=0;cv.style.cursor='grabbing';});
+   cv.addEventListener('pointermove',e=>{const p=pts.get(e.pointerId);if(!p)return;const dx=e.clientX-p[0],dy=e.clientY-p[1];pts.set(e.pointerId,[e.clientX,e.clientY]);
+     if(pts.size===1){ZU-=dx/Wc/ZM;ZV-=dy/Hc/ZM;clampView();}
+     else if(pts.size===2){const [a,b]=[...pts.values()],d=Math.hypot(a[0]-b[0],a[1]-b[1]),r=cv.getBoundingClientRect();if(pinch>0)zoomAt(d/pinch,(a[0]+b[0])/2-r.left,(a[1]+b[1])/2-r.top);pinch=d;}});
+   for(const ev of ['pointerup','pointercancel'])cv.addEventListener(ev,e=>{pts.delete(e.pointerId);pinch=0;cv.style.cursor='grab';});}
+  wrap.querySelector('.zb').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;e.stopPropagation();if(b.dataset.z==='x')show(false);else zoomAt(b.dataset.z==='in'?1.5:1/1.5,Wc/2,Hc/2);});
+  for(const ev of ['touchstart','touchmove','touchend','mousedown','mousemove'])wrap.addEventListener(ev,e=>e.stopPropagation(),{passive:true});
   function show(v){if(v===open)return;open=v;
-    if(v){base=paint();wrap.style.display='flex';if(document.exitPointerLock&&document.pointerLockElement)document.exitPointerLock();GAME.modal=true;loop();}
+    if(v){ZM=1;ZU=ZV=0;wrap.querySelector('.hint').textContent=coarse?'Pinch to zoom · drag to move':'Scroll to zoom · drag to move · M to close';base=paint();wrap.style.display='flex';if(document.exitPointerLock&&document.pointerLockElement)document.exitPointerLock();GAME.modal=true;loop();}
     else{wrap.style.display='none';cancelAnimationFrame(raf);GAME.modal=false;}}
-  addEventListener('keydown',e=>{if(!started)return;if(e.code==='KeyM'&&!e.repeat){if(!open&&GAME.modal)return;show(!open);e.preventDefault();}else if(open&&e.code==='Escape')show(false);});
-  wrap.addEventListener('click',()=>show(false));
+  addEventListener('keydown',e=>{if(!started)return;if(e.code==='KeyM'&&!e.repeat){if(!open&&GAME.modal)return;show(!open);e.preventDefault();}else if(open&&e.code==='Escape')show(false);else if(open&&/^(Equal|NumpadAdd)$/.test(e.code))zoomAt(1.5,Wc/2,Hc/2);else if(open&&/^(Minus|NumpadSubtract)$/.test(e.code))zoomAt(1/1.5,Wc/2,Hc/2);});
+  wrap.addEventListener('click',e=>{if(e.target===wrap)show(false);});
   btn.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();show(!open);},{passive:false});btn.addEventListener('click',()=>show(!open));
   return {show,btn,isOpen:()=>open};})();
 
@@ -2636,9 +2687,10 @@ window.__valley={LAKEY,PIER,ISLE,FARMS,fieldAt,pondD,lakeD,DN,torch(v){torchUp=v
   GAME,NPCS,FLOORS,scene,groundH,allowed,roadDist,inVillage,inCourt,nearStream,trees,say,talkHint,talkBtn,talkBox,keys,canvas,coarse,V,TOWN_C,get INN(){return INN;},get torch(){return torchUp;},wallHit,castleBlocked,floorH,cw,CTOP,CS,spawn,GATEW,RUIN,M,kit,boxUV,roofOn,indexWall,get swingT(){return swingT;},get started(){return started;},get near(){return nearNPC;}};
 })();
 </script>
-<script src="people-core.js?v=1"></script>
-<script src="game.js?v=7"></script>
-<script src="people.js?v=3"></script>
+<script src="people-core.js?v=2"></script>
+<script src="game.js?v=9"></script>
+<script src="people.js?v=5"></script>
+<script src="quests.js?v=2"></script>
 <script src="menu.js?v=1"></script>
 </body>
 </html>

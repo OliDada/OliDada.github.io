@@ -15,17 +15,25 @@
 body:has(#start:not([style*="display: none"])) #devBtn{display:none;}
 /* No backdrop and no scroll, rods, status labels or action cards over the NPC. */
 #vgWrap.talking{inset:auto 0 max(18px,env(safe-area-inset-bottom));padding:0 16px;align-items:flex-end;background:none;pointer-events:none;}
-#vgWrap.talking #vg.dialogue{display:block;width:min(640px,100%);max-height:32dvh;overflow:auto;padding:12px 18px 10px;background:rgba(12,20,16,.88);border:1px solid #8b806057;box-shadow:none;filter:none;color:#f0e6cf;pointer-events:auto;touch-action:pan-y;}
-#vg.dialogue .dialogue-head{display:flex;align-items:center;justify-content:space-between;gap:16px;}
-#vg.dialogue h2{font:normal 15px/1.3 Georgia,serif;color:#d6b777;margin:0;}
-#vg.dialogue .conversation{font:normal 17px/1.5 Georgia,serif;margin:7px 0 10px;}
-#vg.dialogue .topics{display:flex;flex-wrap:wrap;gap:3px 16px;}
-#vg.dialogue button{font:normal 13px/1.4 Georgia,serif;padding:3px 0;margin:0;min-width:0;background:none;border:0;border-bottom:1px solid transparent;color:#c5bba2;box-shadow:none;transform:none;}
-#vg.dialogue button:hover,#vg.dialogue button:focus-visible{color:#ffe0a3;border-bottom-color:#b79b62;outline:none;}
-#vg.dialogue button small{font-size:10px;opacity:.65;margin-left:4px;}
+#vgWrap.talking #vg.dialogue{display:block;width:min(700px,100%);max-height:46dvh;overflow:auto;padding:14px 18px 12px;background:linear-gradient(rgba(34,24,14,.94),rgba(20,14,9,.95));border:3px solid #5a4028;box-shadow:0 0 0 1px #c8a868,inset 0 0 0 1px rgba(200,168,104,.25),0 10px 30px rgba(0,0,0,.55);filter:none;color:#f0e6cf;pointer-events:auto;touch-action:pan-y;}
+#vg.dialogue .dialogue-main{display:flex;gap:14px;align-items:flex-start;}
+#vg.dialogue .face{flex:none;width:72px;height:72px;background:linear-gradient(#7d8f86,#4a5a48);border:2px solid #5a4028;box-shadow:0 0 0 1px #c8a868;overflow:hidden;}
+#vg.dialogue .face img{display:block;width:100%;height:100%;image-rendering:pixelated;}
+#vg.dialogue .dialogue-body{flex:1;min-width:0;}
+#vg.dialogue .dialogue-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+#vg.dialogue h2{font:normal 21px/1.15 "IM Fell English",Georgia,serif;color:#e8c884;margin:0;letter-spacing:.02em;}
+#vg.dialogue .who{display:block;font:italic 13px/1.3 Georgia,serif;color:#a89a7c;margin-top:1px;}
+#vg.dialogue .conversation{font:normal 18px/1.5 Georgia,serif;margin:8px 0 2px;color:#f4ead2;}
+#vg.dialogue .topics{display:grid;grid-template-columns:1fr 1fr;gap:1px 18px;margin-top:10px;padding-top:9px;border-top:1px solid rgba(200,168,104,.3);}
+#vg.dialogue button{display:flex;align-items:baseline;gap:8px;text-align:left;font:normal 15px/1.35 Georgia,serif;padding:4px 6px;margin:0 -6px;min-width:0;background:none;border:0;color:#cfc4a8;box-shadow:none;transform:none;border-radius:2px;}
+#vg.dialogue button:hover,#vg.dialogue button:focus-visible{color:#fff0c8;background:rgba(200,168,104,.16);outline:none;}
+#vg.dialogue button.gold{color:#f2c860;}
+#vg.dialogue .dialog-key{flex:none;font:normal 11px/1 Georgia,serif;color:#a89a7c;border:1px solid rgba(200,168,104,.45);padding:2px 4px 1px;min-width:8px;text-align:center;position:relative;top:-1px;}
+#vg.dialogue .dialogue-head button{flex:none;font-size:13px;font-style:italic;color:#a89a7c;padding:2px 6px;margin:0;}
+#vg.dialogue button small{font-size:10px;opacity:.65;margin-left:4px;font-style:normal;}
 body:has(#vgWrap.talking[style*="display: flex"]) :is(#hint,#talkBtn,#jump,#swing,#vgSneak){visibility:hidden;}
-@media(max-width:600px){#start .title-menu h1{font-size:48px;margin-bottom:48px;}#vgWrap.talking{padding:0 9px;bottom:max(8px,env(safe-area-inset-bottom));}#vgWrap.talking #vg.dialogue{padding:10px 12px;max-height:35dvh;}#vg.dialogue .conversation{font-size:16px;}#vg.dialogue .topics{gap:3px 15px;}#vg.dialogue button{padding:6px 0;}}
-@media(max-height:550px){#start{align-items:flex-start;}#start .title-menu h1{font-size:40px;margin-bottom:22px;}#start .title-menu h1 span{font-size:14px;margin-bottom:2px;}.menu-options{gap:2px;}#vgWrap.talking #vg.dialogue{max-height:42dvh;}}
+@media(max-width:600px){#start .title-menu h1{font-size:48px;margin-bottom:48px;}#vgWrap.talking{padding:0 9px;bottom:max(8px,env(safe-area-inset-bottom));}#vgWrap.talking #vg.dialogue{padding:10px 12px;max-height:52dvh;}#vg.dialogue .conversation{font-size:16px;}#vg.dialogue .topics{grid-template-columns:1fr;}#vg.dialogue button{padding:6px;}#vg.dialogue .face{width:52px;height:52px;}#vg.dialogue h2{font-size:18px;}}
+@media(max-height:550px){#start{align-items:flex-start;}#start .title-menu h1{font-size:40px;margin-bottom:22px;}#start .title-menu h1 span{font-size:14px;margin-bottom:2px;}.menu-options{gap:2px;}#vgWrap.talking #vg.dialogue{max-height:62dvh;}}
 
 #vg.dialogue:focus{outline:none;}
 /* A small weathered dialogue strip, using the world's parchment texture and palette. */

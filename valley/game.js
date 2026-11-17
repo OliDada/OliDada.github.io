@@ -33,7 +33,17 @@ const ITEMS={
   purse:{n:'Coin purse',v:10},
   pelt:{n:'Wolf pelt',v:12},
   mutton:{n:'Mutton',v:6,heal:18,use:'Eat',said:'Tough, and it tastes of somebody else\'s flock.'},
-  pick:{n:'Lockpick',v:4}
+  pick:{n:'Lockpick',v:4},
+  draught:{n:'Healing draught',v:14,heal:60,use:'Drink',said:'Bitter as bark, and warm all the way down.'},
+  // carried for someone: never sold, never eaten
+  parcel:{n:'Parcel',v:0,quest:true},
+  keepsake:{n:'Lost keepsake',v:0,quest:true},
+  // gear: bought once and kept (S.gear), never in the bag
+  steel:{n:'Steel sword',v:90,gear:true,does:'strikes half again as hard',got:'Castle steel. It sits in the hand as if it had always been yours.'},
+  jack:{n:'Padded jack',v:60,gear:true,does:'blows hurt a fifth less',got:'Thick quilted linen. It will turn a tooth or a cudgel.'},
+  mail:{n:'Mail shirt',v:170,gear:true,does:'blows hurt two fifths less',got:'Heavy on the shoulders, and worth every link.'},
+  cloak:{n:'Hunter\'s cloak',v:70,gear:true,does:'harder to spot when sneaking',got:'The colour of moss and bark. Eyes slide off it.'},
+  room:{n:'A room of your own',v:150,gear:true,does:'sleep here for nothing',got:'The key is yours. Top of the stairs, and the bed is always made.'}
 };
 const ORDER=Object.keys(ITEMS);
 
@@ -59,6 +69,15 @@ const PIX={
   pelt:[[3,5,10,8,'#6a6660'],[2,7,12,4,'#7c7870'],[4,4,2,2,'#56524c'],[10,4,2,2,'#56524c'],[4,13,2,2,'#56524c'],[10,13,2,2,'#56524c'],[6,7,4,3,'#948e84'],[7,13,2,2,'#4a4640']],
   mutton:[[3,6,8,6,'#a84a40'],[4,5,6,1,'#c06a5a'],[4,12,6,1,'#7a2e28'],[5,7,3,2,'#d08a78'],[10,8,3,2,'#e8dcc0'],[12,7,2,4,'#f4ecd8'],[13,6,1,1,'#f4ecd8'],[13,11,1,1,'#f4ecd8']],
   pick:[[2,12,3,2,'#8a909c'],[4,10,3,2,'#9aa0aa'],[6,8,3,2,'#b0b6c2'],[8,6,3,2,'#b0b6c2'],[10,4,3,2,'#c8ccd4'],[12,3,2,2,'#d8dce4'],[13,5,1,2,'#8a909c'],[1,13,2,2,'#5a3820']],
+  draught:[[7,2,2,2,'#8a6a40'],[6,4,4,2,'#b8d8c8'],[4,6,8,8,'#3c8a5a'],[5,7,2,4,'#7ac89a'],[4,14,8,1,'#2a6040']],
+  parcel:[[3,5,10,9,'#b08a5c'],[3,5,10,1,'#c8a878'],[3,13,10,1,'#8a6440'],[7,5,2,9,'#7c2419'],[3,9,10,1,'#7c2419'],[6,3,4,2,'#7c2419']],
+  keepsake:[[6,2,4,1,'#c89030'],[5,3,1,3,'#c89030'],[10,3,1,3,'#c89030'],[5,7,6,6,'#f2c860'],[6,6,4,1,'#f2c860'],[6,13,4,1,'#b88420'],[7,9,2,2,'#3c5a94'],[6,8,1,1,'#fff0b0']],
+  steel:[[7,1,2,9,'#d8dce4'],[8,1,1,9,'#b0b6c2'],[7,0,1,1,'#eef0f4'],[4,10,8,1,'#c89030'],[7,11,2,3,'#5a3820'],[6,14,4,1,'#c89030']],
+  jack:[[4,3,8,10,'#8a6a3c'],[2,4,2,5,'#7a5c34'],[12,4,2,5,'#7a5c34'],[6,3,4,2,'#35240f'],[5,6,1,6,'#a88450'],[8,6,1,6,'#a88450'],[11,6,1,6,'#6a4e2a'],[4,13,8,1,'#5a4224']],
+  mail:[[4,3,8,10,'#9aa0aa'],[2,4,2,5,'#8a909c'],[12,4,2,5,'#8a909c'],[6,3,4,2,'#35240f'],[5,6,1,1,'#d8dce4'],[7,6,1,1,'#d8dce4'],[9,6,1,1,'#d8dce4'],[6,8,1,1,'#d8dce4'],[8,8,1,1,'#d8dce4'],[10,8,1,1,'#d8dce4'],[5,10,1,1,'#d8dce4'],[7,10,1,1,'#d8dce4'],[9,10,1,1,'#d8dce4'],[4,13,8,1,'#6a707c']],
+  cloak:[[5,2,6,3,'#2e5426'],[4,5,8,9,'#3c6a2e'],[3,8,10,6,'#2e5426'],[6,3,4,2,'#1a2c16'],[7,5,2,1,'#c89030'],[5,6,1,7,'#4c7e38']],
+  room:[[2,5,5,6,'#c89030'],[3,7,3,2,'#7a5a20'],[7,7,7,2,'#c89030'],[10,9,1,2,'#c89030'],[12,9,2,3,'#c89030']],
+  scroll:[[3,3,10,10,'#e8dcc0'],[2,2,12,2,'#c2b594'],[2,12,12,2,'#c2b594'],[5,6,6,1,'#6b5230'],[5,8,6,1,'#6b5230'],[5,10,4,1,'#6b5230']],
   coin:[[5,3,6,1,'#c89030'],[4,4,8,8,'#f2c860'],[5,12,6,1,'#a87420'],[3,5,1,6,'#c89030'],[12,5,1,6,'#a87420'],[6,6,1,4,'#fff0b0'],[8,5,1,6,'#c89030']]
 };
 const ICON={},ICON_URL={};
@@ -67,9 +86,9 @@ for(const k in PIX){const c=document.createElement('canvas');c.width=c.height=16
 /* ================= state and saving ================= */
 const KEY='valley.save.1';
 const MAXHP=100;
-const fresh=()=>({jailed:false,evidence:{},hp:MAXHP,coins:5,inv:{},hot:{},bounty:0,picked:{},boots:false,pos:null,tod:null,sheathed:true,boat:'pier'});   // hot: how many of each thing you carry are stolen
+const fresh=()=>({jailed:false,evidence:{},hp:MAXHP,coins:5,inv:{},hot:{},bounty:0,picked:{},boots:false,pos:null,tod:null,sheathed:true,boat:'pier',gear:{},quests:null});   // hot: how many of each thing you carry are stolen
 let S=fresh(),hadSave=false;
-try{const raw=localStorage.getItem(KEY);if(raw){const d=JSON.parse(raw);if(d&&typeof d.coins==='number'){S=Object.assign(fresh(),d);hadSave=true;}}}catch(e){}
+try{const raw=localStorage.getItem(KEY);if(raw){const d=JSON.parse(raw);if(d&&typeof d.coins==='number'){S=Object.assign(fresh(),d);if(!S.gear||typeof S.gear!=='object')S.gear={};hadSave=true;}}}catch(e){}
 function save(){if(V.started){S.pos=[+P.x.toFixed(2),+P.z.toFixed(2),+P.yaw.toFixed(3)];S.tod=+V.DN.tod.toFixed(4);}
   try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
 addEventListener('pagehide',save);
@@ -128,13 +147,15 @@ function place(kind,x,z,sc,y,owned){const sp=new THREE.Sprite(mat(kind));sp.cent
 const SHOPS={
   baker:{name:'Baker',hello:'Fresh from the oven this morning. Berries and apples I will always take off your hands.',sells:['bread','honeycake'],fav:['berries','apple']},
   grocer:{name:'Greengrocer',hello:'Whatever grows, I buy. Whatever I buy, I sell for a little more.',sells:['apple','cheese'],fav:['mushroom','berries','apple']},
-  draper:{name:'Draper',hello:'Cloth from the coast, boots from my brother. Bring me flowers and I will make dye of them.',sells:['cloth','boots'],fav:['flower','pelt']},
-  herbalist:{name:'Herbalist',hello:'Herbs for the pot, herbs for the cough. I pay fairly for anything picked clean.',sells:['candle'],fav:['herb','mushroom']},
-  inn:{name:'Innkeeper',hello:'Ale, stew, or a bed until morning. And I never ask where a thing came from.',sells:['ale','stew','pick'],fav:['mushroom','cheese','bread'],bed:6,fence:true}
+  draper:{name:'Draper',hello:'Cloth from the coast, boots from my brother. Bring me flowers and I will make dye of them.',sells:['cloth','boots','jack','cloak'],fav:['flower','pelt']},
+  herbalist:{name:'Herbalist',hello:'Herbs for the pot, herbs for the cough. I pay fairly for anything picked clean.',sells:['candle','draught'],fav:['herb','mushroom']},
+  inn:{name:'Innkeeper',hello:'Ale, stew, or a bed until morning. And I never ask where a thing came from.',sells:['ale','stew','pick','room'],fav:['mushroom','cheese','bread'],bed:6,fence:true},
+  smith:{name:'Smith',hello:'Good steel is not cheap, and cheap steel is not good. Pelts I can always use, for the bellows.',sells:['steel','mail'],fav:['pelt','jug','candlestick']}
 };
 {const stalls=V.NPCS.filter(n=>n.name==='Merchant'&&n.type==='stand'),ids=['baker','grocer','draper','herbalist'];
  stalls.forEach((n,i)=>{const id=ids[i%ids.length];n.shop=id;n.name=SHOPS[id].name;});
- const keeper=V.NPCS.find(n=>n.name==='Innkeeper');if(keeper)keeper.shop='inn';}
+ const keeper=V.NPCS.find(n=>n.name==='Innkeeper');if(keeper)keeper.shop='inn';
+ const smith=V.NPCS.find(n=>n.role==='smith');if(smith)smith.shop='smith';}
 // --- the watch: the castle has its gate guards; the village, the lake town, the inn and the courtyard get watchmen of their own ---
 {const spot=(c,r)=>{for(let i=0;i<60;i++){const a=R(0,6.283),d=R(3,r),x=c[0]+Math.cos(a)*d,z=c[1]+Math.sin(a)*d;if(V.allowed(x,z)&&!V.wallHit(x,z,1.2)&&V.floorH(x,z)<-1e8&&V.roadDist(x,z)<14)return [x,z];}return null;};
  const post=(c,r,name,n)=>{for(let i=0;i<n;i++){const p=spot(c,r*.6);if(p)V.spawn('guard',p[0],p[1],{type:'wander',radius:r,home:[c[0],c[1]],name});}};
@@ -242,10 +263,12 @@ function open(v,npc){if(view==='person'&&v!=='person'&&G.social)G.social.end();v
 function close(){clearTimeout(speechTimer);if(!view)return;if(G.social)G.social.end();if(view==='arrest'&&shopNPC){if(caught){S.bounty+=5;shopNPC.stun=2.5;tell(null,'Resisting arrest. Fine: '+S.bounty);}else shopNPC.stun=8;}view=null;shopNPC=null;G.modal=false;wrap.style.display='none';save();
   if(!V.coarse&&V.canvas.requestPointerLock){try{const p=V.canvas.requestPointerLock();if(p&&p.catch)p.catch(()=>{});}catch(e){}}}
 function bagRows(shop){let h='';for(const k of ORDER){const n=count(k);if(!n)continue;const it=ITEMS[k],st=hot(k),clean=n-st;
+    if(it.quest){if(!shop)h+='<div class="row">'+img(k)+'<span class="nm">'+it.n+(n>1?'<small>×'+n+'</small>':'')+'</span><span class="pr">for someone</span></div>';continue;}
     if(!shop){h+='<div class="row">'+img(k)+'<span class="nm">'+it.n+(n>1?'<small>×'+n+'</small>':'')+(st?'<small class="hot">'+(st===n?'stolen':st+' stolen')+'</small>':'')+'</span><span class="pr">worth '+it.v+'</span>'+(it.use?'<button type="button" data-use="'+k+'">'+it.use+'</button>':'')+'</div>';continue;}
     if(clean){const o=offer(shop,k);h+='<div class="row">'+img(k)+'<span class="nm">'+it.n+(clean>1?'<small>×'+clean+'</small>':'')+'</span><span class="pr">'+o+(shop.fav.includes(k)?' ★':'')+'</span><button type="button" data-sell="'+k+'">Sell</button>'+(clean>1?'<button type="button" class="alt" data-sellall="'+k+'">All</button>':'')+'</div>';}
     if(st){h+='<div class="row">'+img(k)+'<span class="nm">'+it.n+(st>1?'<small>×'+st+'</small>':'')+'<small class="hot">stolen</small></span>'+(shop.fence?'<span class="pr">'+fenced(k)+'</span><button type="button" data-sell="'+k+'" data-hot="1">Sell</button>'+(st>1?'<button type="button" class="alt" data-sellall="'+k+'" data-hot="1">All</button>':''):'<span class="pr">will not buy</span>')+'</div>';}}
   if(S.boots&&!shop)h+='<div class="row">'+img('boots')+'<span class="nm">Walking boots<small>worn</small></span><span class="pr">a quicker stride</span></div>';
+  if(!shop)for(const k of ORDER)if(S.gear[k])h+='<div class="row">'+img(k)+'<span class="nm">'+ITEMS[k].n+'<small>yours</small></span><span class="pr">'+ITEMS[k].does+'</span></div>';
   return h||'<div class="none">'+(shop?'You have nothing to sell.':'Nothing but lint. Mushrooms, berries, herbs and flowers grow wild in the valley.')+'</div>';}
 function draw(){if(!view)return;const talking=view==='person';wrap.classList.toggle('talking',talking);box.setAttribute('aria-modal',String(!talking));if(talking&&G.social){box.className='dialogue';box.innerHTML=G.social.panel(shopNPC);animateSpeech();return;}const shop=view==='shop'?SHOPS[shopNPC.shop]:null;box.className=shop?'':'one';
   if(view==='lock'&&PK){const L=PK.L,n=count('pick'),name=L.kind==='chest'?'Chest lock':L.kind==='evidence'?'Evidence chest':L.kind==='cell'?'Cell door':'Door lock';let pins='';for(let i=0;i<L.pins;i++)pins+=i<PK.set?'●':'○';
@@ -255,26 +278,29 @@ function draw(){if(!view)return;const talking=view==='person';wrap.classList.tog
   if(view==='arrest'){const can=S.coins>=S.bounty,loot=ORDER.some(k=>hot(k)),nights=nightsFor(S.bounty),coins=S.bounty+(S.bounty===1?' coin':' coins');
     box.innerHTML='<div class="rod"></div><div class="sheet"><div class="top"><h2>'+shopNPC.name+'</h2><div class="purse">'+img('coin')+S.coins+' coins</div></div><p class="hello">“'+(caught?'Got you. ':'')+'There is a fine of '+coins+' on your head'+(loot?', and whatever you took is forfeit':'')+'. Pay it, or it is '+(nights===1?'a night':nights+' nights')+' in the cells.”</p>'
       +'<div class="foot" style="flex-wrap:wrap;justify-content:flex-start">'+(can?'<button type="button" data-fine="1">Pay '+coins+'</button>':'')+'<button type="button"'+(can?' class="alt"':'')+' data-jail="1">Go to the cells</button><button type="button" class="alt" data-close="1" style="margin-left:auto">'+(caught?'Run for it':'Walk away')+'</button></div></div><div class="rod"></div>';return;}
+  if(view==='journal'&&G.quests){box.innerHTML='<div class="rod"></div><div class="sheet">'+G.quests.journal()+'<div class="foot"><span class="note">'+note+'</span><span style="display:flex;gap:.5rem"><button type="button" class="alt" data-bag="1">Bag</button><button type="button" class="alt" data-close="1">'+(V.coarse?'Close':'Close (Esc)')+'</button></span></div></div><div class="rod"></div>';return;}
   let h='<div class="top"><h2>'+(shop?shop.name:'Your bag')+'</h2><div class="purse">'+img('coin')+S.coins+' coins</div></div>';
   if(shop){h+='<p class="hello">“'+shop.hello+'”</p><div class="cols"><div><h3>For sale</h3>';
-    for(const k of shop.sells){const it=ITEMS[k],own=it.worn&&S.boots;h+='<div class="row">'+img(k)+'<span class="nm">'+it.n+'</span><span class="pr">'+it.v+'</span><button type="button" data-buy="'+k+'"'+(S.coins<it.v||own?' disabled':'')+'>'+(own?'Worn':'Buy')+'</button></div>';}
-    if(shop.bed)h+='<div class="row">'+img('candle')+'<span class="nm">A bed until morning</span><span class="pr">'+shop.bed+'</span><button type="button" data-bed="1"'+(S.coins<shop.bed?' disabled':'')+'>Sleep</button></div>';
+    for(const k of shop.sells){const it=ITEMS[k],own=(it.worn&&S.boots)||(it.gear&&S.gear[k]);h+='<div class="row">'+img(k)+'<span class="nm">'+it.n+(it.does?'<small>'+it.does+'</small>':'')+'</span><span class="pr">'+it.v+'</span><button type="button" data-buy="'+k+'"'+(S.coins<it.v||own?' disabled':'')+'>'+(own?(it.gear?'Yours':'Worn'):'Buy')+'</button></div>';}
+    if(shop.bed){const own=S.gear.room;h+='<div class="row">'+img(own?'room':'candle')+'<span class="nm">'+(own?'Your own bed, until morning':'A bed until morning')+'</span><span class="pr">'+(own?'yours':shop.bed)+'</span><button type="button" data-bed="1"'+(!own&&S.coins<shop.bed?' disabled':'')+'>Sleep</button></div>';}
     h+='</div><div><h3>Your bag <small style="font-style:normal;color:var(--ink2)">★ pays extra</small></h3>'+bagRows(shop)+'</div></div>';}
   else h+='<h3>Carrying</h3>'+bagRows(null);
-  h+='<div class="foot"><span class="note">'+note+'</span><button type="button" class="alt" data-close="1">'+(V.coarse?'Close':'Close (Esc)')+'</button></div>';
+  h+='<div class="foot"><span class="note">'+note+'</span><span style="display:flex;gap:.5rem">'+(!shop&&G.quests?'<button type="button" class="alt" data-journal="1">'+(V.coarse?'Journal':'Journal (J)')+'</button>':'')+'<button type="button" class="alt" data-close="1">'+(V.coarse?'Close':'Close (Esc)')+'</button></span></div>';
   const top=box.querySelector('.sheet'),y=top?top.scrollTop:0;box.innerHTML='<div class="rod"></div><div class="sheet">'+h+'</div><div class="rod"></div>';box.querySelector('.sheet').scrollTop=y;drawHud();}
 box.addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='Enter')e.stopPropagation();});
 box.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.disabled)return;const d=b.dataset,shop=shopNPC&&SHOPS[shopNPC.shop];
   if(d.close){close();return;}
+  if(d.journal||d.bag){view=d.journal?'journal':'bag';note='';draw();box.focus();return;}
+  if(d.q&&view==='journal'&&G.quests){note=G.quests.click(d.q,d.id)||'';save();draw();return;}
   if(d.topic&&view==='person'){G.social.topic(shopNPC,d.topic);draw();(box.querySelector('[data-topic="'+d.topic+'"]')||box).focus();return;}
   if(d.trade&&view==='person'&&shop){if(!G.sheathed){G.social.topic(shopNPC,'hello');draw();return;}if(S.bounty>0&&!shop.fence){tell(null,'Settle your fine with the watch first.');return;}if(!G.social.willTrade(shopNPC)){tell(null,'They do not trust you enough to trade.');return;}view='shop';G.modal=true;draw();return;}
   if(d.set){lockTry();return;}
   if(d.fine){if(S.coins<S.bounty)return;S.coins-=S.bounty;forfeit();view='paid';close();standDown();V.say('Fine paid','Your name is clear again.');drawHud();return;}
   if(d.jail){jail();return;}
-  if(d.buy&&shop){const it=ITEMS[d.buy];if(S.coins<it.v)return;S.coins-=it.v;if(it.worn){S.boots=true;wear();note='You lace them up. The road feels shorter already.';}else{give(d.buy);note='Bought: '+it.n.toLowerCase()+'.';}}
+  if(d.buy&&shop){const it=ITEMS[d.buy];if(S.coins<it.v)return;S.coins-=it.v;if(it.gear){if(S.gear[d.buy]){S.coins+=it.v;return;}S.gear[d.buy]=true;note=it.got;}else if(it.worn){S.boots=true;wear();note='You lace them up. The road feels shorter already.';}else{give(d.buy);note='Bought: '+it.n.toLowerCase()+'.';}}
   else if((d.sell||d.sellall)&&shop){const k=d.sell||d.sellall,st=!!d.hot,have=st?hot(k):count(k)-hot(k),n=d.sellall?have:1;if(have<1||(st&&!shop.fence))return;const c=(st?fenced(k):offer(shop,k))*n;take(k,n,st);S.coins+=c;note='Sold for '+c+(c===1?' coin.':' coins.');}
   else if(d.use){const it=ITEMS[d.use];if(!count(d.use))return;take(d.use,1,hot(d.use)>0);note=it.said;if(it.heal&&S.hp<MAXHP){S.hp=Math.min(MAXHP,S.hp+it.heal);note+=' You feel better.';drawHp();}}
-  else if(d.bed&&shop){if(S.coins<shop.bed)return;S.coins-=shop.bed;sleep();return;}
+  else if(d.bed&&shop){const c=S.gear.room?0:shop.bed;if(S.coins<c)return;S.coins-=c;sleep();return;}
   if(shop&&(d.buy||d.sell||d.sellall)&&G.social)G.social.trade(shopNPC);
   save();draw();});
 // --- fine or cells ---
@@ -296,6 +322,7 @@ addEventListener('keydown',e=>{if(!V.started)return;
   if(view==='person'&&!V.coarse&&!e.altKey&&!e.ctrlKey&&!e.metaKey&&/^(Digit|Numpad)[1-9]$/.test(e.code)){e.preventDefault();if(!e.repeat)box.querySelector('[data-dialog-key="'+e.code.slice(-1)+'"]')?.click();return;}
   if(e.code==='Tab'&&view){e.preventDefault();const buttons=[...box.querySelectorAll('button:not(:disabled)')];if(buttons.length){const i=buttons.indexOf(document.activeElement);buttons[(i+(e.shiftKey?-1:1)+buttons.length)%buttons.length].focus();}return;}
   if(e.code==='Tab'||e.code==='KeyI'||e.code==='KeyB'){e.preventDefault();if(e.repeat)return;if(view==='bag')close();else if(!G.modal)open('bag');}
+  else if(e.code==='KeyJ'&&G.quests){if(e.repeat)return;if(view==='journal')close();else if(view==='bag'){view='journal';note='';draw();}else if(!G.modal&&!view)open('journal');}
   else if(view==='lock'&&(e.code==='Space'||e.code==='Enter')){e.preventDefault();if(!e.repeat)lockTry();}
   else if(e.code==='Escape'&&view)close();});
 wrap.addEventListener('click',e=>{if(e.target===wrap)close();});
@@ -359,7 +386,7 @@ function canSee(n,light){if(n.sleep||n.down)return false;const dx=P.x-n.x,dz=P.z
   if(d>26||Math.abs(n.y-P.y)>2.4+d*.5)return false;   // a storey apart indoors, but a hillside does not hide you
   const hear=G.sneak?(pace>.3?1.3:.7):(pace>6?7:pace>.3?3.5:1.6);
   const front=(Math.sin(n.face)*dx+Math.cos(n.face)*dz)/(d||1)>.26;
-  if(!(d<hear||(front&&d<24*light*(G.sneak?.5:1))))return false;
+  if(!(d<hear||(front&&d<24*light*(G.sneak?(S.gear.cloak?.34:.5):1))))return false;
   return d<1.2||clearLine(n);}
 function look(){const light=daylight();watchers=[];for(const n of PEOPLE){const far=Math.abs(n.x-P.x)>28||Math.abs(n.z-P.z)>28;n.sees=!far&&canSee(n,light);if(n.sees)watchers.push(n);}}
 function speak(n,line){V.talkBox.innerHTML='<b style="font-weight:400;color:var(--accent)">'+n.name+'</b><br>'+line;V.talkBox.style.opacity=1;speakT=3.5;}
@@ -505,6 +532,7 @@ V.canvas.addEventListener('contextmenu',e=>e.preventDefault());
 // --- being hurt ---
 function hurt(dmg,src){if(dying||!V.started)return;
   if(G.block){const dx=src.x-P.x,dz=src.z-P.z,d=Math.hypot(dx,dz)||1;if((-Math.sin(P.yaw)*dx-Math.cos(P.yaw)*dz)/d>.2)dmg=Math.ceil(dmg*.25);}
+  if(S.gear.mail)dmg=Math.ceil(dmg*.6);else if(S.gear.jack)dmg=Math.ceil(dmg*.8);
   S.hp-=dmg;lastHurt=clockT;hurtFx.style.transition='none';hurtFx.style.opacity=Math.min(1,.45+dmg/30);requestAnimationFrame(()=>{hurtFx.style.transition='';hurtFx.style.opacity=0;});drawHp();
   if(S.hp<=0)die(src);}
 function die(src){dying=true;if(G.social)G.social.end();if(view){view=null;shopNPC=null;wrap.style.display='none';}G.modal=true;
@@ -577,15 +605,15 @@ function attack(){const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw);let n=null,bd=2.
   for(const m of HITTABLE){if(m.gone||m.down||m.sleep||m.dead)continue;const dx=m.x-P.x,dz=m.z-P.z;if(dx>3||dx<-3||dz>3||dz<-3)continue;const d=Math.hypot(dx,dz);
     if(d>=bd||Math.abs(m.y-P.y)>1.8||(d>.9&&(dx*fx+dz*fz)/d<.45))continue;n=m;bd=d;}
   if(!n)return;
-  look();const person=n.anim==='person',unseen=person&&!n.sees,dmg=unseen?50:25,law=LAW(n);
+  look();const person=n.anim==='person',unseen=person&&!n.sees,dmg=(unseen?50:25)*(S.gear.steel?1.5:1),law=LAW(n);
   puff.sp.position.set(n.x-fx*.3,n.y+(person?1.2:.6),n.z-fz*.3);puff.sp.scale.set(.9,.9,1);puff.sp.visible=true;puff.t=.16;
   if(n.fixedY===undefined&&!n.sit){const x=n.x+fx*.6,z=n.z+fz*.6;if(!V.wallHit(x,z,.4)&&!V.castleBlocked(x,z)){n.x=x;n.z=z;}}
   if(n.hp===undefined){n.hp=n.maxhp=person?(law?90:40):30;if(person)n.dmg=n.dmg||(law?12:5);}
   n.hp-=dmg;gore(n,n.hp<=0?18:9);
   if(n.foe){n.angry=true;n.speed=n.run;
     if(n.hp>0)return;
-    if(n.foe==='wolf'){n.angry=false;corpse(n,300);give('pelt');tell('pelt','+1 Wolf pelt');}
-    else{const c=8+((Math.random()*13)|0);halt(n);unwind(n);n.down=true;n.downT=180;n.angry=false;pool(n);S.coins+=c;tell('coin','+'+c+' coins from the bandit');if(Math.random()<.6){give('pick');tell('pick','+1 Lockpick');}}
+    if(n.foe==='wolf'){n.angry=false;corpse(n,300);give('pelt');tell('pelt','+1 Wolf pelt');if(G.quests)G.quests.kill('wolf',n);}
+    else{const c=8+((Math.random()*13)|0);halt(n);unwind(n);n.down=true;n.downT=180;n.angry=false;pool(n);S.coins+=c;tell('coin','+'+c+' coins from the bandit');if(Math.random()<.6){give('pick');tell('pick','+1 Lockpick');}if(G.quests)G.quests.kill('bandit',n);}
     drawHud();save();return;}
   if(!person){livestock(n);drawHud();save();return;}
   // someone who was minding their own business: that is assault, if anyone lives to tell the watch it was you
@@ -630,7 +658,7 @@ const J=(function gaol(){let best=null,bs=1e9;
   V.roofOn(K,13,15,4.5,3,'slate','ashlar',.6,0,x,y,z+3.5);
   K.add(B(2.2,.18,1,1),'wood',x+3,y+1,z+2.8);
   V.FLOORS.push({x,z:z+3.5,ry:0,hw:6.5,hd:7.5,y,r:11});
-  K.build(V.M,V.scene);V.trees.push([cx,cz,.45]);
+  const barracksM={...V.M,ashlar:V.M.ashlar.clone()};barracksM.ashlar.side=THREE.DoubleSide;K.build(barracksM,V.scene);V.trees.push([cx,cz,.45]);
   const g=new THREE.Group(),K2=V.kit();for(let i=0;i<6;i++)K2.add(new THREE.BoxGeometry(.07,2.1,.07),'iron',-.5+i*.2,1.05,0);for(const h of [.25,1.1,1.95])K2.add(new THREE.BoxGeometry(1.1,.07,.07),'iron',0,h,0);
   K2.build(V.M,g);g.position.set(x,y,z+1.95);V.scene.add(g);
   V.FLOORS.push({x,z,ry:0,hw:2.3,hd:2.1,y,r:3.8});
@@ -737,6 +765,7 @@ G.begin=function(){hud.style.display='flex';drawHud();if(!(S.hp>0))S.hp=50;drawH
 // the start card: continue where you left off, or start over
 if(hadSave&&S.pos){const go=$('#go');if(go){go.textContent='Continue';const o=document.createElement('button');o.id='vgOver';o.type='button';o.textContent='New game';
   o.addEventListener('click',()=>{try{localStorage.removeItem(KEY);}catch(e){}S=fresh();G.sneak=false;wear();o.remove();go.textContent='New game';G.sheathed=true;G.sheathK=1;});go.after(o);}}
+G.qa={give,take,count,hot,tell,img,save,drawHud,open,close,ITEMS,ICON,view:()=>view,bounty:()=>S.bounty,gear:()=>S.gear,heal(n){S.hp=Math.min(MAXHP,S.hp+n);drawHp();},coins(n){S.coins+=n;drawHud();}};
 G.socialAccess={save,count,hot,take,go,halt,ambient(n,line){if(view||speakT>0||S.jailed||!G.sheathed)return false;speak(n,line);return true;}};
 G.reports=REPORTS;G.attack=attack;G.crime=crime;G.setSheath=setSheath;G.boat=BOAT;G.row=row;G.people=PEOPLE;G.sheep=SHEEP;G.foes=FOES;G.hurt=hurt;G.locks=LOCKS;G.gaol=J;G.jail=jail;G.pk=()=>PK;G.state=()=>S;G.items=ITEMS;G.picks=PICK;G.watchers=()=>watchers;
 })();
