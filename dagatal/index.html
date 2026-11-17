@@ -548,14 +548,18 @@ window.raesaDagatal = (CONFIG) => {
       try { await Promise.all(["800 64px 'Baloo 2'", "800 30px Nunito, system-ui, sans-serif", "600 30px Nunito, system-ui, sans-serif"].map((f) => document.fonts.load(f))); } catch (_) {}
       const W = 1200, H = 640, c = document.createElement("canvas"); c.width = W; c.height = H;
       const x = c.getContext("2d"), nr = String(d).padStart(2, "0"), stubbur = 950;
-      x.fillStyle = "#0f2e25"; x.fillRect(0, 0, W, H);
       // Ticket body with notches at the perforation.
       x.save(); x.beginPath(); x.roundRect(60, 60, W - 120, H - 120, 26); x.clip();
       x.fillStyle = "#ffe6a6"; x.fillRect(0, 0, W, H);
       x.fillStyle = "rgba(194,142,52,.13)"; for (let yy = 66; yy < H; yy += 16) for (let xx = 66; xx < W; xx += 16) { x.beginPath(); x.arc(xx, yy, 2, 0, 7); x.fill(); }
       x.restore();
-      x.fillStyle = "#0f2e25"; for (const yy of [60, H - 60]) { x.beginPath(); x.arc(stubbur, yy, 26, 0, 7); x.fill(); }
       x.strokeStyle = "#23201b"; x.lineWidth = 5; x.beginPath(); x.roundRect(60, 60, W - 120, H - 120, 26); x.stroke();
+      // Punch transparent notches at the perforation, then outline them.
+      x.globalCompositeOperation = "destination-out"; for (const yy of [60, H - 60]) { x.beginPath(); x.arc(stubbur, yy, 26, 0, 7); x.fill(); }
+      x.globalCompositeOperation = "source-over";
+      x.save(); x.beginPath(); x.roundRect(60, 60, W - 120, H - 120, 26); x.clip();
+      for (const yy of [60, H - 60]) { x.beginPath(); x.arc(stubbur, yy, 26, 0, 7); x.stroke(); }
+      x.restore();
       x.setLineDash([14, 12]); x.strokeStyle = "#8d7352"; x.lineWidth = 4; x.beginPath(); x.moveTo(stubbur, 96); x.lineTo(stubbur, H - 96); x.stroke(); x.setLineDash([]);
       // Text
       const L = 120, B = stubbur - L - 50;
@@ -573,7 +577,9 @@ window.raesaDagatal = (CONFIG) => {
         x.beginPath(); x.roundRect(-150, -62, 300, 124, 14); x.stroke(); x.textAlign = "center";
         x.font = "800 52px Nunito, system-ui, sans-serif"; x.fillText("NOTAÐUR", 0, 8); x.font = "700 26px Nunito, system-ui, sans-serif"; x.fillText(dagsetning(stada.notad[d]), 0, 44); x.restore();
       }
-      const blob = await new Promise((r) => c.toBlob(r, "image/png"));
+      const m = 56, ut = document.createElement("canvas"); ut.width = W - 2 * m; ut.height = H - 2 * m;
+      ut.getContext("2d").drawImage(c, -m, -m);
+      const blob = await new Promise((r) => ut.toBlob(r, "image/png"));
       const skra = new File([blob], `midi-${nr}.png`, { type: "image/png" });
       if (navigator.canShare?.({ files: [skra] })) {
         try { await navigator.share({ files: [skra], title: dg.titill }); } catch (_) {}
@@ -667,7 +673,7 @@ window.raesaDagatal = (CONFIG) => {
         if (navigator.share) { try { await navigator.share({ text: texti }); return; } catch (e) { if (e.name === "AbortError") return; } }
         location.href = "sms:?&body=" + encodeURIComponent(texti);
       };
-      const vistaTakki = h("button", { class: "takki ljos", type: "button", onclick: () => vistaMida(dg, d, vistaTakki) }, "Vista mynd");
+      const vistaTakki = h("button", { class: "takki ljos", type: "button", onclick: () => vistaMida(dg, d, vistaTakki) }, "Vista miða");
       function teikna() {
         if (notadur()) {
           adgerdir.replaceChildren(
