@@ -306,6 +306,54 @@ dialog::backdrop{background:#071c17c9;backdrop-filter:blur(3px)}
 .las-kort input{width:100%;font:600 1.1rem var(--body);padding:12px 14px;border:2px solid var(--blek);border-radius:10px;background:#fffaf0;color:var(--blek);text-align:center}
 .las-kort .takki{width:100%;margin-top:12px;padding:13px}
 .las-villa{min-height:1.5em;margin:10px 0 0;color:var(--tronuber);font-weight:700}
+
+/* Tengingar */
+.tg-leystir{display:grid;gap:8px;margin:10px 0 8px}
+.tg-hopur{border-radius:10px;padding:10px 8px;text-align:center;border:2px solid var(--blek);animation:tgInn .4s cubic-bezier(.3,1.5,.5,1) both}
+.tg-hopur strong{display:block;font:800 .95rem/1.3 var(--body);text-transform:uppercase;letter-spacing:.04em}
+.tg-hopur span{font-size:.92rem}
+.tg-hopur.gulur{background:#f6d77a}.tg-hopur.graenn{background:#a9d3a0}.tg-hopur.blar{background:#a9c7e8}.tg-hopur.fjolu{background:#c9a6dd}
+@keyframes tgInn{from{transform:scale(.85);opacity:0}}
+.tg-bord{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:8px 0}
+.tg-ord{min-height:64px;padding:4px 3px;border:0;border-radius:9px;background:#e8dfc8;color:var(--blek);font:800 min(.95rem,calc((min(100vw,540px) - 92px) / 4 / (var(--n,6) * .8 + .6)))/1.1 var(--body);text-transform:uppercase;cursor:pointer;hyphens:manual;transition:background .15s,color .15s,transform .1s;touch-action:manipulation}
+.tg-ord:hover{background:#ddd2b6}.tg-ord:active{transform:scale(.95)}
+.tg-ord.valid{background:#4c4a44;color:var(--snjor)}
+.tg-ord:focus-visible{outline:3px solid var(--greni);outline-offset:2px}
+.tg-ord.hoppa{animation:tgHopp .45s ease both}
+@keyframes tgHopp{40%{transform:translateY(-10px)}}
+.tg-bord.hrista{animation:hrista .4s}
+.tg-skilabod{min-height:1.5em;text-align:center;font-weight:800;margin:6px 0 2px!important;color:var(--tronuber)}
+.tg-skilabod.synd{animation:upp .25s both}
+.tg-mistok{display:flex;justify-content:center;align-items:center;gap:7px;font-size:.88rem;color:#5d5a50;margin:4px 0 10px}
+.tg-mistok span{width:11px;height:11px;border-radius:50%;background:#4c4a44;transition:transform .3s,opacity .3s}
+.tg-mistok span.farinn{transform:scale(.4);opacity:.25}
+.tg-takkar{justify-content:center;gap:8px;flex-wrap:wrap}
+.tg-takkar .takki{padding:9px 16px}
+.tg-takkar .takki[disabled]{opacity:.45;cursor:default}
+
+/* Miðar */
+.midi{position:relative}
+.midi.notadur .meginn,.midi.notadur .stubbur{opacity:.55}
+.midi-stimpill{position:absolute;right:56px;bottom:14px;transform:rotate(-12deg);border:3px solid var(--tronuber);border-radius:8px;padding:4px 12px;color:var(--tronuber);text-align:center;background:rgba(255,246,220,.6);line-height:1.1;pointer-events:none}
+.midi-stimpill strong{display:block;font:800 1.3rem/1.1 var(--body);text-transform:uppercase;letter-spacing:.06em}
+.midi-stimpill span{font-weight:700;font-size:.8rem}
+.midi-stimpill.ny{animation:stimpla3 .45s cubic-bezier(.3,1.5,.5,1) both}
+@keyframes stimpla3{from{transform:rotate(-30deg) scale(2.6);opacity:0}}
+.midi-adgerdir .rod{gap:10px;flex-wrap:wrap}
+.midi-adgerdir .dauft{margin:0 0 12px}
+.midi-stada{font-weight:800;margin:0 0 10px}
+.midi-afturkalla{display:block;margin-top:12px;background:none;border:0;padding:4px 0;font:600 .85rem var(--body);color:#7a7466;text-decoration:underline;cursor:pointer}
+#veski{display:flex;align-items:center;gap:10px;margin:16px auto 0;padding:10px 18px 10px 14px;border:2px solid var(--blek);border-radius:999px;background:#ffe6a6;color:var(--blek);font:800 .95rem var(--body);box-shadow:3px 3px 0 var(--blek);cursor:pointer}
+#veski[hidden]{display:none}
+#veski svg{width:28px;height:28px;color:#913440}
+#veski:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--blek)}
+.veski-tala{font-weight:700;font-size:.8rem;background:var(--tronuber);color:var(--snjor);border-radius:999px;padding:2px 9px}
+.veski-listi{display:grid;gap:10px;margin:6px 0 14px}
+.veski-midi{display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto;align-items:center;text-align:left;padding:12px 0 12px 16px;border:2px solid var(--blek);border-radius:10px;background:#ffe6a6;color:var(--blek);box-shadow:2px 3px 0 var(--blek);cursor:pointer;font:inherit;overflow:hidden}
+.veski-heiti{font:800 1.15rem/1.2 var(--body)}
+.veski-stada{grid-row:2;font-size:.82rem;font-weight:700;color:#3f6b4f}
+.veski-midi.notadur{background:#efe6cf}.veski-midi.notadur .veski-heiti{opacity:.6}.veski-midi.notadur .veski-stada{color:var(--tronuber)}
+.veski-nr{grid-row:1/3;grid-column:2;align-self:stretch;display:grid;place-items:center;padding:0 16px;margin-left:12px;border-left:2px dashed #8d7352;font:800 .85rem var(--body);color:#663c35}
 </style>
 </head>
 <body>
@@ -319,6 +367,7 @@ dialog::backdrop{background:#071c17c9;backdrop-filter:blur(3px)}
   </header>
   <div class="calendar-meta"><span>24 litlar gleðistundir</span><span id="opnad-fjoldi"></span></div>
   <ol id="kassar" aria-label="Jóladagatal, 1. til 24. desember"></ol>
+  <button id="veski" type="button" hidden><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 15h38v6a3 3 0 0 0 0 6v6H5v-6a3 3 0 0 0 0-6z"/><path d="M31 16v16" stroke-dasharray="2.5 3"/></svg><span>Miðarnir mínir</span><span class="veski-tala"></span></button>
   <footer>Nýr gluggi á hverjum morgni kl. <span id="opnun-kl"></span><span class="footer-heart" aria-hidden="true">♡</span></footer>
 </main>
 <div id="tilkynning" role="status" aria-live="polite"></div>
@@ -352,12 +401,12 @@ window.raesaDagatal = (CONFIG) => {
     gjof: '<rect x="8" y="21" width="32" height="19" rx="1"/><rect x="5" y="14" width="38" height="7" rx="1"/><path d="M24 14v26M24 14c-6-10-14-4 0 0c14-4 6-10 0 0"/>',
     stjarna: '<path d="M24 5l5.6 12 13 1.6-9.6 9 2.5 13L24 34.200l-11.500 6.400 2.500-13-9.600-9 13-1.600z"/>'
   };
-  const TAKN_FYRIR = { inngangur: "bref", skilabod: "bref", listi: "bref", lag: "bref", midi: "midi", quiz: "leikur", hvort: "leikur", liklegri: "leikur", minni: "leikur", ordarugl: "leikur", wordle: "leikur", snake: "leikur", hjol: "hjol", gjof: "gjof", recap: "stjarna", lok: "stjarna" };
+  const TAKN_FYRIR = { inngangur: "bref", skilabod: "bref", listi: "bref", lag: "bref", midi: "midi", quiz: "leikur", tengingar: "leikur", hvort: "leikur", liklegri: "leikur", minni: "leikur", ordarugl: "leikur", wordle: "leikur", snake: "leikur", hjol: "hjol", gjof: "gjof", recap: "stjarna", lok: "stjarna" };
   const takn = (nafn) => { const d = h("div", {}); d.innerHTML = `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAKN[nafn] || TAKN.stjarna}</svg>`; return d.firstChild; };
 
   /* ---------- Vistun (hvaða kassar eru opnaðir, hvað vannst á hjólinu) ---------- */
   const LYKILL = "dagatal-" + CONFIG.ar;
-  let stada = { opnad: [], hjol: {} };
+  let stada = { opnad: [], hjol: {}, notad: {} };
   try { stada = Object.assign(stada, JSON.parse(localStorage.getItem(LYKILL) || "{}")); } catch (e) {}
   const vista = () => { try { localStorage.setItem(LYKILL, JSON.stringify(stada)); } catch (e) {} };
 
@@ -436,6 +485,7 @@ window.raesaDagatal = (CONFIG) => {
       k.setAttribute("aria-label", `${d}. desember, ` + (opinn ? "opnaður" : laus ? "tilbúinn til að opna" : `læstur til kl. ${kl}`));
     }
     $("#opnad-fjoldi").textContent = `${stada.opnad.length} af 24 opnaðir`;
+    uppfaeraVeski();
     sidastLaus = lausir();
   }
 
@@ -480,6 +530,84 @@ window.raesaDagatal = (CONFIG) => {
     if (!gluggi.open) gluggi.showModal();
     spjald.scrollTop = 0;
   }
+  /* ---------- Miðar: notkun, mynd og veski ---------- */
+  const MANUDIR = ["janúar", "febrúar", "mars", "apríl", "maí", "júní", "júlí", "ágúst", "september", "október", "nóvember", "desember"];
+  const dagsetning = (iso) => { const t = new Date(iso); return `${t.getDate()}. ${MANUDIR[t.getMonth()]}`; };
+  const midaDagar = () => Object.keys(CONFIG.dagar).map(Number).filter((d) => CONFIG.dagar[d].tegund === "midi" && stada.opnad.includes(d)).sort((a, b) => a - b);
+
+  function linur(ctx, texti, breidd) {
+    const ord = String(texti || "").split(/\s+/), ut = [];
+    let lina = "";
+    for (const o of ord) { const t = lina ? lina + " " + o : o; if (ctx.measureText(t).width > breidd && lina) { ut.push(lina); lina = o; } else lina = t; }
+    if (lina) ut.push(lina);
+    return ut;
+  }
+  async function vistaMida(dg, d, takki) {
+    const fyrri = takki.textContent; takki.disabled = true; takki.textContent = "Augnablik…";
+    try {
+      try { await Promise.all(["800 64px 'Baloo 2'", "800 30px Nunito, system-ui, sans-serif", "600 30px Nunito, system-ui, sans-serif"].map((f) => document.fonts.load(f))); } catch (_) {}
+      const W = 1200, H = 640, c = document.createElement("canvas"); c.width = W; c.height = H;
+      const x = c.getContext("2d"), nr = String(d).padStart(2, "0"), stubbur = 950;
+      x.fillStyle = "#0f2e25"; x.fillRect(0, 0, W, H);
+      // Ticket body with notches at the perforation.
+      x.save(); x.beginPath(); x.roundRect(60, 60, W - 120, H - 120, 26); x.clip();
+      x.fillStyle = "#ffe6a6"; x.fillRect(0, 0, W, H);
+      x.fillStyle = "rgba(194,142,52,.13)"; for (let yy = 66; yy < H; yy += 16) for (let xx = 66; xx < W; xx += 16) { x.beginPath(); x.arc(xx, yy, 2, 0, 7); x.fill(); }
+      x.restore();
+      x.fillStyle = "#0f2e25"; for (const yy of [60, H - 60]) { x.beginPath(); x.arc(stubbur, yy, 26, 0, 7); x.fill(); }
+      x.strokeStyle = "#23201b"; x.lineWidth = 5; x.beginPath(); x.roundRect(60, 60, W - 120, H - 120, 26); x.stroke();
+      x.setLineDash([14, 12]); x.strokeStyle = "#8d7352"; x.lineWidth = 4; x.beginPath(); x.moveTo(stubbur, 96); x.lineTo(stubbur, H - 96); x.stroke(); x.setLineDash([]);
+      // Text
+      const L = 120, B = stubbur - L - 50;
+      x.textBaseline = "alphabetic"; x.fillStyle = "#913440"; x.font = "800 26px Nunito, system-ui, sans-serif"; x.fillText("HANDA ÞÉR  ✦", L, 150);
+      x.fillStyle = "#23201b"; x.font = "800 76px 'Baloo 2', Nunito, system-ui, sans-serif";
+      let y = 232; for (const l of linur(x, dg.titill, B).slice(0, 2)) { x.fillText(l, L, y); y += 74; }
+      x.font = "600 34px Nunito, sans-serif"; y += 8;
+      for (const l of linur(x, dg.texti, B).slice(0, 4)) { x.fillText(l, L, y); y += 46; }
+      if (dg.smattLetur) { x.fillStyle = "#665840"; x.font = "600 26px Nunito, sans-serif"; x.fillText(dg.smattLetur, L, Math.min(H - 150, y + 24)); }
+      x.save(); x.translate(stubbur + 62, H / 2); x.rotate(Math.PI / 2); x.textAlign = "center"; x.fillStyle = "#663c35"; x.font = "800 30px Nunito, system-ui, sans-serif";
+      x.fillText("MIÐI NR. " + nr, 0, 0); x.font = "600 22px Nunito, system-ui, sans-serif"; x.fillText(CONFIG.titill + " " + CONFIG.ar, 0, 40); x.restore();
+      x.fillStyle = "#8d7352"; x.font = "700 24px Nunito, system-ui, sans-serif"; x.fillText(`Gildir hjá ${CONFIG.hansNafnThgf} · hvenær sem er`, L, H - 100);
+      if (stada.notad[d]) {
+        x.save(); x.translate(stubbur - 190, H - 190); x.rotate(-.18); x.strokeStyle = x.fillStyle = "rgba(168,31,45,.85)"; x.lineWidth = 6;
+        x.beginPath(); x.roundRect(-150, -62, 300, 124, 14); x.stroke(); x.textAlign = "center";
+        x.font = "800 52px Nunito, system-ui, sans-serif"; x.fillText("NOTAÐUR", 0, 8); x.font = "700 26px Nunito, system-ui, sans-serif"; x.fillText(dagsetning(stada.notad[d]), 0, 44); x.restore();
+      }
+      const blob = await new Promise((r) => c.toBlob(r, "image/png"));
+      const skra = new File([blob], `midi-${nr}.png`, { type: "image/png" });
+      if (navigator.canShare?.({ files: [skra] })) {
+        try { await navigator.share({ files: [skra], title: dg.titill }); } catch (_) {}
+      } else {
+        const a = h("a", { href: URL.createObjectURL(blob), download: skra.name }); document.body.append(a); a.click(); a.remove();
+      }
+    } finally { takki.disabled = false; takki.textContent = fyrri; }
+  }
+
+  function uppfaeraVeski() {
+    const takki = $("#veski"), dagar = midaDagar();
+    takki.hidden = !dagar.length;
+    const onotadir = dagar.filter((d) => !stada.notad[d]).length;
+    takki.querySelector(".veski-tala").textContent = onotadir ? `${onotadir} ónotað${onotadir === 1 ? "ur" : "ir"}` : "allir notaðir";
+  }
+  function opnaVeski() {
+    hreinsaLeik(); hreinsaLeik = () => {};
+    gluggi.classList.remove("game-dialog", "snake-dialog");
+    spjald.replaceChildren(
+      h("button", { class: "loka", type: "button", "aria-label": "Loka", onclick: () => gluggi.close() }, "×"),
+      h("div", { class: "stimpill" }, "Veskið þitt"),
+      h("h2", { id: "gluggi-titill" }, "Miðarnir þínir"),
+      h("div", { class: "veski-listi" }, midaDagar().map((d) => {
+        const dg = CONFIG.dagar[d], n = stada.notad[d];
+        return h("button", { class: "veski-midi" + (n ? " notadur" : ""), type: "button", onclick: () => opnaGlugga(d) },
+          h("span", { class: "veski-heiti" }, dg.titill),
+          h("span", { class: "veski-stada" }, n ? "Notaður " + dagsetning(n) : "Ónotaður"),
+          h("span", { class: "veski-nr" }, String(d).padStart(2, "0")));
+      })),
+      h("p", { class: "dauft" }, "Nýir miðar bætast við þegar þú opnar þá í dagatalinu."));
+    if (!gluggi.open) gluggi.showModal();
+    spjald.scrollTop = 0;
+  }
+
   const malsgreinar = (t) => [].concat(t || []).map((x) => h("p", {}, x));
   const bref = (t) => h("div", { class: "bref" }, malsgreinar(t), h("div", { class: "undirskrift" }, "– " + CONFIG.hansNafn));
 
@@ -522,14 +650,55 @@ window.raesaDagatal = (CONFIG) => {
     },
 
     midi(el, dg, d) {
-      el.append(h("div", { class: "midi" },
+      const nr = String(d).padStart(2, "0");
+      const notadur = () => stada.notad[d];
+      const stimpill = () => notadur() ? h("div", { class: "midi-stimpill" }, h("strong", {}, "Notaður"), h("span", {}, dagsetning(notadur()))) : "";
+      const midi = h("div", { class: "midi" + (notadur() ? " notadur" : "") },
         h("div", { class: "meginn" },
           h("div", { class: "yfir" }, "Handa þér"),
           h("div", { class: "heiti" }, dg.titill),
           h("div", {}, dg.texti),
           dg.smattLetur && h("div", { class: "smatt" }, dg.smattLetur)),
-        h("div", { class: "stubbur" }, "Miði nr. " + String(d).padStart(2, "0"))),
-        h("p", { class: "dauft" }, `Sýndu ${CONFIG.hansNafnThgf} miðann þegar þú vilt nota hann.`));
+        h("div", { class: "stubbur" }, "Miði nr. " + nr),
+        stimpill());
+      const adgerdir = h("div", { class: "midi-adgerdir" });
+      const texti = `Ég ætla að nota miðann minn: ${dg.titill}! (Miði nr. ${nr}) ♡`;
+      const senda = async () => {
+        if (navigator.share) { try { await navigator.share({ text: texti }); return; } catch (e) { if (e.name === "AbortError") return; } }
+        location.href = "sms:?&body=" + encodeURIComponent(texti);
+      };
+      const vistaTakki = h("button", { class: "takki ljos", type: "button", onclick: () => vistaMida(dg, d, vistaTakki) }, "Vista mynd");
+      function teikna() {
+        if (notadur()) {
+          adgerdir.replaceChildren(
+            h("p", { class: "midi-stada" }, `Þú notaðir miðann ${dagsetning(notadur())}.`),
+            h("div", { class: "rod" },
+              h("button", { class: "takki", type: "button", onclick: senda }, `Senda ${CONFIG.hansNafnThgf} aftur`), vistaTakki),
+            h("button", { class: "midi-afturkalla", type: "button", onclick: () => { delete stada.notad[d]; vista(); midi.classList.remove("notadur"); midi.querySelector(".midi-stimpill")?.remove(); teikna(); uppfaeraVeski(); } }, "Óvart? Afturkalla"));
+        } else {
+          adgerdir.replaceChildren(
+            h("p", { class: "dauft" }, `Ýttu á „Nota miðann“ þegar þú vilt nota hann. Þá fær ${CONFIG.hansNafn} skilaboð.`),
+            h("div", { class: "rod" },
+              h("button", { class: "takki", type: "button", onclick: stadfesta }, "Nota miðann"), vistaTakki));
+        }
+      }
+      function stadfesta() {
+        adgerdir.replaceChildren(
+          h("p", { class: "midi-stada" }, "Nota miðann núna?"),
+          h("div", { class: "rod" },
+            h("button", { class: "takki", type: "button", onclick: nota }, "Já, nota hann!"),
+            h("button", { class: "takki ljos", type: "button", onclick: teikna }, "Ekki strax")));
+        adgerdir.querySelector(".takki").focus();
+      }
+      function nota() {
+        stada.notad[d] = new Date().toISOString(); vista(); uppfaeraVeski();
+        midi.classList.add("notadur");
+        const s = stimpill(); s.classList.add("ny"); midi.append(s);
+        teikna();
+        setTimeout(senda, hreyfingLeyfd ? 700 : 0);
+      }
+      el.append(midi, adgerdir);
+      teikna();
     },
 
     gjof(el, dg) {
@@ -761,6 +930,84 @@ window.raesaDagatal = (CONFIG) => {
       el.append(dg.inngangur && h("p", {}, dg.inngangur), h("div", { class: "minni" }, takkar), stadaEl, lok);
     },
 
+    tengingar(el, dg) {
+      const LITIR = ["gulur", "graenn", "blar", "fjolu"];
+      const hopar = dg.hopar.map((g, i) => ({ ...g, ord: g.ord.map((o) => o.toUpperCase()), litur: LITIR[i % 4] }));
+      let eftir, leyst, valin, mistok, profad, buid;
+      const MEST = 4;
+      const nyr = () => { eftir = stokka(hopar.flatMap((g) => g.ord)); leyst = []; valin = new Set(); mistok = 0; profad = new Set(); buid = false; teikna(); };
+      const bord = h("div", { class: "tg-bord" }), leystir = h("div", { class: "tg-leystir" });
+      const skilabod = h("p", { class: "tg-skilabod", role: "status" });
+      const punktar = h("div", { class: "tg-mistok" });
+      const stokkaT = h("button", { class: "takki ljos", type: "button", onclick: () => { eftir = stokka(eftir); teikna(); } }, "Stokka");
+      const afvelja = h("button", { class: "takki ljos", type: "button", onclick: () => { valin.clear(); teikna(); } }, "Afvelja");
+      const senda = h("button", { class: "takki", type: "button", onclick: () => giska() }, "Senda");
+      const takkar = h("div", { class: "rod tg-takkar" }, stokkaT, afvelja, senda);
+      const lokEl = h("div", {});
+      const segja = (t) => { skilabod.textContent = t; skilabod.classList.remove("synd"); void skilabod.offsetWidth; skilabod.classList.add("synd"); };
+      const hopur = (g) => h("div", { class: "tg-hopur " + g.litur }, h("strong", {}, g.heiti), h("span", {}, g.ord.map((o) => o.replace(/\u00AD/g, "")).join(", ")));
+
+      function teikna() {
+        leystir.replaceChildren(...leyst.map(hopur));
+        bord.replaceChildren(...eftir.map((o) => {
+          const b = h("button", { class: "tg-ord" + (valin.has(o) ? " valid" : ""), style: `--n:${Math.max(5, ...o.split(/[ \u00AD]/).map((w) => w.length + (o.includes("\u00AD") ? 1 : 0)))}`, type: "button", "aria-pressed": valin.has(o) ? "true" : "false",
+            onclick: () => { if (buid) return; valin.has(o) ? valin.delete(o) : valin.size < 4 && valin.add(o); teikna(); } }, o);
+          return b;
+        }));
+        bord.hidden = !eftir.length;
+        punktar.replaceChildren("Mistök eftir:", ...Array.from({ length: MEST }, (_, i) => h("span", { class: i < MEST - mistok ? "" : "farinn" })));
+        punktar.hidden = buid;
+        takkar.hidden = buid;
+        afvelja.disabled = !valin.size;
+        senda.disabled = valin.size !== 4;
+      }
+
+      function leysa(g) {
+        leyst.push(g);
+        eftir = eftir.filter((o) => !g.ord.includes(o));
+      }
+
+      function giska() {
+        if (valin.size !== 4 || buid) return;
+        const lykill = [...valin].sort().join("|");
+        if (profad.has(lykill)) { segja("Þú ert búin að prófa þessi."); return; }
+        profad.add(lykill);
+        const g = hopar.find((x) => !leyst.includes(x) && x.ord.every((o) => valin.has(o)));
+        if (g) {
+          const valdirTakkar = [...bord.children].filter((b) => valin.has(b.textContent));
+          valdirTakkar.forEach((b, i) => { b.style.animationDelay = i * 70 + "ms"; b.classList.add("hoppa"); });
+          setTimeout(() => {
+            valin.clear(); leysa(g); segja(["Já!", "Einmitt!", "Vel gert!", "Þú þekkir okkur."][leyst.length - 1] || "Já!");
+            if (!eftir.length) lok(true); else teikna();
+          }, hreyfingLeyfd ? 520 : 0);
+          return;
+        }
+        const nalaegt = hopar.some((x) => !leyst.includes(x) && x.ord.filter((o) => valin.has(o)).length === 3);
+        mistok++;
+        bord.classList.remove("hrista"); void bord.offsetWidth; bord.classList.add("hrista");
+        if (mistok >= MEST) {
+          segja("Æ, nú kláruðust tilraunirnar. Hér eru svörin.");
+          valin.clear();
+          hopar.filter((x) => !leyst.includes(x)).forEach(leysa);
+          lok(false);
+          return;
+        }
+        segja(nalaegt ? "Einu frá!" : "Ekki alveg.");
+        teikna();
+      }
+
+      function lok(vann) {
+        buid = true; teikna();
+        lokEl.replaceChildren(h("div", { class: "midja", style: "margin-top:14px" },
+          vann ? h("p", { class: "hv-titill" }, mistok ? "Þú fannst þá alla!" : "Fullkomið!") : "",
+          vann ? verdlaun(dg.verdlaun) : "",
+          h("div", { class: "rod", style: "justify-content:center" }, h("button", { class: "takki ljos", type: "button", onclick: () => { lokEl.replaceChildren(); skilabod.textContent = ""; nyr(); } }, vann ? "Spila aftur" : "Reyna aftur"))));
+      }
+
+      el.append(dg.inngangur ? h("p", {}, dg.inngangur) : "", leystir, bord, skilabod, punktar, takkar, lokEl);
+      nyr();
+    },
+
     ordarugl(el, dg) {
       let nr = 0;
       const n = dg.ord.length;
@@ -841,6 +1088,7 @@ window.raesaDagatal = (CONFIG) => {
     })();
   }
 
+  $("#veski").addEventListener("click", opnaVeski);
   teikna(); uppfaeraTeljara(); snjor();
   setInterval(() => { uppfaeraTeljara(); if (lausir() !== sidastLaus) uppfaeraKassa(); }, 1000);
 };
