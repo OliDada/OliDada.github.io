@@ -279,6 +279,7 @@ function compass(){const dpr=Math.min(2,window.devicePixelRatio||1),w=comp.clien
   cg.setTransform(dpr,0,0,dpr,0,0);cg.clearRect(0,0,w,h);const b=-P.yaw,y=19;
   const at=a=>{let r=a-b;r=Math.atan2(Math.sin(r),Math.cos(r));const k=Math.abs(r)/HALF;return k>1?null:[w/2+r/HALF*(w/2-8),Math.min(1,(1-k)/.22)];};
   const line=cg.createLinearGradient(0,0,w,0);line.addColorStop(0,'rgba(240,230,207,0)');line.addColorStop(.18,'rgba(240,230,207,.7)');line.addColorStop(.82,'rgba(240,230,207,.7)');line.addColorStop(1,'rgba(240,230,207,0)');
+  {const band=cg.createLinearGradient(0,0,w,0);band.addColorStop(0,'rgba(10,8,6,0)');band.addColorStop(.2,'rgba(10,8,6,.32)');band.addColorStop(.8,'rgba(10,8,6,.32)');band.addColorStop(1,'rgba(10,8,6,0)');cg.fillStyle=band;cg.fillRect(0,4,w,24);}
   cg.shadowColor='rgba(0,0,0,.9)';cg.shadowBlur=4;cg.shadowOffsetY=1;cg.fillStyle=line;cg.fillRect(0,y,w,1);
   cg.textAlign='center';cg.textBaseline='alphabetic';
   for(let i=0;i<24;i++){const p=at(i*.2618);if(!p)continue;cg.globalAlpha=p[1]*(i%6?.55:1);cg.fillStyle='#f0e6cf';

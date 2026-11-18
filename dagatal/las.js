@@ -17,7 +17,7 @@
   const stadbundid = () => new Promise((r) => {
     if (location.protocol === "https:" && !/^(localhost|127\.)/.test(location.hostname)) return r(null);
     const s = document.createElement("script");
-    s.src = "leynt/efni.js";
+    s.src = "leynt/efni.js?v=" + Date.now();
     s.onload = () => r(window.DAGATAL_EFNI || null);
     s.onerror = () => r(null);
     document.head.append(s);
@@ -75,7 +75,9 @@
   (async () => {
     main.hidden = true;
     const heima = await stadbundid();
-    if (heima) return raesa(skiptaUt(heima, (s) => s.startsWith("myndir/") ? "leynt/" + s : null));
+    // Á eigin tölvu: alltaf nýjasta útgáfa myndanna (ekki gamlar úr skyndiminni vafrans).
+    const ny = Date.now();
+    if (heima) return raesa(skiptaUt(heima, (s) => s.startsWith("myndir/") ? "leynt/" + s + "?v=" + ny : null));
     let skra;
     try { skra = await lesaSkra(); } catch (_) { document.body.append(Object.assign(document.createElement("p"), { className: "las-villa", textContent: "Dagatalið fannst ekki." })); return; }
     let munad = null;

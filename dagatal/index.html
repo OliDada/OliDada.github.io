@@ -220,8 +220,8 @@ header p{max-width:42ch;font-weight:600;font-size:1rem;line-height:1.6;color:#e8
 .l4 .hurd{background-image:radial-gradient(#a136451b 1.5px,transparent 1.5px);background-size:12px 12px}
 .laus:not(.opinn) .hurd{animation:none}
 .i-dag:not(.opinn) .hurd{outline:3px solid var(--gull);outline-offset:2px}
-.opnad-numer{display:none;position:absolute;left:10px;top:8px;font-size:.75rem;font-weight:800;color:var(--gull)}
-.opinn .opnad-numer{display:block}
+.opnad-numer{display:block;opacity:0;position:absolute;left:10px;top:8px;font-size:.75rem;font-weight:800;color:var(--gull);transition:opacity .15s}
+.opinn .opnad-numer{opacity:1;transition:opacity .45s ease .8s}
 footer{text-align:center;margin-top:24px;font-size:.8rem;color:#e0e6cc;font-weight:600}.footer-heart{display:block;color:var(--gull);font-size:24px;margin-top:8px}
 dialog{width:min(570px,100vw);padding:14px}
 dialog::backdrop{background:#071c17c9;backdrop-filter:blur(3px)}
@@ -269,7 +269,7 @@ dialog::backdrop{background:#071c17c9;backdrop-filter:blur(3px)}
 .hv-hjortu span{color:transparent;-webkit-text-stroke:1.5px #bfb193;transition:color .3s,transform .3s}
 .hv-hjortu .nu{color:transparent;-webkit-text-stroke:1.5px var(--tronuber);transform:scale(1.2)}
 .hv-hjortu .ja{color:var(--tronuber);-webkit-text-stroke:0}.hv-hjortu .nei{color:#b3ad9f;-webkit-text-stroke:0}
-.hv-bord{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:6px 0 4px}
+.hv-bord{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:6px 0 14px}
 .hv-kort{position:relative;display:grid;place-items:center;min-height:150px;padding:20px 26px 20px 14px;overflow-wrap:anywhere;hyphens:auto;border:2px solid var(--blek);border-radius:16px;cursor:pointer;color:var(--blek);font:400 clamp(1.1rem,4.6vw,1.5rem)/1.15 var(--display);text-wrap:balance;box-shadow:0 5px 0 var(--blek);transition:transform .3s cubic-bezier(.3,1.6,.5,1),opacity .3s,box-shadow .2s,background .3s}
 .hv-kort.a{background:#f7d9d2;transform:rotate(-2deg)}.hv-kort.b{padding:20px 14px 20px 26px}.hv-kort.b{background:#d5e8d5;transform:rotate(2deg)}
 .hv-kort:hover:not([disabled]){transform:rotate(0) translateY(-4px)}
@@ -294,6 +294,8 @@ dialog::backdrop{background:#071c17c9;backdrop-filter:blur(3px)}
 @media(max-width:380px){.hv-bord{gap:12px}.hv-kort{min-height:128px;padding:16px 8px}.hv-eda{width:40px;height:40px;font-size:.9rem}}
 @media(prefers-reduced-motion:reduce){.hv-kort,.hv-stimpill,.hv-svar{transition:none;animation:none}}
 
+.hv-spurning{font:400 clamp(1.4rem,5.6vw,1.8rem)/1.2 var(--display);text-align:center;margin:0 0 16px;text-wrap:balance}
+.hv-bord.hv-folk .hv-kort{min-height:120px;font-size:clamp(1.5rem,6.5vw,2rem)}
 /* Lás */
 #las{position:fixed;inset:0;display:grid;place-items:center;padding:20px;z-index:10;transition:opacity .45s}
 #las.opnast{opacity:0}
@@ -354,6 +356,57 @@ dialog::backdrop{background:#071c17c9;backdrop-filter:blur(3px)}
 .veski-stada{grid-row:2;font-size:.82rem;font-weight:700;color:#3f6b4f}
 .veski-midi.notadur{background:#efe6cf}.veski-midi.notadur .veski-heiti{opacity:.6}.veski-midi.notadur .veski-stada{color:var(--tronuber)}
 .veski-nr{grid-row:1/3;grid-column:2;align-self:stretch;display:grid;place-items:center;padding:0 16px;margin-left:12px;border-left:2px dashed #8d7352;font:800 .85rem var(--body);color:#663c35}
+
+/* Smá hrós í lok leikja */
+.hros{text-align:center;font:400 1.3rem/1.3 var(--display);color:var(--tronuber);margin:14px auto 4px!important;max-width:30ch;animation:upp .5s .2s both}
+.regnstadur{position:relative}
+.snake-board.hj-bord{aspect-ratio:3/4;width:min(100%,56dvh,400px);cursor:grab}
+/* Púsl */
+.pusl{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:4px;width:min(100%,360px);margin:12px auto 8px;padding:4px;background:var(--blek);border-radius:12px;transition:gap .4s,padding .4s}
+.pusl-bitur{aspect-ratio:1;border:0;padding:0;border-radius:6px;background-size:300% 300%;cursor:pointer;transition:transform .15s,box-shadow .15s,border-radius .4s;touch-action:manipulation}
+.pusl-bitur.valinn{transform:scale(.9);box-shadow:0 0 0 4px var(--gull)}
+.pusl-bitur:focus-visible{outline:3px solid var(--gull);outline-offset:-3px}
+.pusl.buid{gap:0;padding:0;box-shadow:0 0 0 4px var(--gull),0 10px 30px rgba(0,0,0,.25)}
+.pusl.buid .pusl-bitur{border-radius:0;cursor:default}
+
+/* Árið okkar: nokkrar myndir á einu spjaldi */
+.recap-safn{display:flex;justify-content:center;align-items:center;margin:18px -8px 6px;padding:0;flex-wrap:wrap}
+.recap-safn .polaroid{width:calc(min(100%,420px) / min(var(--n),3) + 14px);margin:0 -7px 6px;padding:6px 6px 0}
+.recap-safn .polaroid figcaption{display:none}.recap-safn .polaroid::before{width:44%;height:12px;top:-6px}
+.recap-safn .polaroid:nth-child(3n+1){transform:rotate(-5deg)}.recap-safn .polaroid:nth-child(3n+2){transform:rotate(3deg) translateY(-6px);z-index:1}.recap-safn .polaroid:nth-child(3n){transform:rotate(-2deg) translateY(4px)}
+.recap-safn img,.recap-safn .vantar{aspect-ratio:1;object-fit:cover;width:100%}
+.recap-safn-texti{width:100%;text-align:center;font:700 .85rem var(--body);margin:6px 0 0!important}
+
+/* Árið okkar: ramminn tekur lögun myndarinnar, ekkert skorið af, enginn texti undir myndum */
+.recap-mynd figcaption,.recap-safn figcaption{display:none}
+.recap-mynd{width:fit-content!important;max-width:100%;margin:18px auto 14px!important;padding:8px!important}
+.recap-mynd img,.recap-mynd .vantar{display:block;width:auto!important;height:auto!important;max-width:100%;max-height:min(44vh,340px);aspect-ratio:auto!important;object-fit:contain!important;border-radius:2px}
+.recap-mynd .vantar{width:240px!important;aspect-ratio:4/3!important}
+.recap-safn .polaroid{width:auto!important;padding:6px!important}
+.recap-safn{flex-wrap:nowrap!important}.recap-safn .polaroid{flex:0 1 auto;min-width:0}
+.recap-safn img,.recap-safn .vantar{display:block;width:auto!important;height:auto!important;max-width:100%;max-height:min(34vh,260px);aspect-ratio:auto!important;object-fit:contain!important}
+.recap-undir{margin-top:6px;font-size:.9rem;color:#5d5a50}
+
+/* Krossgáta */
+.kg-vis{position:sticky;top:-2px;z-index:2;background:#e9f0e5;border:2px solid var(--blek);border-radius:10px;padding:10px 12px;margin:10px 0;font-size:.95rem;min-height:2.8em}
+.kg-vis strong{color:var(--greni);margin-right:4px}
+.kg-bord{display:grid;grid-template-columns:repeat(var(--b),1fr);gap:3px;width:min(100%,calc(var(--b) * 46px));margin:10px auto}
+.kg-tomt{aspect-ratio:1}
+.kg-reitur{position:relative;aspect-ratio:1;padding:0;border:2px solid var(--blek);border-radius:5px;background:#fffaf0;color:var(--blek);cursor:pointer;display:grid;place-items:center;font:800 clamp(.8rem,4.2vw,1.25rem) var(--body);text-transform:uppercase;transition:background .15s}
+.kg-reitur.ordid{background:#f6e3b0}
+.kg-reitur.valinn{background:#f4c85a;box-shadow:0 0 0 2px var(--blek) inset}
+.kg-reitur.rett{background:#cfe6cf;border-color:#347552;color:#1f4a33}
+.kg-reitur.rett.valinn{background:#a9d3a0}
+.kg-nr{position:absolute;top:1px;left:3px;font-size:clamp(.45rem,1.9vw,.6rem);font-weight:700;color:#5d5a50}
+.kg-bord.buid .kg-reitur{animation:tgHopp .5s ease both}
+.kg-bord.buid .kg-reitur:nth-child(2n){animation-delay:.08s}.kg-bord.buid .kg-reitur:nth-child(3n){animation-delay:.16s}
+.kg-lyklar{margin:12px auto 4px}
+.kg-listi{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+.kg-listi h3{font:800 .8rem var(--body);text-transform:uppercase;letter-spacing:.08em;margin:0 0 6px;color:#913440}
+.kg-ordvis{display:block;width:100%;text-align:left;background:none;border:0;border-radius:6px;padding:5px 6px;font:500 .88rem/1.35 var(--body);color:var(--blek);cursor:pointer}
+.kg-ordvis.virkt{background:#f6e3b0}
+.kg-ordvis.leyst{color:#347552;text-decoration:line-through;text-decoration-color:#34755288}
+@media(max-width:480px){.kg-listi{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -401,7 +454,7 @@ window.raesaDagatal = (CONFIG) => {
     gjof: '<rect x="8" y="21" width="32" height="19" rx="1"/><rect x="5" y="14" width="38" height="7" rx="1"/><path d="M24 14v26M24 14c-6-10-14-4 0 0c14-4 6-10 0 0"/>',
     stjarna: '<path d="M24 5l5.6 12 13 1.6-9.6 9 2.5 13L24 34.200l-11.500 6.400 2.500-13-9.600-9 13-1.600z"/>'
   };
-  const TAKN_FYRIR = { inngangur: "bref", skilabod: "bref", listi: "bref", lag: "bref", midi: "midi", quiz: "leikur", tengingar: "leikur", hvort: "leikur", liklegri: "leikur", minni: "leikur", ordarugl: "leikur", wordle: "leikur", snake: "leikur", hjol: "hjol", gjof: "gjof", recap: "stjarna", lok: "stjarna" };
+  const TAKN_FYRIR = { inngangur: "bref", skilabod: "bref", listi: "bref", lag: "bref", midi: "midi", quiz: "leikur", tengingar: "leikur", hjortu: "leikur", pusl: "leikur", krossgata: "leikur", hvort: "leikur", liklegri: "leikur", minni: "leikur", ordarugl: "leikur", wordle: "leikur", snake: "leikur", hjol: "hjol", gjof: "gjof", recap: "stjarna", lok: "stjarna" };
   const takn = (nafn) => { const d = h("div", {}); d.innerHTML = `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAKN[nafn] || TAKN.stjarna}</svg>`; return d.firstChild; };
 
   /* ---------- Vistun (hvaða kassar eru opnaðir, hvað vannst á hjólinu) ---------- */
@@ -518,7 +571,7 @@ window.raesaDagatal = (CONFIG) => {
   function opnaGlugga(d) {
     hreinsaLeik(); hreinsaLeik = () => {};
     const dagur = CONFIG.dagar[d];
-    gluggi.classList.toggle("game-dialog", ["snake", "wordle"].includes(dagur.tegund));
+    gluggi.classList.toggle("game-dialog", ["snake", "wordle", "krossgata"].includes(dagur.tegund));
     gluggi.classList.toggle("snake-dialog", dagur.tegund === "snake");
     const efni = h("div", {});
     spjald.replaceChildren(
@@ -526,14 +579,15 @@ window.raesaDagatal = (CONFIG) => {
       h("div", { class: "stimpill" }, `${d}. desember`),
       h("h2", { id: "gluggi-titill" }, dagur.titill),
       efni);
-    (TEGUNDIR[dagur.tegund] || TEGUNDIR.skilabod)(efni, dagur, d);
+    (TEGUNDIR[dagur.tegund] || TEGUNDIR.skilabod)(efni, { ...dagur, dagur: d }, d);
     if (!gluggi.open) gluggi.showModal();
     spjald.scrollTop = 0;
   }
   /* ---------- Miðar: notkun, mynd og veski ---------- */
   const MANUDIR = ["janúar", "febrúar", "mars", "apríl", "maí", "júní", "júlí", "ágúst", "september", "október", "nóvember", "desember"];
   const dagsetning = (iso) => { const t = new Date(iso); return `${t.getDate()}. ${MANUDIR[t.getMonth()]}`; };
-  const midaDagar = () => Object.keys(CONFIG.dagar).map(Number).filter((d) => CONFIG.dagar[d].tegund === "midi" && stada.opnad.includes(d)).sort((a, b) => a - b);
+  const midaDagar = () => Object.keys(CONFIG.dagar).map(Number).filter((d) => stada.opnad.includes(d) && (CONFIG.dagar[d].tegund === "midi" || (CONFIG.dagar[d].tegund === "hjol" && stada.hjol[d]))).sort((a, b) => a - b);
+  const midaHeiti = (d) => CONFIG.dagar[d].tegund === "hjol" ? stada.hjol[d] : CONFIG.dagar[d].titill;
 
   function linur(ctx, texti, breidd) {
     const ord = String(texti || "").split(/\s+/), ut = [];
@@ -563,14 +617,14 @@ window.raesaDagatal = (CONFIG) => {
       x.setLineDash([14, 12]); x.strokeStyle = "#8d7352"; x.lineWidth = 4; x.beginPath(); x.moveTo(stubbur, 96); x.lineTo(stubbur, H - 96); x.stroke(); x.setLineDash([]);
       // Text
       const L = 120, B = stubbur - L - 50;
-      x.textBaseline = "alphabetic"; x.fillStyle = "#913440"; x.font = "800 26px Nunito, system-ui, sans-serif"; x.fillText("HANDA ÞÉR  ✦", L, 150);
+      x.textBaseline = "alphabetic"; x.fillStyle = "#913440"; x.font = "800 26px Nunito, system-ui, sans-serif"; x.fillText((dg.yfir || "Handa þér").toUpperCase() + "  ✦", L, 150);
       x.fillStyle = "#23201b"; x.font = "800 76px 'Baloo 2', Nunito, system-ui, sans-serif";
       let y = 232; for (const l of linur(x, dg.titill, B).slice(0, 2)) { x.fillText(l, L, y); y += 74; }
       x.font = "600 34px Nunito, sans-serif"; y += 8;
       for (const l of linur(x, dg.texti, B).slice(0, 4)) { x.fillText(l, L, y); y += 46; }
       if (dg.smattLetur) { x.fillStyle = "#665840"; x.font = "600 26px Nunito, sans-serif"; x.fillText(dg.smattLetur, L, Math.min(H - 150, y + 24)); }
       x.save(); x.translate(stubbur + 62, H / 2); x.rotate(Math.PI / 2); x.textAlign = "center"; x.fillStyle = "#663c35"; x.font = "800 30px Nunito, system-ui, sans-serif";
-      x.fillText("MIÐI NR. " + nr, 0, 0); x.font = "600 22px Nunito, system-ui, sans-serif"; x.fillText(CONFIG.titill + " " + CONFIG.ar, 0, 40); x.restore();
+      x.fillText((dg.stubbur || "Miði nr. " + nr).toUpperCase(), 0, 0); x.font = "600 22px Nunito, system-ui, sans-serif"; x.fillText(CONFIG.titill + " " + CONFIG.ar, 0, 40); x.restore();
       x.fillStyle = "#8d7352"; x.font = "700 24px Nunito, system-ui, sans-serif"; x.fillText(`Gildir hjá ${CONFIG.hansNafnThgf} · hvenær sem er`, L, H - 100);
       if (stada.notad[d]) {
         x.save(); x.translate(stubbur - 190, H - 190); x.rotate(-.18); x.strokeStyle = x.fillStyle = "rgba(168,31,45,.85)"; x.lineWidth = 6;
@@ -603,10 +657,10 @@ window.raesaDagatal = (CONFIG) => {
       h("div", { class: "stimpill" }, "Veskið þitt"),
       h("h2", { id: "gluggi-titill" }, "Miðarnir þínir"),
       h("div", { class: "veski-listi" }, midaDagar().map((d) => {
-        const dg = CONFIG.dagar[d], n = stada.notad[d];
+        const n = stada.notad[d], hjol = CONFIG.dagar[d].tegund === "hjol";
         return h("button", { class: "veski-midi" + (n ? " notadur" : ""), type: "button", onclick: () => opnaGlugga(d) },
-          h("span", { class: "veski-heiti" }, dg.titill),
-          h("span", { class: "veski-stada" }, n ? "Notaður " + dagsetning(n) : "Ónotaður"),
+          h("span", { class: "veski-heiti" }, midaHeiti(d)),
+          h("span", { class: "veski-stada" }, (hjol ? "Af hjólinu · " : "") + (n ? "Notaður " + dagsetning(n) : "Ónotaður")),
           h("span", { class: "veski-nr" }, String(d).padStart(2, "0")));
       })),
       h("p", { class: "dauft" }, "Nýir miðar bætast við þegar þú opnar þá í dagatalinu."));
@@ -614,61 +668,82 @@ window.raesaDagatal = (CONFIG) => {
     spjald.scrollTop = 0;
   }
 
-  const malsgreinar = (t) => [].concat(t || []).map((x) => h("p", {}, x));
-  const bref = (t) => h("div", { class: "bref" }, malsgreinar(t), h("div", { class: "undirskrift" }, "– " + CONFIG.hansNafn));
-
-  function ljosmynd(slod, texti) {
-    const vantar = () => h("div", { class: "vantar" }, profun ? "Mynd vantar: " + slod : "♡");
-    const img = slod ? h("img", { src: slod, alt: texti || "Mynd" }) : null;
-    if (img) img.addEventListener("error", () => img.replaceWith(vantar()));
-    return h("figure", { class: "polaroid" }, img, h("figcaption", {}, texti || ""));
+  function parLeikur(el, dg, { kostir, hans, spurning }) {
+      let nr = 0, sammala = 0, svor = [];
+      const n = dg.spurningar.length;
+      const JA = ["Sammála.", "Sama og ég.", "Ég valdi það líka."];
+      const NEI = ["Gott val líka.", "Ég skil það vel.", "Bæði er gott, ef það er með þér."];
+      const velja = (listi) => listi[Math.floor(Math.random() * listi.length)];
+      const hjortu = () => h("div", { class: "hv-hjortu", "aria-hidden": "true" },
+        dg.spurningar.map((_, i) => h("span", { class: i < svor.length ? (svor[i] ? "ja" : "nei") : i === nr ? "nu" : "" }, "♥")));
+      const springa = (kort) => {
+        if (!hreyfingLeyfd) return;
+        for (let i = 0; i < 9; i++) {
+          const s = h("span", { class: "hv-hjarta", "aria-hidden": "true",
+            style: `--x:${20 + Math.random() * 60}%;--dx:${(Math.random() - .5) * 120}px;--r:${(Math.random() - .5) * 60}deg;--s:${14 + Math.random() * 16}px;animation-delay:${i * 35}ms` }, "♥");
+          s.addEventListener("animationend", () => s.remove());
+          kort.append(s);
+        }
+      };
+      const syna = () => {
+        const s = dg.spurningar[nr], eftir = h("div", { class: "hv-eftir" }), rett = hans(s);
+        const kort = kostir(s).map((txt, i) => h("button", { class: "hv-kort " + (i ? "b" : "a"), type: "button", onclick: () => {
+          kort.forEach((k, j) => { k.disabled = true; k.classList.add(j === i ? "thitt" : "hitt"); });
+          const sama = i === rett;
+          svor.push(sama); if (sama) sammala++;
+          setTimeout(() => {
+            if (sama) {
+              kort[i].classList.add("sama");
+              kort[i].append(h("span", { class: "hv-stimpill" }, "Við bæði"));
+              springa(kort[i]);
+            } else {
+              kort[i].append(h("span", { class: "hv-stimpill thu" }, "Þú"));
+              kort[rett].classList.add("hans");
+              kort[rett].append(h("span", { class: "hv-stimpill" }, CONFIG.hansNafn));
+            }
+            eftir.append(
+              h("p", { class: "hv-svar" + (sama ? " ja" : "") }, sama ? velja(JA) : (s.komment || velja(NEI))),
+              h("div", { class: "rod", style: "justify-content:center" }, h("button", { class: "takki", type: "button", onclick: () => { nr++; nr < n ? syna() : lok(); } }, nr + 1 < n ? "Næsta" : "Sjá niðurstöðu")));
+            topp.replaceWith(topp = hjortu());
+            eftir.querySelector(".takki").focus({ preventScroll: true });
+          }, hreyfingLeyfd ? 450 : 0);
+        } }, h("span", {}, txt)));
+        let topp = hjortu();
+        el.replaceChildren(
+          nr === 0 && dg.inngangur ? h("p", {}, dg.inngangur) : "",
+          topp,
+          spurning ? h("p", { class: "hv-spurning" }, spurning(s)) : "",
+          h("div", { class: "hv-bord" + (spurning ? " hv-folk" : "") }, kort[0], h("div", { class: "hv-eda", "aria-hidden": "true" }, "eða"), kort[1]),
+          eftir);
+      };
+      const lok = () => {
+        const hlutf = sammala / n;
+        const titill = hlutf === 1 ? "Sálufélagar" : hlutf >= .6 ? "Ansi samstíga" : hlutf >= .3 ? "Smá krydd í tilveruna" : "Andstæður laðast að";
+        el.replaceChildren(h("div", { class: "midja hv-lok" },
+          h("p", { class: "hv-titill" }, titill),
+          hjortu(),
+          h("div", { class: "stig" }, `${sammala} af ${n}`),
+          h("p", {}, "sinnum sammála"),
+          astarbref(dg, dg.dagur),
+          h("div", { class: "rod", style: "justify-content:center" }, h("button", { class: "takki ljos", type: "button", onclick: () => { nr = 0; sammala = 0; svor = []; syna(); } }, "Spila aftur"))));
+      };
+      syna();
   }
-  // Verðlaun fyrir leiki: mynd og/eða texti
-  function verdlaun(v) {
-    if (!v) return "";
-    if (v.mynd) return h("div", {}, h("p", { class: "dauft midja", style: "margin:14px 0 0" }, "Verðlaun"), ljosmynd(v.mynd, v.texti));
-    return v.texti ? h("p", { class: "eftir midja" }, v.texti) : "";
-  }
 
-  function raesaLeik(tegund, el, dg, d) {
-    // Key progress by game identity, so moving doors does not mix up saved games.
-    const key = "dagatal-leikur-" + CONFIG.ar + "-" + tegund;
-    let saved = {};
-    try { saved = JSON.parse(localStorage.getItem(key) || "{}") || {}; } catch (_) {}
-    const save = value => { try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) {} };
-    hreinsaLeik = DagatalGames[tegund](el, dg, saved, save);
-  }
-
-  /* ---------- Tegundir kassa ---------- */
-  const TEGUNDIR = {
-    wordle(el, dg, d) { raesaLeik("wordle", el, dg, d); },
-    snake(el, dg, d) { raesaLeik("snake", el, dg, d); },
-    skilabod(el, dg) {
-      el.append(bref(dg.texti));
-      if (dg.mynd) el.append(ljosmynd(dg.mynd, dg.myndatexti));
-    },
-
-    inngangur(el, dg) {
-      el.append(bref(dg.texti));
-      if (dg.mynd) el.append(ljosmynd(dg.mynd, dg.myndatexti));
-      if (dg.listi) el.append(h("div", { class: "innihald" }, h("h3", {}, dg.listaTitill || ""),
-        h("ul", {}, dg.listi.map(([t, texti]) => h("li", {}, takn(t), h("span", {}, texti))))));
-    },
-
-    midi(el, dg, d) {
+  function syndaMida(el, dg, d) {
       const nr = String(d).padStart(2, "0");
       const notadur = () => stada.notad[d];
       const stimpill = () => notadur() ? h("div", { class: "midi-stimpill" }, h("strong", {}, "Notaður"), h("span", {}, dagsetning(notadur()))) : "";
       const midi = h("div", { class: "midi" + (notadur() ? " notadur" : "") },
         h("div", { class: "meginn" },
-          h("div", { class: "yfir" }, "Handa þér"),
+          h("div", { class: "yfir" }, dg.yfir),
           h("div", { class: "heiti" }, dg.titill),
           h("div", {}, dg.texti),
           dg.smattLetur && h("div", { class: "smatt" }, dg.smattLetur)),
-        h("div", { class: "stubbur" }, "Miði nr. " + nr),
+        h("div", { class: "stubbur" }, dg.stubbur),
         stimpill());
       const adgerdir = h("div", { class: "midi-adgerdir" });
-      const texti = `Ég ætla að nota miðann minn: ${dg.titill}! (Miði nr. ${nr}) ♡`;
+      const texti = `Ég ætla að nota miðann minn: ${dg.titill}! (${dg.stubbur}) ♡`;
       const senda = async () => {
         if (navigator.share) { try { await navigator.share({ text: texti }); return; } catch (e) { if (e.name === "AbortError") return; } }
         location.href = "sms:?&body=" + encodeURIComponent(texti);
@@ -705,6 +780,74 @@ window.raesaDagatal = (CONFIG) => {
       }
       el.append(midi, adgerdir);
       teikna();
+  }
+
+  /* ---------- Ástarbréf í lok leikja ---------- */
+  const HROS = ["Vel gert, snillingur. ♡", "Ég vissi að þú myndir rúlla þessu upp.", "Þú ert best. Bara svo það sé á hreinu."];
+  function hjartaRegn(stadur) {
+    if (!hreyfingLeyfd) return;
+    stadur.classList.add("regnstadur");
+    for (let i = 0; i < 14; i++) {
+      const s = h("span", { class: "hv-hjarta", "aria-hidden": "true",
+        style: `--x:${5 + Math.random() * 90}%;--dx:${(Math.random() - .5) * 140}px;--r:${(Math.random() - .5) * 70}deg;--s:${14 + Math.random() * 18}px;animation-delay:${i * 45}ms` }, "♥");
+      s.addEventListener("animationend", () => s.remove());
+      stadur.append(s);
+    }
+  }
+  // Ein lína í lok leiks. Ef verðlaunin eru mynd birtist hún líka.
+  function astarbref(dg, d, texti) {
+    const t = texti || dg.hros || dg.verdlaun?.texti || HROS[(d || 0) % HROS.length];
+    const mynd = dg.verdlaun?.mynd ? ljosmynd(dg.verdlaun.mynd, "") : "";
+    return h("div", { class: "lokaord" }, mynd, h("p", { class: "hros" }, t));
+  }
+
+
+
+  const malsgreinar = (t) => [].concat(t || []).map((x) => h("p", {}, x));
+  const bref = (t) => h("div", { class: "bref" }, malsgreinar(t), h("div", { class: "undirskrift" }, "– " + CONFIG.hansNafn));
+
+  function ljosmynd(slod, texti) {
+    const vantar = () => h("div", { class: "vantar" }, profun ? "Mynd vantar: " + slod : "♡");
+    const img = slod ? h("img", { src: slod, alt: texti || "Mynd" }) : null;
+    if (img) img.addEventListener("error", () => img.replaceWith(vantar()));
+    return h("figure", { class: "polaroid" }, img, h("figcaption", {}, texti || ""));
+  }
+  // Verðlaun fyrir leiki: mynd og/eða texti
+  function verdlaun(v) {
+    if (!v) return "";
+    if (v.mynd) return h("div", {}, h("p", { class: "dauft midja", style: "margin:14px 0 0" }, "Verðlaun"), ljosmynd(v.mynd, v.texti));
+    return v.texti ? h("p", { class: "eftir midja" }, v.texti) : "";
+  }
+
+  function raesaLeik(tegund, el, dg, d) {
+    // Key progress by game identity, so moving doors does not mix up saved games.
+    const key = "dagatal-leikur-" + CONFIG.ar + "-" + tegund;
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(key) || "{}") || {}; } catch (_) {}
+    const save = value => { try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) {} };
+    let komid = false;
+    const vann = () => { if (komid) return; komid = true; setTimeout(() => el.append(astarbref(dg, d, dg.skilabod)), 400); };
+    hreinsaLeik = DagatalGames[tegund](el, { ...dg, vann }, saved, save);
+  }
+
+  /* ---------- Tegundir kassa ---------- */
+  const TEGUNDIR = {
+    wordle(el, dg, d) { raesaLeik("wordle", el, dg, d); },
+    snake(el, dg, d) { raesaLeik("snake", el, dg, d); },
+    skilabod(el, dg) {
+      el.append(bref(dg.texti));
+      if (dg.mynd) el.append(ljosmynd(dg.mynd, dg.myndatexti));
+    },
+
+    inngangur(el, dg) {
+      el.append(bref(dg.texti));
+      if (dg.mynd) el.append(ljosmynd(dg.mynd, dg.myndatexti));
+      if (dg.listi) el.append(h("div", { class: "innihald" }, h("h3", {}, dg.listaTitill || ""),
+        h("ul", {}, dg.listi.map(([t, texti]) => h("li", {}, takn(t), h("span", {}, texti))))));
+    },
+
+    midi(el, dg, d) {
+      syndaMida(el, { titill: dg.titill, texti: dg.texti, smattLetur: dg.smattLetur, yfir: "Handa þér", stubbur: "Miði nr. " + String(d).padStart(2, "0") }, d);
     },
 
     gjof(el, dg) {
@@ -767,98 +910,17 @@ window.raesaDagatal = (CONFIG) => {
     },
 
     hvort(el, dg) {
-      let nr = 0, sammala = 0, svor = [];
-      const n = dg.spurningar.length;
-      const JA = ["Sammála!", "Sálufélagar.", "Vissi það!", "Auðvitað."];
-      const NEI = ["Andstæður laðast að.", "Hmm. Ræðum þetta yfir kakóbolla.", "Ég gæti skipt um skoðun fyrir þig.", "Rangt svar, en ég elska þig samt."];
-      const velja = (listi) => listi[Math.floor(Math.random() * listi.length)];
-      const hjortu = () => h("div", { class: "hv-hjortu", "aria-hidden": "true" },
-        dg.spurningar.map((_, i) => h("span", { class: i < svor.length ? (svor[i] ? "ja" : "nei") : i === nr ? "nu" : "" }, "♥")));
-      const springa = (kort) => {
-        if (!hreyfingLeyfd) return;
-        for (let i = 0; i < 9; i++) {
-          const s = h("span", { class: "hv-hjarta", "aria-hidden": "true",
-            style: `--x:${20 + Math.random() * 60}%;--dx:${(Math.random() - .5) * 120}px;--r:${(Math.random() - .5) * 60}deg;--s:${14 + Math.random() * 16}px;animation-delay:${i * 35}ms` }, "♥");
-          s.addEventListener("animationend", () => s.remove());
-          kort.append(s);
-        }
-      };
-      const syna = () => {
-        const s = dg.spurningar[nr], eftir = h("div", { class: "hv-eftir" });
-        const kort = [s.a, s.b].map((txt, i) => h("button", { class: "hv-kort " + (i ? "b" : "a"), type: "button", onclick: () => {
-          kort.forEach((k, j) => { k.disabled = true; k.classList.add(j === i ? "thitt" : "hitt"); });
-          const sama = i === s.hans;
-          svor.push(sama); if (sama) sammala++;
-          setTimeout(() => {
-            if (sama) {
-              kort[i].classList.add("sama");
-              kort[i].append(h("span", { class: "hv-stimpill" }, "Við bæði"));
-              springa(kort[i]);
-            } else {
-              kort[i].append(h("span", { class: "hv-stimpill thu" }, "Þú"));
-              kort[s.hans].classList.add("hans");
-              kort[s.hans].append(h("span", { class: "hv-stimpill" }, CONFIG.hansNafn));
-            }
-            eftir.append(
-              h("p", { class: "hv-svar" + (sama ? " ja" : "") }, sama ? velja(JA) : (s.komment || velja(NEI))),
-              h("div", { class: "rod", style: "justify-content:center" }, h("button", { class: "takki", type: "button", onclick: () => { nr++; nr < n ? syna() : lok(); } }, nr + 1 < n ? "Næsta" : "Sjá niðurstöðu")));
-            topp.replaceWith(topp = hjortu());
-            eftir.querySelector(".takki").focus({ preventScroll: true });
-          }, hreyfingLeyfd ? 450 : 0);
-        } }, h("span", {}, txt)));
-        let topp = hjortu();
-        el.replaceChildren(
-          nr === 0 && dg.inngangur ? h("p", {}, dg.inngangur) : "",
-          topp,
-          h("div", { class: "hv-bord" }, kort[0], h("div", { class: "hv-eda", "aria-hidden": "true" }, "eða"), kort[1]),
-          eftir);
-      };
-      const lok = () => {
-        const hlutf = sammala / n;
-        const titill = hlutf === 1 ? "Sálufélagar" : hlutf >= .6 ? "Ansi samstíga" : hlutf >= .3 ? "Smá krydd í tilveruna" : "Andstæður laðast að";
-        el.replaceChildren(h("div", { class: "midja hv-lok" },
-          h("p", { class: "hv-titill" }, titill),
-          hjortu(),
-          h("div", { class: "stig" }, `${sammala} af ${n}`),
-          h("p", {}, "sinnum sammála"),
-          verdlaun(dg.verdlaun),
-          h("div", { class: "rod", style: "justify-content:center" }, h("button", { class: "takki ljos", type: "button", onclick: () => { nr = 0; sammala = 0; svor = []; syna(); } }, "Spila aftur"))));
-      };
-      syna();
+      parLeikur(el, dg, { kostir: (s) => [s.a, s.b], hans: (s) => s.hans });
     },
 
     liklegri(el, dg) {
-      let nr = 0, sammala = 0;
-      const n = dg.spurningar.length;
-      const syna = () => {
-        const s = dg.spurningar[nr], eftir = h("div", {});
-        const kostir = [["hun", "Ég"], ["hann", CONFIG.hansNafn]];
-        const takkar = kostir.map(([lyk, txt]) => h("button", { class: "val", type: "button", onclick: (e) => {
-          takkar.forEach((t) => t.disabled = true);
-          e.currentTarget.classList.add("valid");
-          if (lyk === s.hans) sammala++;
-          eftir.append(
-            h("p", { class: "eftir" }, `${CONFIG.hansNafn} sagði: ${s.hans === "hun" ? "þú" : "ég"}. ` + (s.komment || "")),
-            h("div", { class: "rod" }, h("button", { class: "takki", type: "button", onclick: () => { nr++; nr < n ? syna() : lok(); } }, nr + 1 < n ? "Næsta" : "Sjá niðurstöðu")));
-          eftir.querySelector(".takki").focus();
-        } }, txt));
-        el.replaceChildren(
-          nr === 0 && dg.inngangur ? h("p", {}, dg.inngangur) : "",
-          h("div", { class: "framvinda" }, `${nr + 1} af ${n}`),
-          h("p", { class: "spurning" }, "Hver er líklegri " + s.sp),
-          h("div", { class: "valkostir tveir" }, takkar), eftir);
-      };
-      const lok = () => el.replaceChildren(h("div", { class: "midja" }, h("div", { class: "stig" }, `${sammala} af ${n}`), h("p", {}, "sinnum vorum við sammála"), verdlaun(dg.verdlaun)));
-      syna();
+      parLeikur(el, dg, { kostir: () => ["Ég", CONFIG.hansNafn], hans: (s) => s.hans === "hun" ? 0 : 1, spurning: (s) => (/^til /.test(s.sp) ? "Hver er líklegri " : "Hver ") + s.sp });
     },
 
     hjol(el, dg, d) {
       const LITIR = ["#a81f2d", "#1d4a3a", "#e3b65c", "#7d1420", "#2c6650", "#c98a2b"];
       const unnid = stada.hjol[d];
-      const vinningur = (txt) => h("div", { class: "midi" },
-        h("div", { class: "meginn" }, h("div", { class: "yfir" }, "Vinningur"), h("div", { class: "heiti" }, txt),
-          h("div", { class: "smatt" }, `Sýndu ${CONFIG.hansNafnThgf} miðann þegar þú vilt nota hann.`)),
-        h("div", { class: "stubbur" }, "Hjól nr. " + String(d).padStart(2, "0")));
+      const vinningur = (txt) => { const box = h("div", {}); syndaMida(box, { titill: txt, texti: "Vannst á lukkuhjólinu.", yfir: "Vinningur", stubbur: "Hjól nr. " + String(d).padStart(2, "0") }, d); return box; };
       if (unnid) { el.append(h("p", {}, "Þetta vannstu í dag."), vinningur(unnid)); return; }
       const farid = Object.values(stada.hjol);
       const eftir = CONFIG.hjol.filter((x) => !farid.includes(x));
@@ -889,11 +951,253 @@ window.raesaDagatal = (CONFIG) => {
         const k = Math.floor(Math.random() * n);
         stada.hjol[d] = eftir[k]; vista();
         svg.style.transform = `rotate(${360 * 6 - (k + .5) * bil}deg)`;
-        setTimeout(() => { takki.remove(); nidurstada.append(vinningur(eftir[k])); }, hreyfingLeyfd ? 4400 : 50);
+        setTimeout(() => { takki.remove(); nidurstada.append(vinningur(eftir[k])); uppfaeraVeski(); }, hreyfingLeyfd ? 4400 : 50);
       } }, "Snúa hjólinu");
       el.append(h("p", {}, "Einn snúningur, eitthvað gott í boði mínu."),
         h("div", { class: "hjolsvid" }, h("div", { class: "bendill" }), svg),
         h("div", { class: "midja" }, takki), nidurstada);
+    },
+
+    hjortu(el, dg) {
+      const MARK = dg.markmid || 15, W = 360, H = 480;
+      el.append(h("p", {}, dg.inngangur || `Gríptu ${MARK} hjörtu í körfuna. Passaðu þig á kolamolunum.`));
+      const stig = h("p", { class: "snake-score", role: "status" });
+      const c = h("canvas", { class: "snake-board hj-bord", "aria-label": "Fangaðu hjörtun. Dragðu fingurinn til hliðar eða notaðu örvatakkana." });
+      const dpr = Math.min(2, devicePixelRatio || 1); c.width = W * dpr; c.height = H * dpr;
+      const x = c.getContext("2d"), lok = h("div", {});
+      const takki = h("button", { class: "takki", type: "button", onclick: () => byrja() }, "Byrja");
+      el.append(stig, c, h("div", { class: "midja" }, takki), lok);
+      let karfa, hlutir, agnir, nadi, lif, keyrir = false, buid = false, sidast = 0, naesti = 0, ramma = 0, hristingur = 0, ord = "Tilbúin?";
+      const nyttSpil = () => { karfa = W / 2; hlutir = []; agnir = []; nadi = 0; lif = 3; hristingur = 0; };
+      nyttSpil();
+      function hjarta(cx, cy, s) { x.beginPath(); x.moveTo(cx, cy + s * .35); x.bezierCurveTo(cx - s, cy - s * .35, cx - s * .45, cy - s, cx, cy - s * .45); x.bezierCurveTo(cx + s * .45, cy - s, cx + s, cy - s * .35, cx, cy + s * .35); }
+      function teikna(t) {
+        x.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (t < hristingur) x.translate((Math.random() - .5) * 8, (Math.random() - .5) * 8);
+        const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#123a2f"); g.addColorStop(1, "#1d4a3a");
+        x.fillStyle = g; x.fillRect(-10, -10, W + 20, H + 20);
+        x.fillStyle = "rgba(255,255,255,.5)";
+        for (let i = 0; i < 30; i++) { const fx = (i * 83) % W, fy = ((i * 47) + t / 1000 * (8 + i % 5 * 4)) % H; x.beginPath(); x.arc(fx + Math.sin(t / 1300 + i) * 5, fy, 1 + i % 3 * .6, 0, 7); x.fill(); }
+        x.fillStyle = "#f6efdd"; x.fillRect(0, H - 18, W, 18);
+        for (const o of hlutir) {
+          x.save(); x.translate(o.x, o.y); x.rotate(Math.sin(t / 300 + o.f) * .25);
+          if (o.teg === "kol") { x.fillStyle = "#26231f"; x.beginPath(); x.moveTo(-13, -4); x.lineTo(-6, -13); x.lineTo(8, -11); x.lineTo(14, 2); x.lineTo(5, 12); x.lineTo(-10, 10); x.closePath(); x.fill(); x.fillStyle = "rgba(255,255,255,.18)"; x.beginPath(); x.arc(-3, -5, 3, 0, 7); x.fill(); }
+          else if (o.teg === "gull") { x.fillStyle = "#f4c85a"; hjarta(0, 4, 20); x.fill(); x.strokeStyle = "#fff6d8"; x.lineWidth = 2; x.stroke(); }
+          else { x.fillStyle = "#e8475a"; hjarta(0, 4, 17); x.fill(); x.fillStyle = "rgba(255,255,255,.4)"; x.beginPath(); x.arc(-6, -4, 3, 0, 7); x.fill(); }
+          x.restore();
+        }
+        // Basket
+        const ky = H - 44;
+        x.fillStyle = "rgba(0,0,0,.25)"; x.beginPath(); x.ellipse(karfa, H - 16, 40, 6, 0, 0, 7); x.fill();
+        x.fillStyle = "#a8642c"; x.beginPath(); x.moveTo(karfa - 42, ky - 8); x.lineTo(karfa + 42, ky - 8); x.lineTo(karfa + 32, ky + 24); x.lineTo(karfa - 32, ky + 24); x.closePath(); x.fill();
+        x.strokeStyle = "#7a431a"; x.lineWidth = 2; for (let i = -2; i <= 2; i++) { x.beginPath(); x.moveTo(karfa + i * 15, ky - 8); x.lineTo(karfa + i * 12, ky + 24); x.stroke(); }
+        x.fillStyle = "#d23f4c"; x.fillRect(karfa - 44, ky - 12, 88, 8);
+        for (const a of agnir) { const al = 1 - (t - a.t) / 700; if (al <= 0) continue; x.globalAlpha = al; x.fillStyle = a.c; x.font = "800 22px Nunito, system-ui, sans-serif"; x.textAlign = "center"; x.fillText(a.txt, a.x, a.y - (1 - al) * 40); x.globalAlpha = 1; }
+        if (!keyrir) {
+          x.fillStyle = "rgba(18,30,26,.6)"; x.fillRect(0, 0, W, H);
+          x.fillStyle = "#fff6d8"; x.textAlign = "center"; x.font = "800 28px Nunito, system-ui, sans-serif"; x.fillText(ord, W / 2, H * .38);
+          x.font = "600 17px Nunito, system-ui, sans-serif"; x.fillStyle = "rgba(255,246,216,.8)";
+          x.fillText(buid ? "" : "Dragðu til hliðar til að færa körfuna", W / 2, H * .38 + 36);
+        }
+        stig.textContent = `♥ ${nadi} / ${MARK}   ·   ${"●".repeat(lif)}${"○".repeat(3 - lif)}`;
+      }
+      function lykkja(t) {
+        if (!c.isConnected) return;
+        ramma = requestAnimationFrame(lykkja);
+        if (keyrir) {
+          const dt = Math.min(50, t - (sidast || t)); sidast = t;
+          const hradi = 1 + nadi / MARK * .9;
+          if (t > naesti) {
+            const r = Math.random(), teg = r < .2 + nadi / MARK * .12 ? "kol" : r > .96 ? "gull" : "hjarta";
+            hlutir.push({ x: 24 + Math.random() * (W - 48), y: -20, v: (110 + Math.random() * 70) * hradi, teg, f: Math.random() * 6 });
+            naesti = t + (720 - nadi * 18) / hradi;
+          }
+          for (const o of hlutir) o.y += o.v * dt / 1000;
+          hlutir = hlutir.filter((o) => {
+            if (o.y > H - 58 && o.y < H - 20 && Math.abs(o.x - karfa) < 46) {
+              if (o.teg === "kol") { lif--; hristingur = t + 300; agnir.push({ x: o.x, y: o.y, txt: "Æ!", c: "#cfd3d0", t }); }
+              else { const p = o.teg === "gull" ? 3 : 1; nadi = Math.min(MARK, nadi + p); agnir.push({ x: o.x, y: o.y - 10, txt: "+" + p, c: o.teg === "gull" ? "#f4c85a" : "#ff8a98", t }); }
+              return false;
+            }
+            return o.y < H + 30;
+          });
+          agnir = agnir.filter((a) => t - a.t < 700);
+          if (lif <= 0) { keyrir = false; ord = "Úps!"; takki.textContent = "Reyna aftur"; takki.hidden = false; }
+          else if (nadi >= MARK) {
+            keyrir = false; buid = true; ord = "Þú náðir þeim öllum!"; takki.textContent = "Spila aftur"; takki.hidden = false;
+            if (!lok.childNodes.length) { lok.append(astarbref(dg, dg.dagur, [].concat(dg.texti).join(" "))); setTimeout(() => lok.scrollIntoView({ block: "nearest", behavior: "smooth" }), 200); }
+          }
+        }
+        teikna(t);
+      }
+      function byrja() { nyttSpil(); buid = false; keyrir = true; sidast = 0; naesti = 0; takki.hidden = true; c.focus({ preventScroll: true }); }
+      const faera = (e) => { const r = c.getBoundingClientRect(); karfa = Math.max(42, Math.min(W - 42, (e.clientX - r.left) / r.width * W)); };
+      c.addEventListener("pointerdown", (e) => { if (!keyrir) { byrja(); } faera(e); c.setPointerCapture?.(e.pointerId); });
+      c.addEventListener("pointermove", (e) => { if (e.buttons || e.pointerType !== "mouse" || keyrir) faera(e); });
+      c.tabIndex = 0;
+      c.addEventListener("keydown", (e) => { const d = { ArrowLeft: -1, ArrowRight: 1 }[e.key]; if (d) { e.preventDefault(); karfa = Math.max(42, Math.min(W - 42, karfa + d * 28)); } else if (e.key === " " && !keyrir) { e.preventDefault(); byrja(); } });
+      ramma = requestAnimationFrame(lykkja);
+    },
+
+    async pusl(el, dg) {
+      const N = 3;
+      el.append(h("p", {}, dg.inngangur || "Pikkaðu á tvo búta til að skipta á þeim. Raðaðu myndinni saman."));
+      const mynd = await new Promise((r) => { const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = dg.mynd; });
+      if (!mynd) { el.append(bref(dg.texti)); return; }
+      const hlid = Math.min(mynd.naturalWidth, mynd.naturalHeight) * Math.min(1, dg.adradur ?? 1);
+      const cv = document.createElement("canvas"); cv.width = cv.height = 900;
+      cv.getContext("2d").drawImage(mynd, (mynd.naturalWidth - hlid) * (dg.fokusX ?? .5), (mynd.naturalHeight - hlid) * (dg.fokus ?? .3), hlid, hlid, 0, 0, 900, 900);
+      const slod = cv.toDataURL("image/jpeg", .88);
+      let rod = stokka([...Array(N * N).keys()]);
+      while (rod.every((v, i) => v === i)) rod = stokka(rod);
+      let valinn = null, faersur = 0, buid = false;
+      const bord = h("div", { class: "pusl", style: `--n:${N}` });
+      const stadaEl = h("p", { class: "dauft midja", role: "status" }, "Færslur: 0");
+      const lok = h("div", {});
+      function teikna() {
+        bord.replaceChildren(...rod.map((bitur, i) => h("button", {
+          class: "pusl-bitur" + (valinn === i ? " valinn" : "") + (bitur === i ? " rettur" : ""), type: "button", "aria-label": `Bútur ${i + 1}`,
+          style: `background-image:url(${slod});background-position:${(bitur % N) * 50}% ${Math.floor(bitur / N) * 50}%`,
+          onclick: () => velja(i) })));
+      }
+      function velja(i) {
+        if (buid) return;
+        if (valinn === null) { valinn = i; return teikna(); }
+        if (valinn !== i) { [rod[valinn], rod[i]] = [rod[i], rod[valinn]]; faersur++; stadaEl.textContent = "Færslur: " + faersur; }
+        valinn = null; teikna();
+        if (rod.every((v, k) => v === k)) {
+          buid = true; bord.classList.add("buid"); stadaEl.textContent = `Komið! ${faersur} færslur.`;
+          setTimeout(() => { hjartaRegn(bord); lok.append(bref(dg.texti)); lok.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, hreyfingLeyfd ? 500 : 0);
+        }
+      }
+      teikna();
+      el.append(bord, stadaEl, lok);
+    },
+
+    krossgata(el, dg, d) {
+      const nf = (s) => String(s).normalize("NFC").toUpperCase().replace(/[^A-ZÁÐÉÍÓÚÝÞÆÖ]/g, "");
+      const ord = dg.ord.map((o) => ({ svar: nf(o.svar), vis: o.visbending })).filter((o) => o.svar.length > 1);
+      // Raða orðunum sjálfvirkt í krossgátu (sama röð gefur alltaf sömu krossgátu).
+      const lykill = (x, y) => x + "," + y;
+      function smida(rod) {
+        const reitir = new Map(), sett = [], stafur = (x, y) => reitir.get(lykill(x, y));
+        const passar = (w, x, y, dx, dy) => {
+          if (stafur(x - dx, y - dy) || stafur(x + dx * w.length, y + dy * w.length)) return -1;
+          let sk = 0;
+          for (let i = 0; i < w.length; i++) {
+            const cx = x + dx * i, cy = y + dy * i, c = stafur(cx, cy);
+            if (c) { if (c !== w[i]) return -1; sk++; }
+            else if (stafur(cx + dy, cy + dx) || stafur(cx - dy, cy - dx)) return -1;
+          }
+          return sk;
+        };
+        const setja = (o, x, y, dx, dy) => { for (let i = 0; i < o.svar.length; i++) reitir.set(lykill(x + dx * i, y + dy * i), o.svar[i]); sett.push({ ...o, x, y, dx, dy }); };
+        const umfang = (w, x, y, dx, dy) => {
+          let a = Infinity, b = Infinity, c = -Infinity, e = -Infinity;
+          for (const k of reitir.keys()) { const [px, py] = k.split(",").map(Number); a = Math.min(a, px); b = Math.min(b, py); c = Math.max(c, px); e = Math.max(e, py); }
+          a = Math.min(a, x); b = Math.min(b, y); c = Math.max(c, x + dx * (w.length - 1)); e = Math.max(e, y + dy * (w.length - 1));
+          const bb = c - a + 1, hh = e - b + 1; return Math.max(bb, hh) * 3 + bb * hh / 4;
+        };
+        setja(rod[0], 0, 0, 1, 0);
+        let eftir = rod.slice(1), breyting = true;
+        while (eftir.length && breyting) {
+          breyting = false;
+          for (const o of [...eftir]) {
+            let best = null;
+            for (const s of sett) for (let i = 0; i < s.svar.length; i++) for (let m = 0; m < o.svar.length; m++) {
+              if (s.svar[i] !== o.svar[m]) continue;
+              const dx = s.dy, dy = s.dx, x = s.x + s.dx * i - dx * m, y = s.y + s.dy * i - dy * m;
+              const sk = passar(o.svar, x, y, dx, dy); if (sk < 1) continue;
+              const stig = umfang(o.svar, x, y, dx, dy) - sk * 4;
+              if (!best || stig < best.stig) best = { x, y, dx, dy, stig };
+            }
+            if (best) { setja(o, best.x, best.y, best.dx, best.dy); eftir = eftir.filter((x) => x !== o); breyting = true; }
+          }
+        }
+        const xs = sett.flatMap((s) => [s.x, s.x + s.dx * (s.svar.length - 1)]), ys = sett.flatMap((s) => [s.y, s.y + s.dy * (s.svar.length - 1)]);
+        const bb = Math.max(...xs) - Math.min(...xs) + 1, hh = Math.max(...ys) - Math.min(...ys) + 1;
+        return { sett, eftir, stig: eftir.length * 1000 + Math.max(bb, hh) * 10 + bb * hh / 10 };
+      }
+      // Prófa margar raðanir (alltaf eins, ekki tilviljun) og velja þá þéttustu þar sem flest orð komast fyrir.
+      let fra = 7, best = null;
+      const slembi = () => (fra = (fra * 16807) % 2147483647) / 2147483647;
+      const lengst = [...ord].sort((a, b) => b.svar.length - a.svar.length);
+      for (let t = 0; t < 300; t++) {
+        const rod = t === 0 ? ord : t === 1 ? lengst : [lengst[t % Math.min(3, lengst.length)], ...ord.filter((o) => o !== lengst[t % Math.min(3, lengst.length)]).sort(() => slembi() - .5)];
+        const r = smida(rod);
+        if (!best || r.stig < best.stig) best = r;
+      }
+      const { sett, eftir } = best;
+      if (eftir.length && profun) el.append(h("p", { class: "dauft" }, "Komust ekki fyrir: " + eftir.map((o) => o.svar).join(", ")));
+      // Hnit frá 0 og númer
+      const xs = sett.flatMap((s) => [s.x, s.x + s.dx * (s.svar.length - 1)]), ys = sett.flatMap((s) => [s.y, s.y + s.dy * (s.svar.length - 1)]);
+      const mx = Math.min(...xs), my = Math.min(...ys), B = Math.max(...xs) - mx + 1, H = Math.max(...ys) - my + 1;
+      sett.forEach((s) => { s.x -= mx; s.y -= my; });
+      const upphaf = [...new Set(sett.map((s) => s.y * 100 + s.x))].sort((a, b) => a - b);
+      sett.forEach((s) => { s.nr = upphaf.indexOf(s.y * 100 + s.x) + 1; s.reitir = [...s.svar].map((_, i) => lykill(s.x + s.dx * i, s.y + s.dy * i)); });
+      const rett = new Map(); sett.forEach((s) => s.reitir.forEach((k, i) => rett.set(k, s.svar[i])));
+
+      const VISTA = "dagatal-krossgata-" + CONFIG.ar + "-" + d;
+      let svor = {}; try { svor = JSON.parse(localStorage.getItem(VISTA) || "{}") || {}; } catch (_) {}
+      const vista2 = () => { try { localStorage.setItem(VISTA, JSON.stringify(svor)); } catch (_) {} };
+      let virkt = sett[0], val = sett[0].reitir[0], buid = false;
+      const ordFyrir = (k, helst) => { const a = sett.filter((s) => s.reitir.includes(k)); return a.find((s) => s === helst) || a.find((s) => helst && s.dx === helst.dx) || a[0]; };
+
+      const bord = h("div", { class: "kg-bord", style: `--b:${B}` });
+      const visbending = h("div", { class: "kg-vis", role: "status" });
+      const listi = h("div", { class: "kg-listi" });
+      const lok = h("div", {});
+      const reitaEl = new Map();
+      for (let y = 0; y < H; y++) for (let x = 0; x < B; x++) {
+        const k = lykill(x, y);
+        if (!rett.has(k)) { bord.append(h("span", { class: "kg-tomt" })); continue; }
+        const byrjar = sett.find((s) => s.x === x && s.y === y);
+        const r = h("button", { class: "kg-reitur", type: "button", onclick: () => { if (val === k) virkt = sett.find((s) => s !== virkt && s.reitir.includes(k)) || virkt; else { val = k; virkt = ordFyrir(k, virkt); } teikna(); } },
+          byrjar ? h("span", { class: "kg-nr" }, String(byrjar.nr)) : "", h("span", { class: "kg-stafur" }));
+        reitaEl.set(k, r); bord.append(r);
+      }
+      const ordRett = (s) => s.reitir.every((k) => svor[k] === rett.get(k));
+      function teikna() {
+        for (const [k, r] of reitaEl) {
+          r.querySelector(".kg-stafur").textContent = svor[k] || "";
+          r.classList.toggle("valinn", k === val);
+          r.classList.toggle("ordid", virkt.reitir.includes(k));
+          r.classList.toggle("rett", sett.some((s) => s.reitir.includes(k) && ordRett(s)));
+        }
+        visbending.replaceChildren(h("strong", {}, `${virkt.nr} ${virkt.dx ? "Lárétt" : "Lóðrétt"}`), " " + virkt.vis);
+        listi.replaceChildren(...[["Lárétt", 1], ["Lóðrétt", 0]].map(([heiti, dx]) => h("div", {}, h("h3", {}, heiti),
+          sett.filter((s) => s.dx === dx).sort((a, b) => a.nr - b.nr).map((s) => h("button", { class: "kg-ordvis" + (s === virkt ? " virkt" : "") + (ordRett(s) ? " leyst" : ""), type: "button",
+            onclick: () => { virkt = s; val = s.reitir[0]; teikna(); } }, h("strong", {}, s.nr + ". "), s.vis)))));
+        if (!buid && sett.every(ordRett)) {
+          buid = true; bord.classList.add("buid"); hjartaRegn(bord);
+          lok.append(astarbref(dg, d));
+          setTimeout(() => lok.scrollIntoView({ block: "nearest", behavior: "smooth" }), 300);
+        }
+      }
+      function slaInn(c) {
+        if (buid) return;
+        if (c === "⌫") {
+          if (svor[val]) delete svor[val];
+          else { const i = virkt.reitir.indexOf(val); if (i > 0) { val = virkt.reitir[i - 1]; delete svor[val]; } }
+        } else {
+          svor[val] = c;
+          const i = virkt.reitir.indexOf(val);
+          if (virkt.reitir[i + 1]) val = virkt.reitir[i + 1];
+        }
+        vista2(); teikna();
+      }
+      const lyklabord = h("div", { class: "word-keyboard kg-lyklar" },
+        [["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "Ð"], ["A", "S", "D", "F", "G", "H", "J", "K", "L", "Æ", "Ö"], ["Z", "X", "C", "V", "B", "N", "M", "Þ", "⌫"], ["Á", "É", "Í", "Ó", "Ú", "Ý"]]
+          .map((rod) => h("div", { class: "word-key-row" }, rod.map((c) => h("button", { class: "word-key" + (c === "⌫" ? " word-action" : ""), type: "button", "aria-label": c === "⌫" ? "Eyða" : c, onclick: () => slaInn(c) }, c)))));
+      const syna = h("button", { class: "midi-afturkalla", type: "button", onclick: () => { if (buid) return; svor[val] = rett.get(val); vista2(); teikna(); } }, "Sýna staf");
+      el.addEventListener("keydown", (e) => {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (e.key === "Backspace") { e.preventDefault(); slaInn("⌫"); return; }
+        const c = nf(e.key);
+        if (c.length === 1) { e.preventDefault(); slaInn(c); }
+      });
+      el.append(h("p", {}, dg.inngangur || "Pikkaðu á reit og skrifaðu. Pikkaðu aftur til að skipta á milli lárétt og lóðrétt."), visbending, bord, lyklabord, syna, listi, lok);
+      teikna();
     },
 
     async minni(el, dg) {
@@ -924,7 +1228,7 @@ window.raesaDagatal = (CONFIG) => {
           const a = fyrra; fyrra = null;
           if (a.dataset.m === merki) {
             [a, t].forEach((x) => { x.classList.remove("upp"); x.classList.add("buid"); x.setAttribute("aria-label", `Mynd ${dg.spjold.indexOf(merki) + 1}, par fundið`); });
-            if (++fundin === dg.spjold.length) { stadaEl.textContent = `Öll pörin fundin í ${tilraunir} tilraunum.`; lok.append(verdlaun(dg.verdlaun) || ""); lok.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
+            if (++fundin === dg.spjold.length) { stadaEl.textContent = `Öll pörin fundin í ${tilraunir} tilraunum.`; lok.append(astarbref(dg, dg.dagur)); lok.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
           } else {
             laest = true;
             setTimeout(() => { [a, t].forEach((x) => { x.classList.remove("upp"); x.setAttribute("aria-label", "Spjald á hvolfi"); }); laest = false; }, 800);
@@ -1006,7 +1310,7 @@ window.raesaDagatal = (CONFIG) => {
         buid = true; teikna();
         lokEl.replaceChildren(h("div", { class: "midja", style: "margin-top:14px" },
           vann ? h("p", { class: "hv-titill" }, mistok ? "Þú fannst þá alla!" : "Fullkomið!") : "",
-          vann ? verdlaun(dg.verdlaun) : "",
+          vann ? astarbref(dg, dg.dagur) : "",
           h("div", { class: "rod", style: "justify-content:center" }, h("button", { class: "takki ljos", type: "button", onclick: () => { lokEl.replaceChildren(); skilabod.textContent = ""; nyr(); } }, vann ? "Spila aftur" : "Reyna aftur"))));
       }
 
@@ -1048,18 +1352,21 @@ window.raesaDagatal = (CONFIG) => {
       const n = dg.spjold.length;
       const syna = () => {
         const s = dg.spjold[nr];
-        const mynd = s.mynd ? ljosmynd(s.mynd, s.myndatexti || s.texti) : null;
-        if (mynd) mynd.classList.add("recap-mynd");
+        // "mynd" má vera ein slóð eða listi af slóðum (þá birtast þær saman, smá skakkar).
+        const myndir = [].concat(s.mynd || []);
+        let mynd = "";
+        if (myndir.length === 1) { mynd = ljosmynd(myndir[0], ""); mynd.classList.add("recap-mynd"); }
+        else if (myndir.length > 1) mynd = h("div", { class: "recap-safn", style: `--n:${myndir.length}` }, myndir.map((m) => ljosmynd(m, "")));
         el.replaceChildren(
-          nr === 0 && dg.inngangur ? h("p", {}, dg.inngangur) : null,
+          nr === 0 && dg.inngangur ? h("p", {}, dg.inngangur) : "",
           mynd,
-          h("div", { class: "recap", "aria-live": "polite" }, h("div", {}, h("div", { class: "tala" }, s.tala), h("div", { class: "lysing" }, s.texti))),
+          h("div", { class: "recap", "aria-live": "polite" }, h("div", {}, h("div", { class: "tala" }, s.tala), h("div", { class: "lysing" }, s.texti), s.myndatexti ? h("div", { class: "recap-undir" }, s.myndatexti) : "")),
           h("div", { class: "rod", style: "justify-content:space-between" },
             h("span", { class: "framvinda", style: "margin:0" }, `${nr + 1} af ${n}`),
-            nr > 0 ? h("button", { class: "takki ljos", type: "button", onclick: () => { nr--; syna(); } }, "Fyrri") : null,
+            nr > 0 ? h("button", { class: "takki ljos", type: "button", onclick: () => { nr--; syna(); } }, "Fyrri") : "",
             nr + 1 < n ? h("button", { class: "takki", type: "button", onclick: () => { nr++; syna(); } }, "Næsta")
                        : h("button", { class: "takki ljos", type: "button", onclick: () => { nr = 0; syna(); } }, "Aftur frá byrjun")),
-          nr + 1 === n ? verdlaun(dg.verdlaun && { mynd: dg.verdlaun.mynd, texti: dg.verdlaun.texti }) : null);
+          nr + 1 === n ? verdlaun(dg.verdlaun && { mynd: dg.verdlaun.mynd, texti: dg.verdlaun.texti }) : "");
       };
       syna();
     },

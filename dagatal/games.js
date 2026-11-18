@@ -55,7 +55,7 @@
       }
       keys.forEach((key,c)=>{key.className='word-key '+(best[c]||'')+(c==='Enter'||c==='Backspace'?' word-action':'');key.disabled=finished();});
       hint.disabled=finished();retry.hidden=!finished();
-      if(guesses.includes(answer))message.textContent=config.skilabod;
+      if(guesses.includes(answer)){message.textContent=config.vann?'':config.skilabod;config.vann?.();}
       else if(finished())message.textContent='Orðið var '+answer+'. Þú mátt alltaf prófa aftur.';
     }
     // QWERTY positions, Icelandic letters and a separate accent row.
@@ -202,7 +202,7 @@
     function loop(){if(disposed)return;frame=raf(loop);if(typeof document==='undefined'||!document.hidden)draw();}
     function stop(){clearInterval(timer);timer=null;running=false;}
     function pause(){if(running){stop();start.textContent='Halda áfram';message.textContent='Í pásu. Ég bíð eftir þér.';draw();}}
-    function reset(){stop();body=[{x:4,y:6},{x:3,y:6},{x:2,y:6}];prev=null;direction={x:1,y:0};queue=[];facing=1;food={x:7,y:6};foodBorn=0;points=0;over=false;won=false;particles.length=0;start.textContent='Byrja';message.textContent=saved.won?config.skilabod:'';draw();}
+    function reset(){stop();body=[{x:4,y:6},{x:3,y:6},{x:2,y:6}];prev=null;direction={x:1,y:0};queue=[];facing=1;food={x:7,y:6};foodBorn=0;points=0;over=false;won=false;particles.length=0;start.textContent='Byrja';message.textContent=saved.won&&!config.vann?config.skilabod:'';if(saved.won)config.vann?.();draw();}
     function tick(){
       const time=now();if(queue.length)direction=queue.shift();if(direction.x)facing=direction.x;
       const result=stepSnake(body,direction,food,size);
@@ -210,7 +210,7 @@
       prev=body;body=result.body;lastTick=time;
       if(result.ate){
         points++;const fx=(food.x+.5)*U,fy=(food.y+.5)*U;burst(fx,fy,12,time);particles.push({x:fx,y:fy-10,vx:0,vy:-.5,g:0,text:'+1',c:'#ffd56b',t:time,life:800});
-        if(points>=target){stop();over=true;won=true;saved.won=true;save({won:true});start.textContent='Spila aftur';message.textContent=config.skilabod;food=null;for(let k=0;k<4;k++)burst(W*(.2+.2*k),W*.3,14,time+k*120);}
+        if(points>=target){stop();over=true;won=true;saved.won=true;save({won:true});start.textContent='Spila aftur';message.textContent=config.vann?'':config.skilabod;config.vann?.();food=null;for(let k=0;k<4;k++)burst(W*(.2+.2*k),W*.3,14,time+k*120);}
         else{food=freeCell(body,size);foodBorn=time;}
       }
       if(!raf)draw();

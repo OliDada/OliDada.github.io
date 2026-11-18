@@ -11,7 +11,7 @@ function identity(n){const id=n.personId||n.role+':'+n.origin.join(','),h=hash(i
  const traits={warmth:r('warmth'),courage:r('courage'),temper:r('temper'),honesty:r('honesty'),sociability:r('social'),loyalty:r('loyalty'),diligence:r('work')};
  if(n.role==='child')traits.courage*=.45;
  const voice=traits.warmth>.7?'kind':traits.temper>.7?'blunt':traits.sociability<.3?'reserved':traits.sociability>.7?'wry':'thoughtful';
- return {id,traits,voice,first:first[h%first.length],surname:surnames[hash(id+'family')%surnames.length],job:n.shop?({baker:'baker',grocer:'greengrocer',draper:'draper',herbalist:'herbalist',inn:'innkeeper',smith:'blacksmith'}[n.shop]):jobs[n.role]||['weaver','gardener','mender','carter','launderer'][h%5],interest:interests[hash(id+'interest')%interests.length],offset:(r('wake')-.5)*.035,family:[],friends:[]};}
+ return {id,traits,voice,first:first[h%first.length],surname:surnames[hash(id+'family')%surnames.length],job:n.shop?({baker:'baker',grocer:'greengrocer',draper:'draper',herbalist:'herbalist',inn:'innkeeper',smith:'blacksmith',pedlar:'pedlar'}[n.shop]):jobs[n.role]||['weaver','gardener','mender','carter','launderer'][h%5],interest:interests[hash(id+'interest')%interests.length],offset:(r('wake')-.5)*.035,family:[],friends:[]};}
 function state(store,id){return store[id]||(store[id]={trust:0,memories:[],met:false,visits:0,lastGift:-1,lastTrade:-1,lastChat:-1,apologized:null});}
 function remember(s,event){if(s.memories.some(e=>e.id===event.id))return false;
  s.memories.push({...event});if(s.memories.length>12)s.memories.shift();s.trust=clamp(s.trust+(event.impact||0),-100,100);return true;}

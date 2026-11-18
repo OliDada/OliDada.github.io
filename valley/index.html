@@ -27,7 +27,7 @@ button:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
 #swing{display:none;position:fixed;right:calc(18px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 52px);width:76px;height:76px;margin:0;padding:0;border-radius:50%;font-size:1.05rem;background:rgba(22,20,34,.55);color:var(--fg);border:2px solid var(--line);touch-action:none}
 @media (prefers-reduced-motion: reduce){#hint,#msg{transition:none}}
 </style>
-<link rel="stylesheet" href="arrival.css?v=4">
+<link rel="stylesheet" href="arrival.css?v=5">
 </head>
 <body>
 <canvas id="view" aria-label="A first-person view from a forest path, looking out over a valley to a castle and mountains"></canvas>
@@ -52,6 +52,8 @@ button:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
 <button id="jump" type="button">Jump</button>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="world.js?v=1"></script>
+<script>/* the map editor can hand the game an unsaved map to try */try{if(/[?&]draft\b/.test(location.search)){const d=localStorage.getItem('valley.worldDraft');if(d)window.WORLD=JSON.parse(d);}}catch(e){}</script>
 <script>
 (function(){
 "use strict";
@@ -108,6 +110,37 @@ const POND={x:-262,z:-302,rx:42,rz:24},CROSS=[-430,-357];let INN=[-446,-380];
 const CRAGS=[[-530,-730,34,38],[-480,-708,26,29]];          // twin rock pillars with towers on top, the landmark between the valley and the lake
 // the east: a hanging valley up in the hills holding the Old Wood: a stone circle, a witch's cottage, the Elder tree
 const OW={SC:[500,-300],WC:[642,-250],GT:[650,-342]};
+
+/* ================= the world file =================
+   Everything outside the hand-built valley comes from world.js, which editor.html makes: height, forest and region
+   painted on a 12 m grid, plus roads, rivers and places. Inside the LOCK rectangle the hand-written shapes in this
+   file win, and across its feathered edge the two blend. Without a world file the game is exactly as hand-built. */
+const WD=window.WORLD&&window.WORLD.v===1?window.WORLD:null;
+const LOCK=WD?WD.lock:{x0:-1320,x1:830,z0:-930,z1:260,f:200};
+const WB=WD?{x0:WD.x0,z0:WD.z0,cell:WD.cell,nx:WD.nx,nz:WD.nz}:{x0:-3220,z0:-2620,cell:12,nx:471,nz:401};
+WB.x1=WB.x0+WB.cell*(WB.nx-1);WB.z1=WB.z0+WB.cell*(WB.nz-1);
+function lockW(x,z){const L=LOCK;return smooth(L.x0-L.f,L.x0,x)*smooth(L.x1+L.f,L.x1,x)*smooth(L.z0-L.f,L.z0,z)*smooth(L.z1+L.f,L.z1,z);}
+function unb64(s,T){const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return new T(u.buffer);}
+const WLH=WD?unb64(WD.height,Uint16Array):null,WLF=WD?unb64(WD.forest,Uint8Array):null,WLR=WD?unb64(WD.region,Uint8Array):null;
+function wSample(A,x,z){const fx=clamp((x-WB.x0)/WB.cell,0,WB.nx-1.001),fz=clamp((z-WB.z0)/WB.cell,0,WB.nz-1.001),i=fx|0,j=fz|0,u=fx-i,v=fz-j,k=j*WB.nx+i;
+  return (A[k]*(1-u)+A[k+1]*u)*(1-v)+(A[k+WB.nx]*(1-u)+A[k+WB.nx+1]*u)*v;}
+const layerH=(x,z)=>wSample(WLH,x,z)/10-200,layerF=(x,z)=>wSample(WLF,x,z)/255;
+const inWorld=(x,z,m)=>{m=m||0;return x>WB.x0+m&&x<WB.x1-m&&z>WB.z0+m&&z<WB.z1-m;};
+// regions: each lays its own light over the land and grows its own trees. [name, tint, desaturate, darken]
+const REGIONS=[['valley',[1,1,1],0,1],['amber',[1.13,1.02,.74],.06,1.02],['green',[.92,1.03,.9],0,.95],['oldwood',[.86,.97,1],0,.86],['rot',[.96,.96,.88],.3,.86],
+  ['ash',[1,.98,.95],.55,.8],['blight',[.95,.82,1.04],.45,.66],['north',[.98,1,1.04],.2,1],['warm',[1.1,1.03,.84],.08,1.03]];
+const RW2=(function(){if(!WD)return null;const nx=((WB.nx-1)>>1)+1,nz=((WB.nz-1)>>1)+1,K=REGIONS.length,g=[],cnt=new Float32Array(K);for(let k=0;k<K;k++)g.push(new Float32Array(nx*nz));
+  for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){cnt.fill(0);let n=0;       // a soft blend some 350 m wide
+    for(let b=-15;b<=15;b+=3)for(let a=-15;a<=15;a+=3){const fi=clamp(i*2+a,0,WB.nx-1),fj=clamp(j*2+b,0,WB.nz-1);cnt[WLR[fj*WB.nx+fi]]++;n++;}
+    for(let k=0;k<K;k++)g[k][j*nx+i]=cnt[k]/n;}
+  return {g,nx,nz,cell:WB.cell*2};})();
+function regionAt(x,z){const out=[];if(!RW2)return out;const L=lockW(x,z);if(L>=1)return out;
+  const fx=clamp((x-WB.x0)/RW2.cell,0,RW2.nx-1.001),fz=clamp((z-WB.z0)/RW2.cell,0,RW2.nz-1.001),i=fx|0,j=fz|0,u=fx-i,v=fz-j,k=j*RW2.nx+i;
+  for(let r=1;r<REGIONS.length;r++){const A=RW2.g[r],w=((A[k]*(1-u)+A[k+1]*u)*(1-v)+(A[k+RW2.nx]*(1-u)+A[k+RW2.nx+1]*u)*v)*(1-L);if(w>.01)out.push([r,w]);}
+  return out;}
+function tintLand(x,z,c){for(const [r,w] of regionAt(x,z)){const R=REGIONS[r],l=c[0]*.3+c[1]*.55+c[2]*.15;
+  for(let i=0;i<3;i++)c[i]=lerp(c[i],lerp(c[i],l,R[2])*R[1][i]*R[3],w);}return c;}
+function forestAt(x,z){if(!WD)return forestD(x,z);const L=lockW(x,z),f=L>0?forestD(x,z):0;return L<1?lerp(layerF(x,z),f,L):f;}
 // nothing in nature runs along a ruler: every big region is drawn through a slow wobble so its edge wanders
 function wob(x,z,k){return (fbm(x*.0052+k,z*.0052+k*1.7)-.5)*2;}
 function forestEdge(x){return (vn(x*.011+31,7.7)-.5)*90*smooth(25,120,Math.abs(x+5));}     // the forest's northern edge bulges and bays; straight only where the path leaves it
@@ -129,7 +162,7 @@ function fallRidge(x){return Math.exp(-(((x-170)/48)**2));}
 function edgeZ(x){return -422+22*Math.sin(x*.013+1)+30*smooth(-40,-150,x);}
 function edgeW(x){return lerp(190+28*Math.sin(x*.018),19,fallRidge(x));}
 function shelfT(x,z){const e=edgeZ(x)+(vn(x*.03,z*.03)-.5)*10;return smooth(e,e-edgeW(x),z);}
-function rawH(x,z,noStream){
+function formulaH(x,z){
   const n=fbm(x*.012+3,z*.012+7);
   let h=4+7*n;
   h+=24*smooth(-178,-96,z+forestEdge(x))*(1-smooth(150,320,Math.abs(x)));     // the forest shelf you start on
@@ -140,7 +173,7 @@ function rawH(x,z,noStream){
     const step=5.5,f=h/step-Math.floor(h/step),tq=(Math.floor(h/step)+smooth(.55,.95,f))*step;h=lerp(h,tq,b*(.18+.67*fallRidge(x)));}   // the edge breaks into ledges and rock bands
   h+=12*(fbm(x*.02+4,z*.02+9)-.5)*smooth(-470,-560,z);           // rolling ground up on the shelf
   h+=110*smooth(-760,-1100,z)*(.7+.6*fbm(x*.004+2,z*.004));      // foothills
-  h+=110*smooth(160,420,z);                                      // hills behind the forest
+  h+=WD?-16*smooth(150,520,z):110*smooth(160,420,z);              // hills behind the forest; with the wider world, a vale falling south toward Oakhurst
   const cl=24+36*Math.sin(z*.0045+.6),ax=Math.abs(x-cl)+38*wob(x,z,23),w0=170+.16*Math.max(0,-z);
   const lw=lowW(x,z),rk=1-lw*.94;
   h+=rk*(80+.22*Math.max(0,-z))*smooth(w0,w0+340,ax)*(.55+.9*fbm(x*.006+9,z*.006+1));
@@ -154,7 +187,12 @@ function rawH(x,z,noStream){
      t+=3.2*Math.exp(-((x-OW.SC[0])**2+(z-OW.SC[1])**2)/260);for(const p of [OW.WC,OW.GT])t=lerp(t,lerp(26,80,smooth(225,470,p[0])),smooth(30,14,Math.hypot(x-p[0],z-p[1])));
      h=lerp(h,t,ew);}}
   for(const [cx,cz,r,ht] of CRAGS){const d=Math.hypot(x-cx,z-cz)+(vn(x*.12,z*.12)-.5)*9;if(d<r*4.5){const top=ht*smooth(r*3.8,r*.45,d),skirt=ht*.35*smooth(r*4.5,r,d);h+=Math.max(top+(vn(x*.3,z*.05)-.5)*6*smooth(r*1.1,r*.7,d),skirt);}}
-  if(!noStream){{const v=valeHash.near(x,z);if(v){const [lv,sl,wd,wt]=v[1],t=smooth(wd,wd*.55,v[0])*wt;if(t>0)h=lerp(h,Math.min(h,lv+.4+Math.max(0,v[0]-5)*sl),t);}}   // the stream's own valley
+  return h;}
+const riverHash=makeHash(24);
+function rawH(x,z,noStream){
+  let h;{const L=WD?lockW(x,z):1;h=L>0?formulaH(x,z):0;if(L<1)h=lerp(layerH(x,z),h,L);}
+  if(!noStream){{const r=riverHash.near(x,z);if(r){const [lv,w]=r[1],t=smooth(w+7,w*.6,r[0]);if(t>0)h=lerp(h,Math.min(h,lv-1.3),t);}}
+    {const v=valeHash.near(x,z);if(v){const [lv,sl,wd,wt]=v[1],t=smooth(wd,wd*.55,v[0])*wt;if(t>0)h=lerp(h,Math.min(h,lv+.4+Math.max(0,v[0]-5)*sl),t);}}   // the stream's own valley
     const q=streamHash.near(x,z);if(q){const t=smooth(10,2.5,q[0]);if(t>0)h=lerp(h,Math.min(h,q[1]-.9),t);}}
   return h;
 }
@@ -175,11 +213,13 @@ ROAD_DEF.owitch=[[500,-300],[540,-291],[578,-276],[612,-262],[636,-254]];
 ROAD_DEF.oelder=[[540,-291],[574,-304],[606,-322],[634,-336]];
 ROAD_DEF.track=[[-430,-357],[-408,-336],[-366,-319],[-308,-307]];
 ROAD_DEF.service=[[-146,CZ+40],[-120,CZ+70],[-70,CZ+93],[-20,CZ+105],[40,CZ+110],[92,CZ+105]];
+if(WD)for(const r of WD.roads)ROAD_DEF[r.id]=r.pts.map(p=>[p[0],p[1]]);
 const roads={},roadHash=makeHash(24);
 for(const k in ROAD_DEF){const pts=spline(ROAD_DEF[k],2.5),hs=pts.map(p=>rawH(p[0],p[1],true)),n=hs.length;
   for(const e of [0,n-1]){const q=roadHash.near(pts[e][0],pts[e][1]);if(q&&q[0]<4)hs[e]=q[1];}
   if(k==='castle')hs[n-1]=CTOP;
-  for(let pass=0;pass<14;pass++){const o=hs.slice();for(let i=1;i<n-1;i++)hs[i]=(o[Math.max(0,i-2)]+o[i-1]+o[i]+o[i+1]+o[Math.min(n-1,i+2)])/5;}
+  const H0=hs.slice(),PIN=WD&&WD.roads.some(r=>r.id===k)?pts.map(p=>WD.places.some(q=>(q.kind==='town'||q.kind==='farm'||q.kind==='monastery')&&Math.hypot(p[0]-q.x,p[1]-q.z)<q.r*.7)):null;
+  for(let pass=0,np=WD&&WD.roads.some(r=>r.id===k)?380:14;pass<np;pass++){const o=hs.slice();if(PIN){for(let i=1;i<n-1;i++)if(PIN[i])o[i]=H0[i];hs.splice(0,n,...o);}for(let i=1;i<n-1;i++)hs[i]=(o[Math.max(0,i-2)]+o[i-1]+o[i]+o[i+1]+o[Math.min(n-1,i+2)])/5;}
   pts.forEach((p,i)=>{p[2]=hs[i];});roads[k]=pts;pts.forEach(p=>roadHash.add(p[0],p[1],p[2]));}
 function roadDist(x,z){const q=roadHash.near(x,z);return q?q[0]:99;}
 // the lake's surface sits just below the lowest point of its shore
@@ -202,7 +242,31 @@ const BECK=(function(){const a0=.62,r0=LAKE_R[Math.round(a0/6.2832*180)]*.985,b0
   pts.forEach((p,i)=>{streamHash.add(p[0],p[1],p[2]);if(i%3===0&&lakeD(p[0],p[1])>1.5)valeHash.add(p[0],p[1],[p[2],.28,75,smooth(1.5,1.9,lakeD(p[0],p[1]))]);});
   STREAM.forEach((p,i)=>{if(i%3===0&&p[0]<-120&&p[1]>-190)valeHash.add(p[0],p[1],[p[2],.42,150,smooth(-120,-230,p[0])]);});
   return pts;})();
+// rivers from the world file: each runs downhill from its first point, with a bed as wide as the river and a broad vale
+const WRIV=WD?WD.rivers.map(rv=>{const pts=spline(rv.pts,4),w=rv.w||5;let prev=1e9;
+  {const q=streamHash.near(pts[0][0],pts[0][1]);if(q&&q[0]<40)prev=q[1];}
+  pts.forEach((p,i)=>{p[2]=Math.min(rawH(p[0],p[1],true)-1.3,i?prev-.03:prev);prev=p[2];});
+  pts.forEach((p,i)=>{streamHash.add(p[0],p[1],p[2]);riverHash.add(p[0],p[1],[p[2],w]);if(i%3===0)valeHash.add(p[0],p[1],[p[2],.26,w*8,1]);});
+  return {pts,w,id:rv.id};}):[];
 const PIER={x0:-852,z:-388,len:30};
+// bridges: wherever a road of the world file crosses a river or the stream, a stone arch carries it over
+const WBR=[];
+if(WD){const waters=WRIV.map(r=>({pts:r.pts,w:r.w})).concat([{pts:STREAM,w:4.2},{pts:BECK,w:2.8}]);
+  const nearWater=(x,z)=>{let best=null,bd=1e9;for(const wv of waters)for(let i=0;i<wv.pts.length;i+=2){const p=wv.pts[i],d=(p[0]-x)**2+(p[1]-z)**2;if(d<bd){bd=d;best={wv,i};}}return best?{...best,d:Math.sqrt(bd)}:null;};
+  for(const rd of WD.roads){const P=roads[rd.id];let run=null;
+    const flush=()=>{if(!run)return;const c=run.best,p=P[c.i],a=P[Math.max(0,c.i-4)],b=P[Math.min(P.length-1,c.i+4)],ux0=b[0]-a[0],uz0=b[1]-a[1],ul=Math.hypot(ux0,uz0)||1,ux=ux0/ul,uz=uz0/ul;
+      const n=nearWater(p[0],p[1]);if(!n){run=null;return;}const wp=n.wv.pts,q0=wp[Math.max(0,n.i-3)],q1=wp[Math.min(wp.length-1,n.i+3)],rx=q1[0]-q0[0],rz=q1[1]-q0[1],rl=Math.hypot(rx,rz)||1;
+      const cross=Math.abs(ux*rz/rl-uz*rx/rl);run=null;if(cross<.55)return;   // a road running alongside water needs no bridge
+      const hl=Math.min(16,(n.wv.w+6)/cross),lv=wp[n.i][2];
+      const at=s=>{let k=c.i,acc=0;const dir=s<0?-1:1;while(acc<Math.abs(s)&&k+dir>=0&&k+dir<P.length){acc+=Math.hypot(P[k+dir][0]-P[k][0],P[k+dir][1]-P[k][1]);k+=dir;}return P[k][2];};
+      const eA=at(-hl),eB=at(hl),top=Math.max(lv+3.4,Math.max(eA,eB)+.7);
+      if(WBR.some(o=>Math.hypot(o.x-p[0],o.z-p[1])<40))return;
+      WBR.push({x:p[0],z:p[1],ux,uz,hl,eA,eB,top,lv,w:n.wv.w});};
+    for(let i=0;i<P.length;i++){const q=streamHash.near(P[i][0],P[i][1]),d=q?q[0]:99;
+      if(d<9){if(!run)run={best:{i,d}};else if(d<run.best.d)run.best={i,d};}else flush();}
+    flush();}}
+function deckH(b,al){const t=(al+b.hl)/(2*b.hl),base=lerp(b.eA,b.eB,t);return base+(b.top-lerp(b.eA,b.eB,.5))*(1-(al/b.hl)**2)*1+0*base;}
+function wBridgeH(x,z){let h=-1e9;for(const b of WBR){const dx=x-b.x,dz=z-b.z;if(dx>20||dx<-20||dz>20||dz<-20)continue;const al=dx*b.ux+dz*b.uz,ac=-dx*b.uz+dz*b.ux;if(Math.abs(al)<=b.hl&&Math.abs(ac)<2.9)h=Math.max(h,deckH(b,al));}return h;}
 const PONDY=rawH(POND.x,POND.z,true)-1.2;
 function pondD(x,z){const dx=(x-POND.x)/POND.rx,dz=(z-POND.z)/POND.rz,a=Math.atan2(dz,dx);return Math.hypot(dx,dz)/(1+.15*Math.sin(a*2+.5)+.1*Math.sin(a*3+2))+(vn(x*.08,z*.08)-.5)*.12;}
 // strip fields round the two villages: which crop (0 none, 1 wheat, 2 barley, 3 ploughed, 4 fallow)
@@ -229,6 +293,7 @@ function finalH(x,z){let h=rawH(x,z);{const dt=Math.hypot(x-TOWN_C[0],z-TOWN_C[1
   {const dp=pondD(x,z);if(dp<1.02)h=Math.min(h,PONDY-.4-2.5*smooth(1.02,.5,dp));else if(dp<1.5)h=lerp(h,clamp(h,PONDY+.4,PONDY+.4+(dp-1)*12),smooth(1.5,1.05,dp));}
   {const dl=lakeD(x,z);if(dl<1.02)h=Math.min(h,LAKEY-.6-7*smooth(1.02,.55,dl));else if(dl<1.6)h=lerp(h,clamp(h,LAKEY+.6,LAKEY+.6+(dl-1)*55),smooth(1.6,1.08,dl));}   // gentle banks round the lake
   {const id=isleD(x,z);if(id<1)h=LAKEY+.45+7.5*smooth(1,.1,id)*(.75+.5*vn(x*.07,z*.07));}   // the island: a low wooded hump
+  {const r=riverHash.near(x,z);if(r){const [lv,w]=r[1],t=smooth(w+6,w*.6,r[0]);if(t>0)h=lerp(h,Math.min(h,lv-1.3),t);}}
   const s=streamHash.near(x,z);if(s){const t=smooth(9,2.5,s[0]);if(t>0)h=lerp(h,Math.min(h,s[1]-.9),t);}
   {const [al,ac]=bridgeLocal(x,z),aa=Math.abs(al);if(aa>BR.hl-2.5&&aa<BR.hl+12&&Math.abs(ac)<7){            // earth ramps that meet the ends of the deck
     const target=BR.top-BR.k*Math.min(aa*aa,BR.hl*BR.hl)-Math.max(0,aa-BR.hl)*.12-.12;h=lerp(h,target,smooth(7,4,Math.abs(ac))*smooth(BR.hl+12,BR.hl+6,aa));}}
@@ -237,16 +302,34 @@ function finalH(x,z){let h=rawH(x,z);{const dt=Math.hypot(x-TOWN_C[0],z-TOWN_C[1
 const N1={x0:-1420,z0:-1420,cell:6,nx:404,nz:307};
 const HG=new Float32Array(N1.nx*N1.nz);
 for(let j=0;j<N1.nz;j++)for(let i=0;i<N1.nx;i++)HG[j*N1.nx+i]=finalH(N1.x0+i*N1.cell,N1.z0+j*N1.cell);
-function terrainH(x,z){const fx=clamp((x-N1.x0)/N1.cell,0,N1.nx-1.001),fz=clamp((z-N1.z0)/N1.cell,0,N1.nz-1.001),i=fx|0,j=fz|0,u=fx-i,v=fz-j,k=j*N1.nx+i;
+function terrainN1(x,z){const fx=clamp((x-N1.x0)/N1.cell,0,N1.nx-1.001),fz=clamp((z-N1.z0)/N1.cell,0,N1.nz-1.001),i=fx|0,j=fz|0,u=fx-i,v=fz-j,k=j*N1.nx+i;
   return (HG[k]*(1-u)+HG[k+1]*u)*(1-v)+(HG[k+N1.nx]*(1-u)+HG[k+N1.nx+1]*u)*v;}
 var FLOORS=[],RAMPS=[],HELIXES=[],FREF=null;
+// the rest of the world: the same 6 m grid, worked out a block at a time the first time anything there needs it
+const N1x1=N1.x0+N1.cell*(N1.nx-1),N1z1=N1.z0+N1.cell*(N1.nz-1);
+const inN1=(x,z)=>x>=N1.x0&&x<=N1x1&&z>=N1.z0&&z<=N1z1;
+const GW={x0:WB.x0,z0:WB.z0,nx:Math.round((WB.x1-WB.x0)/6)+1,nz:Math.round((WB.z1-WB.z0)/6)+1,CH:32};
+GW.cx=Math.ceil((GW.nx-1)/GW.CH);GW.cz=Math.ceil((GW.nz-1)/GW.CH);
+const GG=new Float32Array(GW.nx*GW.nz),GDONE=new Uint8Array(GW.cx*GW.cz);
+function finalW(x,z){if(inN1(x,z))return terrainN1(x,z);let h=rawH(x,z);
+  const q=roadHash.near(x,z);if(q){const t=smooth(24,5,q[0]);if(t>0)h=lerp(h,q[1]-.15,t);}
+  {const r=riverHash.near(x,z);if(r){const [lv,w]=r[1],t=smooth(w+6,w*.6,r[0]);if(t>0)h=lerp(h,Math.min(h,lv-1.3),t);}}
+  const s=streamHash.near(x,z);if(s){const t=smooth(9,2.5,s[0]);if(t>0)h=lerp(h,Math.min(h,s[1]-.9),t);}
+  return h;}
+function fillBlock(ci,cj){GDONE[cj*GW.cx+ci]=1;const i0=ci*GW.CH,j0=cj*GW.CH;
+  for(let j=j0;j<=Math.min(GW.nz-1,j0+GW.CH);j++)for(let i=i0;i<=Math.min(GW.nx-1,i0+GW.CH);i++)GG[j*GW.nx+i]=finalW(GW.x0+i*6,GW.z0+j*6);}
+function gget(i,j){i=clamp(i,0,GW.nx-1);j=clamp(j,0,GW.nz-1);const ci=Math.min(GW.cx-1,(i/GW.CH)|0),cj=Math.min(GW.cz-1,(j/GW.CH)|0);if(!GDONE[cj*GW.cx+ci])fillBlock(ci,cj);return GG[j*GW.nx+i];}
+function terrainH(x,z){if(inN1(x,z))return terrainN1(x,z);if(!inWorld(x,z))return rawH(x,z);
+  const fx=(x-GW.x0)/6,fz=(z-GW.z0)/6,i=Math.floor(fx),j=Math.floor(fz),u=fx-i,v=fz-j;
+  return (gget(i,j)*(1-u)+gget(i+1,j)*u)*(1-v)+(gget(i,j+1)*(1-u)+gget(i+1,j+1)*u)*v;}
+
 function pickLevel(hs){if(!hs.length)return -1e9;if(FREF===null)return Math.min(...hs);let b=-1e9;for(const h of hs)if(h<=FREF+1.2&&h>b)b=h;return b;}
 function rampH(x,z){const hs=[];for(const r of RAMPS){const dx=x-r.x,dz=z-r.z,u=dx*r.ux+dz*r.uz,v=-dx*r.uz+dz*r.ux;if(u>=-.05&&u<=r.L&&Math.abs(v)<r.hw)hs.push(r.y0-(r.y0-r.y1)*clamp(u,0,r.L)/r.L);}return pickLevel(hs);}
 function helixH(x,z){const hs=[];for(const h of HELIXES){const dx=x-h.x,dz=z-h.z,d=Math.hypot(dx,dz);if(d<h.r0||d>h.r1)continue;let p=Math.atan2(dx,dz)-h.a0;p=((p%6.2832)+6.2832)%6.2832;
   for(let y=h.base+p*h.rr+.06;y<=h.top+.01;y+=6.2832*h.rr)hs.push(Math.min(y,h.top));}return pickLevel(hs);}
 function pierH(x,z){return (x<PIER.x0&&x>PIER.x0-PIER.len&&Math.abs(z-PIER.z)<1.5)?LAKEY+.75:-1e9;}
-function groundH(x,z){return Math.max(terrainH(x,z),bridgeH(x,z),pierH(x,z),FLOORS.length?floorH(x,z):-1e9,RAMPS.length?rampH(x,z):-1e9,HELIXES.length?helixH(x,z):-1e9);}
-function anyH(x,z){return z<-1400||x<-1410||x>990?rawH(x,z):terrainH(x,z);}
+function groundH(x,z){return Math.max(terrainH(x,z),bridgeH(x,z),WBR.length?wBridgeH(x,z):-1e9,pierH(x,z),FLOORS.length?floorH(x,z):-1e9,RAMPS.length?rampH(x,z):-1e9,HELIXES.length?helixH(x,z):-1e9);}
+function anyH(x,z){return terrainH(x,z);}
 function forestD(x,z){
   let d=smooth(-118,-92,z+forestEdge(x))*smooth(330,240,Math.abs(x));             // the forest you start in
   const cl=24+36*Math.sin(z*.0045+.6),ax=Math.abs(x-cl)+38*wob(x,z,23),w0=170+.16*Math.max(0,-z);
@@ -436,6 +519,17 @@ const R_DARK=[0,1].map(i=>put(broadCanvas(192,192,PAL.dark,{n:14}),512+i*192,256
 const R_OAK=[0,1,2].map(i=>put(broadCanvas(256,256,PAL.oak,{n:16,cw:.44,ch:.3,cy:.36}),i*256,512));
 const R_AUT=[put(broadCanvas(256,256,PAL.autumn,{n:15}),768,512),put(broadCanvas(256,256,PAL.gold,{n:15}),1024,512)];
 const R_HERO=put(broadCanvas(320,320,PAL.dark,{n:22,cw:.46,ch:.32,cy:.36,limbs:8}),1280,512);
+// dead trees for the east, and the Blight's own: painted with their own dice so everything after keeps its shape
+function deadCanvas(W,H,cols,glow){const [c,g]=mk(W,H);g.lineCap='round';
+  function br(x,y,a,len,w,d){if(d>5||len<5)return;const x2=x+Math.sin(a)*len,y2=y-Math.cos(a)*len;
+    g.strokeStyle=cols[Math.min(cols.length-1,d>>1)];g.lineWidth=Math.max(1,w);g.beginPath();g.moveTo(x,y);g.lineTo(x2,y2);g.stroke();
+    if(w>3){g.strokeStyle=cols[cols.length-1];g.lineWidth=1;g.beginPath();g.moveTo(x-w*.3,y);g.lineTo(x2-w*.2,y2);g.stroke();}
+    if(glow&&d>=3&&rnd()<.4){g.fillStyle=pick(glow);g.fillRect(x2|0,y2|0,2,2);}
+    const n=d<1?2:rnd()<.55?2:3;for(let i=0;i<n;i++)br(x2,y2,a+R(-.5,.5)+(i-(n-1)/2)*.55,len*R(.58,.78),w*.6,d+1);}
+  g.fillStyle=cols[0];g.fillRect(W/2-7,H-5,14,5);br(W/2,H-2,R(-.06,.06),H*.32,W*.08,0);return c;}
+const R_DEAD=[],R_BLIGHT=[];{const s0=seed;seed=4242;
+  for(let i=0;i<2;i++)R_DEAD.push(put(deadCanvas(160,256,['#3a322c','#4a4038','#5a5048','#6e645a']),1320+i*160,0));
+  R_BLIGHT.push(put(deadCanvas(176,256,['#1c1020','#2a1830','#3a2240','#4a2c50'],['#b070d0','#d8a0f0','#9050b8']),1640,0));seed=s0;}
 const R_BUSH=[put(bushCanvas(96,56,null),0,860),put(bushCanvas(96,56,['#e88aa6','#f4c0d0']),96,860),put(bushCanvas(96,56,['#f6e7a0','#fff8d6']),192,860),put(bushCanvas(96,56,null),288,860)];
 const R_FERN=[0,1,2].map(i=>put(fernCanvas(),384+i*64,860));
 const R_FLOW=[['#f2d24a','#ffe680'],['#e8708e','#f6a6ba'],['#f4f0e6','#ffffff'],['#8c9cf0','#b8c2ff']].map((c,i)=>put(flowerCanvas(c),576+i*48,860));
@@ -452,7 +546,7 @@ function terrainColor(x,z,h,sl){
   const nn=fbm(x*.03,z*.03),fine=vn(x*.25,z*.25);
   let r=lerp(.36,.56,nn),g=lerp(.52,.62,nn),b=lerp(.18,.24,nn);            // warm meadow
   const dry=smooth(.45,.85,fbm(x*.008+5,z*.008));r=lerp(r,.6,dry*.4);g=lerp(g,.6,dry*.4);
-  const f=forestD(x,z)*(z>-1300?1:.8),dapple=smooth(.58,.7,fbm(x*.06+3,z*.06+1))*(z>-200?1:.3);
+  const f=forestAt(x,z)*(z>-1300?1:.8),dapple=smooth(.58,.7,fbm(x*.06+3,z*.06+1))*(z>-200?1:.3);
   r=lerp(r,lerp(.11,.27,dapple),f);g=lerp(g,lerp(.18,.34,dapple),f);b=lerp(b,lerp(.11,.18,dapple),f);
   {const lw=lowW(x,z);if(lw>0){const hth=smooth(.5,.82,fbm(x*.03+9,z*.03+4))*lw*(1-f);r=lerp(r,.6,lw*.14*(1-f));g=lerp(g,.6,lw*.08*(1-f));b=lerp(b,.24,lw*.06);
      r=lerp(r,.5,hth*.42);g=lerp(g,.38,hth*.42);b=lerp(b,.46,hth*.42);}
@@ -465,14 +559,17 @@ function terrainColor(x,z,h,sl){
   // rock: warm low down, cold and grey up high, with strata
   const rock=Math.max(smooth(.78,1.25,sl),smooth(320,440,h)*.9);
   const patch=smooth(.48,.6,fbm(x*.045+7,z*.045+2))*(1-smooth(1.3,2.2,sl))*(1-smooth(250,350,h));const rock0=rock*(1-.75*patch);
-  const cold=smooth(150,520,h),strata=.5+.5*Math.sin(h*.13+fbm(x*.01,z*.01)*7),rs=lerp(.9,1.1,strata)*lerp(.85,1.12,fine);
+  const cold=smooth(150,520,h),strata=.5+.5*Math.sin(h*.05+fbm(x*.006,z*.006)*12),rs=lerp(.96,1.04,strata)*lerp(.88,1.1,fine);
   r=lerp(r,lerp(.5,.46,cold)*rs,rock0);g=lerp(g,lerp(.47,.47,cold)*rs,rock0);b=lerp(b,lerp(.45,.55,cold)*rs,rock0);
   // snow: caps, and streaks down the gullies
   const sn=smooth(430+150*nn,520+150*nn,h)*smooth(lerp(1.7,3.2,smooth(500,850,h)),lerp(.95,1.9,smooth(500,850,h)),sl)*(.5+.9*vn(x*.018,z*.018))+smooth(700,850,h)*smooth(2.4,1.4,sl)*.6;
   const snow=clamp(sn,0,1);r=lerp(r,.97,snow);g=lerp(g,.96,snow);b=lerp(b,1,snow);
+  if(WD){const L=lockW(x,z);if(L<1){const v=1-L,p1=fbm(x*.045+31,z*.045+17),p2=vn(x*.14+5,z*.14+9),m=(p1-.5)*.34*v+(vn(x*.011+3,z*.011+8)-.5)*.16*v;r*=1+m;g*=1+m*.8;b*=1+m*.6;   // meadows mottled light and dark
+    const s2=smooth(.26,.72,sl)*v;if(s2>0){const e=.35+.65*smooth(.38,.7,p2);r=lerp(r,lerp(.44,.52,p2),s2*e*.75);g=lerp(g,lerp(.39,.45,p2),s2*e*.75);b=lerp(b,lerp(.28,.34,p2),s2*e*.75);}}   // earth and stone on the steep ground
+    const c=tintLand(x,z,[r,g,b]);r=c[0];g=c[1];b=c[2];}
   {const hz=smooth(-1500,-2700,x)*.55+smooth(-1900,-3200,z)*.25;r=lerp(r,.66,hz);g=lerp(g,.7,hz);b=lerp(b,.88,hz);}   // blue haze on the far western ranges
   return [r,g,b];}
-function gridMesh(x0,z0,cell,nx,nz,hf,map,uvs){
+function gridMesh(x0,z0,cell,nx,nz,hf,map,uvs,mat,noAdd){
   const n=nx*nz,pos=new Float32Array(n*3),col=new Float32Array(n*3),uv=new Float32Array(n*2),hs=new Float32Array(n);
   for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const k=j*nx+i;hs[k]=hf(x0+i*cell,z0+j*cell,k);}
   for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const k=j*nx+i,x=x0+i*cell,z=z0+j*cell,h=hs[k];
@@ -483,9 +580,18 @@ function gridMesh(x0,z0,cell,nx,nz,hf,map,uvs){
   for(let j=0;j<nz-1;j++)for(let i=0;i<nx-1;i++){const a=j*nx+i,b=a+1,c=a+nx,d=c+1;idx[q++]=a;idx[q++]=c;idx[q++]=b;idx[q++]=b;idx[q++]=c;idx[q++]=d;}
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('color',new THREE.BufferAttribute(col,3));g.setAttribute('uv',new THREE.BufferAttribute(uv,2));
   g.setIndex(new THREE.BufferAttribute(idx,1));g.computeVertexNormals();
-  const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({map,vertexColors:true}));m.frustumCulled=false;scene.add(m);return m;}
+  const m=new THREE.Mesh(g,mat||new THREE.MeshLambertMaterial({map,vertexColors:true}));m.frustumCulled=false;if(!noAdd)scene.add(m);return m;}
 gridMesh(N1.x0,N1.z0,N1.cell,N1.nx,N1.nz,(x,z,k)=>HG[k],grassTex,4);
-gridMesh(-3600,-4800,16,451,332,(x,z)=>(z>-1430&&x>-1420&&x<1000)?Math.min(rawH(x,z),terrainH(x,z))-4:rawH(x,z),mtTex,60);
+const NEAR_R=1150,lodU={pp:{value:new THREE.Vector2(0,0)},nr:{value:NEAR_R-170}};
+function sinkMat(mat){mat.onBeforeCompile=sh=>{sh.uniforms.pp=lodU.pp;sh.uniforms.nr=lodU.nr;
+  sh.vertexShader='uniform vec2 pp;uniform float nr;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n  float dd=distance(transformed.xz,pp);transformed.y-=mix(45.,1.5+max(0.,dd-nr)*.0016,smoothstep(nr-220.,nr,dd));');};return mat;}
+if(!WD)gridMesh(-3600,-4800,16,451,332,(x,z)=>(z>-1430&&x>-1420&&x<1000)?Math.min(rawH(x,z),terrainH(x,z))-4:rawH(x,z),mtTex,60);
+else{const C=24,in1=(x,z)=>x>N1.x0+30&&x<N1x1-30&&z>N1.z0+30&&z<N1z1-30;
+ gridMesh(WB.x0,WB.z0,C,Math.round((WB.x1-WB.x0)/C)+1,Math.round((WB.z1-WB.z0)/C)+1,(x,z)=>{if(in1(x,z))return terrainN1(x,z)-8;let h=rawH(x,z);for(const [a,b] of [[9,0],[-9,0],[0,9],[0,-9]])h=Math.min(h,rawH(x+a,z+b)+1);return h;},grassTex,4,sinkMat(new THREE.MeshLambertMaterial({map:grassTex,vertexColors:true})));
+ // beyond the world's edge the land carries on as it ends, then rises into a gentle far range that fades into the haze;
+ // inside the world this coarse mesh stays far below, so it never shows through
+ gridMesh(-9000,-9000,80,226,216,(x,z)=>{if(inWorld(x,z,240))return -600;const ex=clamp(x,WB.x0,WB.x1),ez=clamp(z,WB.z0,WB.z1),d=Math.hypot(x-ex,z-ez);
+   if(d<1)return rawH(x,z,true)-40;const far=260+320*Math.pow(1-Math.abs(fbm(x*.0009+3,z*.0009+7)*2-1),1.6)+(z<WB.z0?260:0);return lerp(rawH(ex,ez,true),far,smooth(200,1600,d))*(1-smooth(5000,8000,d));},mtTex,60);}
 // beyond the fine grid at the sides, the far grid takes over
 
 /* ================= paths, the stream and the waterfall ================= */
@@ -524,6 +630,8 @@ const fallMat=new THREE.MeshBasicMaterial({map:fallTex,color:0xe8eeff,polygonOff
 for(const f of FALLS)ribbon(f,BECK.includes(f[0])?3:4.6,fallMat,.15,true,5);
 const steepIn=S=>p=>{const i=S.indexOf(p);if(i<1||i>=S.length-1)return false;const a=S[i-1],b=S[i+1];return (a[2]-b[2])/Math.hypot(b[0]-a[0],b[1]-a[1])>.22;};
 ribbon(STREAM,4.2,waterMat,0,true,8,null,steepIn(STREAM));ribbon(BECK,2.8,waterMat,0,true,8,null,steepIn(BECK));
+for(const rv of WRIV)ribbon(rv.pts,rv.w,waterMat,0,true,8,null,steepIn(rv.pts));
+if(WD)for(const r of WD.roads)ribbon(roads[r.id],r.kind==='track'?1.1:r.kind==='lane'?1.6:2.1,pathMat,.2,false,3.5,(x,z)=>Math.max(terrainH(x,z),wBridgeH(x,z)+.05));
 const fallBase=(function(){let b=null,bd=0;for(const f of FALLS){const d=f[0][2]-f[f.length-1][2];if(d>bd){bd=d;b=f[f.length-1];}}return b||STREAM[0];})();   // the great fall over the shelf edge
 
 /* ================= mesh kit: merge many small parts into a few draw calls ================= */
@@ -875,7 +983,7 @@ function castleBlocked(x,z){const [lx,lz]=toCastle(x,z);if(lx<-75||lx>65||lz<-60
 /* ================= billboards: trees, bushes, flowers ================= */
 const bb=[];       // [x,y,z,w,h,rect,shade,sway]
 const trees=[];    // collision: [x,z,r]
-const KINDS={tall:[R_TALL,.25,.012],pine:[R_PINE,.375,.02],birch:[R_BIRCH,.375,.012],poplar:[R_POP,.25,.02],oak:[R_OAK,1,.05],aut:[[R_AUT[0]],1,.05],gold:[[R_AUT[1]],1,.05],dark:[R_DARK,1,.06],hero:[[R_HERO],1,.05]};
+const KINDS={dead:[R_DEAD,.62,.03],blight:[R_BLIGHT,.69,.04],tall:[R_TALL,.25,.012],pine:[R_PINE,.375,.02],birch:[R_BIRCH,.375,.012],poplar:[R_POP,.25,.02],oak:[R_OAK,1,.05],aut:[[R_AUT[0]],1,.05],gold:[[R_AUT[1]],1,.05],dark:[R_DARK,1,.06],hero:[[R_HERO],1,.05]};
 function addTree(x,z,kind,ht,shade){const y=anyH(x,z)-.4,k=KINDS[kind];
   bb.push([x,y,z,ht*k[1],ht,pick(k[0]),shade,kind==='oak'||kind==='aut'||kind==='dark'?.45:.3]);if(z>-700)trees.push([x,z,ht*k[2]+.15]);}
 const inVillage=(x,z)=>Math.hypot(x-V[0],z-V[1])<48;
@@ -892,7 +1000,7 @@ for(const f of [['hero',-19,-104,28,.92],['tall',9,-99,40,1],['tall',-12,-92,36,
   let n=0;
   for(let i=0;i<620000&&n<32000;i++){
     const x=R(-1400,760),z=R(-950,420);
-    const d=forestD(x,z);if(d<.05||rnd()>d)continue;
+    if(WD&&lockW(x,z)<.5)continue;const d=forestD(x,z);if(d<.05||rnd()>d)continue;
     const rd=roadDist(x,z),h=anyH(x,z);
     if(h>470+60*vn(x*.01,z*.01))continue;
     if(inVillage(x,z)||onCrag(x,z)||nearStream(x,z,7))continue;
@@ -969,14 +1077,14 @@ const bbMat=new THREE.ShaderMaterial({
     'vec4 mv=viewMatrix*vec4(p,1.);gl_Position=projectionMatrix*mv;',
     'vUv=aRect.xy+vec2(aOff.x+.5,aOff.y)*aRect.zw;float d=-mv.z*density;vFog=1.-exp(-d*d);vShade=aMisc.x;vT=torchI*pow(max(0.,1.-distance(p,torchP)/20.),2.);}'].join('\n'),
   fragmentShader:'uniform sampler2D map;uniform vec3 fogColor;uniform vec3 sunTint;varying vec2 vUv;varying float vFog;varying float vShade;varying float vT;\nvoid main(){vec4 c=texture2D(map,vUv);if(c.a<.42)discard;gl_FragColor=vec4(mix(c.rgb*sunTint*vShade+c.rgb*vec3(1.,.62,.32)*vT*.9,fogColor,vFog),1.);}'});
-function buildBillboards(){
-  const n=bb.length,pos=new Float32Array(n*12),off=new Float32Array(n*8),size=new Float32Array(n*8),rect=new Float32Array(n*16),misc=new Float32Array(n*8),idx=new Uint32Array(n*6);
+function buildBillboards(list,add){list=list||bb;
+  const n=list.length,pos=new Float32Array(n*12),off=new Float32Array(n*8),size=new Float32Array(n*8),rect=new Float32Array(n*16),misc=new Float32Array(n*8),idx=new Uint32Array(n*6);
   const O=[-.5,0,.5,0,.5,1,-.5,1];
-  bb.forEach((t,i)=>{for(let c=0;c<4;c++){pos.set([t[0],t[1],t[2]],i*12+c*3);off.set([O[c*2],O[c*2+1]],i*8+c*2);size.set([t[3],t[4]],i*8+c*2);rect.set(t[5],i*16+c*4);misc.set([t[6],t[7]],i*8+c*2);}
+  list.forEach((t,i)=>{for(let c=0;c<4;c++){pos.set([t[0],t[1],t[2]],i*12+c*3);off.set([O[c*2],O[c*2+1]],i*8+c*2);size.set([t[3],t[4]],i*8+c*2);rect.set(t[5],i*16+c*4);misc.set([t[6],t[7]],i*8+c*2);}
     idx.set([i*4,i*4+1,i*4+2,i*4,i*4+2,i*4+3],i*6);});
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('aOff',new THREE.BufferAttribute(off,2));
   g.setAttribute('aSize',new THREE.BufferAttribute(size,2));g.setAttribute('aRect',new THREE.BufferAttribute(rect,4));g.setAttribute('aMisc',new THREE.BufferAttribute(misc,2));g.setIndex(new THREE.BufferAttribute(idx,1));
-  const m=new THREE.Mesh(g,bbMat);m.frustumCulled=false;scene.add(m);
+  const m=new THREE.Mesh(g,bbMat);if(list===bb){m.frustumCulled=false;scene.add(m);}else{g.computeBoundingSphere();g.boundingSphere.radius+=45;if(add!==false)scene.add(m);}return m;
 }
 
 seed=-161995634;   // the villages are laid out from here on: pin the dice so reshaping the land does not shuffle the houses
@@ -1450,7 +1558,116 @@ function updateEast(dt,T){
  }
  seed=savedSeed;
 })();
-buildBillboards();
+const CORE_BB=buildBillboards();
+
+// a hand-built tree or plant standing where something new is built is taken away (its quad shrunk to nothing, and it no longer blocks)
+function clearPlants(x,z,hw,hd){const g=CORE_BB.geometry,P=g.attributes.position,S=g.attributes.aSize;for(let i=0;i<P.count;i+=4){const dx=P.getX(i)-x,dz=P.getZ(i)-z;if(Math.abs(dx)<hw&&Math.abs(dz)<hd)for(let c=0;c<4;c++)S.setXY(i+c,0,0);}S.needsUpdate=true;
+  for(let i=trees.length-1;i>=0;i--){const t=trees[i];if(Math.abs(t[0]-x)<hw&&Math.abs(t[1]-z)<hd&&t[2]>.3&&t[2]<2.5)trees.splice(i,1);}}
+/* ================= the world in tiles =================
+   Outside the hand-built grid the land is cut into 192 m tiles. Near you each has its own fine mesh and its own trees;
+   further off, the whole-world mesh and one sparse forest stand in. Tiles come and go as you walk. */
+const TILE=GW.CH*6,TREE_R=720,FAR_FRAC=.16;
+const MIX=[[['oak',.4],['birch',.2],['pine',.3],['aut',.1]],[['gold',.3],['aut',.3],['birch',.3],['oak',.1]],[['pine',.4],['tall',.2],['oak',.32],['birch',.08]],
+  [['tall',.35],['oak',.3],['dark',.25],['pine',.1]],[['dark',.4],['dead',.35],['pine',.25]],[['dead',.85],['dark',.15]],[['blight',.8],['dead',.2]],[['pine',.85],['birch',.15]],[['oak',.45],['poplar',.3],['aut',.25]]];
+const DENS=[1,1,1.05,1.1,.9,.55,.7,.9,.45],SHADE=[1,1,.95,.7,.72,.6,.8,.9,1.05];
+const SIZE={tall:[26,44],pine:[14,26],oak:[12,24],birch:[13,22],aut:[12,22],gold:[12,22],dark:[12,20],poplar:[16,24],dead:[10,20],blight:[14,26]};
+const R2=(r,a,b)=>a+(b-a)*r();
+function mul32(a){return ()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+// one tree, if one grows at grid cell (gi,gj); far: whether this is one of the few that stand in from afar
+function treeAt(gi,gj,far,hf,out,coll){const r=mul32((gi*73856093)^(gj*19349663)^0x5bd1e995);if((r()<FAR_FRAC)!==far)return;
+  const x=GW.x0+gi*6+r()*5.4,z=GW.z0+gj*6+r()*5.4;if(!inWorld(x,z,30)||lockW(x,z)>=.5)return;
+  const rw=regionAt(x,z);let wv=1;for(const e of rw)wv-=e[1];const pickR=r();let reg=0,acc=Math.max(0,wv);if(pickR>=acc)for(const e of rw){acc+=e[1];if(pickR<acc){reg=e[0];break;}}
+  if(r()>layerF(x,z)*DENS[reg])return;
+  if(roadDist(x,z)<(far?9:6.5)||nearStream(x,z,far?10:7))return;
+  const h=hf(x,z);if(h>360+70*vn(x*.01,z*.01))return;   // the tree line: bare rock and snow above
+  const mx=MIX[reg],q=r();let kind=mx[0][0],a=0;for(const e of mx){a+=e[1];if(q<a){kind=e[0];break;}}
+  const k=KINDS[kind],sz=SIZE[kind],ht=lerp(sz[0],sz[1],r())*(far?1.15:1),sh=SHADE[reg]*lerp(.85,1.05,r());
+  out.push([x,h-.4,z,ht*k[1],ht,k[0][(r()*k[0].length)|0],sh,kind==='oak'||kind==='aut'||kind==='dark'?.45:kind==='dead'||kind==='blight'?.1:.3]);if(coll)coll.push([x,z,ht*k[2]+.15]);}
+const TTER=new Map(),TTRE=new Map(),tileMat=new THREE.MeshLambertMaterial({map:grassTex,vertexColors:true});
+function tileMesh(ci,cj){const n=GW.CH+1,i0=ci*GW.CH,j0=cj*GW.CH,x0=GW.x0+i0*6,z0=GW.z0+j0*6;
+  if(x0>=N1.x0&&x0+TILE<=N1x1&&z0>=N1.z0&&z0+TILE<=N1z1)return null;   // all inside the hand-built grid
+  const pos=new Float32Array(n*n*3),col=new Float32Array(n*n*3),nor=new Float32Array(n*n*3),uv=new Float32Array(n*n*2);
+  for(let j=0;j<n;j++)for(let i=0;i<n;i++){const k=j*n+i,gi=i0+i,gj=j0+j,x=GW.x0+gi*6,z=GW.z0+gj*6;let h=gget(gi,gj);
+    if(x>N1.x0&&x<N1x1&&z>N1.z0&&z<N1z1)h-=.4;   // tuck under the hand-built mesh where they overlap
+    const dx=(gget(gi+1,gj)-gget(gi-1,gj))/12,dz=(gget(gi,gj+1)-gget(gi,gj-1))/12,nl=Math.hypot(dx,1,dz);
+    pos[k*3]=x;pos[k*3+1]=h;pos[k*3+2]=z;nor[k*3]=-dx/nl;nor[k*3+1]=1/nl;nor[k*3+2]=-dz/nl;uv[k*2]=x/4;uv[k*2+1]=z/4;
+    const c=terrainColor(x,z,h,Math.hypot(dx,dz));col[k*3]=c[0];col[k*3+1]=c[1];col[k*3+2]=c[2];}
+  const idx=new Uint16Array((n-1)*(n-1)*6);let q=0;
+  for(let j=0;j<n-1;j++)for(let i=0;i<n-1;i++){const a=j*n+i,b=a+1,c=a+n,d=c+1;idx[q++]=a;idx[q++]=c;idx[q++]=b;idx[q++]=b;idx[q++]=c;idx[q++]=d;}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('normal',new THREE.BufferAttribute(nor,3));g.setAttribute('color',new THREE.BufferAttribute(col,3));g.setAttribute('uv',new THREE.BufferAttribute(uv,2));
+  g.setIndex(new THREE.BufferAttribute(idx,1));g.computeBoundingSphere();const m=new THREE.Mesh(g,tileMat);scene.add(m);return m;}
+function tileTrees(ci,cj){const out=[],coll=[];for(let gj=cj*GW.CH;gj<(cj+1)*GW.CH;gj++)for(let gi=ci*GW.CH;gi<(ci+1)*GW.CH;gi++)treeAt(gi,gj,false,terrainH,out,coll);
+  {const r=mul32(ci*7919+cj*104729+17),x0=GW.x0+ci*TILE,z0=GW.z0+cj*TILE;
+   for(let i=0;i<420;i++){const x=x0+r()*TILE,z=z0+r()*TILE;if(lockW(x,z)>=.5||!inWorld(x,z,30))continue;const rd=roadDist(x,z);if(rd<2.6||nearStream(x,z,4))continue;
+     const rw=regionAt(x,z);let reg=0,best=.35;for(const e of rw)if(e[1]>best){best=e[1];reg=e[0];}
+     const f=layerF(x,z),near=rd<60,q=r();if(!near&&q<.55)continue;const y=terrainH(x,z)-.1;
+     if(reg===6||(reg===5&&q<.7))continue;   // nothing green grows in the Blight, little in the ash
+     const dull=reg===4||reg===5?.62:1;
+     if(f>.45){if(q<.5)out.push([x,y,z,R2(r,1.4,2.4),R2(r,.9,1.5),R_FERN[(r()*R_FERN.length)|0],.8*dull,.4]);else out.push([x,y,z,R2(r,2.2,3.6),R2(r,1.3,2.1),R_BUSH[0],.85*dull,.3]);continue;}
+     const pal=reg===1?[R_HEATH,R_FLOW,R_GRASS]:reg===8?[R_WHEAT,R_GRASS,R_FLOW]:[R_GRASS,R_FLOW,R_GRASS];
+     if(q<.12)out.push([x,y,z,R2(r,2.2,3.8),R2(r,1.3,2.2),R_BUSH[(r()*R_BUSH.length)|0],dull,.3]);
+     else{const L=pal[(r()*pal.length)|0];out.push([x,y,z,R2(r,1.2,2.2),R2(r,.7,1.3),L[(r()*L.length)|0],dull,.75]);}}}
+  // along the roads: big trees at the verge to frame the way, flowers and grass at its edge
+  if(WD){const x0=GW.x0+ci*TILE,z0=GW.z0+cj*TILE,x1=x0+TILE,z1=z0+TILE;
+   WD.roads.forEach((rd,ri)=>{const P=roads[rd.id];if(!P)return;for(let i=1;i<P.length-1;i++){const p=P[i];if(p[0]<x0||p[0]>=x1||p[1]<z0||p[1]>=z1)continue;
+     if(lockW(p[0],p[1])>=.5)continue;
+     const q=P[i+1],tx=q[0]-P[i-1][0],tz=q[1]-P[i-1][1],tl=Math.hypot(tx,tz)||1,nx=-tz/tl,nz=tx/tl,r=mul32(ri*100003+i*7919+11);
+     const rw=regionAt(p[0],p[1]);let reg=0,best=.35;for(const e of rw)if(e[1]>best){best=e[1];reg=e[0];}
+     if(i%11===0){const sd=r()<.5?-1:1,off=9.5+r()*8,x=p[0]+nx*sd*off,z=p[1]+nz*sd*off;
+       if(layerF(x,z)<.5&&roadDist(x,z)>8&&!nearStream(x,z,6)){const mix=reg===5||reg===6?MIX[reg]:reg===7?[['pine',.7],['birch',.3]]:reg===2?[['oak',.5],['pine',.3],['birch',.2]]:reg===1?[['gold',.35],['aut',.35],['birch',.3]]:[['oak',.55],['birch',.2],['aut',.15],['poplar',.1]];
+         const qq=r();let kind=mix[0][0],ac=0;for(const e of mix){ac+=e[1];if(qq<ac){kind=e[0];break;}}const k=KINDS[kind],sz=SIZE[kind],ht=lerp(sz[0],sz[1],.5+r()*.5)*1.1,h=terrainH(x,z);
+         if(h<470){out.push([x,h-.4,z,ht*k[1],ht,k[0][(r()*k[0].length)|0],SHADE[reg]*lerp(.9,1.05,r()),.4]);coll.push([x,z,ht*k[2]+.15]);}}}
+     if(i%2===0&&reg!==6&&!(reg===5&&r()<.7))for(const sd of [-1,1]){if(r()<.35)continue;const off=2.8+r()*7,x=p[0]+nx*sd*off+r()*2-1,z=p[1]+nz*sd*off+r()*2-1;if(nearStream(x,z,3.5))continue;
+       const pal=reg===1?[R_HEATH,R_FLOW,R_FLOW,R_GRASS]:reg===8?[R_WHEAT,R_FLOW,R_GRASS]:reg===4||reg===5?[R_GRASS]:[R_FLOW,R_GRASS,R_FLOW,R_HEATH],L=pal[(r()*pal.length)|0],dull=reg===4||reg===5?.65:1;
+       if(r()<.08)out.push([x,terrainH(x,z)-.1,z,R2(r,2.2,3.6),R2(r,1.3,2.1),R_BUSH[(r()*R_BUSH.length)|0],dull,.3]);
+       else out.push([x,terrainH(x,z)-.1,z,R2(r,1.2,2.2),R2(r,.7,1.3),L[(r()*L.length)|0],dull,.75]);}}});}
+  let g=null;
+  // steep ground near the roads: boulders, bushes and ferns, so banks and hillsides are never bare
+  {const r=mul32(ci*48271+cj*69621+5),x0=GW.x0+ci*TILE,z0=GW.z0+cj*TILE,K=kit();let rocks=0;
+   for(let i=0;i<160;i++){const x=x0+r()*TILE,z=z0+r()*TILE;if(lockW(x,z)>=.5||!inWorld(x,z,30))continue;const rd=roadDist(x,z);if(rd<3.5||nearStream(x,z,4))continue;
+     const h=terrainH(x,z),sl=Math.hypot(terrainH(x+3,z)-terrainH(x-3,z),terrainH(x,z+3)-terrainH(x,z-3))/6;if(sl<(rd<90?.3:.55))continue;
+     const rw=regionAt(x,z);let reg=0,best=.35;for(const e of rw)if(e[1]>best){best=e[1];reg=e[0];}
+     if(r()<.42&&rocks<14){const s=R2(r,.9,2.8);K.add(rockGeo(s,R2(r,.8,1.4),R2(r,.8,1.4),r()*90,R2(r,.5,.9)),'rock',x,h-s*.25,z,r()*6.3);coll.push([x,z,s*.8]);rocks++;continue;}
+     if(reg===6)continue;const dull=reg===4||reg===5?.62:1;
+     if(r()<.55)out.push([x,h-.1,z,R2(r,2.4,4),R2(r,1.4,2.4),R_BUSH[(r()*R_BUSH.length)|0],.9*dull,.3]);else out.push([x,h-.1,z,R2(r,1.4,2.4),R2(r,.9,1.5),R_FERN[(r()*R_FERN.length)|0],.85*dull,.4]);}
+   // open meadows: a lone tree here and there with bushes gathered round its foot, like hedgerow remnants
+   for(let i=0;i<10;i++){const x=x0+r()*TILE,z=z0+r()*TILE;if(lockW(x,z)>=.5||!inWorld(x,z,30)||layerF(x,z)>.3||roadDist(x,z)<12||nearStream(x,z,8))continue;
+     const rw=regionAt(x,z);let reg=0,best=.35;for(const e of rw)if(e[1]>best){best=e[1];reg=e[0];}if(reg===6)continue;
+     const h=terrainH(x,z);if(h>440)continue;const mx=reg===5?[['dead',1]]:reg===1?[['gold',.4],['aut',.3],['birch',.3]]:reg===7?[['pine',1]]:[['oak',.6],['birch',.2],['aut',.2]];
+     const q=r();let kind=mx[0][0],ac=0;for(const e of mx){ac+=e[1];if(q<ac){kind=e[0];break;}}const k=KINDS[kind],sz=SIZE[kind],ht=lerp(sz[0],sz[1],r());
+     out.push([x,h-.4,z,ht*k[1],ht,k[0][(r()*k[0].length)|0],SHADE[reg]*lerp(.9,1.05,r()),.4]);coll.push([x,z,ht*k[2]+.15]);
+     const dull=reg===4||reg===5?.62:1;for(let j=0;j<5;j++){const a=r()*6.283,d=R2(r,2,8),bx=x+Math.cos(a)*d,bz=z+Math.sin(a)*d;out.push([bx,terrainH(bx,bz)-.1,bz,R2(r,2.2,3.8),R2(r,1.3,2.2),R_BUSH[(r()*R_BUSH.length)|0],.9*dull,.3]);}}
+   if(rocks){g=new THREE.Group();K.build(M,g);scene.add(g);}}
+  return {m:out.length?buildBillboards(out):null,coll,g};}
+function tileTreesNear(x,z){const out=[];if(!WD)return out;const seen=new Set();for(const [a,b] of [[-8,-8],[8,-8],[-8,8],[8,8]]){const ci=Math.floor((x+a-GW.x0)/TILE),cj=Math.floor((z+b-GW.z0)/TILE),k=cj*GW.cx+ci;
+  if(seen.has(k))continue;seen.add(k);const t=TTRE.get(k);if(t)out.push(t.coll);}return out;}
+function tileDist(ci,cj){const cx=GW.x0+(ci+.5)*TILE,cz=GW.z0+(cj+.5)*TILE;return Math.max(0,Math.hypot(cx-P.x,cz-P.z)-TILE*.71);}
+function drop(map,k,o){if(o){const m=o.m!==undefined?o.m:o;if(m){scene.remove(m);m.geometry.dispose();}if(o.g){scene.remove(o.g);o.g.traverse(c=>{if(c.geometry)c.geometry.dispose();});}}map.delete(k);}
+let tileT=0,lastFull=[1e9,1e9];
+function updateTiles(dt,all){if(!WD)return;lodU.pp.value.set(P.x,P.z);for(const s of WSAILS)s.rotation.z-=dt*.6;tileT-=dt;if(tileT>0&&!all)return;tileT=.1;
+  // a long jump (a teleport, loading a save): fill in everything near at once
+  if(Math.hypot(P.x-lastFull[0],P.z-lastFull[1])>400){all=true;lastFull=[P.x,P.z];}
+  const ci0=Math.max(0,Math.floor((P.x-NEAR_R-GW.x0)/TILE)),ci1=Math.min(GW.cx-1,Math.floor((P.x+NEAR_R-GW.x0)/TILE)),cj0=Math.max(0,Math.floor((P.z-NEAR_R-GW.z0)/TILE)),cj1=Math.min(GW.cz-1,Math.floor((P.z+NEAR_R-GW.z0)/TILE));
+  const want=[];for(let cj=cj0;cj<=cj1;cj++)for(let ci=ci0;ci<=ci1;ci++){const d=tileDist(ci,cj);if(d<NEAR_R)want.push([d,ci,cj]);}
+  want.sort((a,b)=>a[0]-b[0]);let budget=all?1e9:2;
+  for(const [d,ci,cj] of want){const k=cj*GW.cx+ci;if(!TTER.has(k)&&budget>0){TTER.set(k,tileMesh(ci,cj));budget--;}
+    if(d<TREE_R&&!TTRE.has(k)&&(budget>0||all)){TTRE.set(k,tileTrees(ci,cj));budget--;}}
+  for(const [k,m] of TTER){if(tileDist(k%GW.cx,(k/GW.cx)|0)>NEAR_R+250)drop(TTER,k,m);}
+  for(const [k,t] of TTRE){if(tileDist(k%GW.cx,(k/GW.cx)|0)>TREE_R+200)drop(TTRE,k,t);}
+  if(all)lastFull=[P.x,P.z];}
+// the few trees that stand in from afar, for the whole world at once
+if(WD){const far=[];for(let gj=0;gj<GW.nz;gj++)for(let gi=0;gi<GW.nx;gi++)treeAt(gi,gj,true,(x,z)=>inN1(x,z)?terrainN1(x,z):rawH(x,z),far,null);
+  const m=buildBillboards(far,true);m.frustumCulled=false;}
+let LOCK_FAR=null;
+if(WD){const far=[],L=LOCK;for(let gj=Math.floor((L.z0-L.f-GW.z0)/6);gj<=Math.ceil((L.z1+L.f-GW.z0)/6);gj++)for(let gi=Math.floor((L.x0-L.f-GW.x0)/6);gi<=Math.ceil((L.x1+L.f-GW.x0)/6);gi++){
+    const r=mul32((gi*73856093)^(gj*19349663)^0x5bd1e995);if(r()>=FAR_FRAC)continue;const x=GW.x0+gi*6+r()*5.4,z=GW.z0+gj*6+r()*5.4;if(lockW(x,z)<.5)continue;
+    const d=forestD(x,z);if(r()>d||roadDist(x,z)<8||nearStream(x,z,8))continue;const h=terrainN1(x,z);if(h>470)continue;
+    const kind=oldW(x,z)>.3?pick2(r,['tall','oak','dark']):lowW(x,z)>.25?pick2(r,['birch','aut','gold','oak']):pick2(r,['pine','tall','oak','birch']),k=KINDS[kind],sz=SIZE[kind],ht=lerp(sz[0],sz[1],r())*1.15;
+    far.push([x,h-.4,z,ht*k[1],ht,k[0][(r()*k[0].length)|0],1,.3]);}
+  LOCK_FAR=buildBillboards(far,true);LOCK_FAR.frustumCulled=false;LOCK_FAR.visible=false;}
+function pick2(r,a){return a[(r()*a.length)|0];}
+// while the map is drawn, the same sparse trees stand everywhere, so no line shows where the hand-built valley ends
+function mapTrees(on){if(!WD)return;CORE_BB.visible=!on;if(LOCK_FAR)LOCK_FAR.visible=on;for(const [,t] of TTRE)if(t.m)t.m.visible=!on;}
 // windmill on the rise west of the village
 const mill=(()=>{let best=null,bs=-1e9;for(let i=0;i<400;i++){const x=R(-90,-25),z=R(-330,-280),rd=roadDist(x,z);if(rd<16)continue;let ok=true;for(const p of housePos)if(Math.hypot(p[0]-x,p[1]-z)<14)ok=false;for(const f of FLOORS)if(f.door&&Math.hypot(f.door[0]-x,f.door[1]-z)<9)ok=false;if(!ok)continue;const sc=terrainH(x,z)-Math.abs(rd-22)*.2;if(sc>bs){bs=sc;best={x,z};}}return best||{x:-70,z:-300};})();const sails=new THREE.Group();
 (function(){const y=terrainH(mill.x,mill.z),K=kit();const g=new THREE.Group();g.position.set(mill.x,y,mill.z);g.rotation.y=.35;
@@ -1630,8 +1847,8 @@ if(false)(function(){const K=kit(),a=roads.castle[14],b=roads.castle[18],ry=Math
   K.add(new THREE.BoxGeometry(.25,1.4,.25),'wood',BAR[0]+Math.sin(ry)*2.8,y+.6,BAR[1]+Math.cos(ry)*2.8);K.add(new THREE.BoxGeometry(.25,1.4,.25),'wood',BAR[0]-Math.sin(ry)*2.8,y+.6,BAR[1]-Math.cos(ry)*2.8);
   K.add(new THREE.BoxGeometry(6.6,.3,.15),'wood',BAR[0],y+1.1,BAR[1],ry);K.add(new THREE.BoxGeometry(6.6,.3,.15),'red',BAR[0],y+.6,BAR[1],ry);K.build(M,scene);})();
 // you may wander anywhere within a few hundred metres of a road or a settlement; cliffs, water and walls still stop you
-const ROAM=[[ISLE.x,ISLE.z]];for(const k in roads)for(let i=0;i<roads[k].length;i+=8)ROAM.push(roads[k][i]);
-function roamOK(x,z){if(x<N1.x0+40||z<N1.z0+40||x>N1.x0+N1.cell*(N1.nx-1)-40||z>N1.z0+N1.cell*(N1.nz-1)-40)return false;for(const p of ROAM){const dx=x-p[0],dz=z-p[1];if(dx<260&&dx>-260&&dz<260&&dz>-260&&dx*dx+dz*dz<67600)return true;}return false;}
+const ROAM=[[ISLE.x,ISLE.z]];for(const k in roads)for(let i=0;i<roads[k].length;i+=8)ROAM.push(roads[k][i]);if(WD)for(const p of WD.places)ROAM.push([p.x,p.z]);
+function roamOK(x,z){if(WD?!inWorld(x,z,40):!inN1(x,z))return false;for(const p of ROAM){const dx=x-p[0],dz=z-p[1];if(dx<260&&dx>-260&&dz<260&&dz>-260&&dx*dx+dz*dz<67600)return true;}return false;}
 function allowed(x,z){const q=walkHash.near(x,z);const dr=q?q[0]:99;
   if(Math.hypot(x-BAR[0],z-BAR[1])<5)return false;
   if(!roamOK(x,z)&&!inCourt(x,z)&&pierH(x,z)<-1e8)return false;
@@ -2472,33 +2689,16 @@ const DEV={noclip:false,open:false};
   const PLACES=[
     ['Start',roads.forest[0][0],roads.forest[0][1],yawTo(roads.forest[0][0],roads.forest[0][1],CX,CZ)],
     ['Forest edge (the view)',-9,-112,yawTo(-9,-112,CX,CZ)],
-    ['Bridge',BR.x+BR.ux*-16,BR.z+BR.uz*-16,Math.atan2(-BR.ux,-BR.uz)],
     ['Village',V[0]+6,V[1]+16,yawTo(V[0]+6,V[1]+16,V[0],V[1])],
-    ['Watermill',mp.x-14,mp.z+8,yawTo(mp.x-14,mp.z+8,mp.x,mp.z)],
-    ['Windmill',mill.x+10,mill.z+12,yawTo(mill.x+10,mill.z+12,mill.x,mill.z)],
-    ['Castle road (bottom)',roads.castle[10][0],roads.castle[10][1],yawTo(roads.castle[10][0],roads.castle[10][1],CX,CZ)],
-    ['Castle gardens',CX-20,CZ+120,yawTo(CX-20,CZ+120,CX,CZ)],
-    ['Castle road (top)',-146,CZ+40,yawTo(-146,CZ+40,GATEW.x,GATEW.z)],
     ['Castle gate',GATEW.x-14,GATEW.z,yawTo(GATEW.x-14,GATEW.z,GATEW.x,GATEW.z)],
-    ['Courtyard',...cwp(-40,-4),yawTo(...cwp(-40,-4),...cwp(10,10))],
-    ['Fountain',fp[0],fp[1],yawTo(fp[0],fp[1],...cwp(4,16.5))],
     ['Throne room',thr[0],thr[1],0],
-    ['Throne gallery',...T0.toW(4,T0.ID/2-3),yawTo(...T0.toW(4,T0.ID/2-3),...T0.toW(0,T0.tz)),T0.y0+T0.GY],
-    ['Royal bedchamber',...T0.toW(6,4),yawTo(...T0.toW(6,4),...T0.toW(0,-T0.ID/2+2.4)),T0.y0+T0.UY],
-    ...HALLIN.map(h=>{const p=h.kind==='feast'?h.toWd(h.iw/2-3,0):h.toWd(0,h.id/2-2);return [h.kind==='feast'?'Great hall':'Chapel',...p,yawTo(...p,...h.toWd(-h.iw/2,0))];}),
-    ['Watchtower door',TOWER_DOOR[0],TOWER_DOOR[1],TOWER_DOOR[2]],
     ['Watchtower top',HELIXES[0].x+HELIXES[0].r1+.6,HELIXES[0].z,yawTo(HELIXES[0].x,HELIXES[0].z,0,-60),HELIXES[0].top+.08],
-    ['East road (ford)',100,-289,yawTo(100,-289,140,-293)],
-    ['East valley',300,-262,yawTo(300,-262,500,-300)],
     ['Stone circle',OW.SC[0]-24,OW.SC[1]+4,yawTo(OW.SC[0]-24,OW.SC[1]+4,...OW.SC)],
-    ["Witch's cottage",612,-262,yawTo(612,-262,...OW.WC)],
-    ['Elder tree',OWD.elder[0]+Math.sin(OWD.elder[2])*16,OWD.elder[1]+Math.cos(OWD.elder[2])*16,yawTo(OWD.elder[0]+Math.sin(OWD.elder[2])*16,OWD.elder[1]+Math.cos(OWD.elder[2])*16,OWD.elder[0],OWD.elder[1])],
-    ['Fish pond',POND.x-60,POND.z-4,yawTo(POND.x-60,POND.z-4,POND.x,POND.z)],
     ['Inn',ip[0],ip[1],yawTo(ip[0],ip[1],INN[0],INN[1])],
-    ['Ruined watchtower',RUIN[0]+20,RUIN[1]+18,yawTo(RUIN[0]+20,RUIN[1]+18,RUIN[0],RUIN[1])],
-    ['Golden woods',-560,-360,yawTo(-560,-360,-900,-390)],
     ['Lake town',TOWN_C[0]+30,TOWN_C[1]+10,yawTo(TOWN_C[0]+30,TOWN_C[1]+10,TOWN_C[0],TOWN_C[1])],
-    ['Pier',PIER.x0-PIER.len+3,PIER.z,-Math.PI/2*-1],
+
+    ...(WD&&roads.w_south?[(()=>{const R=roads.w_south,i=Math.floor(R.length*.3),j=i+16;return ['Above Oakhurst (south road)',R[i][0],R[i][1],yawTo(R[i][0],R[i][1],R[j][0],R[j][1])];})()]:[]),
+    ...(WD?WD.places.filter(p=>p.kind!=='region'&&(lockW(p.x,p.z)<.5||['shrine','charcoal','farm','town'].includes(p.kind))).map(p=>{let best=null,bd=1e9;const want=Math.max(45,p.r*.8);for(const k in roads)for(const q of roads[k]){const d=Math.abs(Math.hypot(q[0]-p.x,q[1]-p.z)-want);if(d<bd){bd=d;best=q;}}const st=best&&bd<120?best:[p.x+want,p.z];return [p.name,st[0],st[1],yawTo(st[0],st[1],p.x,p.z),undefined,p];}):[]),
   ];
   const css=document.createElement('style');css.textContent=`
 #devBtn{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:calc(8px + env(safe-area-inset-right,0px));z-index:20;width:34px;height:34px;margin:0;padding:0;border-radius:6px;font-size:.95rem;background:rgba(22,20,34,.45);color:var(--fg);border:1px solid var(--line);opacity:.55}
@@ -2515,7 +2715,7 @@ const DEV={noclip:false,open:false};
   pan.innerHTML='<h3>TELEPORT</h3><div id="devPlaces"></div><h3>TIME OF DAY</h3><div class="row"><button data-t=".27">Dawn</button><button data-t=".5">Noon</button><button data-t=".74">Dusk</button><button data-t=".95">Night</button></div><input id="devTime" type="range" min="0" max="1" step=".005"><h3>MOVEMENT</h3><label><input id="devClip" type="checkbox"> No-clip (walk through anything, 4× speed)</label><div id="devPos"></div>';
   document.body.append(btn,pan);
   const list=pan.querySelector('#devPlaces');
-  for(const [name,x,z,yaw,y] of PLACES){const b=document.createElement('button');b.type='button';b.textContent=name;b.onclick=()=>go(x,z,yaw,y);list.appendChild(b);}
+  for(const [name,x,z,yaw,y,pl] of PLACES){const b=document.createElement('button');b.type='button';b.textContent=name;b.onclick=()=>{if(pl&&pl.bx!==undefined){let bd=1e9,q=null;for(const k in roads)for(const r of roads[k]){const d=Math.abs(Math.hypot(r[0]-pl.bx,r[1]-pl.bz)-(pl.kind==='shrine'?13:pl.kind==='charcoal'?26:38));if(d<bd){bd=d;q=r;}}go(q[0],q[1],yawTo(q[0],q[1],pl.bx,pl.bz));}else go(x,z,yaw,y);};list.appendChild(b);}
   function go(x,z,yaw,y){if(!started)begin();P.x=x;P.z=z;if(y!==undefined)FREF=y;P.y=groundH(x,z);FREF=null;P.yaw=yaw;P.pitch=.02;P.air=false;P.vy=0;}
   pan.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{DN.tod=+b.dataset.t;});
   const tr=pan.querySelector('#devTime');tr.oninput=()=>{DN.tod=+tr.value;};
@@ -2530,7 +2730,7 @@ const DEV={noclip:false,open:false};
 
 /* ================= the world map (M) ================= */
 const WMAP=(function(){
-  const X0=-1400,X1=752,Z0=-960,Z1=150,PITCH=.95,RW=matchMedia('(pointer:coarse)').matches?2400:3600;
+  const X0=WD?WB.x0+20:-1400,X1=WD?WB.x1-20:752,Z0=WD?WB.z0+20:-960,Z1=WD?WB.z1-20:150,PITCH=.95,RW=matchMedia('(pointer:coarse)').matches?2400:3600;
   const mcam=new THREE.OrthographicCamera(-1,1,1,-1,10,20000);let RH=1200;
   let base=null,open=false,raf=0,ZM=1,ZU=0,ZV=0,Wc=1,Hc=1;   // zoom, and the top-left corner of the view (0..1 of the whole map)
   const css=document.createElement('style');css.textContent=`
@@ -2557,12 +2757,12 @@ const WMAP=(function(){
     mcam.left=l;mcam.right=r;mcam.bottom=b;mcam.top=t;mcam.updateProjectionMatrix();RH=Math.round(RW*(t-b)/(r-l));
     const rt=new THREE.WebGLRenderTarget(RW,RH,{depthBuffer:true});
     // noon, no fog, no sky, nothing that follows the player
-    const tod=DN.tod;DN.tod=.5;updateDayNight(0,false);const fd=scene.fog.density;scene.fog.density=0;const bd=bbMat.uniforms.density.value;bbMat.uniforms.density.value=0;
+    mapTrees(true);const tod=DN.tod;DN.tod=.5;updateDayNight(0,false);const fd=scene.fog.density;scene.fog.density=0;const bd=bbMat.uniforms.density.value;bbMat.uniforms.density.value=0;
     const hid=[sky,cloudCyl,...mists.map(m=>m[0])].filter(o=>o&&o.visible);hid.forEach(o=>o.visible=false);const bg=scene.background;scene.background=new THREE.Color(0xe6d4a8);
     const tp=TORCH_U.i.value;TORCH_U.i.value=0;
     renderer.setRenderTarget(rt);renderer.setClearColor(0xe6d4a8,1);renderer.clear();renderer.render(scene,mcam);
     const px=new Uint8Array(RW*RH*4);renderer.readRenderTargetPixels(rt,0,0,RW,RH,px);renderer.setRenderTarget(null);rt.dispose();
-    hid.forEach(o=>o.visible=true);scene.background=bg;scene.fog.density=fd;bbMat.uniforms.density.value=bd;TORCH_U.i.value=tp;DN.tod=tod;updateDayNight(0,false);
+    mapTrees(false);hid.forEach(o=>o.visible=true);scene.background=bg;scene.fog.density=fd;bbMat.uniforms.density.value=bd;TORCH_U.i.value=tp;DN.tod=tod;updateDayNight(0,false);
     const c=document.createElement('canvas');c.width=RW;c.height=RH;const cg=c.getContext('2d'),img=cg.createImageData(RW,RH);
     for(let y=0;y<RH;y++)img.data.set(px.subarray((RH-1-y)*RW*4,(RH-y)*RW*4),y*RW*4);
     for(let k=3;k<img.data.length;k+=4)img.data[k]=255;
@@ -2620,7 +2820,8 @@ const WMAP=(function(){
   addEventListener('keydown',e=>{if(!started)return;if(e.code==='KeyM'&&!e.repeat){if(!open&&GAME.modal)return;show(!open);e.preventDefault();}else if(open&&e.code==='Escape')show(false);else if(open&&/^(Equal|NumpadAdd)$/.test(e.code))zoomAt(1.5,Wc/2,Hc/2);else if(open&&/^(Minus|NumpadSubtract)$/.test(e.code))zoomAt(1/1.5,Wc/2,Hc/2);});
   wrap.addEventListener('click',e=>{if(e.target===wrap)show(false);});
   btn.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();show(!open);},{passive:false});btn.addEventListener('click',()=>show(!open));
-  return {show,btn,isOpen:()=>open};})();
+  if(WD)for(const p of WD.places)if(p.name&&!p.hidden)LABELS.push([p.name,p.x,p.z,p.kind==='town'?'town':p.kind==='ruin'?'ruin':null]);
+  return {show,btn,isOpen:()=>open,LABELS};})();
 
 /* ================= loop ================= */
 const msg=$('#msg'),msgT=$('#msgT'),msgS=$('#msgS');let msgTimer=0,saidEdge=false,saidVillage=false,saidBar=0;
@@ -2636,7 +2837,7 @@ function frame(){
   const sp=((keys.ShiftLeft||keys.ShiftRight||joy.run)&&!GAME.sneak?9.5:4.8)*(DEV.noclip?4:1)*(GAME.speed||1);
   const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw),rx=Math.cos(P.yaw),rz=-Math.sin(P.yaw);
   let nx=P.x+(fx*f+rx*s)*sp*dt,nz=P.z+(fz*f+rz*s)*sp*dt;
-  if(!DEV.noclip)for(const t of trees){const dx=nx-t[0],dz=nz-t[1];if(dx>8||dx<-8||dz>8||dz<-8)continue;const r=t[2]+.35,dd=Math.hypot(dx,dz);if(dd<r&&dd>1e-4){nx=t[0]+dx/dd*r;nz=t[1]+dz/dd*r;}}
+  if(!DEV.noclip)for(const L of [trees,...tileTreesNear(nx,nz)])for(const t of L){const dx=nx-t[0],dz=nz-t[1];if(dx>8||dx<-8||dz>8||dz<-8)continue;const r=t[2]+.35,dd=Math.hypot(dx,dz);if(dd<r&&dd>1e-4){nx=t[0]+dx/dd*r;nz=t[1]+dz/dd*r;}}
   for(const n of NPCS){if(n.fly||n.wall)continue;const dx=nx-n.x,dz=nz-n.z;if(dx>3||dx<-3||dz>3||dz<-3)continue;const r=n.r+.3,dd=Math.hypot(dx,dz);if(dd<r&&dd>1e-4){nx=n.x+dx/dd*r;nz=n.z+dz/dd*r;}}
   FREF=P.y;if(!DEV.noclip)[nx,nz]=pushWalls(nx,nz,.42);
   const steep=(x,z)=>{const d=Math.hypot(x-P.x,z-P.z),g=groundH(x,z);if(P.air)return g>P.y+.3;if((floorH(x,z)>-1e8)!==(floorH(P.x,P.z)>-1e8)&&Math.abs(g-groundH(P.x,P.z))<1.3)return false;if(Math.abs(g-groundH(P.x,P.z))<.36&&floorH(x,z)>-1e8)return false;return d>1e-4&&Math.abs(g-groundH(P.x,P.z))>d*.9+.05;};
@@ -2676,21 +2877,166 @@ function frame(){
   {const sk=GAME.sheathK||0;swordG.position.y-=sk*.75;swordG.position.x+=sk*.12;swordG.rotation.set(-.18+sp2[3]+sk*.9,-.45+bk*.3,.1+sp2[4]+bk*1.15);swordG.visible=started&&sk<.97;}
   if(started&&!saidEdge&&P.z<-95){saidEdge=true;say('The Valley','');}
   if(started&&!saidVillage&&inVillage(P.x,P.z)){saidVillage=true;say('The village','');}
-  updateNPCs(dt);if(GAME.tick)GAME.tick(dt,T);updateEast(dt,T);updateDayNight(dt,started&&keys.KeyT);updateHands(dt,hx,hy,D,vs,m2,br,sway);updateDev();
+  updateTiles(dt);updateNPCs(dt);if(GAME.tick)GAME.tick(dt,T);updateEast(dt,T);updateDayNight(dt,started&&keys.KeyT);updateHands(dt,hx,hy,D,vs,m2,br,sway);updateDev();
   renderer.setRenderTarget(rt);renderer.autoClear=true;renderer.render(scene,camera);
   renderer.autoClear=false;renderer.clearDepth();renderer.render(viewScene,viewCam);
   renderer.setRenderTarget(null);renderer.autoClear=true;renderer.render(postScene,postCam);
   requestAnimationFrame(frame);
 }
+const WSAILS=[];
+/* ================= landmarks of the wider world =================
+   Every place in the world file gets something to see from the road: houses round a church spire, windmills on the
+   rises, the monastery's bell tower, the watchtower on the pass, burnt Ashford, the black tree at the heart of the Blight.
+   Built last, with their own dice, so nothing laid out before them moves. */
+if(WD){
+ const lr=mul32(90210),LR=(a,b)=>a+(b-a)*lr();
+ const pick2=(r,a)=>a[(r()*a.length)|0];
+ const LM=Object.assign({},M,{tent:new THREE.MeshLambertMaterial({color:0xd8ccb0,side:THREE.DoubleSide}),char:new THREE.MeshLambertMaterial({color:0x2a2422}),
+   blightBark:new THREE.MeshLambertMaterial({color:0x2a1830}),vein:new THREE.MeshBasicMaterial({color:0xb070e0,fog:true}),sail:new THREE.MeshLambertMaterial({color:0xe8dcc0,side:THREE.DoubleSide})});
+ const K=kit();
+ const ground=(x,z,r)=>{let lo=terrainH(x,z);for(let a=0;a<6.283;a+=1.05)lo=Math.min(lo,terrainH(x+Math.cos(a)*r,z+Math.sin(a)*r));return lo;};
+ const local=(x,z,rot)=>{const c=Math.cos(rot),s=Math.sin(rot);return (lx,lz)=>[x+lx*c+lz*s,z-lx*s+lz*c];};
+ const flatEnough=(x,z,r,tol)=>{const h0=terrainH(x,z);for(let a=0;a<6.283;a+=.79)if(Math.abs(terrainH(x+Math.cos(a)*r,z+Math.sin(a)*r)-h0)>tol)return false;return true;};
+ // a stone church: nave, a square tower at the west end, a tall slate spire you can see from a long way off
+ const KEEP=[];
+ function church(x,z,rot,s,ruined){KEEP.push([x,z,15*s]);const W=local(x,z,rot),nw=8*s,nd=16*s,nh=8*s,y=ground(x,z,9*s)-.3,key=ruined?'stoneDark':'ashlar';
+   K.add(boxUV(nw,nh+1.5,nd,3),key,x,y+nh/2-.75,z,rot);if(!ruined)roofOn(K,nw,nd,nh+.75,4.6*s,'slate',key,.7,rot,x,y-.75,z);
+   const [tx,tz]=W(0,-nd/2-2.4*s),th=ruined?12*s:21*s;K.add(boxUV(5*s,th,5*s,3),key,tx,y+th/2-.5,tz,rot);
+   if(!ruined){K.add(new THREE.ConeGeometry(3.9*s,12*s,4,1,true),'slate',tx,y+th-.5+6*s,tz,rot+Math.PI/4);const [lx,lz]=W(0,-nd/2-4.92*s);K.add(new THREE.PlaneGeometry(1,1.6),'lit',lx,y+th-4*s,lz,rot+Math.PI);}
+   for(const lz of [-nd/4,nd/4]){const [cx,cz]=W(0,lz);trees.push([cx,cz,nw*.62]);}trees.push([tx,tz,3.4*s]);}
+ // a windmill on a rise, sails turning
+ function windmill(x,z,rot){const y=ground(x,z,4)-.2,g=new THREE.Group();g.position.set(x,y,z);g.rotation.y=rot;const k=kit();
+   k.add(suv(new THREE.CylinderGeometry(3,4.2,14,10,1,true),4,4),'stone',0,5.5,0);k.add(suv(new THREE.ConeGeometry(3.7,4.5,10,1,true),4,2),'thatch',0,14.6,0);
+   k.add(new THREE.PlaneGeometry(1.2,2.2),'wood',0,1.4,4.05);k.add(new THREE.PlaneGeometry(.8,1),'lit',0,8,3.55);k.build(LM,g);
+   const sg=new THREE.Group(),sk=kit();for(let i=0;i<4;i++){const a=i*Math.PI/2;sk.add(new THREE.BoxGeometry(.35,9.5,.25),'wood',Math.sin(a)*4.8,Math.cos(a)*4.8,0,0,0,-a);
+     const sl=new THREE.PlaneGeometry(1.8,7.6);sl.translate(1.15,0,0);sk.add(sl,'sail',Math.sin(a)*5.4,Math.cos(a)*5.4,.15,0,0,-a);}
+   sk.build(LM,sg);sg.position.set(0,12.5,3.9);sg.rotation.z=lr()*6;g.add(sg);scene.add(g);WSAILS.push(sg);trees.push([x,z,4.6]);}
+ // the watchtower on the pass: a tall round tower, battlements, a red cap
+ function watchtower(x,z){const y=ground(x,z,5)-.4;K.add(suv(new THREE.CylinderGeometry(4.2,4.9,24,12,1,true),5,6),'stone',x,y+12,z);
+   K.add(new THREE.CylinderGeometry(4.25,4.25,.4,12),'wood',x,y+23.8,z);
+   for(let i=0;i<10;i++){const a=i/10*6.283;K.add(new THREE.BoxGeometry(1.4,1.6,1),'stone',x+Math.cos(a)*4.4,y+24.6,z+Math.sin(a)*4.4,-a);}
+   K.add(suv(new THREE.ConeGeometry(4.6,6.5,12,1,true),4,2),'red',x,y+28.6,z);K.add(new THREE.PlaneGeometry(1.4,2.4),'door',x,y+1.2,z+4.86);trees.push([x,z,5.2]);}
+ // a roofless shell: broken walls, and for burnt houses black beams fallen across
+ function ruin(x,z,rot,burnt){const w=LR(6,9),d=LR(8,11.5),y=ground(x,z,6)-.25,W=local(x,z,rot),key=burnt?'stoneDark':'rubble';
+   const side=(ax,az,bx,bz)=>{const L=Math.hypot(bx-ax,bz-az),n=3,ry=Math.atan2(bx-ax,bz-az)+Math.PI/2;for(let i=0;i<n;i++){if(lr()<.22)continue;const t0=i/n,t1=(i+1)/n,h=LR(1.2,burnt?5:3.8);
+     const [p0x,p0z]=W(ax+(bx-ax)*t0,az+(bz-az)*t0),[p1x,p1z]=W(ax+(bx-ax)*t1,az+(bz-az)*t1);K.add(boxUV(L/n,h,.6,3),key,(p0x+p1x)/2,y+h/2-.3,(p0z+p1z)/2,rot+ry);indexWall([p0x,p0z,p1x,p1z]);}};
+   side(-w/2,-d/2,w/2,-d/2);side(w/2,-d/2,w/2,d/2);side(w/2,d/2,-w/2,d/2);side(-w/2,d/2,-w/2,-d/2);
+   if(burnt)for(let i=0;i<3;i++){const [bx,bz]=W(LR(-w/3,w/3),LR(-d/3,d/3));K.add(new THREE.BoxGeometry(.35,.35,LR(4,7)),'char',bx,y+LR(.4,2.2),bz,rot+LR(-.5,.5),LR(-.5,.5),LR(-.3,.3));}}
+ function mine(x,z,rot){const W=local(x,z,rot),y=ground(x,z,6);
+   for(let i=0;i<5;i++){const [rx,rz]=W(LR(-9,9),LR(-6,-14));K.add(rockGeo(LR(3,6),LR(.8,1.3),LR(.8,1.3),lr()*50,LR(.6,1)),'rock',rx,y+LR(0,1.5),rz,lr()*6);trees.push([rx,rz,4]);}
+   const [px,pz]=W(0,-3.5);for(const sx of [-1.6,1.6]){const [qx,qz]=W(sx,-3.5);K.add(new THREE.BoxGeometry(.5,3.6,.5),'wood',qx,y+1.8,qz,rot);}
+   K.add(new THREE.BoxGeometry(4.2,.5,.6),'wood',px,y+3.7,pz,rot);{const [mx,mz]=W(0,-3.8);K.add(new THREE.PlaneGeometry(2.8,3.4),'iron',mx,y+1.7,mz,rot);}
+   for(let i=0;i<4;i++){const [sx,sz]=W(LR(-6,6),LR(2,8));K.add(rockGeo(LR(.8,1.6),1,1,lr()*30,.5),'rock',sx,terrainH(sx,sz)-.1,sz,lr()*6);}}
+ function tents(x,z,n){for(let i=0;i<n;i++){const a=lr()*6.283,r=LR(3,14),tx=x+Math.cos(a)*r,tz=z+Math.sin(a)*r;K.add(new THREE.ConeGeometry(LR(1.8,2.4),LR(2.2,2.8),4,1,true),'tent',tx,terrainH(tx,tz)+1.2,tz,lr()*3);trees.push([tx,tz,1.8]);}}
+ // the heart of the Blight: one enormous black tree with violet light in its cracks
+ function blightTree(x,z){const y=ground(x,z,6)-1;K.add(new THREE.CylinderGeometry(2.2,4.2,26,7),'blightBark',x,y+13,z);
+   for(let i=0;i<9;i++){const a=i/9*6.283+lr()*.4,tilt=LR(.6,1.1),L=LR(10,18),h=LR(16,25),ex=Math.sin(a)*Math.sin(tilt)*L/2,ez=Math.cos(a)*Math.sin(tilt)*L/2,ey=Math.cos(tilt)*L/2;
+     K.add(new THREE.CylinderGeometry(.5,1.3,L,5),'blightBark',x+ex,y+h+ey,z+ez,a,tilt,0);}
+   for(let i=0;i<6;i++){const a=i/6*6.283+.3;K.add(new THREE.CylinderGeometry(.6,1.6,9,5),'blightBark',x+Math.sin(a)*4.5,y+1,z+Math.cos(a)*4.5,a,1.25,0);}
+   for(let i=0;i<14;i++){const a=lr()*6.283,hh=LR(2,20);K.add(new THREE.BoxGeometry(.25,LR(1.5,4),.25),'vein',x+Math.sin(a)*(2.4+ (26-hh)*.07),y+hh,z+Math.cos(a)*(2.4+(26-hh)*.07),a);}
+   trees.push([x,z,4.6]);}
+
+ function offRoad(p,need,r0,r1){let best=null,bs=-1e9;for(let i=0;i<220;i++){const a=lr()*6.283,r=LR(r0,r1),x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(!inWorld(x,z,60)||nearStream(x,z,need*.6))continue;
+   const rd=roadDist(x,z),fl=flatEnough(x,z,need*.5,2.2)?1:0,sc=Math.min(rd,need*1.4)*2+fl*40-r*.3;if(rd>=need&&sc>bs){bs=sc;best=[x,z];}}return best||[p.x+need*1.5,p.z];}
+ const faceRoad=(x,z)=>{let bd=1e9,bq=null;for(const k in roads)for(let i=0;i<roads[k].length;i+=3){const q=roads[k][i],d=(q[0]-x)**2+(q[1]-z)**2;if(d<bd){bd=d;bq=q;}}return bq?Math.atan2(bq[0]-x,bq[1]-z):0;};
+ // a wayside shrine: a stone cross on a stepped plinth, a bench, flowers
+ function shrine(x,z){const y=ground(x,z,2)-.1,ry=faceRoad(x,z);K.add(boxUV(2.4,.5,2.4,2),'ashlar',x,y+.25,z,ry);K.add(boxUV(1.6,.45,1.6,2),'ashlar',x,y+.7,z,ry);
+   K.add(boxUV(.5,4.4,.5,2),'ashlar',x,y+3.1,z,ry);K.add(boxUV(2.2,.45,.5,2),'ashlar',x,y+4.3,z,ry);roofOn(K,1.2,1.2,5.4,.9,'slate','wood',.3,ry,x,y,z);trees.push([x,z,1.4]);
+   const W=local(x,z,ry),[bx,bz]=W(0,2.6);K.add(new THREE.BoxGeometry(2.2,.12,.5),'wood',bx,terrainH(bx,bz)+.48,bz,ry);for(const s of [-.9,.9]){const [qx,qz]=W(s,2.6);K.add(new THREE.BoxGeometry(.14,.45,.4),'wood',qx,terrainH(qx,qz)+.22,qz,ry);}
+   for(let i=0;i<10;i++){const a=lr()*6.283,d=LR(1.6,3.4),fx=x+Math.cos(a)*d,fz=z+Math.sin(a)*d;LBB.push([fx,terrainH(fx,fz)-.1,fz,LR(1.1,1.8),LR(.6,1),R_FLOW[(lr()*R_FLOW.length)|0],1,.7]);}}
+ // charcoal burners: smoking mounds, stacked logs, a bark hut
+ function charcoal(x,z){const y=ground(x,z,10);for(let i=0;i<2;i++){const a=lr()*6.283,mx=x+Math.cos(a)*7,mz=z+Math.sin(a)*7;K.add(new THREE.SphereGeometry(4,10,6,0,6.283,0,1.4),'char',mx,terrainH(mx,mz)-1.6,mz);trees.push([mx,mz,3.6]);
+     smokeAt(mx,terrainH(mx,mz)+2.4,mz);}
+   for(let i=0;i<3;i++){const [lx,lz]=[x+LR(-9,9),z+LR(-9,9)];for(let j=0;j<4;j++)K.add(new THREE.CylinderGeometry(.22,.22,3.2,6),'wood',lx,terrainH(lx,lz)+.25+j*.42,lz+j*.0,0,0,1.5708);trees.push([lx,lz,1.6]);}
+   house(x+10,z-6,lr()*6.283,{roof:'thatch',w:5,d:6.5,h:3.6});}
+ // a farmstead: farmhouse, barn, a haystack or two, fields round it
+ function farm(x,z){const ry=faceRoad(x,z);house(x,z,ry+(lr()<.5?Math.PI/2:0),{roof:pick2(lr,['thatch','red','brown'])});
+   const W=local(x,z,ry),[bx,bz]=W(LR(14,18),LR(-6,6));if(roadDist(bx,bz)>9)house(bx,bz,ry+Math.PI/2,{roof:'thatch',w:9,d:12,h:5.5});
+   for(let i=0;i<3;i++){const [hx,hz]=W(LR(-20,-10),LR(-14,14));if(roadDist(hx,hz)<8)continue;K.add(new THREE.ConeGeometry(2.2,3.6,8),'thatch',hx,terrainH(hx,hz)+1.6,hz);trees.push([hx,hz,2]);}}
+ const LBB=[],SMOKE0=smokeSpots.length;function smokeAt(x,y,z){smokeSpots.push(new THREE.Vector3(x,y,z));}
+ // houses round a centre, facing in, kept off the roads and on level ground
+ function town(p,n,o){let made=0;for(let i=0;i<900&&made<n;i++){const a=lr()*6.283,r=p.r*LR(.25,1),x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;
+   if(roadDist(x,z)<9||nearStream(x,z,9)||!flatEnough(x,z,5,1.4))continue;if(housePos.some(q=>Math.hypot(q[0]-x,q[1]-z)<13)||KEEP.some(k=>Math.hypot(k[0]-x,k[1]-z)<k[2]+6))continue;
+   if(o&&o.ruins){ruin(x,z,Math.atan2(p.x-x,p.z-z)+(lr()<.5?Math.PI/2:0),true);housePos.push([x,z]);made++;continue;}
+   house(x,z,Math.atan2(p.x-x,p.z-z)+(lr()<.5?Math.PI/2:0)+LR(-.2,.2),{roof:o&&o.roof?o.roof[(lr()*o.roof.length)|0]:undefined,gap:12});made++;}}
+ // somewhere a little above the town, off the road, for a windmill
+ function rise(p,r0,r1){let best=null,bh=-1e9;for(let i=0;i<120;i++){const a=lr()*6.283,r=LR(r0,r1),x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(roadDist(x,z)<14||nearStream(x,z,12)||!inWorld(x,z,60))continue;
+   const h=terrainH(x,z);if(h>bh&&flatEnough(x,z,4,1.6)){bh=h;best=[x,z];}}return best;}
+ for(const p of WD.places){const lw=lockW(p.x,p.z);if(lw>.5&&!['camp','shrine','charcoal','farm'].includes(p.kind))continue;
+   if(p.kind==='town'){
+     if(p.id==='ashford'){town(p,12,{ruins:true});church(p.x+14,p.z-10,.4,1,true);continue;}
+     if(p.r>=80){let c=null;for(let i=0;i<80&&!c;i++){const a=lr()*6.283,r=LR(8,p.r*.4),x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(roadDist(x,z)>18&&!housePos.some(q=>Math.hypot(q[0]-x,q[1]-z)<16)&&flatEnough(x,z,8,i<40?2:4))c=[x,z];}
+       if(c){church(c[0],c[1],Math.atan2(p.x-c[0],p.z-c[1]),1.3);housePos.push(c);}}
+     town(p,Math.max(4,Math.round(p.r/8)),{roof:p.id==='amberley'?['thatch','red','thatch']:p.id==='highfold'?['slate','slate','brown']:['red','brown','thatch','slate']});
+     if(p.r>=55){const w=rise(p,p.r*1.1,p.r*2.2);if(w)windmill(w[0],w[1],lr()*6.283);}
+     if(p.id==='highfold'&&!(p.r>=80))church(p.x+18,p.z+12,.3,.75);}
+   else if(p.kind==='monastery'){const [mx,mz]=offRoad(p,42,40,85);p.bx=mx;p.bz=mz;const mr=faceRoad(mx,mz)+Math.PI;church(mx,mz,mr,1.35);const W=local(mx,mz,mr),y=ground(mx,mz,10);
+     for(const [ax,az,bx,bz] of [[-16,-22,16,-22],[16,-22,16,24],[16,24,-16,24],[-16,24,-16,4]]){const L=Math.hypot(bx-ax,bz-az),[p0x,p0z]=W(ax,az),[p1x,p1z]=W(bx,bz);
+       K.add(boxUV(L,2.6,.7,3),'rubble',(p0x+p1x)/2,ground((p0x+p1x)/2,(p0z+p1z)/2,1)+1.1,(p0z+p1z)/2,mr+Math.atan2(bx-ax,bz-az)+Math.PI/2);indexWall([p0x,p0z,p1x,p1z]);}
+     const [hx,hz]=W(-24,10);house(hx,hz,mr+Math.PI/2,{roof:'slate'});}
+   else if(p.kind==='tower')watchtower(p.x,p.z);
+   else if(p.kind==='ruin'){const [x,z]=offRoad(p,22,25,55),ry=faceRoad(x,z);p.bx=x;p.bz=z;ruin(x,z,ry,false);const W=local(x,z,ry),[x2,z2]=W(17,4);if(roadDist(x2,z2)>12)ruin(x2,z2,ry+Math.PI/2,false);}
+   else if(p.kind==='hut'){const [x,z]=offRoad(p,16,18,40);p.bx=x;p.bz=z;house(x,z,faceRoad(x,z),{roof:'thatch'});}
+   else if(p.kind==='shrine'){const [x,z]=offRoad(p,5.5,4,14);p.bx=x;p.bz=z;clearPlants(x,z,15,15);shrine(x,z);}
+   else if(p.kind==='charcoal'){const [x,z]=offRoad(p,18,8,30);p.bx=x;p.bz=z;clearPlants(x+3,z-2,20,18);charcoal(x,z);}
+   else if(p.kind==='farm'){const [x,z]=offRoad(p,20,10,35);p.bx=x;p.bz=z;clearPlants(x,z,32,32);farm(x,z);}
+   else if(p.kind==='mine')mine(p.x,p.z,lr()*6.283);
+   else if(p.kind==='camp')tents(p.x,p.z,8);
+   else if(p.kind==='blight')blightTree(p.x,p.z);}
+ {const gapW=[];for(const p of STREAM)if(p[0]<-250)gapW.push([p,4.2]);const mr=WRIV.find(r=>r.id==='r_main');if(mr)for(let i=0;i<Math.min(mr.pts.length,110);i++)gapW.push([mr.pts[i],mr.w]);
+   for(let i=0;i<gapW.length;i+=2){const [p,w]=gapW[i];if(lr()<.45)continue;const a=lr()*6.283,inW=lr()<.45,d=inW?LR(0,w*.8):LR(w+1,w+7),x=p[0]+Math.cos(a)*d,z=p[1]+Math.sin(a)*d;
+     if(roadDist(x,z)<6)continue;const s=inW?LR(.6,1.5):LR(1,2.6);K.add(rockGeo(s,LR(.8,1.4),LR(.8,1.4),lr()*80,LR(.5,.8)),'rock',x,(inW?p[2]-.5:terrainH(x,z))-s*.15,z,lr()*6.3);if(!inW)trees.push([x,z,s*.8]);}}
+  // the bridges themselves: an arched stone deck with parapets, piers on each bank
+ for(const b of WBR){const ry=Math.atan2(b.ux,b.uz),n=10,seg=2*b.hl/n,P=(al,ac,y)=>[b.x+b.ux*al-b.uz*ac,y,b.z+b.uz*al+b.ux*ac];
+   for(let i=0;i<n;i++){const a0=-b.hl+i*seg,a1=a0+seg,am=(a0+a1)/2,y0=deckH(b,a0),y1=deckH(b,a1),pitch=-Math.atan((y1-y0)/seg),ym=(y0+y1)/2;
+     {const [x,y,z]=P(am,0,ym-.4);K.add(new THREE.BoxGeometry(5.8,.8,seg+.06),'ashlar',x,y,z,ry,pitch);}
+     for(const s of [-1,1]){const [x,y,z]=P(am,s*2.75,ym+.42);K.add(new THREE.BoxGeometry(.4,.95,seg+.06),'ashlar',x,y,z,ry,pitch);}}
+   // the arch beneath, springing from the banks
+   const span=b.hl*.82,crown=deckH(b,0)-.8,base=Math.min(b.lv-.6,crown-span*.5),rise=crown-base,m=9;
+   for(let i=0;i<m;i++){const t0=i/m,t1=(i+1)/m,al0=-span+2*span*t0,al1=-span+2*span*t1,y0=base+rise*Math.sin(Math.PI*t0),y1=base+rise*Math.sin(Math.PI*t1),L=Math.hypot(al1-al0,y1-y0);
+     const [x,y,z]=P((al0+al1)/2,0,(y0+y1)/2-.35);K.add(new THREE.BoxGeometry(5.4,.8,L+.1),'stone',x,y,z,ry,-Math.atan2(y1-y0,al1-al0));}
+   // piers fill from the arch's feet up to the deck, so no daylight shows under the ends
+   for(const s of [-1,1]){const al=s*(b.hl-1.6),top=deckH(b,al),bot=Math.min(base,terrainH(...P(al,0,0).filter((_,i)=>i!==1)))-1,[x,,z]=P(al,0,0);K.add(new THREE.BoxGeometry(5.6,top-bot,3.4),'stone',x,(top+bot)/2-.5,z,ry);}}
+
+ K.build(LM,scene);
+ /* ---------- life on the roads: travellers, a pedlar, a stranded carter, deer in the glades ---------- */
+ {const NAMES={traveller:'Traveller',merchant:'Carter',villager:'Pilgrim',woman:'Pilgrim',farmer:'Farmhand',soldier:'Soldier'};
+  const roadLen=P=>{let L=0;for(let i=1;i<P.length;i++)L+=Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]);return L;};
+  WD.roads.forEach((rd,ri)=>{const P=roads[rd.id];if(!P||P.length<20)return;const L=roadLen(P),n=L>900?2:L>350?1:0;
+    const path=[];for(let i=0;i<P.length;i+=8)path.push([P[i][0],P[i][1]]);path.push([P[P.length-1][0],P[P.length-1][1]]);
+    for(let k=0;k<n;k++){const role=pick2(lr,['traveller','merchant','villager','woman','farmer','traveller']),wp=Math.floor((k+.3+lr()*.4)/n*(path.length-1));
+      spawn(role,path[wp][0],path[wp][1],{type:'patrol',path,pingpong:true,wp,speed:LR(.9,1.2),name:NAMES[role]});}});
+  // a pedlar who walks the south and west roads with a pack, and sells as he goes
+  {const P=roads.w_monamber||roads.w_south;if(P){const path=[];for(let i=0;i<P.length;i+=8)path.push([P[i][0],P[i][1]]);const n=spawn('merchant',path[3][0],path[3][1],{type:'patrol',path,pingpong:true,wp:3,speed:.8,name:'Pedlar'});n.shop='pedlar';}}
+  // a carter whose cart has thrown a wheel, waiting by the road
+  {const P=roads.w_ashsouth;if(P){const i=Math.floor(P.length*.62),p=P[i],q=P[i+4],tx=q[0]-p[0],tz=q[1]-p[1],tl=Math.hypot(tx,tz),nx=-tz/tl,nz=tx/tl,cx=p[0]+nx*6,cz=p[1]+nz*6,ry=Math.atan2(tx,tz),y=terrainH(cx,cz);
+    const W=local(cx,cz,ry);K.add(new THREE.BoxGeometry(2,.8,4),'wood',cx,y+1.05,cz,ry,0,.12);
+    for(const [a,b] of [[1.15,1.3],[1.15,-1.3],[-1.15,-1.3]]){const [wx,wz]=W(a,b);K.add(new THREE.CylinderGeometry(.6,.6,.18,10),'wood',wx,y+.6,wz,ry,0,Math.PI/2);}
+    {const [wx,wz]=W(-2.1,1.6);K.add(new THREE.CylinderGeometry(.6,.6,.18,10),'wood',wx,y+.12,wz,ry);}
+    for(let j=0;j<3;j++){const [bx,bz]=W(LR(-.6,.6),LR(-1.2,1.2));K.add(new THREE.BoxGeometry(.7,.6,.7),'wood',bx,y+1.75,bz,ry+LR(-.3,.3));}
+    trees.push([cx,cz,2.2]);const [sx,sz]=W(-1.8,-2.6);spawn('merchant',sx,sz,{type:'stand',face:ry+Math.PI/2,name:'Stranded carter'});}}
+  // deer grazing in the open glades beside the roads
+  for(let i=0,h=0;i<400&&h<8;i++){const rd=WD.roads[(lr()*WD.roads.length)|0],P=roads[rd.id];if(!P)continue;const p=P[(lr()*P.length)|0],a=lr()*6.283,d=LR(45,110),x=p[0]+Math.cos(a)*d,z=p[1]+Math.sin(a)*d;
+    if(!inWorld(x,z,80)||lockW(x,z)>.3||layerF(x,z)>.35||roadDist(x,z)<35||nearStream(x,z,10))continue;const rw=regionAt(x,z);if(rw.some(e=>(e[0]===5||e[0]===6)&&e[1]>.3))continue;
+    const k=2+((lr()*3)|0);for(let j=0;j<k;j++)spawn('deer',x+LR(-8,8),z+LR(-8,8),{anim:'deer',stag:j===0&&lr()<.6,type:'wander',radius:22,home:[x,z],speed:.9,talk:false,r:.5});h++;}}
+ if(LBB.length)buildBillboards(LBB);
+ smokeSpots.slice(SMOKE0).forEach((sp,k)=>{for(let i=0;i<10;i++){const s=new THREE.Sprite(new THREE.SpriteMaterial({map:smokeTex,transparent:true,alphaTest:.3,depthWrite:false,opacity:.4}));scene.add(s);smoke.push({s,p:sp,t:i/10,k:k+500,j:lr()});}});}
+
+updateTiles(0,true);
 requestAnimationFrame(frame);
-window.__valley={LAKEY,PIER,ISLE,FARMS,fieldAt,pondD,lakeD,DN,torch(v){torchUp=v;torchK=v?1:0;},swing(t){swingT=t;},tp(x,z,yaw,pitch){P.x=x;P.z=z;P.y=groundH(x,z);if(yaw!==undefined)P.yaw=yaw;if(pitch!==undefined)P.pitch=pitch;},P,roads,terrainH,begin,count:()=>bb.length,
+window.__valley={WB,WD,LOCK,lockW,WBR,clearPlants,forestAt,get tiles(){return [TTER.size,TTRE.size];},
+  bake(){const nx=WB.nx,nz=WB.nz,h=new Array(nx*nz),f=new Array(nx*nz);for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const x=WB.x0+i*WB.cell,z=WB.z0+j*WB.cell;h[j*nx+i]=+formulaH(x,z).toFixed(1);f[j*nx+i]=+forestD(x,z).toFixed(3);}
+    const dec=(a,s)=>a.filter((p,i)=>i%s===0||i===a.length-1).map(p=>[+p[0].toFixed(1),+p[1].toFixed(1)]);
+    const ring=(c,d,lim)=>shoreRing(c,d,lim,90).map((r,i)=>{const a=i/90*6.2832;return [+(c.x+Math.cos(a)*c.rx*r).toFixed(1),+(c.z+Math.sin(a)*c.rz*r).toFixed(1)];});
+    return {nx,nz,x0:WB.x0,z0:WB.z0,cell:WB.cell,lock:LOCK,h,f,roads:Object.keys(ROAD_DEF).filter(k=>!WD||!WD.roads.some(r=>r.id===k)).map(k=>({id:k,pts:dec(roads[k],4)})),water:[dec(STREAM,3),dec(BECK,3)],lakes:[ring(LK,lakeD,1),ring(POND,pondD,1)],labels:WMAP.LABELS.map(l=>[l[0],Math.round(l[1]),Math.round(l[2])]),streamEnd:STREAM[STREAM.length-1].slice(0,3)};},
+  LAKEY,PIER,ISLE,FARMS,fieldAt,pondD,lakeD,DN,torch(v){torchUp=v;torchK=v?1:0;},swing(t){swingT=t;},tp(x,z,yaw,pitch){P.x=x;P.z=z;P.y=groundH(x,z);if(yaw!==undefined)P.yaw=yaw;if(pitch!==undefined)P.pitch=pitch;},P,roads,terrainH,begin,count:()=>bb.length,
   GAME,NPCS,FLOORS,scene,groundH,allowed,roadDist,inVillage,inCourt,nearStream,trees,say,talkHint,talkBtn,talkBox,keys,canvas,coarse,V,TOWN_C,get INN(){return INN;},get torch(){return torchUp;},wallHit,castleBlocked,floorH,cw,CTOP,CS,spawn,GATEW,RUIN,M,kit,boxUV,roofOn,indexWall,get swingT(){return swingT;},get started(){return started;},get near(){return nearNPC;}};
 })();
 </script>
-<script src="people-core.js?v=2"></script>
-<script src="game.js?v=9"></script>
+<script src="people-core.js?v=3"></script>
+<script src="game.js?v=11"></script>
 <script src="people.js?v=5"></script>
-<script src="quests.js?v=2"></script>
+<script src="quests.js?v=3"></script>
 <script src="menu.js?v=1"></script>
 </body>
 </html>

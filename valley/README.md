@@ -29,3 +29,15 @@ Browser checks: arrival screen, entering the world, conversation and family topi
 ## Scope
 
 This is a deterministic social simulation with contextual authored dialogue, not a generative language model. Relationships are established at world creation; people do not yet form new marriages, change jobs, or invent quests. Fixed-post characters do not yet have fully navigable off-duty routes. Local steering is inherited from the game, not a full navigation mesh. These boundaries are intentional extension points; avoid substituting random dialogue for persistent world state.
+
+## The world file and the map editor
+
+Everything outside the hand-built valley comes from `world.js`, which `editor.html` reads and writes. It holds a height map, forest density and region, each on a 12 m grid, plus the roads, rivers and places of the wider world. Inside the `lock` rectangle (with a feathered edge) the hand-written shapes in `index.html` still decide everything, so the valley looks exactly as built; the world file takes over beyond it. Without `world.js` the game falls back to the hand-built valley alone.
+
+Regions (valley, amber, green, oldwood, rot, ash, blight, north, warm) tint the land and choose which trees grow. Edges blend over about 150 m.
+
+Outside the hand-built grid the land loads in 192 m tiles around the player: fine terrain within 1150 m, trees and ground cover within 720 m. Beyond that, one coarse mesh of the whole world sinks out of sight under the tiles, a sparse forest stands in from afar, and the old mountains continue past the world's edge.
+
+Open `/valley/editor.html` from the local server. Brushes raise, lower, smooth and level the land, thicken or clear forest, and paint regions. Roads, rivers and places are drawn as lines and points. **Try it in the game** opens the game with the unsaved map (`index.html?draft=1`); **Save world.js** writes the file (in Chrome it can save straight over `valley/world.js`).
+
+`tools/bake.cjs` and `tools/genworld.py` made the first world file from the hand-built valley and the sketch. Running them again replaces anything painted in the editor.

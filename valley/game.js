@@ -142,6 +142,12 @@ function place(kind,x,z,sc,y,owned){const sp=new THREE.Sprite(mat(kind));sp.cent
   for(const [lx,lz,g] of STALLS){const [x,z]=V.cw(lx,lz-.65/V.CS);g.forEach((kind,i)=>place(kind,x+(i-(g.length-1)/2)*(g.length===2?1.2:.6),z,.3,V.CTOP+1.12,true));}   // each sits on one of the stall's crates
 })();
 
+// along the roads of the wider world: herbs and flowers in the verges, mushrooms and berries where the woods come close
+if(V.WD){let s2=4711;const r2=()=>{s2|=0;s2=s2+0x6D2B79F5|0;let t=Math.imul(s2^s2>>>15,1|s2);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+  const ids=V.WD.roads.map(r=>r.id).filter(k=>V.roads[k]);let n=0;
+  for(let i=0;i<9000&&n<260;i++){const P=V.roads[ids[(r2()*ids.length)|0]],p=P[(r2()*P.length)|0],a=r2()*6.283,d=4+r2()*28,x=p[0]+Math.cos(a)*d,z=p[1]+Math.sin(a)*d;
+    if(!V.allowed(x,z)||V.roadDist(x,z)<3.5||V.nearStream(x,z,3)||V.floorH(x,z)>-1e8)continue;let ok=true;for(const q of PICK)if(Math.abs(q.x-x)<1.5&&Math.abs(q.z-z)<1.5){ok=false;break;}if(!ok)continue;
+    const f=V.forestAt(x,z),k=f>.45?(r2()<.6?'mushroom':'berries'):(r2()<.5?'herb':'flower');place(k,x,z,k==='berries'?.7:k==='mushroom'?.42:.5);n++;}}
 /* ================= merchants ================= */
 // fav: what this trader pays well for. Everything else fetches half its worth.
 const SHOPS={
@@ -150,6 +156,7 @@ const SHOPS={
   draper:{name:'Draper',hello:'Cloth from the coast, boots from my brother. Bring me flowers and I will make dye of them.',sells:['cloth','boots','jack','cloak'],fav:['flower','pelt']},
   herbalist:{name:'Herbalist',hello:'Herbs for the pot, herbs for the cough. I pay fairly for anything picked clean.',sells:['candle','draught'],fav:['herb','mushroom']},
   inn:{name:'Innkeeper',hello:'Ale, stew, or a bed until morning. And I never ask where a thing came from.',sells:['ale','stew','pick','room'],fav:['mushroom','cheese','bread'],bed:6,fence:true},
+  pedlar:{name:'Pedlar',hello:'Needles, picks, a draught for the road. And I will take anything that fits in the pack.',sells:['pick','draught','bread','candle'],fav:['pelt','ring','candlestick','cloth']},
   smith:{name:'Smith',hello:'Good steel is not cheap, and cheap steel is not good. Pelts I can always use, for the bellows.',sells:['steel','mail'],fav:['pelt','jug','candlestick']}
 };
 {const stalls=V.NPCS.filter(n=>n.name==='Merchant'&&n.type==='stand'),ids=['baker','grocer','draper','herbalist'];
@@ -556,7 +563,7 @@ function paintWolf(n){const c=n.t.image,g=c.getContext('2d');g.clearRect(0,0,128
   const far=(x,z,c,r)=>Math.hypot(x-c[0],z-c[1])>r,castle=V.cw(0,0),start=V.roads.forest||[];
   const flat=(x,z)=>Math.abs(V.groundH(x+5,z)-V.groundH(x-5,z))<3&&Math.abs(V.groundH(x,z+5)-V.groundH(x,z-5))<3;
   const dens=[];
-  for(let i=0;i<6000&&dens.length<6;i++){const x=R(-1250,850),z=R(-1250,280);
+  const WB=V.WB||{x0:-1250,x1:850,z0:-1250,z1:280};for(let i=0;i<9000&&dens.length<(V.WD?11:6);i++){const x=R(Math.max(-1500,WB.x0+150),Math.min(1300,WB.x1-150)),z=R(Math.max(-1250,WB.z0+150),Math.min(1300,WB.z1-150));
     if(!V.allowed(x,z)||V.roadDist(x,z)<45||!flat(x,z)||V.nearStream(x,z,10)||V.floorH(x,z)>-1e8)continue;
     if(!far(x,z,V.V,180)||!far(x,z,V.TOWN_C,180)||!far(x,z,V.INN,130)||!far(x,z,castle,230)||!far(x,z,V.RUIN,90))continue;
     if(start.some(p=>Math.hypot(x-p[0],z-p[1])<150)||dens.some(p=>Math.hypot(x-p[0],z-p[1])<170))continue;
@@ -566,6 +573,10 @@ function paintWolf(n){const c=n.t.image,g=c.getContext('2d');g.clearRect(0,0,128
   let camp=null;for(let i=0;i<400&&!camp;i++){const x=-600+R(-60,60),z=-325+R(-50,50);if(V.allowed(x,z)&&V.roadDist(x,z)>22&&flat(x,z)&&V.floorH(x,z)<-1e8&&!V.nearStream(x,z,8))camp=[x,z];}
   if(camp)for(let j=0;j<3;j++){const n=V.spawn('bandit',camp[0]+R(-5,5),camp[1]+R(-5,5),{type:'wander',radius:11,home:camp,speed:1.2,talk:false,name:'Bandit'});
     Object.assign(n,{foe:'bandit',hp:70,maxhp:70,dmg:14,run:5.7,walk:1.2,r0:n.r});FOES.push(n);PEOPLE.push(n);}
+  if(V.WD)for(const rid of ['w_monamber','w_ashsouth','w_westmill']){const P=V.roads[rid];if(!P)continue;let spot=null;
+    for(let i=0;i<300&&!spot;i++){const p=P[Math.floor(P.length*R(.3,.7))],a=R(0,6.283),d=R(22,40),x=p[0]+Math.cos(a)*d,z=p[1]+Math.sin(a)*d;if(V.allowed(x,z)&&V.roadDist(x,z)>18&&flat(x,z)&&!V.nearStream(x,z,8)&&V.floorH(x,z)<-1e8)spot=[x,z];}
+    if(spot)for(let j=0;j<2;j++){const n=V.spawn('bandit',spot[0]+R(-4,4),spot[1]+R(-4,4),{type:'wander',radius:9,home:spot,speed:1.1,talk:false,name:'Bandit'});
+      Object.assign(n,{foe:'bandit',hp:65,maxhp:65,dmg:12,run:5.6,walk:1.1,r0:n.r});FOES.push(n);PEOPLE.push(n);}}
   G.dens=dens;G.camp=camp;
 })();
 function calm(n){n.angry=false;n.speed=n.walk;unwind(n);go(n,n.home[0],n.home[1],3,halt);n.ghost=true;}
@@ -635,12 +646,12 @@ function bar(L,shut){L.shut=shut;L.mesh.visible=shut;const w=L.seg;for(let i=0;i
   const m=new THREE.Mesh(geo,V.M.door);m.position.set(cx,f.y+1.15,cz);m.rotation.y=f.ry;V.scene.add(m);
   const L={kind:'door',x:cx,z:cz,y:f.y,nx:s,nz:c,seg:mkSeg(cx-.8*c,cz+.8*s,cx+.8*c,cz-.8*s),mesh:m,pins:pinsFor(cx,cz),forced:false,reach:1.8,home:f};bar(L,false);LOCKS.push(L);
   if(f.chest)LOCKS.push({kind:'chest',id:'k'+LOCKS.length,x:f.chest[0],z:f.chest[1],y:f.y,pins:pinsFor(cx,cz),rich:V.inCourt(cx,cz),reach:1.7,home:f});}}
-// --- the gaol: a stone lock-up outside the castle gate, with a barred door and a chest for what they take off you ---
+// --- the gaol: a stone lock-up in the castle barracks, by the smithy, with a barred door and a chest for what they take off you ---
 const J=(function gaol(){let best=null,bs=1e9;
   // Find a clear courtyard plot large enough for the whole guardhouse.
-  for(let lx=-35;lx<=35;lx+=5)for(let lz=-20;lz<=30;lz+=5){const p=V.cw(lx,lz),x=p[0],z=p[1];let ok=true;
+  for(let lx=-45;lx<=45;lx+=4)for(let lz=-40;lz<=34;lz+=4){const p=V.cw(lx,lz),x=p[0],z=p[1];let ok=true;
    for(let dx=-7;dx<=7;dx+=2)for(let dz=-4;dz<=11;dz+=2){const xx=x+dx,zz=z+dz;if(!V.inCourt(xx,zz)||!V.allowed(xx,zz)||V.floorH(xx,zz)>-1e8||V.wallHit(xx,zz,.5))ok=false;}
-   if(!ok)continue;const score=Math.hypot(x-V.GATEW.x,z-V.GATEW.z);if(score<bs){bs=score;best=[x,z,V.CTOP];}}
+   if(!ok)continue;const sp=V.cw(34,-20),score=Math.hypot(x-sp[0],z-sp[1])-.4*Math.hypot(x-V.GATEW.x,z-V.GATEW.z);if(score<bs){bs=score;best=[x,z,V.CTOP];}}   // by the smithy and the soldiers, well away from the gate
   if(!best){console.warn('No clear courtyard plot for the guardhouse');return null;}
   const [x,z,hi]=best,y=hi+.45,K=V.kit(),B=V.boxUV;
   K.add(B(5,2.6,4.2,2),'stone',x,y-1.36,z);
@@ -658,6 +669,7 @@ const J=(function gaol(){let best=null,bs=1e9;
   V.roofOn(K,13,15,4.5,3,'slate','ashlar',.6,0,x,y,z+3.5);
   K.add(B(2.2,.18,1,1),'wood',x+3,y+1,z+2.8);
   V.FLOORS.push({x,z:z+3.5,ry:0,hw:6.5,hd:7.5,y,r:11});
+  if(V.clearPlants)V.clearPlants(x,z+3.5,7.2,8.2);   // no lawn flowers growing through the floor
   const barracksM={...V.M,ashlar:V.M.ashlar.clone()};barracksM.ashlar.side=THREE.DoubleSide;K.build(barracksM,V.scene);V.trees.push([cx,cz,.45]);
   const g=new THREE.Group(),K2=V.kit();for(let i=0;i<6;i++)K2.add(new THREE.BoxGeometry(.07,2.1,.07),'iron',-.5+i*.2,1.05,0);for(const h of [.25,1.1,1.95])K2.add(new THREE.BoxGeometry(1.1,.07,.07),'iron',0,h,0);
   K2.build(V.M,g);g.position.set(x,y,z+1.95);V.scene.add(g);
