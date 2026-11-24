@@ -88,7 +88,7 @@ const KEY='valley.save.1';
 const MAXHP=100;
 const fresh=()=>({jailed:false,evidence:{},hp:MAXHP,coins:5,inv:{},hot:{},bounty:0,picked:{},boots:false,pos:null,tod:null,sheathed:true,boat:'pier',gear:{},quests:null});   // hot: how many of each thing you carry are stolen
 let S=fresh(),hadSave=false;
-try{const raw=localStorage.getItem(KEY);if(raw){const d=JSON.parse(raw);if(d&&typeof d.coins==='number'){S=Object.assign(fresh(),d);if(!S.gear||typeof S.gear!=='object')S.gear={};hadSave=true;}}}catch(e){}
+try{const raw=localStorage.getItem(KEY);if(raw){const d=JSON.parse(raw);if(d&&typeof d.coins==='number'){S=Object.assign(fresh(),d);if(!S.gear||typeof S.gear!=='object')S.gear={};delete S.inv.tobin;hadSave=true;}}}catch(e){}
 function save(){if(V.started){S.pos=[+P.x.toFixed(2),+P.z.toFixed(2),+P.yaw.toFixed(3)];S.tod=+V.DN.tod.toFixed(4);}
   try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
 addEventListener('pagehide',save);
@@ -270,7 +270,7 @@ function open(v,npc){if(view==='person'&&v!=='person'&&G.social)G.social.end();v
 function close(){clearTimeout(speechTimer);if(!view)return;if(G.social)G.social.end();if(view==='arrest'&&shopNPC){if(caught){S.bounty+=5;shopNPC.stun=2.5;tell(null,'Resisting arrest. Fine: '+S.bounty);}else shopNPC.stun=8;}view=null;shopNPC=null;G.modal=false;wrap.style.display='none';save();
   if(!V.coarse&&V.canvas.requestPointerLock){try{const p=V.canvas.requestPointerLock();if(p&&p.catch)p.catch(()=>{});}catch(e){}}}
 function bagRows(shop){let h='';for(const k of ORDER){const n=count(k);if(!n)continue;const it=ITEMS[k],st=hot(k),clean=n-st;
-    if(it.quest){if(!shop)h+='<div class="row">'+img(k)+'<span class="nm">'+it.n+(n>1?'<small>×'+n+'</small>':'')+'</span><span class="pr">for someone</span></div>';continue;}
+    if(it.quest){if(!shop)h+='<div class="row">'+img(k)+'<span class="nm">'+it.n+(n>1?'<small>×'+n+'</small>':'')+'</span><span class="pr">'+(it.keep?'':'for someone')+'</span>'+(it.use&&it.keep?'<button type="button" data-use="'+k+'">'+it.use+'</button>':'')+'</div>';continue;}
     if(!shop){h+='<div class="row">'+img(k)+'<span class="nm">'+it.n+(n>1?'<small>×'+n+'</small>':'')+(st?'<small class="hot">'+(st===n?'stolen':st+' stolen')+'</small>':'')+'</span><span class="pr">worth '+it.v+'</span>'+(it.use?'<button type="button" data-use="'+k+'">'+it.use+'</button>':'')+'</div>';continue;}
     if(clean){const o=offer(shop,k);h+='<div class="row">'+img(k)+'<span class="nm">'+it.n+(clean>1?'<small>×'+clean+'</small>':'')+'</span><span class="pr">'+o+(shop.fav.includes(k)?' ★':'')+'</span><button type="button" data-sell="'+k+'">Sell</button>'+(clean>1?'<button type="button" class="alt" data-sellall="'+k+'">All</button>':'')+'</div>';}
     if(st){h+='<div class="row">'+img(k)+'<span class="nm">'+it.n+(st>1?'<small>×'+st+'</small>':'')+'<small class="hot">stolen</small></span>'+(shop.fence?'<span class="pr">'+fenced(k)+'</span><button type="button" data-sell="'+k+'" data-hot="1">Sell</button>'+(st>1?'<button type="button" class="alt" data-sellall="'+k+'" data-hot="1">All</button>':''):'<span class="pr">will not buy</span>')+'</div>';}}
@@ -306,7 +306,7 @@ box.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.dis
   if(d.jail){jail();return;}
   if(d.buy&&shop){const it=ITEMS[d.buy];if(S.coins<it.v)return;S.coins-=it.v;if(it.gear){if(S.gear[d.buy]){S.coins+=it.v;return;}S.gear[d.buy]=true;note=it.got;}else if(it.worn){S.boots=true;wear();note='You lace them up. The road feels shorter already.';}else{give(d.buy);note='Bought: '+it.n.toLowerCase()+'.';}}
   else if((d.sell||d.sellall)&&shop){const k=d.sell||d.sellall,st=!!d.hot,have=st?hot(k):count(k)-hot(k),n=d.sellall?have:1;if(have<1||(st&&!shop.fence))return;const c=(st?fenced(k):offer(shop,k))*n;take(k,n,st);S.coins+=c;note='Sold for '+c+(c===1?' coin.':' coins.');}
-  else if(d.use){const it=ITEMS[d.use];if(!count(d.use))return;take(d.use,1,hot(d.use)>0);note=it.said;if(it.heal&&S.hp<MAXHP){S.hp=Math.min(MAXHP,S.hp+it.heal);note+=' You feel better.';drawHp();}}
+  else if(d.use){const it=ITEMS[d.use];if(!count(d.use))return;if(it.keep){note=it.said;save();draw();return;}take(d.use,1,hot(d.use)>0);note=it.said;if(it.heal&&S.hp<MAXHP){S.hp=Math.min(MAXHP,S.hp+it.heal);note+=' You feel better.';drawHp();}}
   else if(d.bed&&shop){const c=S.gear.room?0:shop.bed;if(S.coins<c)return;S.coins-=c;sleep();return;}
   if(shop&&(d.buy||d.sell||d.sellall)&&G.social)G.social.trade(shopNPC);
   save();draw();});
@@ -559,6 +559,13 @@ function paintWolf(n){const c=n.t.image,g=c.getContext('2d');g.clearRect(0,0,128
     Pt(o+1,low?9:6,5,3,'#5e5a54');Pt(o,low?11:5,2,2,'#4a4640');
     Pt(o+22,4+hy,7,7,'#7c7870');Pt(o+27,7+hy,4,3,'#8a867e');Pt(o+30,7+hy,1,1,'#1a1816');Pt(o+23,2+hy,2,3,'#56524c');Pt(o+26,2+hy,2,3,'#56524c');Pt(o+26,6+hy,1,1,'#e8c040');Pt(o+27,10+hy,3,1,'#e8e0d0');}
   n.t.needsUpdate=true;n.sp.scale.set(1.55,1.16,1);}
+function paintHound(n){const c=n.t.image,g=c.getContext('2d');g.clearRect(0,0,128,24);const Pt=(x,y,w,h,col)=>{g.fillStyle=col;g.fillRect(x,y,w,h);};
+  for(let f=0;f<4;f++){const o=f*32,low=f===3,st=f===1?2:f===2?-2:0,hy=low?5:0;
+    for(const [lx,d] of [[6,1],[9,-1],[19,1],[22,-1]])Pt(o+lx+st*d,15,2,8,'#140c18');
+    Pt(o+5,8,19,8,'#2a1a30');Pt(o+5,8,19,2,'#3e2848');Pt(o+7,14,14,2,'#1c1222');for(let i=0;i<5;i++)Pt(o+7+i*3,6+(i%2),1,3,'#4a2c58');
+    Pt(o+1,low?9:6,5,3,'#1c1222');Pt(o,low?11:5,2,2,'#140c18');
+    Pt(o+22,4+hy,7,7,'#2a1a30');Pt(o+27,7+hy,4,3,'#3e2848');Pt(o+26,6+hy,2,1,'#d070ff');Pt(o+29,6+hy,1,1,'#d070ff');Pt(o+27,10+hy,3,1,'#c8b8d8');Pt(o+23,2+hy,2,3,'#1c1222');Pt(o+26,2+hy,2,3,'#1c1222');}
+  n.t.needsUpdate=true;n.sp.scale.set(1.75,1.3,1);}
 (function populate(){
   const far=(x,z,c,r)=>Math.hypot(x-c[0],z-c[1])>r,castle=V.cw(0,0),start=V.roads.forest||[];
   const flat=(x,z)=>Math.abs(V.groundH(x+5,z)-V.groundH(x-5,z))<3&&Math.abs(V.groundH(x,z+5)-V.groundH(x,z-5))<3;
@@ -577,6 +584,9 @@ function paintWolf(n){const c=n.t.image,g=c.getContext('2d');g.clearRect(0,0,128
     for(let i=0;i<300&&!spot;i++){const p=P[Math.floor(P.length*R(.3,.7))],a=R(0,6.283),d=R(22,40),x=p[0]+Math.cos(a)*d,z=p[1]+Math.sin(a)*d;if(V.allowed(x,z)&&V.roadDist(x,z)>18&&flat(x,z)&&!V.nearStream(x,z,8)&&V.floorH(x,z)<-1e8)spot=[x,z];}
     if(spot)for(let j=0;j<2;j++){const n=V.spawn('bandit',spot[0]+R(-4,4),spot[1]+R(-4,4),{type:'wander',radius:9,home:spot,speed:1.1,talk:false,name:'Bandit'});
       Object.assign(n,{foe:'bandit',hp:65,maxhp:65,dmg:12,run:5.6,walk:1.1,r0:n.r});FOES.push(n);PEOPLE.push(n);}}
+  if(V.WD){const A=V.WD.places.find(p=>p.id==='ashford'),Hh=V.WD.places.find(p=>p.id==='heart');
+    for(const [c,k,r0,r1] of [[A,4,90,170],[Hh,5,60,200]]){if(!c)continue;for(let j=0,m=0;j<200&&m<k;j++){const a=R(0,6.283),d=R(r0,r1),x=c.x+Math.cos(a)*d,z=c.z+Math.sin(a)*d;if(!V.allowed(x,z)||V.nearStream(x,z,6))continue;
+      const n=V.spawn('sheep',x,z,{anim:'sheep',type:'wander',radius:28,home:[x,z],speed:1.1,talk:false,r:.55,name:'Blight hound'});paintHound(n);Object.assign(n,{foe:'hound',hp:75,maxhp:75,dmg:13,run:7.6,walk:1.1,r0:.55});FOES.push(n);m++;}}}
   G.dens=dens;G.camp=camp;
 })();
 function calm(n){n.angry=false;n.speed=n.walk;unwind(n);go(n,n.home[0],n.home[1],3,halt);n.ghost=true;}
@@ -593,7 +603,7 @@ function foes(dt){const night=V.DN.tod<.25||V.DN.tod>.8;
     if(n.gone||n.dead||n.down)continue;
     const d=Math.hypot(n.x-P.x,n.z-P.z),hd=Math.hypot(n.x-n.home[0],n.z-n.home[1]);
     if(!n.angry){if(d>40||G.modal||dying||hd>60||S.jailed)continue;
-      const sense=n.foe==='wolf'?d<(night?24:13)*(G.sneak?.6:1):(n.sees||d<4);
+      const sense=n.foe==='hound'?d<(night?30:20)*(G.sneak?.6:1):n.foe==='wolf'?d<(night?24:13)*(G.sneak?.6:1):(n.sees||d<4);
       if(sense){n.angry=true;n.speed=n.run;go(n,P.x,P.z,1.5);if(n.foe==='bandit')speak(n,THREAT[(Math.random()*THREAT.length)|0]);}continue;}
     if(dying||hd>80||d>48){calm(n);continue;}
     if(!n.drive)go(n,P.x,P.z,1.5);n.goal=[P.x,P.z];n.stop=1.5;n.ghost=false;if(d<1.7)n.face=Math.atan2(P.x-n.x,P.z-n.z);
@@ -605,7 +615,7 @@ function foes(dt){const night=V.DN.tod<.25||V.DN.tod>.8;
 const puff=(()=>{const c=document.createElement('canvas');c.width=c.height=16;const g=c.getContext('2d');g.fillStyle='#fff6d8';for(const [x,y,w,h] of [[7,1,2,14],[1,7,14,2],[4,4,2,2],[10,4,2,2],[4,10,2,2],[10,10,2,2]])g.fillRect(x,y,w,h);
   const t=new THREE.CanvasTexture(c);t.magFilter=t.minFilter=THREE.NearestFilter;const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthTest:false,fog:false}));sp.visible=false;V.scene.add(sp);return {sp,t:0};})();
 const SHEEP=V.NPCS.filter(n=>n.anim==='sheep'&&!n.foe);
-const HITTABLE=PEOPLE.filter(n=>n.role!=='child').concat(FOES.filter(n=>n.foe==='wolf'),SHEEP);
+const HITTABLE=PEOPLE.filter(n=>n.role!=='child').concat(FOES.filter(n=>n.foe==='wolf'||n.foe==='hound'),SHEEP);
 // two traits each: bold or timid, hot-tempered or mild. Shepherds will always stand up for the flock.
 for(const n of PEOPLE){const a=rnd(),b=rnd();n.bold=LAW(n)||!!n.foe||n.role==='shepherd'||(n.role!=='child'&&a<(/smith|woodcutter|farmer|soldier/.test(n.role)?.7:.3));n.hot=n.role==='shepherd'||b<.35;}
 for(const s of SHEEP){let o=null,od=50;for(const p of PEOPLE)if(p.role==='shepherd'){const d=Math.hypot(p.x-s.x,p.z-s.z);if(d<od){od=d;o=p;}}s.owner=o;}
@@ -624,6 +634,7 @@ function attack(){const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw);let n=null,bd=2.
   if(n.foe){n.angry=true;n.speed=n.run;
     if(n.hp>0)return;
     if(n.foe==='wolf'){n.angry=false;corpse(n,300);give('pelt');tell('pelt','+1 Wolf pelt');if(G.quests)G.quests.kill('wolf',n);}
+    else if(n.foe==='hound'){n.angry=false;corpse(n,240);tell(null,'The thing stops moving. The grass under it is already grey.');}
     else{const c=8+((Math.random()*13)|0);halt(n);unwind(n);n.down=true;n.downT=180;n.angry=false;pool(n);S.coins+=c;tell('coin','+'+c+' coins from the bandit');if(Math.random()<.6){give('pick');tell('pick','+1 Lockpick');}if(G.quests)G.quests.kill('bandit',n);}
     drawHud();save();return;}
   if(!person){livestock(n);drawHud();save();return;}
@@ -779,5 +790,5 @@ if(hadSave&&S.pos){const go=$('#go');if(go){go.textContent='Continue';const o=do
   o.addEventListener('click',()=>{try{localStorage.removeItem(KEY);}catch(e){}S=fresh();G.sneak=false;wear();o.remove();go.textContent='New game';G.sheathed=true;G.sheathK=1;});go.after(o);}}
 G.qa={give,take,count,hot,tell,img,save,drawHud,open,close,ITEMS,ICON,view:()=>view,bounty:()=>S.bounty,gear:()=>S.gear,heal(n){S.hp=Math.min(MAXHP,S.hp+n);drawHp();},coins(n){S.coins+=n;drawHud();}};
 G.socialAccess={save,count,hot,take,go,halt,ambient(n,line){if(view||speakT>0||S.jailed||!G.sheathed)return false;speak(n,line);return true;}};
-G.reports=REPORTS;G.attack=attack;G.crime=crime;G.setSheath=setSheath;G.boat=BOAT;G.row=row;G.people=PEOPLE;G.sheep=SHEEP;G.foes=FOES;G.hurt=hurt;G.locks=LOCKS;G.gaol=J;G.jail=jail;G.pk=()=>PK;G.state=()=>S;G.items=ITEMS;G.picks=PICK;G.watchers=()=>watchers;
+G.paintHound=paintHound;G.paintWolf=paintWolf;G.speak=speak;G.addFoe=n=>{FOES.push(n);if(n.anim==="person")PEOPLE.push(n);HITTABLE.push(n);};G.reports=REPORTS;G.attack=attack;G.crime=crime;G.setSheath=setSheath;G.boat=BOAT;G.row=row;G.people=PEOPLE;G.sheep=SHEEP;G.foes=FOES;G.hurt=hurt;G.locks=LOCKS;G.gaol=J;G.jail=jail;G.pk=()=>PK;G.state=()=>S;G.items=ITEMS;G.picks=PICK;G.watchers=()=>watchers;
 })();

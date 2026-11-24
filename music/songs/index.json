@@ -1,5 +1,7 @@
 {
   "songs": [
+    { "file": "valley-the-valley.json", "title": "The Valley", "game": "valley", "gameTitle": "The Valley" },
+    { "file": "valley-ashford-night.json", "title": "The Night Ashford Burned", "game": "valley", "gameTitle": "The Valley" },
     { "file": "stillwater-undertow.json", "title": "Undertow", "game": "stillwater", "gameTitle": "Stillwater", "thumbnail": "/data/thumbnails/stillwater-thumbnail.png" },
     { "file": "elsewhere-first-landfall.json", "title": "First Landfall", "game": "galaxy-explorer", "gameTitle": "Elsewhere", "thumbnail": "/data/thumbnails/elsewhere-thumbnail.png" },
     { "file": "neon-rush-pulse.json", "title": "Pulse", "game": "worm-hole", "gameTitle": "Neon Rush", "thumbnail": "/data/thumbnails/neon-rush-thumbnail.webp" },
@@ -19,6 +21,8 @@
     { "id": "elsewhere", "gameTitle": "Elsewhere", "label": "Music", "default": "elsewhere-first-landfall.json", "path": "/galaxy-explorer/index.html", "thumbnail": "/data/thumbnails/elsewhere-thumbnail.png" },
     { "id": "niceland", "gameTitle": "Niceland", "label": "Music", "default": "niceland-midnight-sun.json", "path": "/niceland/index.html", "thumbnail": "/data/thumbnails/niceland-thumbnail.png" },
     { "id": "gravity-dash", "gameTitle": "Gravity Dash", "label": "Music", "default": "gravity-dash-downhill.json", "path": "/embeds/gravity_dash.html", "thumbnail": "/data/thumbnails/gravity-dash-thumbnail.png" },
-    { "id": "crucible", "gameTitle": "Crucible", "label": "Music", "default": "crucible-quicksilver.json", "path": "/simulations/Falling_Sand/falling_sand.html", "thumbnail": "/data/thumbnails/crucible-thumbnail.png" }
+    { "id": "crucible", "gameTitle": "Crucible", "label": "Music", "default": "crucible-quicksilver.json", "path": "/simulations/Falling_Sand/falling_sand.html", "thumbnail": "/data/thumbnails/crucible-thumbnail.png" },
+    { "id": "valley", "gameTitle": "The Valley", "label": "Music", "default": "valley-the-valley.json", "path": "/valley/index.html" },
+    { "id": "valley-intro", "gameTitle": "The Valley", "label": "Opening", "default": "valley-ashford-night.json", "path": "/valley/index.html" }
   ]
 }

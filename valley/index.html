@@ -28,8 +28,36 @@ button:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
 @media (prefers-reduced-motion: reduce){#hint,#msg{transition:none}}
 </style>
 <link rel="stylesheet" href="arrival.css?v=5">
+<link rel="preload" as="image" href="loading.jpg?v=2">
 </head>
 <body>
+<div id="vload" role="status" aria-label="Loading">
+  <video class="vl-vid" autoplay muted loop playsinline preload="auto" poster="loading.jpg?v=2" aria-hidden="true">
+    <source src="loading.webm?v=1" type="video/webm">
+    <source src="loading.mp4?v=1" type="video/mp4">
+  </video>
+  <div class="vl-shade" aria-hidden="true"></div>
+  <div class="vl-load"><span>Loading</span><b class="vl-dots"><i>.</i><i>.</i><i>.</i></b></div>
+  <div class="vl-bar" aria-hidden="true"><b id="vlBar"></b></div>
+</div>
+<style>
+#vload{position:fixed;inset:0;z-index:100;overflow:hidden;background:#0c0d16 url(loading.jpg?v=2) center/cover no-repeat;transition:opacity 1s ease;pointer-events:auto}
+#vload.done{opacity:0;pointer-events:none}
+#vload .vl-vid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#vload .vl-shade{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(12,13,22,0) 60%,rgba(12,13,22,.55) 100%)}
+#vload .vl-load{position:absolute;right:calc(env(safe-area-inset-right,0px) + 4vw);bottom:calc(env(safe-area-inset-bottom,0px) + 5vh);font-family:ValleyPixel,monospace;font-size:14px;letter-spacing:.14em;color:#f2e6cc;text-shadow:2px 2px #0a0c14;text-transform:uppercase}
+#vload .vl-dots i{font-style:normal;animation:vldot 1.4s steps(1) infinite}#vload .vl-dots i:nth-child(2){animation-delay:.25s}#vload .vl-dots i:nth-child(3){animation-delay:.5s}
+@keyframes vldot{0%{opacity:0}30%,100%{opacity:1}}
+#vload .vl-bar{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(10,12,20,.6)}
+#vload .vl-bar b{display:block;height:100%;background:#e5ca88;transform-origin:0 50%;transform:scaleX(.04);transition:transform .5s ease}
+@media (prefers-reduced-motion: reduce){#vload .vl-dots i{animation:none}#vload .vl-vid{display:none}}
+</style>
+<script>(function(){
+ const bar=document.getElementById('vlBar');let shown=.04;
+ window.__load=function(p){if(p>shown){shown=p;bar.style.transform='scaleX('+p+')';}};
+ // done when the page has loaded and the world has drawn a couple of frames
+ addEventListener('load',()=>{__load(1);let n=0;const step=()=>{if(++n<4)return requestAnimationFrame(step);const el=document.getElementById('vload');el.classList.add('done');setTimeout(()=>el.remove(),1100);};requestAnimationFrame(step);});})();</script>
+
 <canvas id="view" aria-label="A first-person view from a forest path, looking out over a valley to a castle and mountains"></canvas>
 <div class="ov" id="start">
   <div class="card title-menu">
@@ -52,7 +80,8 @@ button:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
 <button id="jump" type="button">Jump</button>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="world.js?v=1"></script>
+<script>__load(.15)</script>
+<script src="world.js?v=2"></script>
 <script>/* the map editor can hand the game an unsaved map to try */try{if(/[?&]draft\b/.test(location.search)){const d=localStorage.getItem('valley.worldDraft');if(d)window.WORLD=JSON.parse(d);}}catch(e){}</script>
 <script>
 (function(){
@@ -581,7 +610,7 @@ function gridMesh(x0,z0,cell,nx,nz,hf,map,uvs,mat,noAdd){
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('color',new THREE.BufferAttribute(col,3));g.setAttribute('uv',new THREE.BufferAttribute(uv,2));
   g.setIndex(new THREE.BufferAttribute(idx,1));g.computeVertexNormals();
   const m=new THREE.Mesh(g,mat||new THREE.MeshLambertMaterial({map,vertexColors:true}));m.frustumCulled=false;if(!noAdd)scene.add(m);return m;}
-gridMesh(N1.x0,N1.z0,N1.cell,N1.nx,N1.nz,(x,z,k)=>HG[k],grassTex,4);
+const N1MESH=gridMesh(N1.x0,N1.z0,N1.cell,N1.nx,N1.nz,(x,z,k)=>HG[k],grassTex,4);
 const NEAR_R=1150,lodU={pp:{value:new THREE.Vector2(0,0)},nr:{value:NEAR_R-170}};
 function sinkMat(mat){mat.onBeforeCompile=sh=>{sh.uniforms.pp=lodU.pp;sh.uniforms.nr=lodU.nr;
   sh.vertexShader='uniform vec2 pp;uniform float nr;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n  float dd=distance(transformed.xz,pp);transformed.y-=mix(45.,1.5+max(0.,dd-nr)*.0016,smoothstep(nr-220.,nr,dd));');};return mat;}
@@ -606,9 +635,9 @@ function ribbon(pts,hw,mat,lift,flow,vScale,hf,skip){
   const m=new THREE.Mesh(g,mat);m.frustumCulled=false;scene.add(m);return m;}
 const pathMat=new THREE.MeshLambertMaterial({map:pathTex,alphaTest:.5,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
 const onBridge=p=>{const [al,ac]=bridgeLocal(p[0],p[1]);return Math.abs(al)<BR.hl-.3&&Math.abs(ac)<5;};
-ribbon(roads.forest,1.9,pathMat,.2);ribbon(roads.meadow,2.1,pathMat,.2,false,3,terrainH,onBridge);ribbon(roads.castle,2.3,pathMat,.32,false,4);ribbon(roads.west,2.1,pathMat,.22,false,3.5);ribbon(roads.east,1.9,pathMat,.2,false,3.5);ribbon(roads.owitch,1.1,pathMat,.15,false,3);ribbon(roads.oelder,1.1,pathMat,.15,false,3);ribbon(roads.track,1.5,pathMat,.2,false,3);
+// (the valley's roads are painted into the ground: see RMASK)
 // the path across the bridge deck
-{const pts=[];for(let s=-BR.hl;s<=BR.hl+.01;s+=1)pts.push([BR.x+BR.ux*s,BR.z+BR.uz*s,BR.top-BR.k*s*s+.04]);ribbon(pts,2.2,pathMat,0,true,3);}
+
 // the lake
 function waterFan(c,ring){const n=ring.length,v=[0,0,0],uv=[.5,.5],idx=[];
   for(let i=0;i<n;i++){const a=i/n*6.2832,r=ring[i]+.03,x=Math.cos(a)*r,z=Math.sin(a)*r;v.push(x*c.rx,0,z*c.rz);uv.push(.5+x/2.2,.5-z/2.2);idx.push(0,1+(i+1)%n,1+i);}
@@ -631,7 +660,7 @@ for(const f of FALLS)ribbon(f,BECK.includes(f[0])?3:4.6,fallMat,.15,true,5);
 const steepIn=S=>p=>{const i=S.indexOf(p);if(i<1||i>=S.length-1)return false;const a=S[i-1],b=S[i+1];return (a[2]-b[2])/Math.hypot(b[0]-a[0],b[1]-a[1])>.22;};
 ribbon(STREAM,4.2,waterMat,0,true,8,null,steepIn(STREAM));ribbon(BECK,2.8,waterMat,0,true,8,null,steepIn(BECK));
 for(const rv of WRIV)ribbon(rv.pts,rv.w,waterMat,0,true,8,null,steepIn(rv.pts));
-if(WD)for(const r of WD.roads)ribbon(roads[r.id],r.kind==='track'?1.1:r.kind==='lane'?1.6:2.1,pathMat,.2,false,3.5,(x,z)=>Math.max(terrainH(x,z),wBridgeH(x,z)+.05));
+// (world roads are painted into the ground, and bridges carry no path strip)
 const fallBase=(function(){let b=null,bd=0;for(const f of FALLS){const d=f[0][2]-f[f.length-1][2];if(d>bd){bd=d;b=f[f.length-1];}}return b||STREAM[0];})();   // the great fall over the shelf edge
 
 /* ================= mesh kit: merge many small parts into a few draw calls ================= */
@@ -1291,9 +1320,9 @@ seed=1019768416;   // pinned again: what follows was laid out before the extra h
   // the west road: dry-stone walls in the open meadow, milestones
   {const wr=roads.west;for(let i=8;i<wr.length-8;i+=3){const a=wr[i],b=wr[i+3]||wr[wr.length-1];if(a[0]<-360&&a[0]>-740)continue;if((i/3|0)%7===6)continue;
      const dx=b[0]-a[0],dz=b[1]-a[1],L=Math.hypot(dx,dz);if(L<.5)continue;const nx=-dz/L,nz=dx/L,ry=Math.atan2(dx,dz),sd=a[0]>-250?1:-1;
-     const ox=(a[0]+b[0])/2+nx*sd*4.6,oz=(a[1]+b[1])/2+nz*sd*4.6;for(let j=0;j<Math.ceil(L/.75);j++){const t=(j+.5)/Math.ceil(L/.75)-.5,xx=ox+dx*t,zz=oz+dz*t,yy=terrainH(xx,zz);
-       K.add(rockGeo(.48,1,.8,j+i,.72),'rock',xx,yy+.24,zz,ry);
-       if((j+i)%5!==0)K.add(rockGeo(.34,1.2,.9,j+i+40,.65),'rock',xx+.08,yy+.65,zz,ry+.2);}}
+     const ox=(a[0]+b[0])/2+nx*sd*4.6,oz=(a[1]+b[1])/2+nz*sd*4.6;const ns=Math.max(1,Math.round(L/1.4));for(let j=0;j<ns;j++){const t0=j/ns-.5,t1=(j+1)/ns-.5,x0=ox+dx*t0,z0=oz+dz*t0,x1=ox+dx*t1,z1=oz+dz*t1,y0=terrainH(x0,z0),y1=terrainH(x1,z1),xx=(x0+x1)/2,zz=(z0+z1)/2,sl=L/ns;
+       const top=(y0+y1)/2+.9+.06*Math.sin((i+j)*2.3),bot=Math.min(y0,y1)-.5;K.add(boxUV(.62,top-bot,sl+.08,1.6),'stone',xx,(top+bot)/2,zz,ry);
+       for(let c=0;c<3;c++){const u=(c+.5)/3-.5,cx=xx+dx/L*sl*u,cz=zz+dz/L*sl*u;K.add(rockGeo(.27,1.25,.95,i*7+j*3+c,.7),'rock',cx,top+.08,cz,ry+.3*Math.sin(c+j));}}}
    for(let i=30;i<wr.length;i+=60){const a=wr[i],b=wr[i+1]||a,dx=b[0]-a[0],dz=b[1]-a[1],L=Math.hypot(dx,dz)||1,x=a[0]-dz/L*3.4,z=a[1]+dx/L*3.4;K.add(boxUV(.6,1.3,.4,1),'stone',x,terrainH(x,z)+.5,z,Math.atan2(dx,dz));trees.push([x,z,.5]);}}
   K.build(M,scene);})();
 // --- the inn at the crossroads ---
@@ -1558,6 +1587,7 @@ function updateEast(dt,T){
  }
  seed=savedSeed;
 })();
+for(let i=bb.length-1;i>=0;i--){const t=bb[i];if(roadDist(t[0],t[2])<2.5+t[3]*.42)bb.splice(i,1);}
 const CORE_BB=buildBillboards();
 
 // a hand-built tree or plant standing where something new is built is taken away (its quad shrunk to nothing, and it no longer blocks)
@@ -1584,6 +1614,49 @@ function treeAt(gi,gj,far,hf,out,coll){const r=mul32((gi*73856093)^(gj*19349663)
   const k=KINDS[kind],sz=SIZE[kind],ht=lerp(sz[0],sz[1],r())*(far?1.15:1),sh=SHADE[reg]*lerp(.85,1.05,r());
   out.push([x,h-.4,z,ht*k[1],ht,k[0][(r()*k[0].length)|0],sh,kind==='oak'||kind==='aut'||kind==='dark'?.45:kind==='dead'||kind==='blight'?.1:.3]);if(coll)coll.push([x,z,ht*k[2]+.15]);}
 const TTER=new Map(),TTRE=new Map(),tileMat=new THREE.MeshLambertMaterial({map:grassTex,vertexColors:true});
+/* ================= roads painted into the ground =================
+   No strips laid on top: one mask, drawn round the player from the road lines, says where the road is, and every
+   ground material paints its earth and stones there itself, with a worn verge, so a road lies in the land however it bends. */
+const RMASK=(function(){
+  const S=coarse?1024:2048,RES=coarse?1.25:.75,SPAN=S*RES;
+  const cv=document.createElement('canvas');cv.width=cv.height=S;const g=cv.getContext('2d');
+  const tx=new THREE.CanvasTexture(cv);tx.flipY=false;tx.generateMipmaps=false;tx.minFilter=tx.magFilter=THREE.LinearFilter;tx.wrapS=tx.wrapT=THREE.ClampToEdgeWrapping;
+  // the earth of the road, tiling both ways: warm dirt, worn stones, a few tufts
+  const [rc,rg]=mk(64,64);
+  for(let y=0;y<64;y++)for(let x=0;x<64;x++){rg.fillStyle=pick(['#9a7d52','#8c7048','#a88a5c','#937650']);rg.fillRect(x,y,1,1);}
+  for(let i=0;i<60;i++){const x=(rnd()*64)|0,y=(rnd()*64)|0,w=R(3,7)|0,h=R(2,4)|0,c1=pick(['#c2a676','#b39566','#cfb486','#a88b5e']);
+    for(const [ox,oy] of [[0,0],[-64,0],[0,-64],[-64,-64]]){rg.fillStyle=c1;rg.fillRect(x+ox,y+oy,w,h);rg.fillStyle='#6e5638';rg.fillRect(x+ox,y+oy+h,w,1);}}
+  dabs(rg,14,0,0,64,64,['#6f7a3a','#5c6a30'],2,1);
+  const rt=tex(rc,true);rt.wrapS=rt.wrapT=THREE.RepeatWrapping;
+  const U={rmTex:{value:tx},rmPath:{value:rt},rmO:{value:new THREE.Vector2(0,0)},rmS:{value:SPAN}};
+  // [points, half width, skip(point)]: the hand-built valley's roads, then the world file's
+  const onDeck=p=>{const b=wBridgeH(p[0],p[1]);return b>terrainH(p[0],p[1])+.6;};
+  const LIST=[[roads.forest,1.9],[roads.meadow,2.1,p=>onBridge(p)],[roads.castle,2.3],[roads.west,2.1],[roads.east,1.9],[roads.owitch,1.1],[roads.oelder,1.1],[roads.track,1.5]].filter(r=>r[0]);
+  if(WD)for(const r of WD.roads)if(roads[r.id])LIST.push([roads[r.id],r.kind==='track'?1.1:r.kind==='lane'?1.6:2.1,onDeck]);
+  let cx=1e9,cz=1e9;
+  function draw(px,pz){cx=Math.round(px/64)*64;cz=Math.round(pz/64)*64;const x0=cx-SPAN/2,z0=cz-SPAN/2;U.rmO.value.set(x0,z0);
+    g.fillStyle='#000';g.fillRect(0,0,S,S);g.lineCap=g.lineJoin='round';
+    const X=x=>(x-x0)/RES,Z=z=>(z-z0)/RES,inside=p=>p[0]>x0-40&&p[0]<x0+SPAN+40&&p[1]>z0-40&&p[1]<z0+SPAN+40;
+    for(const pass of [0,1]){g.strokeStyle=pass?'#fff':'#5a5a5a';
+      for(const [pts,hw,skip] of LIST){for(let i=1;i<pts.length;i++){const a=pts[i-1],b=pts[i];if(!inside(a)&&!inside(b))continue;if(skip&&skip(a)&&skip(b))continue;
+          const w=hw*(1+.18*Math.sin(i*.37)+.1*Math.sin(i*1.3));g.lineWidth=(pass?2*w:2*w+3.2)/RES;g.beginPath();g.moveTo(X(a[0]),Z(a[1]));g.lineTo(X(b[0]),Z(b[1]));g.stroke();}}}
+    tx.needsUpdate=true;}
+  function update(px,pz){if(Math.abs(px-cx)>SPAN*.22||Math.abs(pz-cz)>SPAN*.22)draw(px,pz);}
+  // any ground material: give it the mask
+  function ground(mat){const prev=mat.onBeforeCompile;mat.onBeforeCompile=(sh,r)=>{if(prev)prev(sh,r);Object.assign(sh.uniforms,U);
+      sh.vertexShader='varying vec2 vRW;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n  vRW=(modelMatrix*vec4(transformed,1.)).xz;');
+      sh.fragmentShader='varying vec2 vRW;uniform sampler2D rmTex,rmPath;uniform vec2 rmO;uniform float rmS;\n'+sh.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+  {vec2 ru=(vRW-rmO)/rmS;
+   if(ru.x>0.&&ru.x<1.&&ru.y>0.&&ru.y<1.){
+    float v=texture2D(rmTex,ru).r,edge=smoothstep(0.,.05,ru.x)*smoothstep(1.,.95,ru.x)*smoothstep(0.,.05,ru.y)*smoothstep(1.,.95,ru.y);
+    vec2 q=floor(vRW*5.)/5.;float n=fract(sin(dot(q,vec2(12.9898,78.233)))*43758.5453),n2=fract(sin(dot(floor(vRW*.7),vec2(39.31,11.73)))*24634.63);
+    float road=smoothstep(.62,.7,v+(n-.5)*.2+(n2-.5)*.14)*edge,verge=smoothstep(.1,.4,v+(n-.5)*.24)*(1.-road)*edge;
+    diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*vec3(1.1,.94,.74),verge*.6);
+    diffuseColor.rgb=mix(diffuseColor.rgb,texture2D(rmPath,vRW*.25).rgb*(.6+.55*vColor),road);}}`);};
+    mat.needsUpdate=true;return mat;}
+  return {draw,update,ground,U,LIST};})();
+
+RMASK.ground(tileMat);RMASK.ground(N1MESH.material);
 function tileMesh(ci,cj){const n=GW.CH+1,i0=ci*GW.CH,j0=cj*GW.CH,x0=GW.x0+i0*6,z0=GW.z0+j0*6;
   if(x0>=N1.x0&&x0+TILE<=N1x1&&z0>=N1.z0&&z0+TILE<=N1z1)return null;   // all inside the hand-built grid
   const pos=new Float32Array(n*n*3),col=new Float32Array(n*n*3),nor=new Float32Array(n*n*3),uv=new Float32Array(n*n*2);
@@ -1644,7 +1717,7 @@ function tileTreesNear(x,z){const out=[];if(!WD)return out;const seen=new Set();
 function tileDist(ci,cj){const cx=GW.x0+(ci+.5)*TILE,cz=GW.z0+(cj+.5)*TILE;return Math.max(0,Math.hypot(cx-P.x,cz-P.z)-TILE*.71);}
 function drop(map,k,o){if(o){const m=o.m!==undefined?o.m:o;if(m){scene.remove(m);m.geometry.dispose();}if(o.g){scene.remove(o.g);o.g.traverse(c=>{if(c.geometry)c.geometry.dispose();});}}map.delete(k);}
 let tileT=0,lastFull=[1e9,1e9];
-function updateTiles(dt,all){if(!WD)return;lodU.pp.value.set(P.x,P.z);for(const s of WSAILS)s.rotation.z-=dt*.6;tileT-=dt;if(tileT>0&&!all)return;tileT=.1;
+function updateTiles(dt,all){RMASK.update(P.x,P.z);if(!WD)return;lodU.pp.value.set(P.x,P.z);for(const s of WSAILS)s.rotation.z-=dt*.6;tileT-=dt;if(tileT>0&&!all)return;tileT=.1;
   // a long jump (a teleport, loading a save): fill in everything near at once
   if(Math.hypot(P.x-lastFull[0],P.z-lastFull[1])>400){all=true;lastFull=[P.x,P.z];}
   const ci0=Math.max(0,Math.floor((P.x-NEAR_R-GW.x0)/TILE)),ci1=Math.min(GW.cx-1,Math.floor((P.x+NEAR_R-GW.x0)/TILE)),cj0=Math.max(0,Math.floor((P.z-NEAR_R-GW.z0)/TILE)),cj1=Math.min(GW.cz-1,Math.floor((P.z+NEAR_R-GW.z0)/TILE));
@@ -1699,10 +1772,15 @@ const mill=(()=>{let best=null,bs=-1e9;for(let i=0;i<400;i++){const x=R(-90,-25)
    const deck=s=>BR.top-BR.k*Math.min(s*s,hl*hl);
    const sh=new THREE.Shape();sh.moveTo(-hl-1.5,bot);sh.lineTo(-xa,bot);
    for(let i=0;i<=16;i++){const a=Math.PI-th0-(Math.PI-2*th0)*i/16;sh.lineTo(r*Math.cos(a),yc+r*Math.sin(a));}
-   sh.lineTo(hl+1.5,bot);for(let i=0;i<=24;i++){const t=hl+1.5-i*(2*hl+3)/24;sh.lineTo(t,deck(t)-.02);}
+   sh.lineTo(hl+1.5,bot);for(let i=0;i<=24;i++){const t=hl+1.5-i*(2*hl+3)/24;sh.lineTo(t,deck(t)-.12);}
    const bg=new THREE.ExtrudeGeometry(sh,{depth:W,bevelEnabled:false});bg.translate(0,0,-W/2);
    const ua=bg.attributes.uv;for(let i=0;i<ua.count;i++)ua.setXY(i,ua.getX(i)/3,ua.getY(i)/3);
    K.add(bg,'bridge',BR.x,0,BR.z,ry);
+   {const v=[],uv=[],ix=[],n=24,hw=W/2-.45,E=hl+1.5;for(let i=0;i<=n;i++){const t=-E+i*2*E/n,y=deck(t)-.04;for(const s of [-1,1]){v.push(BR.x+BR.ux*t-BR.uz*s*hw,y,BR.z+BR.uz*t+BR.ux*s*hw);uv.push(s*hw/1.4,t/1.4);}
+      if(i){const o=(i-1)*2;ix.push(o,o+2,o+1,o+1,o+2,o+3);}}
+    const dg=new THREE.BufferGeometry();dg.setAttribute('position',new THREE.Float32BufferAttribute(v,3));dg.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));dg.setIndex(ix);dg.computeVertexNormals();
+    if(dg.attributes.normal.getY(0)<0){for(let k=0;k<ix.length;k+=3){const q=ix[k+1];ix[k+1]=ix[k+2];ix[k+2]=q;}dg.setIndex(ix);dg.computeVertexNormals();}
+    K.add(dg.toNonIndexed(),'rubble',0,0,0,0);}
    const ps=new THREE.Shape();ps.moveTo(-hl-1.5,deck(hl)-.1);for(let i=0;i<=24;i++){const t=-hl-1.5+i*(2*hl+3)/24;ps.lineTo(t,deck(t)+.95);}for(let i=0;i<=24;i++){const t=hl+1.5-i*(2*hl+3)/24;ps.lineTo(t,deck(t)-.1);}
    for(const sd of [-1,1]){const pg=new THREE.ExtrudeGeometry(ps,{depth:.5,bevelEnabled:false});pg.translate(0,0,-.25+sd*(W/2-.25));
      const pu=pg.attributes.uv;for(let i=0;i<pu.count;i++)pu.setXY(i,pu.getX(i)/3,pu.getY(i)/3);K.add(pg,'bridge',BR.x,0,BR.z,ry);}
@@ -2853,7 +2931,7 @@ function frame(){
   phase+=dt*sp*1.1*moving;
   yawVel=lerp(yawVel,(P.yaw-lastYaw)/Math.max(dt,1e-3),Math.min(1,dt*10));lastYaw=P.yaw;
   camera.position.set(P.x,P.y+1.7-(GAME.duck||0)+(P.air?0:Math.abs(Math.sin(phase))*.07*moving),P.z);
-  camera.rotation.set(P.pitch,P.yaw,0);
+  camera.rotation.set(P.pitch,P.yaw,0);if(GAME.cam)GAME.cam(camera,dt);
   sky.position.copy(camera.position);
   if(!started){P.yaw+=Math.sin(T*.3)*.00015;}
   orientShafts();
@@ -2899,6 +2977,7 @@ if(WD){
  const flatEnough=(x,z,r,tol)=>{const h0=terrainH(x,z);for(let a=0;a<6.283;a+=.79)if(Math.abs(terrainH(x+Math.cos(a)*r,z+Math.sin(a)*r)-h0)>tol)return false;return true;};
  // a stone church: nave, a square tower at the west end, a tall slate spire you can see from a long way off
  const KEEP=[];
+ const ASHR=[];   // Ashford's burnt houses, so the opening can show them standing the night they burned
  function church(x,z,rot,s,ruined){KEEP.push([x,z,15*s]);const W=local(x,z,rot),nw=8*s,nd=16*s,nh=8*s,y=ground(x,z,9*s)-.3,key=ruined?'stoneDark':'ashlar';
    K.add(boxUV(nw,nh+1.5,nd,3),key,x,y+nh/2-.75,z,rot);if(!ruined)roofOn(K,nw,nd,nh+.75,4.6*s,'slate',key,.7,rot,x,y-.75,z);
    const [tx,tz]=W(0,-nd/2-2.4*s),th=ruined?12*s:21*s;K.add(boxUV(5*s,th,5*s,3),key,tx,y+th/2-.5,tz,rot);
@@ -2921,6 +3000,7 @@ if(WD){
    const side=(ax,az,bx,bz)=>{const L=Math.hypot(bx-ax,bz-az),n=3,ry=Math.atan2(bx-ax,bz-az)+Math.PI/2;for(let i=0;i<n;i++){if(lr()<.22)continue;const t0=i/n,t1=(i+1)/n,h=LR(1.2,burnt?5:3.8);
      const [p0x,p0z]=W(ax+(bx-ax)*t0,az+(bz-az)*t0),[p1x,p1z]=W(ax+(bx-ax)*t1,az+(bz-az)*t1);K.add(boxUV(L/n,h,.6,3),key,(p0x+p1x)/2,y+h/2-.3,(p0z+p1z)/2,rot+ry);indexWall([p0x,p0z,p1x,p1z]);}};
    side(-w/2,-d/2,w/2,-d/2);side(w/2,-d/2,w/2,d/2);side(w/2,d/2,-w/2,d/2);side(-w/2,d/2,-w/2,-d/2);
+   if(burnt)ASHR.push({x,z,rot,w,d,y});
    if(burnt)for(let i=0;i<3;i++){const [bx,bz]=W(LR(-w/3,w/3),LR(-d/3,d/3));K.add(new THREE.BoxGeometry(.35,.35,LR(4,7)),'char',bx,y+LR(.4,2.2),bz,rot+LR(-.5,.5),LR(-.5,.5),LR(-.3,.3));}}
  function mine(x,z,rot){const W=local(x,z,rot),y=ground(x,z,6);
    for(let i=0;i<5;i++){const [rx,rz]=W(LR(-9,9),LR(-6,-14));K.add(rockGeo(LR(3,6),LR(.8,1.3),LR(.8,1.3),lr()*50,LR(.6,1)),'rock',rx,y+LR(0,1.5),rz,lr()*6);trees.push([rx,rz,4]);}
@@ -2962,9 +3042,23 @@ if(WD){
  // somewhere a little above the town, off the road, for a windmill
  function rise(p,r0,r1){let best=null,bh=-1e9;for(let i=0;i<120;i++){const a=lr()*6.283,r=LR(r0,r1),x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(roadDist(x,z)<14||nearStream(x,z,12)||!inWorld(x,z,60))continue;
    const h=terrainH(x,z);if(h>bh&&flatEnough(x,z,4,1.6)){bh=h;best=[x,z];}}return best;}
+ // Ashford as it was: whole houses over the ruins, the church with its roof and spire. Hidden; the opening shows it, then burns it
+ function ashNight(p){const all=new THREE.Group();all.visible=false;scene.add(all);const houses=[];
+   for(const r of ASHR){const g=new THREE.Group();g.position.set(r.x,0,r.z);g.rotation.y=r.rot;all.add(g);const k=kit(),rk=kit(),w=r.w+1,d=r.d+1,wh=5.4,rg=new THREE.Group();
+     k.add(boxUV(w,wh+.6,d,3),'timber',0,r.y+wh/2-.3,0);
+     for(const sd of [-1,1])for(const t of [-.25,.25]){k.add(new THREE.PlaneGeometry(.9,1.1),'lit',sd*(w/2+.02),r.y+2.3,t*d,sd*Math.PI/2);}
+     k.add(new THREE.PlaneGeometry(.9,1.1),'lit',w*.2,r.y+2.3,d/2+.02);
+     roofOn(rk,w,d,wh,4.2,'thatch','timber',.7,0,0,r.y,0);
+     k.build(LM,g);rk.build(LM,rg);g.add(rg);houses.push({x:r.x,z:r.z,y:r.y,rot:r.rot,w,d,g,roof:rg});}
+   const cx=p.x+14,cz=p.z-10,rot=.4,y=ground(cx,cz,9)-.3,W=local(cx,cz,rot),[tx,tz]=W(0,-16/2-2.4),cg=new THREE.Group(),k=kit();all.add(cg);
+   roofOn(k,8,16,8.75,4.6,'slate','stoneDark',.7,rot,cx,y-.75,cz);
+   k.add(boxUV(5,9.5,5,3),'stoneDark',tx,y+12+4.75-.6,tz,rot);k.add(new THREE.ConeGeometry(3.9,12,4,1,true),'slate',tx,y+21-.5+6,tz,rot+Math.PI/4);
+   {const [lx,lz]=W(0,-16/2-4.92);k.add(new THREE.PlaneGeometry(1,1.6),'lit',lx,y+17,lz,rot+Math.PI);}
+   k.build(LM,cg);
+   window.__ashNight={g:all,houses,church:{x:cx,z:cz,y,tx,tz,top:y+21,g:cg}};}
  for(const p of WD.places){const lw=lockW(p.x,p.z);if(lw>.5&&!['camp','shrine','charcoal','farm'].includes(p.kind))continue;
    if(p.kind==='town'){
-     if(p.id==='ashford'){town(p,12,{ruins:true});church(p.x+14,p.z-10,.4,1,true);continue;}
+     if(p.id==='ashford'){KEEP.push([p.x+14,p.z-10,16]);town(p,12,{ruins:true});church(p.x+14,p.z-10,.4,1,true);ashNight(p);continue;}
      if(p.r>=80){let c=null;for(let i=0;i<80&&!c;i++){const a=lr()*6.283,r=LR(8,p.r*.4),x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(roadDist(x,z)>18&&!housePos.some(q=>Math.hypot(q[0]-x,q[1]-z)<16)&&flatEnough(x,z,8,i<40?2:4))c=[x,z];}
        if(c){church(c[0],c[1],Math.atan2(p.x-c[0],p.z-c[1]),1.3);housePos.push(c);}}
      town(p,Math.max(4,Math.round(p.r/8)),{roof:p.id==='amberley'?['thatch','red','thatch']:p.id==='highfold'?['slate','slate','brown']:['red','brown','thatch','slate']});
@@ -2986,17 +3080,37 @@ if(WD){
  {const gapW=[];for(const p of STREAM)if(p[0]<-250)gapW.push([p,4.2]);const mr=WRIV.find(r=>r.id==='r_main');if(mr)for(let i=0;i<Math.min(mr.pts.length,110);i++)gapW.push([mr.pts[i],mr.w]);
    for(let i=0;i<gapW.length;i+=2){const [p,w]=gapW[i];if(lr()<.45)continue;const a=lr()*6.283,inW=lr()<.45,d=inW?LR(0,w*.8):LR(w+1,w+7),x=p[0]+Math.cos(a)*d,z=p[1]+Math.sin(a)*d;
      if(roadDist(x,z)<6)continue;const s=inW?LR(.6,1.5):LR(1,2.6);K.add(rockGeo(s,LR(.8,1.4),LR(.8,1.4),lr()*80,LR(.5,.8)),'rock',x,(inW?p[2]-.5:terrainH(x,z))-s*.15,z,lr()*6.3);if(!inW)trees.push([x,z,s*.8]);}}
-  // the bridges themselves: an arched stone deck with parapets, piers on each bank
- for(const b of WBR){const ry=Math.atan2(b.ux,b.uz),n=10,seg=2*b.hl/n,P=(al,ac,y)=>[b.x+b.ux*al-b.uz*ac,y,b.z+b.uz*al+b.ux*ac];
-   for(let i=0;i<n;i++){const a0=-b.hl+i*seg,a1=a0+seg,am=(a0+a1)/2,y0=deckH(b,a0),y1=deckH(b,a1),pitch=-Math.atan((y1-y0)/seg),ym=(y0+y1)/2;
-     {const [x,y,z]=P(am,0,ym-.4);K.add(new THREE.BoxGeometry(5.8,.8,seg+.06),'ashlar',x,y,z,ry,pitch);}
-     for(const s of [-1,1]){const [x,y,z]=P(am,s*2.75,ym+.42);K.add(new THREE.BoxGeometry(.4,.95,seg+.06),'ashlar',x,y,z,ry,pitch);}}
-   // the arch beneath, springing from the banks
-   const span=b.hl*.82,crown=deckH(b,0)-.8,base=Math.min(b.lv-.6,crown-span*.5),rise=crown-base,m=9;
-   for(let i=0;i<m;i++){const t0=i/m,t1=(i+1)/m,al0=-span+2*span*t0,al1=-span+2*span*t1,y0=base+rise*Math.sin(Math.PI*t0),y1=base+rise*Math.sin(Math.PI*t1),L=Math.hypot(al1-al0,y1-y0);
-     const [x,y,z]=P((al0+al1)/2,0,(y0+y1)/2-.35);K.add(new THREE.BoxGeometry(5.4,.8,L+.1),'stone',x,y,z,ry,-Math.atan2(y1-y0,al1-al0));}
-   // piers fill from the arch's feet up to the deck, so no daylight shows under the ends
-   for(const s of [-1,1]){const al=s*(b.hl-1.6),top=deckH(b,al),bot=Math.min(base,terrainH(...P(al,0,0).filter((_,i)=>i!==1)))-1,[x,,z]=P(al,0,0);K.add(new THREE.BoxGeometry(5.6,top-bot,3.4),'stone',x,(top+bot)/2-.5,z,ry);}}
+  // the bridges themselves: one solid stone body with an arch through it, its top following the deck, parapets along both sides,
+ // footings down into the banks (built like the valley's own bridge, so nothing floats and no daylight shows where it should not)
+ for(const b of WBR){const ry=Math.atan2(-b.uz,b.ux),W=5.8,E=b.hl+1.5,deck=al=>deckH(b,Math.max(-b.hl,Math.min(b.hl,al)));
+   const at=al=>terrainH(b.x+b.ux*al,b.z+b.uz*al);
+   const span=b.hl*.78,crown=deck(0)-1.1,base=Math.min(b.lv-.4,crown-span*.45),rise=crown-base;
+   const foot=Math.min(base,at(-E),at(E),b.lv-1)-2.5;
+   const sh=new THREE.Shape();sh.moveTo(-E,foot);sh.lineTo(-span,foot);sh.lineTo(-span,base);
+   for(let i=1;i<=18;i++){const t=i/18;sh.lineTo(-span+2*span*t,base+rise*Math.sin(Math.PI*t));}
+   sh.lineTo(span,foot);sh.lineTo(E,foot);
+   for(let i=0;i<=28;i++){const al=E-i*2*E/28;sh.lineTo(al,deck(al)-.12);}
+   const bg=new THREE.ExtrudeGeometry(sh,{depth:W,bevelEnabled:false});bg.translate(0,0,-W/2);
+   {const ua=bg.attributes.uv;for(let i=0;i<ua.count;i++)ua.setXY(i,ua.getX(i)/3,ua.getY(i)/3);}
+   K.add(bg,'stone',b.x,0,b.z,ry);
+   // the deck: paving laid across the top, its stones running across the way
+   {const v=[],uv=[],ix=[],n=28,hw=W/2-.4,c=Math.cos(ry),sn=Math.sin(ry);
+    for(let i=0;i<=n;i++){const al=-E+i*2*E/n,y=deck(al)-.04;for(const s of [-1,1]){const lz=s*hw;v.push(b.x+al*c+lz*sn,y,b.z-al*sn+lz*c);uv.push(s*hw/1.4,al/1.4);}
+      if(i){const o=(i-1)*2;ix.push(o,o+2,o+1,o+1,o+2,o+3);}}
+    const dg=new THREE.BufferGeometry();dg.setAttribute('position',new THREE.Float32BufferAttribute(v,3));dg.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));dg.setIndex(ix);dg.computeVertexNormals();
+    if(dg.attributes.normal.getY(0)<0){for(let k=0;k<ix.length;k+=3){const t=ix[k+1];ix[k+1]=ix[k+2];ix[k+2]=t;}dg.setIndex(ix);dg.computeVertexNormals();}
+    K.add(dg.toNonIndexed(),'rubble',0,0,0,0);}
+   // a ring of dressed stone round the arch, a hand's breadth proud of the face
+   const rs=new THREE.Shape();rs.moveTo(-span-.7,base-.2);
+   for(let i=0;i<=18;i++){const t=i/18;rs.lineTo(-span-.7+(2*span+1.4)*t,base+(rise+.75)*Math.sin(Math.PI*t)-.2*(1-Math.sin(Math.PI*t)));}
+   for(let i=18;i>=0;i--){const t=i/18;rs.lineTo(-span+2*span*t,base+rise*Math.sin(Math.PI*t));}
+   const rg=new THREE.ExtrudeGeometry(rs,{depth:W+.24,bevelEnabled:false});rg.translate(0,0,-(W+.24)/2);{const ua=rg.attributes.uv;for(let i=0;i<ua.count;i++)ua.setXY(i,ua.getX(i)/2,ua.getY(i)/2);}
+   K.add(rg,'ashlar',b.x,0,b.z,ry);
+   // parapets
+   const ps=new THREE.Shape();ps.moveTo(-E,deck(-E)-.3);for(let i=0;i<=28;i++){const al=-E+i*2*E/28;ps.lineTo(al,deck(al)+.95);}for(let i=0;i<=28;i++){const al=E-i*2*E/28;ps.lineTo(al,deck(al)-.3);}
+   for(const sd of [-1,1]){const pg=new THREE.ExtrudeGeometry(ps,{depth:.45,bevelEnabled:false});pg.translate(0,0,-.225+sd*(W/2-.225));
+     const pu=pg.attributes.uv;for(let i=0;i<pu.count;i++)pu.setXY(i,pu.getX(i)/2.5,pu.getY(i)/2.5);K.add(pg,'ashlar',b.x,0,b.z,ry);
+     for(const s of [-1,1]){const al=s*(E-.3),c=Math.cos(ry),sn=Math.sin(ry),lz=sd*(W/2-.225);K.add(new THREE.BoxGeometry(.7,1.5,.7),'ashlar',b.x+al*c+lz*sn,deck(al)+.55,b.z-al*sn+lz*c,ry);}}}
 
  K.build(LM,scene);
  /* ---------- life on the roads: travellers, a pedlar, a stranded carter, deer in the glades ---------- */
@@ -3019,12 +3133,18 @@ if(WD){
   for(let i=0,h=0;i<400&&h<8;i++){const rd=WD.roads[(lr()*WD.roads.length)|0],P=roads[rd.id];if(!P)continue;const p=P[(lr()*P.length)|0],a=lr()*6.283,d=LR(45,110),x=p[0]+Math.cos(a)*d,z=p[1]+Math.sin(a)*d;
     if(!inWorld(x,z,80)||lockW(x,z)>.3||layerF(x,z)>.35||roadDist(x,z)<35||nearStream(x,z,10))continue;const rw=regionAt(x,z);if(rw.some(e=>(e[0]===5||e[0]===6)&&e[1]>.3))continue;
     const k=2+((lr()*3)|0);for(let j=0;j<k;j++)spawn('deer',x+LR(-8,8),z+LR(-8,8),{anim:'deer',stag:j===0&&lr()<.6,type:'wander',radius:22,home:[x,z],speed:.9,talk:false,r:.5});h++;}}
+ /* ---------- the people of the story: refugees by the village, the priest who stayed in Ashford ---------- */
+ {const at=(id,dx,dz,role,name,story,face,stand)=>{const p=WD.places.find(q=>q.id===id);if(!p)return null;const x=p.x+dx,z=p.z+dz;
+    const n=spawn(role,x,z,{type:'stand',face:face||0,fixedY:stand?terrainH(x,z):undefined,name});n.story=story;return n;};
+  at('camp',5,4,'woman','Refugee','maud',2.4,true);at('camp',-6,7,'villager','Refugee','refugee1',.6,true);at('camp',8,-6,'merchant','Refugee','refugee2',-2.2,true);
+  at('camp',-3,-6,'child','Child','',.0,true);
+  at('ashford',14,-2,'priest','Priest','aldous',Math.PI,true);at('ashford',-12,9,'woman','Survivor','survivor',1.2,true);}
  if(LBB.length)buildBillboards(LBB);
  smokeSpots.slice(SMOKE0).forEach((sp,k)=>{for(let i=0;i<10;i++){const s=new THREE.Sprite(new THREE.SpriteMaterial({map:smokeTex,transparent:true,alphaTest:.3,depthWrite:false,opacity:.4}));scene.add(s);smoke.push({s,p:sp,t:i/10,k:k+500,j:lr()});}});}
 
 updateTiles(0,true);
 requestAnimationFrame(frame);
-window.__valley={WB,WD,LOCK,lockW,WBR,clearPlants,forestAt,get tiles(){return [TTER.size,TTRE.size];},
+window.__valley={RMASK,WB,WD,LOCK,lockW,WBR,clearPlants,forestAt,get tiles(){return [TTER.size,TTRE.size];},
   bake(){const nx=WB.nx,nz=WB.nz,h=new Array(nx*nz),f=new Array(nx*nz);for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const x=WB.x0+i*WB.cell,z=WB.z0+j*WB.cell;h[j*nx+i]=+formulaH(x,z).toFixed(1);f[j*nx+i]=+forestD(x,z).toFixed(3);}
     const dec=(a,s)=>a.filter((p,i)=>i%s===0||i===a.length-1).map(p=>[+p[0].toFixed(1),+p[1].toFixed(1)]);
     const ring=(c,d,lim)=>shoreRing(c,d,lim,90).map((r,i)=>{const a=i/90*6.2832;return [+(c.x+Math.cos(a)*c.rx*r).toFixed(1),+(c.z+Math.sin(a)*c.rz*r).toFixed(1)];});
@@ -3033,10 +3153,15 @@ window.__valley={WB,WD,LOCK,lockW,WBR,clearPlants,forestAt,get tiles(){return [T
   GAME,NPCS,FLOORS,scene,groundH,allowed,roadDist,inVillage,inCourt,nearStream,trees,say,talkHint,talkBtn,talkBox,keys,canvas,coarse,V,TOWN_C,get INN(){return INN;},get torch(){return torchUp;},wallHit,castleBlocked,floorH,cw,CTOP,CS,spawn,GATEW,RUIN,M,kit,boxUV,roofOn,indexWall,get swingT(){return swingT;},get started(){return started;},get near(){return nearNPC;}};
 })();
 </script>
+<script>__load(.8)</script>
 <script src="people-core.js?v=3"></script>
-<script src="game.js?v=11"></script>
-<script src="people.js?v=5"></script>
-<script src="quests.js?v=3"></script>
+<script src="game.js?v=16"></script>
+<script src="encounters.js?v=1"></script>
+<script src="people.js?v=6"></script>
+<script src="quests.js?v=4"></script>
+<script src="story.js?v=5"></script>
+<script src="intro.js?v=3"></script>
+<script type="module" src="valley-music.js?v=1"></script>
 <script src="menu.js?v=1"></script>
 </body>
 </html>

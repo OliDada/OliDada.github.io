@@ -44,7 +44,7 @@ PLACES=[
  dict(id='amberley',name='Amberley',kind='town',x=-2000,z=-450,r=100),
  dict(id='westmill',name='Westmill',kind='town',x=-2400,z=-80,r=55),
  dict(id='highfold',name='Highfold',kind='town',x=200,z=-1160,r=70),
- dict(id='camp',name='Refugee camp',kind='camp',x=230,z=-215,r=30),
+ dict(id='camp',name='Refugee camp',kind='camp',x=82,z=-318,r=30),
  dict(id='heart',name='The Blight',kind='blight',x=2150,z=-480,r=120),
  dict(id='r_amber',name='The Amber Vale',kind='region',x=-2250,z=-700,r=0),
  dict(id='r_green',name='The Greenwood',kind='region',x=-350,z=1300,r=0),
@@ -144,15 +144,27 @@ Driv=np.full(X.shape,1e9)
 for rv in RIVERS:
     Driv=np.minimum(Driv,polyd(rv['pts'])[0])
 # landmarks stand up where they can be seen: the monastery and the watchtower on knolls, hills closing the view behind Oakhurst
-for (kx,kz,kr,kh) in [(-800,1000,170,38),(-2000,-450,0,0),(-150,905,170,46),(-150,1380,320,40),(250,1250,300,40),(-500,1300,260,34),(1460,-250,0,0)]:
+for (kx,kz,kr,kh) in [(-800,1000,170,38),(-2000,-450,0,0),(-150,1380,320,40),(250,1250,300,40),(-500,1300,260,34),(1460,-250,0,0)]:
     if kr:T+=kh*np.exp(-((Xd-kx)**2+(Zd-kz)**2)/(kr*kr))*sm(50,230,Driv)
 for p in PLACES:                                     # towns sit on level ground
     if p['r']<=0:continue
-    d=np.hypot(X-p['x'],Z-p['z']);c=T[int((p['z']-z0)/cell),int((p['x']-x0)/cell)];T=T*(1-.8*sm(p['r']*1.6,p['r']*.6,d))+c*.8*sm(p['r']*1.6,p['r']*.6,d)
+    d=np.hypot(X-p['x'],Z-p['z']);c=T[int((p['z']-z0)/cell),int((p['x']-x0)/cell)]
+    T=T*(1-.8*sm(p['r']*1.6,p['r']*.6,d))+c*.8*sm(p['r']*1.6,p['r']*.6,d)
 wn=1.0   # the whole world, peaks included, comes from the design below
 L=LOCK;dl=np.hypot(np.maximum(0,np.maximum(L['x0']-X,X-L['x1'])),np.maximum(0,np.maximum(L['z0']-Z,Z-L['z1'])))
 w=sm(L['f']*.6,L['f']+650,dl)*wn          # the valley's own ridges taper away over most of a kilometre instead of stopping at a line
 Hn=H0*(1-w)+T*w
+# Ashford wants a broad, level shelf: the whole town on one floor, the land easing off well beyond it
+# Oakhurst sits down at the level of the meadows south and west of it, not up on its own rise
+for p in PLACES:
+    if p['id']!='oakhurst':continue
+    d=np.hypot(X-p['x'],Z-p['z']);ang=np.arctan2(Z-p['z'],X-p['x'])
+    ring=(d>p['r']*2.2)&(d<p['r']*3.4)&((Z-p['z'])>-.2*d)&((X-p['x'])<.2*d)   # the arc from west round to south
+    c=float(np.median(Hn[ring]));k=sm(p['r']*3.0,p['r']*1.4,d);Hn=Hn*(1-k)+c*k
+for p in PLACES:
+    if p['id']!='ashford':continue
+    d=np.hypot(X-p['x'],Z-p['z']);c=float(Hn[d<p['r']*.8].mean())
+    k=sm(p['r']*3.0,p['r']*1.5,d);Hn=Hn*(1-k)+c*k
 # ---------------- regions ----------------
 REG=['valley','amber','green','oldwood','rot','ash','blight','north','warm']
 C={'valley':((-200,-350),800),'amber':((-2250,-350),700),'green':((-200,1150),700),'oldwood':((560,-300),210),'rot':((1050,-260),260),'ash':((1600,-100),380),'blight':((2150,-480),300),'north':((-300,-2200),520),'warm':((0,2300),320)}

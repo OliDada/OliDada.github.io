@@ -118,14 +118,14 @@ function abandon(q){const d=data();d.active=d.active.filter(a=>a!==q);if(q.type=
 function kill(foe){const d=data();for(const q of d.active)if(q.type==='hunt'&&q.foe===foe&&q.k<q.n){q.k++;Q.tell('scroll',q.k>=q.n?q.title+': done. Return to '+q.first+'.':q.title+': '+q.k+'/'+q.n);}refresh();}
 
 /* ---------- talking ---------- */
-function options(n){if(!n.person)return [];const d=data(),mine=activeOf(n),out=[];
+function options(n){if(!n.person)return [];const d=data(),mine=activeOf(n),out=G.story?G.story.options(n):[];
   const forMe=d.active.find(q=>q.type==='deliver'&&q.to===n.person.id);
   if(forMe)out.push(['q:deliver','I have a parcel for you, from '+forMe.first+'.']);
   if(mine)out.push(mine.type!=='deliver'&&ready(mine)?['q:done',mine.type==='bring'?'I have what you asked for.':mine.type==='hunt'?'It is done.':'I found your locket.']:['q:about','About the task you gave me.']);
   else if(available(n))out.push(['q:ask','Do you have any work for me?']);
   return out.concat(smallTalk(n));}
-function followups(n,t){const f=talkNext(n,t);if(f)return f;return t==='q:ask'&&offer?[['q:yes','I will do it.'],['return','Not just now.']]:[['return','Ask about something else.']];}
-function choose(n,t){const d=data(),mine=activeOf(n);
+function followups(n,t){if(t.startsWith('s:')&&G.story)return G.story.followups(n,t);const f=talkNext(n,t);if(f)return f;return t==='q:ask'&&offer?[['q:yes','I will do it.'],['return','Not just now.']]:[['return','Ask about something else.']];}
+function choose(n,t){if(t.startsWith('s:')&&G.story){const l=G.story.choose(n,t);if(l!==null)return l;}const d=data(),mine=activeOf(n);
   {const l=talk(n,t);if(l!==null)return l;}
   if(t==='q:ask'){offer=available(n)?make(n):null;return offer?offer.pitch+' There '+(offer.pay===1?'is ':'are ')+coins(offer.pay)+' in it for you.':'Nothing just now. Ask me another day.';}
   if(t==='q:yes'){if(d.active.length>=MAX){offer=null;return 'You look as though you have promised enough already. Finish something first, then come back.';}return accept(n);}
@@ -232,7 +232,7 @@ const css=document.createElement('style');css.textContent=`
 #vgQuest i{font-style:normal;color:#f2c860;margin-right:.35rem;font-size:.7em;vertical-align:.12em}
 body:has(#vgWrap[style*="display: flex"]) :is(#vgQuest,#vgCompass),body:has(#wmap[style*="display: flex"]) :is(#vgQuest,#vgCompass){visibility:hidden}`;
 document.head.appendChild(css);
-function journal(){const d=data();let h='<div class="top"><h2>Journal</h2><div class="purse">'+Q.img('coin')+S().coins+' coins</div></div><h3>Tasks in hand</h3>';
+function journal(){const d=data();let h='<div class="top"><h2>Journal</h2><div class="purse">'+Q.img('coin')+S().coins+' coins</div></div>'+(G.story?G.story.journal():'')+'<h3>Tasks in hand</h3>';
   if(!d.active.length)h+='<div class="none">You have promised nothing to anyone. Ask people for the news to hear who needs a hand. Anyone nearby with work for you shows as a small ring on the compass.</div>';
   d.active.forEach((q,i)=>{const hint=hintOf(q),on=d.track===q.id;
     h+='<div class="q"><div class="qt"><b>'+(i+1)+'</b><span>'+q.title+' <small>for '+q.from+'</small></span></div><div class="qo">'+objective(q)+'</div>'+(hint?'<div class="qh">'+hint+'</div>':'')
@@ -241,7 +241,7 @@ function journal(){const d=data();let h='<div class="top"><h2>Journal</h2><div c
   if(d.active.length&&n)h+='<div class="qlog">'+(n===1?'One more person':n+' more people')+' you know of '+(n===1?'has':'have')+' work for you. They are marked ! on the map.</div>';
   if(d.total)h+='<h3>Finished</h3><div class="qlog">'+d.log.slice().reverse().join(' · ')+(d.total>d.log.length?' · and '+(d.total-d.log.length)+' before that':'')+'</div>';
   return h;}
-function click(act,id){const d=data(),q=d.active.find(a=>a.id===id);if(!q)return '';
+function click(act,id){const d=data();if(act==='track'&&id==='story'){d.track='story';refresh();return 'Following the story.';}const q=d.active.find(a=>a.id===id);if(!q)return '';
   if(act==='track'){d.track=id;dropAsk=null;refresh();return 'Following: '+q.title+'.';}
   if(act==='drop'){if(dropAsk!==id){dropAsk=id;return q.first+' will be disappointed.';}dropAsk=null;abandon(q);return 'You let it go.';}return '';}
 
@@ -269,10 +269,12 @@ function targets(q){const g=who(q.id);if(q.type==='deliver'){const m=who(q.to);r
 function refresh(){if(!folk()[0]||!folk()[0].person)return;const d=data();POINTS=[];
   for(const q of d.active){if(q.type==='bring'){if(ready(q)){if(!q.told){q.told=true;Q.tell('scroll',q.title+': return to '+q.first+'.');}}else q.told=false;}
     for(const t of targets(q))POINTS.push({t,kind:d.track===q.id?'track':'task'});}
+  const storyOn=G.story&&(d.track==='story'||!d.active.some(q=>q.id===d.track));if(G.story)for(const t of G.story.targets())POINTS.push({t,kind:storyOn?'track':'task'});
   for(const n of folk()){if(!n.person||n.sleep||n.down||n.dead)continue;const dd=Math.hypot(n.x-P.x,n.z-P.z);if(dd<45&&Math.abs(n.y-P.y)<8&&available(n)){d.known[n.person.id]=1;POINTS.push({t:n,kind:'giver'});}}
   const c=V.NPCS[0]&&V.NPCS[0].sp.material.color;if(c)keepMat.color.copy(c).lerp(WHITE,.55);
-  const t=d.active.find(q=>q.id===d.track)||d.active[0];
-  if(t&&V.started){let s=short(t);if(t.type==='find'&&!t.found&&!targets(t).length)s='Search here for a glint';s='<i>◆</i>'+s;if(hud.innerHTML!==s)hud.innerHTML=s;hud.style.display='block';}else hud.style.display='none';}
+  const t=storyOn?null:d.active.find(q=>q.id===d.track)||d.active[0];const ss=storyOn&&G.story.short();
+  if(ss&&V.started){const s='<i>✦</i>'+ss;if(hud.innerHTML!==s)hud.innerHTML=s;hud.style.display='block';}
+  else if(t&&V.started){let s=short(t);if(t.type==='find'&&!t.found&&!targets(t).length)s='Search here for a glint';s='<i>◆</i>'+s;if(hud.innerHTML!==s)hud.innerHTML=s;hud.style.display='block';}else hud.style.display='none';}
 // a thin line of compass across the top: the four winds, and a mark for each place a task sends you
 const HALF=1.75;
 function compass(){const dpr=Math.min(2,window.devicePixelRatio||1),w=comp.clientWidth,h=30;if(!w)return;if(comp.width!==Math.round(w*dpr)){comp.width=Math.round(w*dpr);comp.height=h*dpr;}
@@ -317,7 +319,8 @@ G.mapMarks=function(g,proj,fs,W,H){if(!folk()[0]||!folk()[0].person)return;const
         g.fillStyle='rgba(124,36,25,.16)';g.strokeStyle='#7c2419';g.lineWidth=2;g.setLineDash([6,5]);g.beginPath();g.ellipse(px,py,pr,pr*.6,0,0,6.283);g.fill();g.stroke();g.setLineDash([]);seal(q.area[0],q.area[1],i,true,on);}
       if(q.type==='bring'&&q.item==='pelt')for(const s of nearest(G.dens||[],1))seal(s[0],s[1],i,true,on);}
     if(giver)seal(giver.x,giver.z,i,rd,on&&rd);});
-  const y=H-fs*1.3,txt='!  someone you know has work      ●  a task from your journal';g.textAlign='left';g.font='italic '+fs+'px "IM Fell English",Georgia,serif';g.lineWidth=3;g.strokeStyle='rgba(236,222,186,.9)';
+  if(G.story)for(const t of G.story.targets()){const [px,py]=proj(t.x,t.z);g.fillStyle='#2e1c10';g.beginPath();g.arc(px,py,r*1.05,0,6.283);g.fill();g.fillStyle='#f2c860';g.font='bold '+Math.round(r*1.3)+'px Georgia,serif';g.fillText('✦',px,py+1);}
+  const y=H-fs*1.3,txt='✦  the story      !  someone you know has work      ●  a task from your journal';g.textAlign='left';g.font='italic '+fs+'px "IM Fell English",Georgia,serif';g.lineWidth=3;g.strokeStyle='rgba(236,222,186,.9)';
   g.strokeText(txt,fs,y);g.fillStyle='#2e1c10';g.fillText(txt,fs,y);};
 G.quests={options,choose,followups,journal,click,kill,data,available,make,ready,refresh};
 })();
