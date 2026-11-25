@@ -192,21 +192,21 @@
       drawHead(head);
       if(!running){
         if(won)overlay('Þú náðir mér!','Ég er allur þinn ♥',time);
-        else if(over)overlay('Úps!','Ýttu á Reyna aftur',time);
-        else if(points>0)overlay('Pása','Ýttu á Halda áfram',time);
-        else overlay('Tilbúin?','Ýttu á Byrja eða á borðið',time);
+        else if(over)overlay('Úps!','',time);
+        else if(points>0)overlay('Pása','',time);
+        else overlay('Tilbúin?','',time);
       }
       drawParticles(time);
       score.textContent='♥'.repeat(points)+'♡'.repeat(Math.max(0,target-points));score.setAttribute('aria-label',`${points} af ${target} stigum`);
     }
     function loop(){if(disposed)return;frame=raf(loop);if(typeof document==='undefined'||!document.hidden)draw();}
     function stop(){clearInterval(timer);timer=null;running=false;}
-    function pause(){if(running){stop();start.textContent='Halda áfram';message.textContent='Í pásu. Ég bíð eftir þér.';draw();}}
+    function pause(){if(running){stop();start.textContent='Halda áfram';message.textContent='';draw();}}
     function reset(){stop();body=[{x:4,y:6},{x:3,y:6},{x:2,y:6}];prev=null;direction={x:1,y:0};queue=[];facing=1;food={x:7,y:6};foodBorn=0;points=0;over=false;won=false;particles.length=0;start.textContent='Byrja';message.textContent=saved.won&&!config.vann?config.skilabod:'';if(saved.won)config.vann?.();draw();}
     function tick(){
       const time=now();if(queue.length)direction=queue.shift();if(direction.x)facing=direction.x;
       const result=stepSnake(body,direction,food,size);
-      if(result.dead){stop();over=true;shakeUntil=time+350;start.textContent='Reyna aftur';message.textContent='Úps! Prófum aftur. Þú þarft ekki að flýta þér.';draw();return;}
+      if(result.dead){stop();over=true;shakeUntil=time+350;start.textContent='Reyna aftur';message.textContent='';draw();return;}
       prev=body;body=result.body;lastTick=time;
       if(result.ate){
         points++;const fx=(food.x+.5)*U,fy=(food.y+.5)*U;burst(fx,fy,12,time);particles.push({x:fx,y:fy-10,vx:0,vy:-.5,g:0,text:'+1',c:'#ffd56b',t:time,life:800});
@@ -225,7 +225,7 @@
     const keyHandler=e=>{const dir={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],w:[0,-1],s:[0,1],a:[-1,0],d:[1,0]}[e.key];if(dir){e.preventDefault();turn(...dir);}else if(e.key===' '&&e.target===canvas){e.preventDefault();start.click();}};
     el.addEventListener('keydown',keyHandler);
     const visibility=()=>{if(document.hidden)pause();};document.addEventListener('visibilitychange',visibility);window.addEventListener('blur',pause);
-    el.append(intro,score,canvas,start,message,make('p','dauft','Strjúktu til að beygja. Jaðrarnir tengjast. Þú getur alltaf tekið pásu.'));reset();
+    el.append(score,canvas,start,message);reset();
     if(raf)loop();
     return ()=>{disposed=true;stop();if(frame&&typeof cancelAnimationFrame==='function')cancelAnimationFrame(frame);canvas.removeEventListener('pointerdown',down);canvas.removeEventListener('pointermove',move);canvas.removeEventListener('pointerup',up);canvas.removeEventListener('pointercancel',up);el.removeEventListener('keydown',keyHandler);document.removeEventListener('visibilitychange',visibility);window.removeEventListener('blur',pause);};
   };

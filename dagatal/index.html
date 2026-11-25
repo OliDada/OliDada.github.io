@@ -291,7 +291,7 @@ dialog::backdrop{background:#071c17c9;backdrop-filter:blur(3px)}
 .hv-svar.ja{color:var(--tronuber)}
 .hv-titill{font:400 clamp(1.7rem,7vw,2.2rem)/1.1 var(--display);color:var(--tronuber);margin:0 0 6px}
 .hv-lok .hv-hjortu{margin:0 0 10px}
-@media(max-width:380px){.hv-bord{gap:12px}.hv-kort{min-height:128px;padding:16px 8px}.hv-eda{width:40px;height:40px;font-size:.9rem}}
+@media(max-width:380px){.hv-bord{gap:12px}.hv-kort{min-height:128px;padding:16px 8px}.hv-kort.a{padding-right:24px}.hv-kort.b{padding-left:24px}.hv-eda{width:40px;height:40px;font-size:.9rem}}
 @media(prefers-reduced-motion:reduce){.hv-kort,.hv-stimpill,.hv-svar{transition:none;animation:none}}
 
 .hv-spurning{font:400 clamp(1.4rem,5.6vw,1.8rem)/1.2 var(--display);text-align:center;margin:0 0 16px;text-wrap:balance}
@@ -311,6 +311,7 @@ dialog::backdrop{background:#071c17c9;backdrop-filter:blur(3px)}
 
 /* Tengingar */
 .tg-leystir{display:grid;gap:8px;margin:10px 0 8px}
+.kg-adgerdir{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .tg-hopur{border-radius:10px;padding:10px 8px;text-align:center;border:2px solid var(--blek);animation:tgInn .4s cubic-bezier(.3,1.5,.5,1) both}
 .tg-hopur strong{display:block;font:800 .95rem/1.3 var(--body);text-transform:uppercase;letter-spacing:.04em}
 .tg-hopur span{font-size:.92rem}
@@ -407,6 +408,26 @@ dialog::backdrop{background:#071c17c9;backdrop-filter:blur(3px)}
 .kg-ordvis.virkt{background:#f6e3b0}
 .kg-ordvis.leyst{color:#347552;text-decoration:line-through;text-decoration-color:#34755288}
 @media(max-width:480px){.kg-listi{grid-template-columns:1fr}}
+/* ---------- Röðunarleikur (rada) ---------- */
+.rd-endi{font:700 .85rem/1 var(--body);color:#6b6457;margin:10px 4px 6px}
+.rd-listi{list-style:none;margin:0;padding:0;display:grid;gap:5px;touch-action:none}
+.rd-atr{display:flex;align-items:center;gap:10px;padding:4px 5px 4px 10px;background:#fff;border:2px solid var(--blek);border-radius:12px;box-shadow:0 3px 0 var(--blek);cursor:grab;user-select:none;-webkit-user-select:none;transition:background .25s,border-color .25s}
+.rd-atr.drag{cursor:grabbing;position:relative;z-index:3;box-shadow:0 10px 20px rgba(0,0,0,.25);transition:none}
+.rd-atr .rd-nr{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--pappir);border:1.5px solid var(--blek);font:800 .8rem/1 var(--body)}
+.rd-atr .rd-nafn{flex:1;font:600 1.05rem/1.1 var(--display);min-width:0}
+.rd-atr .rd-gildi{flex:none;font:800 .85rem/1 var(--body);color:var(--greni);opacity:0;transform:translateX(6px);transition:opacity .3s,transform .3s}
+.rd-atr .rd-orvar{flex:none;display:flex;gap:4px}
+.rd-atr .rd-orvar button{width:34px;height:32px;border:1.5px solid var(--blek);border-radius:9px;background:var(--pappir);color:var(--blek);display:grid;place-items:center;cursor:pointer;padding:0}
+.rd-atr .rd-orvar button:disabled{opacity:.3;cursor:default}
+.rd-atr .rd-orvar svg{width:18px;height:18px}
+.rd-atr.rett{background:#d9efd9;border-color:#2c7a4b}
+.rd-atr.rangt{background:#f8dede}
+.rd-atr.hrista{animation:hrista .4s}
+.rd-listi.buid .rd-atr{cursor:default;background:#d9efd9;border-color:#2c7a4b}
+.rd-listi.buid .rd-gildi{opacity:1;transform:none}
+.rd-listi.buid .rd-orvar{display:none}
+.rd-stada{text-align:center;margin:12px 0 0;font-weight:700}
+@media(prefers-reduced-motion:reduce){.rd-atr,.rd-atr .rd-gildi{transition:none}}
 </style>
 </head>
 <body>
@@ -426,7 +447,7 @@ dialog::backdrop{background:#071c17c9;backdrop-filter:blur(3px)}
 <div id="tilkynning" role="status" aria-live="polite"></div>
 <dialog id="gluggi" aria-labelledby="gluggi-titill"><div class="spjald" id="spjald"></div></dialog>
 
-<script src="games.js"></script>
+<script src="games.js?v=2"></script>
 <script>
 window.raesaDagatal = (CONFIG) => {
   "use strict";
@@ -443,7 +464,8 @@ window.raesaDagatal = (CONFIG) => {
   };
   const stokka = (a) => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const hreyfingLeyfd = !matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const erMynd = (s) => /\.(jpe?g|png|webp|gif|avif)$/i.test(s);
+  // Mynd = slóð með myndaendingu (líka með ?v=... aftan við) eða blob:/data:-slóð úr dulkóðaða efninu.
+  const erMynd = (s) => /^(blob:|data:image\/)/.test(s) || /\.(jpe?g|png|webp|gif|avif)(?=$|[?#])/i.test(s);
 
   /* ---------- Teiknuð tákn (í stað emoji) ---------- */
   const TAKN = {
@@ -454,7 +476,7 @@ window.raesaDagatal = (CONFIG) => {
     gjof: '<rect x="8" y="21" width="32" height="19" rx="1"/><rect x="5" y="14" width="38" height="7" rx="1"/><path d="M24 14v26M24 14c-6-10-14-4 0 0c14-4 6-10 0 0"/>',
     stjarna: '<path d="M24 5l5.6 12 13 1.6-9.6 9 2.5 13L24 34.200l-11.500 6.400 2.500-13-9.600-9 13-1.600z"/>'
   };
-  const TAKN_FYRIR = { inngangur: "bref", skilabod: "bref", listi: "bref", lag: "bref", midi: "midi", quiz: "leikur", tengingar: "leikur", hjortu: "leikur", pusl: "leikur", krossgata: "leikur", hvort: "leikur", liklegri: "leikur", minni: "leikur", ordarugl: "leikur", wordle: "leikur", snake: "leikur", hjol: "hjol", gjof: "gjof", recap: "stjarna", lok: "stjarna" };
+  const TAKN_FYRIR = { inngangur: "bref", skilabod: "bref", listi: "bref", lag: "bref", midi: "midi", quiz: "leikur", tengingar: "leikur", hjortu: "leikur", pusl: "leikur", krossgata: "leikur", hvort: "leikur", liklegri: "leikur", minni: "leikur", ordarugl: "leikur", wordle: "leikur", snake: "leikur", rada: "leikur", hjol: "hjol", gjof: "gjof", recap: "stjarna", lok: "stjarna" };
   const takn = (nafn) => { const d = h("div", {}); d.innerHTML = `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAKN[nafn] || TAKN.stjarna}</svg>`; return d.firstChild; };
 
   /* ---------- Vistun (hvaða kassar eru opnaðir, hvað vannst á hjólinu) ---------- */
@@ -473,7 +495,7 @@ window.raesaDagatal = (CONFIG) => {
   const kl = String(CONFIG.opnarKl).padStart(2, "0") + ":00";
 
   // Núllstilling (bara með leynilyklinum): ?lykill=...&reset=1 eða takkinn neðst á síðunni
-  const nullstilla = () => { try { localStorage.removeItem(LYKILL); for (const game of ["wordle", "snake"]) localStorage.removeItem("dagatal-leikur-" + CONFIG.ar + "-" + game); } catch (e) {} sp.delete("reset"); location.replace(location.pathname + "?" + sp.toString()); };
+  const nullstilla = () => { try { localStorage.removeItem(LYKILL); for (const game of ["wordle", "snake"]) localStorage.removeItem("dagatal-leikur-" + CONFIG.ar + "-" + game); Object.keys(localStorage).filter((k) => k.startsWith("dagatal-krossgata-")).forEach((k) => localStorage.removeItem(k)); } catch (e) {} sp.delete("reset"); location.replace(location.pathname + "?" + sp.toString()); };
   if (profun && sp.has("reset")) return nullstilla();
   if (profun) document.querySelector("main").append(h("p", { style: "text-align:center; margin-top:28px" },
     h("button", { class: "takki ljos", type: "button", style: "color:#cfe0d5; border-color:#cfe0d5", onclick: nullstilla }, "Núllstilla dagatalið (sést bara í prófun)")));
@@ -668,11 +690,13 @@ window.raesaDagatal = (CONFIG) => {
     spjald.scrollTop = 0;
   }
 
-  function parLeikur(el, dg, { kostir, hans, spurning }) {
+  // giska = true: hún giskar á hvað Óli valdi (rétt/rangt + verðlaun). Annars: eruð þið sammála?
+  function parLeikur(el, dg, { kostir, hans, spurning, giska }) {
       let nr = 0, sammala = 0, svor = [];
       const n = dg.spurningar.length;
-      const JA = ["Sammála.", "Sama og ég.", "Ég valdi það líka."];
-      const NEI = ["Gott val líka.", "Ég skil það vel.", "Bæði er gott, ef það er með þér."];
+      const JA = giska ? ["Rétt!", "Einmitt.", "Þú þekkir mig."] : ["Sammála.", "Sama og ég.", "Ég valdi það líka."];
+      const NEI = giska ? ["Nei, ég valdi hitt."] : ["Gott val líka.", "Ég skil það vel.", "Bæði er gott, ef það er með þér."];
+      const lagmark = giska ? (dg.lagmark || Math.ceil(dg.spurningar.length * .75)) : 0;
       const velja = (listi) => listi[Math.floor(Math.random() * listi.length)];
       const hjortu = () => h("div", { class: "hv-hjortu", "aria-hidden": "true" },
         dg.spurningar.map((_, i) => h("span", { class: i < svor.length ? (svor[i] ? "ja" : "nei") : i === nr ? "nu" : "" }, "♥")));
@@ -694,7 +718,7 @@ window.raesaDagatal = (CONFIG) => {
           setTimeout(() => {
             if (sama) {
               kort[i].classList.add("sama");
-              kort[i].append(h("span", { class: "hv-stimpill" }, "Við bæði"));
+              kort[i].append(h("span", { class: "hv-stimpill" }, giska ? "Rétt" : "Við bæði"));
               springa(kort[i]);
             } else {
               kort[i].append(h("span", { class: "hv-stimpill thu" }, "Þú"));
@@ -702,7 +726,7 @@ window.raesaDagatal = (CONFIG) => {
               kort[rett].append(h("span", { class: "hv-stimpill" }, CONFIG.hansNafn));
             }
             eftir.append(
-              h("p", { class: "hv-svar" + (sama ? " ja" : "") }, sama ? velja(JA) : (s.komment || velja(NEI))),
+              h("p", { class: "hv-svar" + (sama ? " ja" : "") }, giska ? [velja(sama ? JA : NEI), s.komment ? " " + s.komment : ""].join("") : (sama ? velja(JA) : (s.komment || velja(NEI)))),
               h("div", { class: "rod", style: "justify-content:center" }, h("button", { class: "takki", type: "button", onclick: () => { nr++; nr < n ? syna() : lok(); } }, nr + 1 < n ? "Næsta" : "Sjá niðurstöðu")));
             topp.replaceWith(topp = hjortu());
             eftir.querySelector(".takki").focus({ preventScroll: true });
@@ -711,12 +735,22 @@ window.raesaDagatal = (CONFIG) => {
         let topp = hjortu();
         el.replaceChildren(
           nr === 0 && dg.inngangur ? h("p", {}, dg.inngangur) : "",
+          nr === 0 && lagmark && dg.verdlaun ? h("p", { class: "dauft" }, `${lagmark} rétt eða fleiri gefa verðlaun.`) : "",
           topp,
           spurning ? h("p", { class: "hv-spurning" }, spurning(s)) : "",
           h("div", { class: "hv-bord" + (spurning ? " hv-folk" : "") }, kort[0], h("div", { class: "hv-eda", "aria-hidden": "true" }, "eða"), kort[1]),
           eftir);
       };
       const lok = () => {
+        if (giska) {
+          const nadi = sammala >= lagmark;
+          el.replaceChildren(h("div", { class: "midja hv-lok" },
+            hjortu(),
+            h("div", { class: "stig" }, `${sammala} af ${n}`),
+            nadi ? astarbref(dg, dg.dagur) : h("p", { class: "eftir" }, `Þú þarft ${lagmark} rétt til að fá verðlaunin.`),
+            h("div", { class: "rod", style: "justify-content:center" }, h("button", { class: "takki ljos", type: "button", onclick: () => { nr = 0; sammala = 0; svor = []; syna(); } }, nadi ? "Spila aftur" : "Reyna aftur"))));
+          return;
+        }
         const hlutf = sammala / n;
         const titill = hlutf === 1 ? "Sálufélagar" : hlutf >= .6 ? "Ansi samstíga" : hlutf >= .3 ? "Smá krydd í tilveruna" : "Andstæður laðast að";
         el.replaceChildren(h("div", { class: "midja hv-lok" },
@@ -745,6 +779,9 @@ window.raesaDagatal = (CONFIG) => {
       const adgerdir = h("div", { class: "midi-adgerdir" });
       const texti = `Ég ætla að nota miðann minn: ${dg.titill}! (${dg.stubbur}) ♡`;
       const senda = async () => {
+        // Með símanúmeri: SMS beint til hans. Annars deilingargluggi símans, svo SMS án viðtakanda.
+        const simi = String(CONFIG.hansSimi || "").replace(/[^\d+]/g, "");
+        if (simi) { location.href = `sms:${simi}?&body=` + encodeURIComponent(texti); return; }
         if (navigator.share) { try { await navigator.share({ text: texti }); return; } catch (e) { if (e.name === "AbortError") return; } }
         location.href = "sms:?&body=" + encodeURIComponent(texti);
       };
@@ -758,7 +795,7 @@ window.raesaDagatal = (CONFIG) => {
             h("button", { class: "midi-afturkalla", type: "button", onclick: () => { delete stada.notad[d]; vista(); midi.classList.remove("notadur"); midi.querySelector(".midi-stimpill")?.remove(); teikna(); uppfaeraVeski(); } }, "Óvart? Afturkalla"));
         } else {
           adgerdir.replaceChildren(
-            h("p", { class: "dauft" }, `Ýttu á „Nota miðann“ þegar þú vilt nota hann. Þá fær ${CONFIG.hansNafn} skilaboð.`),
+            h("p", { class: "dauft" }, `Ýttu á „Nota miðann“ þegar þú vilt nota hann. Þá opnast skilaboð til ${CONFIG.hansNafnThgf}.`),
             h("div", { class: "rod" },
               h("button", { class: "takki", type: "button", onclick: stadfesta }, "Nota miðann"), vistaTakki));
         }
@@ -776,7 +813,7 @@ window.raesaDagatal = (CONFIG) => {
         midi.classList.add("notadur");
         const s = stimpill(); s.classList.add("ny"); midi.append(s);
         teikna();
-        setTimeout(senda, hreyfingLeyfd ? 700 : 0);
+        senda(); // strax, á meðan smellurinn gildir (annars leyfir Safari ekki að deila)
       }
       el.append(midi, adgerdir);
       teikna();
@@ -910,11 +947,11 @@ window.raesaDagatal = (CONFIG) => {
     },
 
     hvort(el, dg) {
-      parLeikur(el, dg, { kostir: (s) => [s.a, s.b], hans: (s) => s.hans });
+      parLeikur(el, dg, { kostir: (s) => [s.a, s.b], hans: (s) => s.hans, giska: !!dg.giska });
     },
 
     liklegri(el, dg) {
-      parLeikur(el, dg, { kostir: () => ["Ég", CONFIG.hansNafn], hans: (s) => s.hans === "hun" ? 0 : 1, spurning: (s) => (/^til /.test(s.sp) ? "Hver er líklegri " : "Hver ") + s.sp });
+      parLeikur(el, dg, { kostir: () => ["Ég", CONFIG.hansNafn], hans: (s) => s.hans === "hun" ? 0 : 1, spurning: (s) => /^[A-ZÁÐÉÍÓÚÝÞÆÖ]/.test(s.sp) ? s.sp : (/^til /.test(s.sp) ? "Hver er líklegri " : "Hver ") + s.sp });
     },
 
     hjol(el, dg, d) {
@@ -948,7 +985,10 @@ window.raesaDagatal = (CONFIG) => {
       const nidurstada = h("div", { "aria-live": "polite" });
       const takki = h("button", { class: "takki", type: "button", onclick: () => {
         takki.disabled = true;
-        const k = Math.floor(Math.random() * n);
+        // Ef dagurinn hefur "vinningur" í efninu lendir hjólið alltaf á honum; annars tilviljun.
+        const valinn = dg.vinningur ? eftir.indexOf(dg.vinningur) : -1;
+        if (dg.vinningur && valinn < 0 && profun) console.warn("Vinningur dagsins er ekki á hjólinu:", dg.vinningur);
+        const k = valinn >= 0 ? valinn : Math.floor(Math.random() * n);
         stada.hjol[d] = eftir[k]; vista();
         svg.style.transform = `rotate(${360 * 6 - (k + .5) * bil}deg)`;
         setTimeout(() => { takki.remove(); nidurstada.append(vinningur(eftir[k])); uppfaeraVeski(); }, hreyfingLeyfd ? 4400 : 50);
@@ -1041,7 +1081,7 @@ window.raesaDagatal = (CONFIG) => {
 
     async pusl(el, dg) {
       const N = 3;
-      el.append(h("p", {}, dg.inngangur || "Pikkaðu á tvo búta til að skipta á þeim. Raðaðu myndinni saman."));
+      el.append(h("p", {}, dg.inngangur || "Veldu á tvo reiti til að skipta þeim. Raðaðu myndinni saman."));
       const mynd = await new Promise((r) => { const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = dg.mynd; });
       if (!mynd) { el.append(bref(dg.texti)); return; }
       const hlid = Math.min(mynd.naturalWidth, mynd.naturalHeight) * Math.min(1, dg.adradur ?? 1);
@@ -1137,7 +1177,9 @@ window.raesaDagatal = (CONFIG) => {
       sett.forEach((s) => { s.nr = upphaf.indexOf(s.y * 100 + s.x) + 1; s.reitir = [...s.svar].map((_, i) => lykill(s.x + s.dx * i, s.y + s.dy * i)); });
       const rett = new Map(); sett.forEach((s) => s.reitir.forEach((k, i) => rett.set(k, s.svar[i])));
 
-      const VISTA = "dagatal-krossgata-" + CONFIG.ar + "-" + d;
+      // Lykillinn fer eftir orðunum: ef orðunum er breytt byrjar krossgátan tóm.
+      const fingrafar = [...sett.map((s) => s.svar + s.x + "," + s.y + s.dx).join("|")].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7).toString(36);
+      const VISTA = "dagatal-krossgata-" + CONFIG.ar + "-" + d + "-" + fingrafar;
       let svor = {}; try { svor = JSON.parse(localStorage.getItem(VISTA) || "{}") || {}; } catch (_) {}
       const vista2 = () => { try { localStorage.setItem(VISTA, JSON.stringify(svor)); } catch (_) {} };
       let virkt = sett[0], val = sett[0].reitir[0], buid = false;
@@ -1190,13 +1232,19 @@ window.raesaDagatal = (CONFIG) => {
         [["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "Ð"], ["A", "S", "D", "F", "G", "H", "J", "K", "L", "Æ", "Ö"], ["Z", "X", "C", "V", "B", "N", "M", "Þ", "⌫"], ["Á", "É", "Í", "Ó", "Ú", "Ý"]]
           .map((rod) => h("div", { class: "word-key-row" }, rod.map((c) => h("button", { class: "word-key" + (c === "⌫" ? " word-action" : ""), type: "button", "aria-label": c === "⌫" ? "Eyða" : c, onclick: () => slaInn(c) }, c)))));
       const syna = h("button", { class: "midi-afturkalla", type: "button", onclick: () => { if (buid) return; svor[val] = rett.get(val); vista2(); teikna(); } }, "Sýna staf");
+      let hreinsaTimi;
+      const hreinsa = h("button", { class: "midi-afturkalla", type: "button", onclick: () => {
+        if (!hreinsa.dataset.stadfesta) { hreinsa.dataset.stadfesta = "1"; hreinsa.textContent = "Ýttu aftur til að hreinsa allt"; clearTimeout(hreinsaTimi); hreinsaTimi = setTimeout(() => { delete hreinsa.dataset.stadfesta; hreinsa.textContent = "Byrja upp á nýtt"; }, 3000); return; }
+        delete hreinsa.dataset.stadfesta; hreinsa.textContent = "Byrja upp á nýtt"; clearTimeout(hreinsaTimi);
+        svor = {}; buid = false; bord.classList.remove("buid"); lok.replaceChildren(); virkt = sett[0]; val = sett[0].reitir[0]; vista2(); teikna();
+      } }, "Byrja upp á nýtt");
       el.addEventListener("keydown", (e) => {
         if (e.ctrlKey || e.metaKey || e.altKey) return;
         if (e.key === "Backspace") { e.preventDefault(); slaInn("⌫"); return; }
         const c = nf(e.key);
         if (c.length === 1) { e.preventDefault(); slaInn(c); }
       });
-      el.append(h("p", {}, dg.inngangur || "Pikkaðu á reit og skrifaðu. Pikkaðu aftur til að skipta á milli lárétt og lóðrétt."), visbending, bord, lyklabord, syna, listi, lok);
+      el.append(h("p", {}, dg.inngangur || "Pikkaðu á reit og skrifaðu. Pikkaðu aftur til að skipta á milli lárétt og lóðrétt."), visbending, bord, lyklabord, h("div", { class: "kg-adgerdir" }, syna, hreinsa), listi, lok);
       teikna();
     },
 
@@ -1258,7 +1306,9 @@ window.raesaDagatal = (CONFIG) => {
       const hopur = (g) => h("div", { class: "tg-hopur " + g.litur }, h("strong", {}, g.heiti), h("span", {}, g.ord.map((o) => o.replace(/\u00AD/g, "")).join(", ")));
 
       function teikna() {
-        leystir.replaceChildren(...leyst.map(hopur));
+        // Bara nýir hópar bætast við; þeir sem fyrir eru haldast (annars spilast innkoman aftur).
+        if (leystir.children.length > leyst.length) leystir.replaceChildren();
+        leyst.slice(leystir.children.length).forEach((g) => leystir.append(hopur(g)));
         bord.replaceChildren(...eftir.map((o) => {
           const b = h("button", { class: "tg-ord" + (valin.has(o) ? " valid" : ""), style: `--n:${Math.max(5, ...o.split(/[ \u00AD]/).map((w) => w.length + (o.includes("\u00AD") ? 1 : 0)))}`, type: "button", "aria-pressed": valin.has(o) ? "true" : "false",
             onclick: () => { if (buid) return; valin.has(o) ? valin.delete(o) : valin.size < 4 && valin.add(o); teikna(); } }, o);
@@ -1287,7 +1337,7 @@ window.raesaDagatal = (CONFIG) => {
           const valdirTakkar = [...bord.children].filter((b) => valin.has(b.textContent));
           valdirTakkar.forEach((b, i) => { b.style.animationDelay = i * 70 + "ms"; b.classList.add("hoppa"); });
           setTimeout(() => {
-            valin.clear(); leysa(g); segja(["Já!", "Einmitt!", "Vel gert!", "Þú þekkir okkur."][leyst.length - 1] || "Já!");
+            valin.clear(); leysa(g); segja(["Já!", "Einmitt!", "Vel gert!", "Frábært!"][leyst.length - 1] || "Já!");
             if (!eftir.length) lok(true); else teikna();
           }, hreyfingLeyfd ? 520 : 0);
           return;
@@ -1371,8 +1421,97 @@ window.raesaDagatal = (CONFIG) => {
       syna();
     },
 
+    rada(el, dg) {
+      // Röðunarleikur í anda Rank: raða atriðum í rétta röð, grænt = réttur staður, reyna þar til allt er rétt.
+      const rett = dg.atridi.map((a) => a.nafn);
+      const gildi = Object.fromEntries(dg.atridi.map((a) => [a.nafn, a.gildi || ""]));
+      let fra = 11; const slembi = () => (fra = (fra * 16807) % 2147483647) / 2147483647;
+      let rod = [...rett];
+      for (let t = 0; t < 50 && rod.filter((x, i) => x === rett[i]).length > 1; t++) rod = [...rett].sort(() => slembi() - .5);
+      let merki = null, tilraunir = 0, buid = false;
+      const UPP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>';
+      const NIDUR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+      const listi = h("ol", { class: "rd-listi" });
+      const stadaEl = h("p", { class: "rd-stada", role: "status" });
+      const athuga = h("button", { class: "takki", type: "button", onclick: () => laesa() }, "Athuga");
+      const lok = h("div", {});
+      function teikna() {
+        listi.classList.toggle("buid", buid);
+        listi.replaceChildren(...rod.map((nafn, i) => {
+          const li = h("li", { class: "rd-atr" + (!buid && merki ? (merki[i] ? " rett" : " rangt") : "") },
+            h("span", { class: "rd-nr" }, String(i + 1)),
+            h("span", { class: "rd-nafn" }, nafn),
+            h("span", { class: "rd-gildi" }, gildi[nafn]));
+          li.dataset.nafn = nafn;
+          if (!buid) {
+            const upp = h("button", { type: "button", "aria-label": `Færa ${nafn} upp` }); upp.innerHTML = UPP; upp.disabled = i === 0;
+            const nidur = h("button", { type: "button", "aria-label": `Færa ${nafn} niður` }); nidur.innerHTML = NIDUR; nidur.disabled = i === rod.length - 1;
+            upp.onclick = () => faera(i, i - 1); nidur.onclick = () => faera(i, i + 1);
+            upp.onpointerdown = nidur.onpointerdown = (e) => e.stopPropagation();
+            li.append(h("span", { class: "rd-orvar" }, upp, nidur));
+            li.addEventListener("pointerdown", draga);
+          }
+          return li;
+        }));
+      }
+      function faera(a, b) {
+        if (b < 0 || b >= rod.length) return;
+        const [x] = rod.splice(a, 1); rod.splice(b, 0, x); merki = null; teikna();
+        listi.children[b]?.querySelector("button:not(:disabled)")?.focus({ preventScroll: true });
+      }
+      function draga(e) {
+        if (buid || e.button > 0) return;
+        const li = e.currentTarget, born = [...listi.children], fra0 = born.indexOf(li);
+        const skref = born.length > 1 ? born[1].offsetTop - born[0].offsetTop : 1, y0 = e.clientY;
+        let nu = fra0, hreyft = false;
+        const hreyfa = (ev) => {
+          const dy = ev.clientY - y0;
+          if (!hreyft && Math.abs(dy) < 4) return;
+          if (!hreyft) { hreyft = true; li.classList.add("drag"); }
+          const til = Math.max(0, Math.min(rod.length - 1, fra0 + Math.round(dy / skref)));
+          if (til !== nu) { listi.insertBefore(li, [...listi.children].filter((c) => c !== li)[til] || null); nu = til; }
+          li.style.transform = `translateY(${dy - (nu - fra0) * skref}px)`;
+          ev.preventDefault();
+        };
+        const sleppa = () => {
+          removeEventListener("pointermove", hreyfa); removeEventListener("pointerup", sleppa); removeEventListener("pointercancel", sleppa);
+          li.classList.remove("drag"); li.style.transform = "";
+          if (!hreyft) return;
+          const ny = [...listi.children].map((c) => c.dataset.nafn);
+          if (ny.join() !== rod.join()) { rod = ny; merki = null; }
+          teikna();
+        };
+        addEventListener("pointermove", hreyfa, { passive: false }); addEventListener("pointerup", sleppa); addEventListener("pointercancel", sleppa);
+      }
+      function laesa() {
+        if (buid) return;
+        tilraunir++;
+        merki = rod.map((x, i) => x === rett[i]);
+        const n = merki.filter(Boolean).length;
+        if (n === rod.length) {
+          buid = true; merki = null; teikna(); athuga.remove();
+          stadaEl.textContent = tilraunir === 1 ? "Allt rétt í fyrstu tilraun!" : `Allt rétt! Þú náðir þessu í ${tilraunir} tilraunum.`;
+          setTimeout(() => { hjartaRegn(listi); lok.append(astarbref(dg, dg.dagur)); lok.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, hreyfingLeyfd ? 500 : 0);
+          return;
+        }
+        teikna();
+        [...listi.children].forEach((li, i) => { if (!merki[i]) { li.classList.remove("hrista"); void li.offsetWidth; li.classList.add("hrista"); } });
+        stadaEl.textContent = `${n} af ${rod.length} á réttum stað. Þeir grænu eru réttir.`;
+      }
+      teikna();
+      el.append(
+        dg.inngangur ? h("p", {}, dg.inngangur) : "",
+        dg.efst ? h("div", { class: "rd-endi" }, "↑ " + dg.efst) : "",
+        listi,
+        dg.nedst ? h("div", { class: "rd-endi" }, "↓ " + dg.nedst) : "",
+        stadaEl,
+        h("div", { class: "rod", style: "justify-content:center" }, athuga),
+        lok);
+    },
+
     lok(el, dg) {
-      el.append(bref(dg.texti), dg.visbending && h("div", { class: "visbending" }, dg.visbending));
+      el.append(bref(dg.texti));
+      if (dg.visbending) el.append(h("div", { class: "visbending" }, dg.visbending));
       if (!hreyfingLeyfd) return;
       const litir = ["#a81f2d", "#e3b65c", "#fbf5e6", "#2c6650"];
       for (let i = 0; i < 60; i++) {
@@ -1406,6 +1545,6 @@ window.raesaDagatal = (CONFIG) => {
   setInterval(() => { uppfaeraTeljara(); if (lausir() !== sidastLaus) uppfaeraKassa(); }, 1000);
 };
 </script>
-<script src="las.js"></script>
+<script src="las.js?v=2"></script>
 </body>
 </html>
